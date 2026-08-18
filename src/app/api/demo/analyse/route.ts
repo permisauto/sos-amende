@@ -1,0 +1,244 @@
+import { prisma } from "@/lib/prisma";
+import {
+  detecterFailles,
+  remplirTemplate,
+  scoreFaille,
+  type ExtractedData,
+  type RegleDetection,
+} from "@/lib/moteur";
+import { extrairePv, normaliserPv } from "@/lib/ocr";
+import type { JurisprudenceRef } from "@/lib/catalogue-sources";
+
+/**
+ * Démo de scan (landing) : SIMULATION automatique. Sans upload ni saisie,
+ * la démo « téléverse » un échantillon (avis de contravention ou décision de
+ * suspension), le scanne (OCR mock en dev), détecte les failles candidates,
+ * calcule un score global et **génère la lettre de recours** depuis le
+ * template de la faille principale.
+ *
+ * GARDE-FOU : c'est une SIMULATION de démonstration. Aucune donnée n'est
+ * stockée, aucun dossier n'est créé, le résultat n'est jamais présenté comme
+ * un avis juridique — la validation reste humaine (juriste). Les articles et
+ * templates affichés proviennent toujours de la base (FailleJuridique
+ * ACTIVE/PROPOSEE) — jamais inventés.
+ */
+
+/** Échantillons simulés utilisés par la démo (aucun upload requis). */
+const ECHANTILLONS: Record<"AMENDE" | "SUSPENSION", string> = {
+  AMENDE: `CONTRAVENTION
+N° 123456789
+Vous êtes avisé d'une infraction commise le 01/07/2020 à 14h32.
+Véhicule : AB-123-CD
+Montant : 135 €
+Amende majorée : vous n'avez pas payé l'amende initiale dans les délais.`,
+  SUSPENSION: `DÉCISION DE SUSPENSION
+N° DEC-2026-0421
+Votre permis de conduire est suspendu pour une durée de 6 mois.
+Conduite sous l'empire d'un état alcoolique établie au moyen d'un éthylomètre.
+Véhicule : AB-123-CD
+Infraction commise le 01/07/2026.`,
+};
+
+// En mode simulation, la démo présente des scores de réussite favorables
+// (chances estimées de succès), sans jamais être un avis juridique. Plancher
+// de confiance pour que la démo montre toujours un résultat encourageant.
+const SCORE_MIN_DEMO = 82;
+
+type ResultatDemo = {
+  id: string;
+  titreFaille: string | null;
+  articleLoi: string | null;
+  source: string | null;
+  jurisprudence: JurisprudenceRef[];
+  score: number;
+  reglesMatchées: number;
+  reglesTotal: number;
+  statut: string | null;
+  proposition: boolean;
+  motifsTexte: string[];
+};
+
+type FailleDb = {
+  id: string;
+  titreFaille: string;
+  articleLoi: string | null;
+  source: string | null;
+  statut: string;
+  templateLettre: string;
+  jurisprudence: unknown;
+  reglesDetection: unknown;
+};
+
+function construireResultat(
+  faille: FailleDb | null,
+  score: { matchees: number; total: number; score: number } | null,
+  texte: string,
+  demo: boolean,
+): ResultatDemo {
+  const motifsTexte: string[] = [];
+  const texteBrut = texte ?? "";
+  for (const regle of (faille?.reglesDetection as RegleDetection[] | null) ??
+    []) {
+    if (
+      regle.type === "texteContient" &&
+      texteBrut.toLowerCase().includes(regle.motif.toLowerCase())
+    ) {
+      motifsTexte.push(regle.motif);
+    }
+  }
+  const scoreBrut = score?.score ?? 0;
+  return {
+    id: faille?.id ?? "",
+    titreFaille: faille?.titreFaille ?? null,
+    articleLoi: faille?.articleLoi ?? null,
+    source: faille?.source ?? null,
+    jurisprudence: (faille?.jurisprudence as JurisprudenceRef[] | null) ?? [],
+    score: demo ? Math.max(scoreBrut, SCORE_MIN_DEMO) : scoreBrut,
+    reglesMatchées: score?.matchees ?? 0,
+    reglesTotal: score?.total ?? 0,
+    statut: faille?.statut ?? null,
+    proposition: faille?.statut === "PROPOSEE",
+    motifsTexte,
+  };
+}
+
+export async function POST(req: Request) {
+  let type: "AMENDE" | "SUSPENSION" = "AMENDE";
+  let texte: string | null = null;
+  let data: ExtractedData = {};
+  let simule = true;
+
+  try {
+    const form = await req.formData();
+    const typeRaw = String(form.get("type") ?? "AMENDE");
+    if (typeRaw === "SUSPENSION") type = "SUSPENSION";
+
+    const fichier = form.get("pv");
+    if (fichier instanceof File && fichier.size > 0) {
+      const buffer = Buffer.from(await fichier.arrayBuffer());
+      const ocr = await extrairePv(buffer);
+      if (ocr?.texte) {
+        texte = ocr.texte;
+        data = { ...data, ...normaliserPv(ocr.texte) };
+        simule = false;
+      }
+    }
+
+    const texteLibre = String(form.get("texte") ?? "").trim();
+    if (!texte && texteLibre) {
+      texte = texteLibre;
+      data = { ...data, ...normaliserPv(texteLibre) };
+      simule = false;
+    }
+
+    const date = String(form.get("date") ?? "").trim();
+    if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) data.date = date;
+
+    // Sans document fourni : la démo simule le téléversement d'un échantillon.
+    if (!texte) {
+      texte = ECHANTILLONS[type];
+      data = { ...data, ...normaliserPv(texte) };
+      // Identité fictive pour la lettre démo (remplissage du template).
+      data.nom = data.nom ?? "Alex Martin";
+      simule = true;
+    }
+
+    // Démo : failles ACTIVE (validées) **et** PROPOSEE (propositions du
+    // catalogue, clairement étiquetées dans l'UI) — jamais INACTIVE. Le scan
+    // reste une simulation : le résultat n'est pas un avis juridique.
+    const faillesDb = await prisma.failleJuridique.findMany({
+      where: {
+        typeInfraction: type,
+        statut: { in: ["ACTIVE", "PROPOSEE"] },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const candidats = detecterFailles(
+      data,
+      texte,
+      faillesDb.map((f) => ({
+        id: f.id,
+        reglesDetection: f.reglesDetection as unknown as
+          | RegleDetection[]
+          | null,
+      })),
+    );
+
+    let resultats = candidats.map((id) => {
+      const faille = faillesDb.find((f) => f.id === id) ?? null;
+      const score = faille
+        ? scoreFaille(
+            {
+              id: faille.id,
+              reglesDetection: faille.reglesDetection as unknown as
+                | RegleDetection[]
+                | null,
+            },
+            data,
+            texte,
+          )
+        : null;
+      return construireResultat(faille, score, texte ?? "", simule);
+    });
+
+    // Repli démo (aucun candidat) : on présente les failles de la base pour
+    // que la démo montre toujours des failles détectées avec un score
+    // favorable. Articles et templates réels — jamais inventés.
+    if (simule && resultats.length === 0 && faillesDb.length > 0) {
+      resultats = faillesDb.slice(0, 3).map((faille, i) =>
+        construireResultat(
+          faille,
+          { matchees: 1, total: 1, score: SCORE_MIN_DEMO - i * 4 },
+          texte ?? "",
+          true,
+        ),
+      );
+    }
+
+    // Score global de réussite (démo) : le meilleur score parmi les failles
+    // détectées — simple agrégat de confiance, jamais un avis juridique.
+    const scoreGlobal =
+      resultats.length > 0
+        ? Math.max(...resultats.map((r) => r.score))
+        : 0;
+
+    // Lettre de recours (démo) : générée depuis le template de la faille
+    // principale (la première candidate). Identité fictive pour l'échantillon.
+    const faillePrincipale = resultats[0]
+      ? faillesDb.find((f) => f.id === resultats[0].id) ?? null
+      : null;
+    const lettre = faillePrincipale
+      ? remplirTemplate(faillePrincipale.templateLettre, data)
+      : null;
+
+    return new Response(
+      JSON.stringify({
+        simulation: true,
+        message:
+          "Simulation de démonstration : le scan détecte des failles par règles automatiques et génère une lettre de recours à partir du template de la faille retenue. Les propositions « à valider » ne sont pas encore retenues par la base juridique. Ce résultat ne constitue pas un avis juridique et reste soumis à la validation d'un juriste.",
+        texte,
+        data,
+        scoreGlobal,
+        simule,
+        lettre,
+        lettreFaille: faillePrincipale
+          ? {
+              titre: faillePrincipale.titreFaille,
+              articleLoi: faillePrincipale.articleLoi,
+              statut: faillePrincipale.statut,
+            }
+          : null,
+        resultats,
+      }),
+      { headers: { "Content-Type": "application/json; charset=utf-8" } },
+    );
+  } catch (e) {
+    return new Response(
+      JSON.stringify({
+        erreur: `Erreur pendant la démonstration : ${(e as Error).message}`,
+      }),
+      { status: 500, headers: { "Content-Type": "application/json" } },
+    );
+  }
+}

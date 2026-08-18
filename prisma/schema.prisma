@@ -1,0 +1,317 @@
+// SOS Amende — schéma conforme à la section 4 du cahier des charges
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// next-auth v5 (@auth/prisma-adapter) : modèles obligatoires — NE PAS RENOMMER
+// ---------------------------------------------------------------------------
+
+model User {
+  id               String    @id @default(cuid())
+  name             String?
+  email            String    @unique
+  emailVerified    DateTime?
+  image            String?
+  passwordHash     String? // inscription inversée : mot de passe temporaire (sect. 3)
+  role             Role      @default(CLIENT) // CLIENT | JURISTE | ADMIN
+  stripeCustomerId String?   @unique
+  credits          Int       @default(0)
+
+  accounts       Account[]
+  sessions       Session[]
+  authenticators Authenticator[]
+  dossiers       Dossier[]
+  lawyerMatches  LawyerMatch[]
+  payments       Payment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Authenticator {
+  credentialID         String  @unique
+  userId               String
+  providerAccountId    String
+  credentialPublicKey  String
+  counter              Int
+  credentialDeviceType String
+  credentialBackedUp   Boolean
+  transports           String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, credentialID])
+}
+
+// ---------------------------------------------------------------------------
+// Tables métier — section 4 du cahier des charges
+// ---------------------------------------------------------------------------
+
+model Dossier {
+  id               String        @id @default(cuid())
+  userId           String
+  type             DossierType   @default(AMENDE) // AMENDE | SUSPENSION
+  statut           DossierStatut @default(BROUILLON)
+  pvUrl            String? // avis de contravention uploadé
+  pvTexte          String? @db.Text // texte brut extrait par l'OCR (détection par scan)
+  extractedData    Json? // OCR : {nom, plaque, num_pv, date, heure, typeRadar, numTelePaiement, cle}
+  lettreGeneree    String? @db.Text // lettre remplie à partir du templateLettre (sect. 5)
+  motifRejet       String? @db.Text // raison du rejet juriste (statut REJETE)
+  decisionOmp      String? // décision OMP après envoi : ACCEPTE | REJETE
+  decisionDetail   String? @db.Text // note du juriste sur la décision OMP
+  valideLe         DateTime? // validation de la lettre par le juriste (PRET → kit LRAR)
+  dateLimite       DateTime? // délai de contestation : 45 j (amende) / 2 mois (suspension)
+  prix             Decimal       @db.Decimal(10, 2)
+  failleJuridiqueId String? // faille retenue (principale) par le moteur (sect. 5)
+  failleJuridique FailleJuridique? @relation(fields: [failleJuridiqueId], references: [id])
+  faillesRetenues  DossierFaille[] // toutes les failles candidates (détection par scan)
+  courriers        Courrier[]
+  preuves          Preuve[]
+  rappels          Rappel[]
+  evenements       DossierEvent[]
+  lawyerMatch      LawyerMatch?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model FailleJuridique {
+  id             String       @id @default(cuid())
+  typeInfraction String // AMENDE | SUSPENSION
+  titreFaille    String
+  articleLoi     String
+  templateLettre String       @db.Text // variables {nom}, {plaque}, {num_pv}…
+  source         String?
+  reglesDetection Json? // règles de détection automatique (scan PV/lettre) — voir src/lib/moteur.ts
+  jurisprudence  Json? // références sourcées : [{reference, juridiction, date, url, verifiee}] (base auto-alimentée)
+  statut         FailleStatut @default(ACTIVE)
+
+  dossiers       Dossier[]
+  faillesRetenues DossierFaille[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Failles identifiées automatiquement pour un dossier (détection par scan du
+// PV ou de la lettre). Le juriste confirme ou rejette chaque candidat : ces
+// validations alimentent la base juridique (s'auto-alimente par mises à jour).
+model DossierFaille {
+  id        String              @id @default(cuid())
+  dossierId String
+  failleId  String
+  statut    DossierFailleStatut @default(CANDIDATE)
+
+  dossier Dossier         @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+  faille  FailleJuridique @relation(fields: [failleId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([dossierId, failleId])
+}
+
+model Courrier {
+  id             String  @id @default(cuid())
+  dossierId      String
+  pdfUrl         String?
+  signatureUrl   String?
+  preuveDepotUrl String?
+
+  dossier Dossier @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+// Pièces justificatives jointes à la contestation (preuves) : téléversées par
+// le client et/ou le juriste pour étayer la lettre (carte grise, récépissé de
+// plainte, photos…). RGPD : supprimées avec le dossier/le compte.
+model Preuve {
+  id        String  @id @default(cuid())
+  dossierId String
+  dossier   Dossier @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+  userId    String? // auteur : client ou juriste
+  url       String // /uploads/... (storage)
+  nom       String  @default("piece")
+  type      String  @default("OTHER") // CARTE_GRISE | PLAINTE | PHOTO | CERTIFICAT | AUTRE
+  createdAt DateTime @default(now())
+
+  @@index([dossierId])
+}
+
+model Rappel {
+  id        String   @id @default(cuid())
+  dossierId String
+  type      String // J10 | J3 | J0
+  sentAt    DateTime @default(now())
+
+  dossier Dossier @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+
+  @@unique([dossierId, type])
+}
+
+model DossierEvent {
+  id        String          @id @default(cuid())
+  dossierId String
+  type      DossierEventType
+  detail    String? // ex. URL de l'accusé, motif de rejet
+  createdAt DateTime        @default(now())
+
+  dossier Dossier @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+
+  @@index([dossierId, createdAt])
+}
+
+model RadarCalibration {
+  id             String   @id @default(cuid())
+  radarId        String
+  dateExpiration DateTime
+  preuveUrl      String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Mise en relation avocat (PLAN §2 — orientation vers un avocat partenaire,
+// pas de consultation juridique interne)
+// ---------------------------------------------------------------------------
+
+model LawyerMatch {
+  id             String            @id @default(cuid())
+  dossierId      String            @unique
+  dossier        Dossier           @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  statut         LawyerMatchStatut @default(DEMANDE)
+  motif          String?           @db.Text // contexte du besoin (client)
+  partnerName    String?
+  partnerBarreau String?
+  partnerEmail   String?
+  note           String?           @db.Text // note juriste (affectation ou refus)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Paiements Stripe (inscription inversée, remboursements sect. 9)
+// ---------------------------------------------------------------------------
+
+model Payment {
+  id              String   @id @default(cuid())
+  userId          String
+  stripePaymentId String?  @unique
+  amount          Decimal  @db.Decimal(10, 2)
+  currency        String   @default("EUR")
+  status          String
+  kind            String   @default("AMENDE") // AMENDE | SUSPENSION
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  CLIENT
+  JURISTE
+  ADMIN
+}
+
+enum DossierType {
+  AMENDE
+  SUSPENSION
+}
+
+enum DossierStatut {
+  BROUILLON
+  EN_ANALYSE
+  A_VERIFIER
+  PRET
+  ENVOYE
+  REJETE
+  ERREUR_TECHNIQUE // sect. 11D
+  RESOLU
+  ANNULE
+}
+
+enum FailleStatut {
+  ACTIVE
+  INACTIVE
+  PROPOSEE // proposition issue de l'auto-alimentation (source publique) — jamais utilisée par le moteur tant que l'admin ne l'a pas validée
+}
+
+enum DossierFailleStatut {
+  CANDIDATE
+  CONFIRMEE
+  REJETEE
+}
+
+enum LawyerMatchStatut {
+  DEMANDE
+  AFFECTE
+  REFUSE
+}
+
+enum DossierEventType {
+  CREATION
+  ANALYSE
+  LETTRE_GENEREE
+  EN_ATTENTE
+  SIGNATURE
+  VALIDATION
+  ENVOI
+  DECISION
+  REJET
+  RETOUR
+  PREUVE // pièce justificative ajoutée (client ou juriste)
+}
