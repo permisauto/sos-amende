@@ -14,6 +14,8 @@ const failles = [
     typeInfraction: "AMENDE",
     titreFaille: "Prescription de l'action publique (1 an)",
     articleLoi: "Article 9 du Code de procédure pénale",
+    regle:
+      "L'action publique pour une contravention se prescrit par une année révolue à compter du jour où l'infraction a été commise (art. 9 CPP) : un avis notifié plus d'un an après les faits porte sur une infraction prescrite, l'amende doit être annulée.",
     reglesDetection: [{ type: "datePrescrite" }],
     templateLettre: `Je soussigné(e) {nom}, titulaire du certificat d'immatriculation du véhicule portant la plaque {plaque}, conteste l'avis de contravention n° {num_pv} qui m'a été notifié.
 
@@ -27,6 +29,8 @@ L'infraction est donc prescrite. Je demande en conséquence l'annulation de l'am
     typeInfraction: "AMENDE",
     titreFaille: "Défaut de mentions obligatoires sur l'avis de contravention",
     articleLoi: "Articles R. 246-1 et suivants du Code de la route",
+    regle:
+      "L'avis de contravention doit comporter l'ensemble des mentions obligatoires du code de la route (signature de l'agent, heure de constatation, matricule…) ; leur absence entache le titre exécutoire d'irrégularité.",
     reglesDetection: [
       { type: "champAbsent", champ: "numTelePaiement" },
       { type: "champAbsent", champ: "cle" },
@@ -43,6 +47,8 @@ Je demande en conséquence l'annulation de l'amende qui m'est réclamée.`,
     typeInfraction: "AMENDE",
     titreFaille: "Erreur de plaque d'immatriculation",
     articleLoi: "Article 530-1 du Code de procédure pénale",
+    regle:
+      "L'erreur de plaque d'immatriculation sur l'avis de contravention (identification du véhicule ou de son titulaire) permet au titulaire qui n'est pas l'auteur de l'infraction d'obtenir l'exonération (art. 530-1 CPP).",
     reglesDetection: [{ type: "plaqueIncorrecte" }],
     templateLettre: `Je soussigné(e) {nom}, conteste l'avis de contravention n° {num_pv}.
 
@@ -56,6 +62,8 @@ Je demande en conséquence l'annulation de l'amende qui m'est réclamée.`,
     typeInfraction: "AMENDE",
     titreFaille: "Demande de communication du certificat d'étalonnage du cinémomètre",
     articleLoi: "Article L. 130-3 du Code de la route et arrêté du 27 mars 2007",
+    regle:
+      "La mesure de vitesse doit être effectuée par un appareil dûment étalonné (art. L. 130-3 CR, arrêté du 27 mars 2007) : le certificat d'étalonnage valable à la date de l'infraction doit être communiqué sur demande, à défaut l'amende est annulée.",
     reglesDetection: [{ type: "etalonnageExpire" }],
     templateLettre: `Je soussigné(e) {nom}, titulaire du certificat d'immatriculation du véhicule portant la plaque {plaque}, conteste l'avis de contravention n° {num_pv} établi au moyen d'un cinémomètre.
 

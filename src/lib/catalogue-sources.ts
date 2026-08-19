@@ -13,6 +13,7 @@ export type JurisprudenceRef = {
   date?: string | null; // ISO yyyy-mm-dd (facultatif)
   url?: string | null;
   verifiee: boolean; // confirmée sur source primaire par un juriste
+  resume?: string | null; // l'essentiel de la décision, contextualisé (ce qu'elle tranche)
 };
 
 export type FailleSourcee = {
@@ -24,6 +25,7 @@ export type FailleSourcee = {
   reglesDetection: unknown[];
   jurisprudence: JurisprudenceRef[];
   templateLettre: string;
+  regle: string; // règle dégagée : ce que l'article + la jurisprudence imposent
 };
 
 /**
@@ -40,6 +42,8 @@ export const CATALOGUE_SOURCES: FailleSourcee[] = [
     articleLoi:
       "art. 530 et 529-2 du Code de procédure pénale",
     source: "Legifrance (articles) ; justice.fr",
+    regle:
+      "L'amende majorée n'est recouvrable que si l'avis de contravention initial a été régulièrement notifié et demeurait impayé à l'expiration du délai légal. À défaut de notification préalable, la majoration ne peut être valablement appliquée et le titre doit être ramené au montant forfaitaire initial.",
     reglesDetection: [{ type: "texteContient", motif: "majorée" }],
     jurisprudence: [
       {
@@ -47,6 +51,8 @@ export const CATALOGUE_SOURCES: FailleSourcee[] = [
         juridiction: "Cour de cassation",
         url: "https://www.legifrance.gouv.fr/juri/id/JURITEXT000007068889",
         verifiee: false,
+        resume:
+          "La chambre criminelle fait de la notification régulière de l'avis de contravention initial une condition du recouvrement de l'amende majorée : sans notification préalable, la majoration est injustifiée.",
       },
     ],
     templateLettre: `Je soussigné(e) {nom}, conteste le titre de perception (amende majorée) qui m'est notifié concernant l'avis de contravention n° {num_pv}, d'un montant de {montant}.
@@ -64,6 +70,8 @@ Je demande en conséquence l'annulation de la majoration et la restitution de l'
       "Nullité de l'avis : procédure d'amende forfaitaire inapplicable (infraction concomitante non forfaitisable)",
     articleLoi: "art. 529 du Code de procédure pénale",
     source: "query-juriste.com ; kohenavocats.com (lien courdecassation.fr)",
+    regle:
+      "L'avis de contravention ne peut être établi par la procédure de l'amende forfaitaire lorsque l'infraction est concomitante à une infraction non forfaitisable : la procédure doit alors être contraventionnelle (art. 529 CPP). À défaut, l'avis est entaché de nullité.",
     reglesDetection: [
       { type: "texteContient", motif: "sans avertissement préalable" },
     ],
@@ -73,12 +81,16 @@ Je demande en conséquence l'annulation de la majoration et la restitution de l'
         juridiction: "Cour de cassation",
         url: "https://decisions.query-juriste.com/decisions/cour-de-cassation-30-avril-2024-23-86-163-23-86-163.html",
         verifiee: false,
+        resume:
+          "La chambre criminelle juge la procédure d'amende forfaitaire inapplicable en cas d'infraction concomitante non forfaitisable : l'avis établi selon cette procédure est nul et l'action doit être exercée selon la procédure contraventionnelle.",
       },
       {
         reference: "Cass. crim., 18 novembre 2025, n° 25-80.227",
         juridiction: "Cour de cassation",
         url: "https://www.courdecassation.fr/decision/691c4c158b6588a4f898c792",
         verifiee: false,
+        resume:
+          "Confirme le principe : l'amende forfaitaire est exclue lorsque l'infraction est concomitante à une infraction non forfaitisable, la nullité de l'avis en résultant.",
       },
     ],
     templateLettre: `Je soussigné(e) {nom}, conteste l'avis de contravention n° {num_pv} établi à mon encontre.
@@ -97,6 +109,8 @@ Je demande en conséquence l'annulation de l'amende qui m'est réclamée.`,
     articleLoi:
       "art. 529-10 du Code de procédure pénale ; art. L. 317-4-1 du Code de la route",
     source: "Legifrance (art. 529-10) ; conseil-etat.fr (CE 9 juil. 2010 n° 339261)",
+    regle:
+      "Le titulaire du certificat d'immatriculation peut obtenir l'exonération en établissant qu'il n'était pas l'auteur de l'infraction (vol, usurpation de plaque, cession du véhicule) : la requête en exonération (art. 529-10 CPP) est recevable si elle est accompagnée des justificatifs (récépissé de plainte, certificat de cession).",
     reglesDetection: [{ type: "texteContient", motif: "vol" }],
     jurisprudence: [
       {
@@ -104,12 +118,16 @@ Je demande en conséquence l'annulation de l'amende qui m'est réclamée.`,
         juridiction: "Conseil d'État",
         url: "https://www.conseil-etat.fr/fr/arianeweb/CE/decision/2010-07-09/339261",
         verifiee: false,
+        resume:
+          "Le Conseil d'État rappelle que la requête en exonération est recevable lorsque le titulaire de la carte grise établit n'être pas l'auteur de l'infraction, notamment en cas de vol ou de cession du véhicule.",
       },
       {
         reference: "Cons. const., 29 septembre 2010, n° 2010-38 QPC",
         juridiction: "Conseil constitutionnel",
         url: "https://www.legifrance.gouv.fr/juri/id/JURITEXT000022884221",
         verifiee: false,
+        resume:
+          "Le Conseil constitutionnel valide le régime de l'article 529-10 CPP : il laisse au titulaire la possibilité de prouver qu'il n'était pas le conducteur (vol, usurpation, cession) pour obtenir l'exonération.",
       },
     ],
     templateLettre: `Je soussigné(e) {nom}, conteste l'avis de contravention n° {num_pv} relatif au véhicule portant la plaque {plaque}.
@@ -127,6 +145,8 @@ Je demande en conséquence l'exonération de l'amende qui m'est réclamée.`,
       "Usurpation de plaque d'immatriculation (délit) — récépissé de plainte",
     articleLoi: "art. L. 317-4-1 du Code de la route",
     source: "Code de la route (à confirmer sur Legifrance)",
+    regle:
+      "L'usurpation de plaque d'immatriculation est un délit (art. L. 317-4-1 du code de la route) qui place le titulaire dans une situation où il ne peut être tenu responsable de l'infraction commise par un tiers : le dépôt de plainte et le récépissé justifient l'exonération.",
     reglesDetection: [{ type: "texteContient", motif: "usurpation" }],
     jurisprudence: [],
     templateLettre: `Je soussigné(e) {nom}, conteste l'avis de contravention n° {num_pv} relatif au véhicule portant la plaque {plaque}.
@@ -144,6 +164,8 @@ Je demande en conséquence l'exonération de l'amende qui m'est réclamée.`,
       "Erreur de plaque d'immatriculation — champ du contrôle des juges",
     articleLoi: "art. 530-1 du Code de procédure pénale",
     source: "query-juriste.com",
+    regle:
+      "L'erreur matérielle portant sur l'identification du véhicule ou de son titulaire (plaque d'immatriculation) dans l'avis de contravention entre dans le champ du contrôle des juges et ouvre droit à l'exonération (art. 530-1 CPP).",
     reglesDetection: [{ type: "plaqueIncorrecte" }],
     jurisprudence: [
       {
@@ -151,6 +173,8 @@ Je demande en conséquence l'exonération de l'amende qui m'est réclamée.`,
         juridiction: "Cour de cassation",
         url: "https://decisions.query-juriste.com/decisions/cour-de-cassation-14-novembre-2017-17-81-047-17-81-047.html",
         verifiee: false,
+        resume:
+          "La chambre criminelle retient que l'erreur portant sur la plaque d'immatriculation (identification du véhicule ou de son titulaire) figure parmi les motifs que le juge de l'amende forfaitaire contrôle pour prononcer l'exonération.",
       },
     ],
     templateLettre: `Je soussigné(e) {nom}, conteste l'avis de contravention n° {num_pv}.
@@ -169,12 +193,16 @@ Je demande en conséquence l'exonération de l'amende qui m'est réclamée.`,
     articleLoi:
       "art. L. 130-3 du Code de la route ; art. R. 130-11 du Code de la route",
     source: "contraventionavocat.fr (blog) ; legifrance",
+    regle:
+      "La mesure de vitesse doit être effectuée par un appareil soumis à une vérification périodique par un organisme agréé : le certificat d'étalonnage du cinémomètre doit être valable à la date de l'infraction (art. L. 130-3, R. 130-11 CR) et communiqué sur demande, à défaut de quoi l'amende doit être annulée.",
     reglesDetection: [{ type: "etalonnageExpire" }],
     jurisprudence: [
       {
         reference: "Cass. crim., 12 janvier 2026, n° 25-80.412",
         juridiction: "Cour de cassation",
         verifiee: false,
+        resume:
+          "Décision récente non vérifiée (introuvable sur Judilibre au moment de l'audit) : à confirmer par un juriste sur source primaire avant activation de la proposition.",
       },
     ],
     templateLettre: `Je soussigné(e) {nom}, titulaire du certificat d'immatriculation du véhicule portant la plaque {plaque}, conteste l'avis de contravention n° {num_pv} établi au moyen du cinémomètre n° {radarId}.
@@ -191,6 +219,8 @@ Je demande la communication du certificat d'étalonnage de l'appareil n° {radar
     articleLoi:
       "art. L. 121-1 et L. 211-2 du Code des relations entre le public et l'administration ; art. L. 224-2 du Code de la route",
     source: "Légifrance (CE 20 avr. 2021 n° 438114, texte intégral) ; reinsdidier-avocat.com",
+    regle:
+      "La suspension de permis est une décision individuelle défavorable prise en considération de la personne : elle doit être précédée d'une procédure contradictoire permettant à l'intéressé de présenter ses observations (art. L. 121-1 et L. 211-2 CRPA), sauf urgence caractérisée. À défaut, la décision est illégale.",
     reglesDetection: [{ type: "texteAbsent", motif: "observations" }],
     jurisprudence: [
       {
@@ -199,6 +229,8 @@ Je demande la communication du certificat d'étalonnage de l'appareil n° {radar
         date: "2021-04-20",
         url: "https://www.legifrance.gouv.fr/ceta/id/CETATEXT000043411148",
         verifiee: false,
+        resume:
+          "Le Conseil d'État juge que le préfet doit mettre l'intéressé en mesure de présenter ses observations avant de prononcer une suspension de permis, sauf urgence caractérisée ; l'absence de contradictoire préalable rend la décision illégale.",
       },
       {
         reference: "Conseil d'État, 5e ch., 24 mai 2024, n° 474548 (Inédit)",
@@ -206,6 +238,8 @@ Je demande la communication du certificat d'étalonnage de l'appareil n° {radar
         date: "2024-05-24",
         url: null,
         verifiee: false,
+        resume:
+          "Confirme l'exigence de procédure contradictoire préalable à toute suspension de permis : une décision prise sans mise en demeure de présenter des observations est annulable.",
       },
       {
         reference: "Conseil d'État, 7 décembre 2017, n° 407700",
@@ -213,6 +247,8 @@ Je demande la communication du certificat d'étalonnage de l'appareil n° {radar
         date: "2017-12-07",
         url: "https://www.conseil-etat.fr/fr/arianeweb/CE/decision/2017-12-07/407700",
         verifiee: false,
+        resume:
+          "Le Conseil d'État rappelle que la formalité substantielle du contradictoire s'impose aux décisions individuelles défavorables prises en considération de la personne, dont relève la suspension de permis.",
       },
     ],
     templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} du {date} par laquelle le préfet a prononcé la suspension de mon permis de conduire.
@@ -229,6 +265,8 @@ Je demande en conséquence le retrait de la décision de suspension prise à mon
     articleLoi:
       "art. L. 224-2 et L. 234-1 du Code de la route ; art. 15 de l'arrêté du 8 juillet 2003 (marge d'erreur maximale tolérée 8 %)",
     source: "Légifrance (CE 14 févr. 2018 n° 407914) ; ledall-avocat.fr ; capital.fr",
+    regle:
+      "Le préfet doit s'assurer que les seuils légaux d'alcoolémie ont été effectivement dépassés et, par suite, prendre en compte la marge d'erreur maximale tolérée de 8 % de l'éthylomètre (art. 15 de l'arrêté du 8 juillet 2003), sauf si le résultat communiqué intègre déjà cette marge. À défaut, la suspension est annulable.",
     reglesDetection: [{ type: "texteContient", motif: "éthylomètre" }],
     jurisprudence: [
       {
@@ -237,6 +275,8 @@ Je demande en conséquence le retrait de la décision de suspension prise à mon
         date: "2018-02-14",
         url: "https://www.legifrance.gouv.fr/ceta/id/CETATEXT000036601993",
         verifiee: false,
+        resume:
+          "Le Conseil d'État juge que la suspension pour alcoolémie suppose que le seuil légal soit effectivement dépassé compte tenu de la marge d'erreur maximale tolérée de l'éthylomètre ; une décision fondée sur un résultat brut, sans prise en compte de cette marge, est annulée.",
       },
       {
         reference: "Cass. crim., 26 mars 2019, n° 18-94.900",
@@ -244,6 +284,8 @@ Je demande en conséquence le retrait de la décision de suspension prise à mon
         date: "2019-03-26",
         url: "https://www.legifrance.gouv.fr/juri/id/JURITEXT000038388467",
         verifiee: false,
+        resume:
+          "La chambre criminelle confirme que la preuve de l'alcoolémie doit reposer sur des mesures fiables, la marge d'erreur de l'éthylomètre devant être prise en compte pour retenir le dépassement des seuils.",
       },
     ],
     templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} du {date} par laquelle le préfet a suspendu mon permis de conduire pour conduite sous l'empire d'un état alcoolique.
@@ -260,6 +302,8 @@ Je demande en conséquence le retrait de la décision de suspension prise à mon
     articleLoi:
       "art. L. 224-16 et R. 224-4 du Code de la route",
     source: "Légifrance (R. 224-1 à R. 224-4) ; ledall-avocat.fr",
+    regle:
+      "La décision de suspension doit être régulièrement notifiée à l'intéressé (remise directe ou lettre recommandée avec demande d'avis de réception) conformément aux articles L. 224-16 et R. 224-4 du code de la route ; une décision non notifiée n'est pas opposable.",
     reglesDetection: [{ type: "texteAbsent", motif: "notifiée" }],
     jurisprudence: [
       {
@@ -267,6 +311,8 @@ Je demande en conséquence le retrait de la décision de suspension prise à mon
         juridiction: "Cour de cassation",
         url: "https://www.legifrance.gouv.fr/juri/id/JURITEXT000043426584",
         verifiee: false,
+        resume:
+          "La chambre criminelle rappelle que la notification de la décision de suspension (exigée par l'article L. 224-16 du code de la route) conditionne son opposabilité à l'intéressé.",
       },
     ],
     templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} du {date} par laquelle le préfet a suspendu mon permis de conduire.

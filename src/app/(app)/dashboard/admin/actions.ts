@@ -28,6 +28,7 @@ const jurisprudenceSchema = z.object({
   date: z.string().optional().nullable(),
   url: z.string().optional().nullable(),
   verifiee: z.boolean().default(false),
+  resume: z.string().optional().nullable(),
 });
 
 // Lit les règles de détection depuis le textarea JSON du formulaire admin.
@@ -70,6 +71,7 @@ const failleSchema = z.object({
   typeInfraction: z.enum(["AMENDE", "SUSPENSION"]),
   titreFaille: z.string().trim().min(3, "Titre trop court"),
   articleLoi: z.string().trim().min(1, "Article requis"),
+  regle: z.string().trim().optional(),
   templateLettre: z.string().trim().min(10, "Template trop court"),
   source: z.string().trim().optional(),
 });
@@ -92,6 +94,7 @@ export async function creerFaille(
   await prisma.failleJuridique.create({
     data: {
       ...parsed.data,
+      regle: parsed.data.regle || null,
       reglesDetection: regles.regles.length > 0 ? regles.regles : Prisma.JsonNull,
       jurisprudence:
         jurisprudence.jurisprudence.length > 0
@@ -125,6 +128,7 @@ export async function modifierFaille(
     where: { id },
     data: {
       ...parsed.data,
+      regle: parsed.data.regle || null,
       reglesDetection: regles.regles.length > 0 ? regles.regles : Prisma.JsonNull,
       jurisprudence:
         jurisprudence.jurisprudence.length > 0
@@ -218,6 +222,7 @@ const importItemSchema = z.object({
   articleLoi: z.string().min(1),
   templateLettre: z.string().min(1),
   source: z.string().nullable().optional(),
+  regle: z.string().nullable().optional(),
   statut: z.enum(["ACTIVE", "INACTIVE", "PROPOSEE"]).optional(),
   reglesDetection: z.array(regleSchema).nullable().optional(),
   jurisprudence: z.array(jurisprudenceSchema).nullable().optional(),
@@ -262,6 +267,7 @@ export async function importerFailles(
         articleLoi: f.articleLoi,
         templateLettre: f.templateLettre,
         source: f.source ?? null,
+        regle: f.regle ?? null,
         statut: f.statut ?? "ACTIVE",
         reglesDetection: f.reglesDetection ?? Prisma.JsonNull,
         jurisprudence: f.jurisprudence ?? Prisma.JsonNull,
@@ -273,6 +279,7 @@ export async function importerFailles(
         articleLoi: f.articleLoi,
         templateLettre: f.templateLettre,
         source: f.source ?? null,
+        regle: f.regle ?? null,
         statut: f.statut ?? "ACTIVE",
         reglesDetection: f.reglesDetection ?? Prisma.JsonNull,
         jurisprudence: f.jurisprudence ?? Prisma.JsonNull,

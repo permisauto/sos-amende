@@ -6,8 +6,10 @@ import { prisma } from "@/lib/prisma";
 import { requireJuriste } from "@/lib/dal";
 import { remplirTemplate } from "@/lib/moteur";
 import { notifierStatut } from "@/lib/notifications";
+import { storageRead, storageWrite } from "@/lib/storage";
+import { generateLettrePdf } from "@/lib/lettre-pdf";
 
-export type ValidationState = { error?: string } | undefined;
+export type ValidationState = { error?: string; ok?: boolean } | undefined;
 
 const DECISION_OMP = ["ACCEPTE", "REJETE"] as const;
 
@@ -101,6 +103,79 @@ export async function validerDossier(
   revalidatePath(`/dashboard/juriste/${dossier.id}`);
   revalidatePath(`/dashboard/cases/${dossier.id}`);
   redirect(`/dashboard/juriste/${dossier.id}?valide=ok`);
+}
+
+/**
+ * Modification de la lettre générée par le juriste avant validation :
+ *  - A_VERIFIER : la lettre n'est pas encore signée — seul le texte change ;
+ *  - PRET : la lettre est signée — le PDF est régénéré en recollant
+ *    automatiquement la signature existante en bas de la nouvelle lettre.
+ * La signature est toujours réappliquée : le juriste n'a pas à la retracer.
+ */
+export async function modifierLettre(
+  _prev: ValidationState,
+  formData: FormData,
+): Promise<ValidationState> {
+  await requireJuriste();
+
+  const dossierId = String(formData.get("dossierId") ?? "");
+  const lettre = String(formData.get("lettre") ?? "").trim();
+  if (lettre.length < 10) {
+    return { error: "La lettre doit contenir du texte." };
+  }
+
+  const dossier = await prisma.dossier.findUnique({
+    where: { id: dossierId },
+    include: { courriers: { orderBy: { createdAt: "asc" } } },
+  });
+  if (!dossier) {
+    return { error: "Dossier introuvable." };
+  }
+  if (dossier.statut !== "A_VERIFIER" && dossier.statut !== "PRET") {
+    return { error: "La lettre ne peut être modifiée qu'avant validation." };
+  }
+
+  const courrier = dossier.courriers[dossier.courriers.length - 1];
+  let pdfUrl: string | null = courrier?.pdfUrl ?? null;
+  if (courrier?.signatureUrl) {
+    // Lettre déjà signée : on régénère le PDF avec la signature existante.
+    const sig = await storageRead(courrier.signatureUrl);
+    if (sig) {
+      const sigDataUrl = `data:image/png;base64,${sig.toString("base64")}`;
+      const pdfBuffer = await generateLettrePdf(lettre, sigDataUrl);
+      pdfUrl = await storageWrite(
+        `pdfs/lettre-${dossier.id}-${Date.now()}.pdf`,
+        pdfBuffer,
+      );
+    }
+  }
+
+  await prisma.$transaction([
+    prisma.dossier.update({
+      where: { id: dossier.id },
+      data: { lettreGeneree: lettre },
+    }),
+    ...(courrier && pdfUrl
+      ? [
+          prisma.courrier.update({
+            where: { id: courrier.id },
+            data: { pdfUrl },
+          }),
+        ]
+      : []),
+    prisma.dossierEvent.create({
+      data: {
+        dossierId: dossier.id,
+        type: "LETTRE_GENEREE",
+        detail: "Lettre modifiée par le juriste.",
+      },
+    }),
+  ]);
+
+  revalidatePath("/dashboard/juriste");
+  revalidatePath(`/dashboard/juriste/${dossier.id}`);
+  revalidatePath(`/dashboard/cases/${dossier.id}`);
+  return { ok: true };
 }
 
 export async function retournerDossier(

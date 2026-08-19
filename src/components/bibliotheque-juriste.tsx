@@ -8,6 +8,7 @@ export type RefJurisprudentielle = {
   date?: string | null;
   url?: string | null;
   verifiee: boolean;
+  resume?: string | null;
 };
 
 export type FailleBibliotheque = {
@@ -15,6 +16,7 @@ export type FailleBibliotheque = {
   titreFaille: string;
   articleLoi: string;
   statut: string;
+  regle?: string | null;
   jurisprudence: RefJurisprudentielle[];
 };
 
@@ -75,6 +77,12 @@ export function BibliothequeJuriste({
             {failleRetenue.titreFaille}
           </p>
           <p className="text-sm text-emerald-800">{failleRetenue.articleLoi}</p>
+          {failleRetenue.regle && (
+            <p className="mt-2 text-sm leading-relaxed text-emerald-900">
+              <span className="font-semibold">Règle dégagée : </span>
+              {failleRetenue.regle}
+            </p>
+          )}
           {failleRetenue.jurisprudence.length > 0 && (
             <ul className="mt-2 flex flex-col gap-1.5">
               {failleRetenue.jurisprudence.map((j, i) => (
@@ -102,6 +110,21 @@ export function BibliothequeJuriste({
                 </li>
               ))}
             </ul>
+          )}
+          {failleRetenue.jurisprudence.some((j) => j.resume) && (
+            <div className="mt-2 flex flex-col gap-1.5">
+              {failleRetenue.jurisprudence.map((j, i) =>
+                j.resume ? (
+                  <p
+                    key={i}
+                    className="rounded-lg bg-white/70 px-3 py-2 text-xs leading-relaxed text-emerald-900"
+                  >
+                    <span className="font-semibold">Résumé de la décision : </span>
+                    {j.resume}
+                  </p>
+                ) : null,
+              )}
+            </div>
           )}
         </div>
       )}
@@ -151,6 +174,14 @@ export function BibliothequeJuriste({
                   </span>
                 </div>
                 <p className="text-sm text-zinc-600">{f.articleLoi}</p>
+                {f.regle && (
+                  <p className="mt-1 text-sm leading-relaxed text-zinc-700">
+                    <span className="font-semibold text-zinc-800">
+                      Règle dégagée :{" "}
+                    </span>
+                    {f.regle}
+                  </p>
+                )}
                 {f.jurisprudence.length > 0 && (
                   <ul className="mt-1 flex flex-col gap-1">
                     {f.jurisprudence.map((j, i) => (
@@ -181,6 +212,23 @@ export function BibliothequeJuriste({
                       </li>
                     ))}
                   </ul>
+                )}
+                {f.jurisprudence.some((j) => j.resume) && (
+                  <div className="mt-1 flex flex-col gap-1">
+                    {f.jurisprudence.map((j, i) =>
+                      j.resume ? (
+                        <p
+                          key={i}
+                          className="rounded-lg bg-zinc-50 px-3 py-2 text-xs leading-relaxed text-zinc-700"
+                        >
+                          <span className="font-semibold text-zinc-800">
+                            Résumé de la décision :{" "}
+                          </span>
+                          {j.resume}
+                        </p>
+                      ) : null,
+                    )}
+                  </div>
                 )}
               </li>
             ))}

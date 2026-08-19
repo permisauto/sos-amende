@@ -23,6 +23,7 @@ export async function GET() {
     typeInfraction: f.typeInfraction,
     titreFaille: f.titreFaille,
     articleLoi: f.articleLoi,
+    regle: f.regle,
     templateLettre: f.templateLettre,
     source: f.source,
     statut: f.statut,

@@ -52,6 +52,38 @@ export async function storageWrite(key: string, buffer: Buffer): Promise<string>
 }
 
 /**
+ * Lit le contenu d'une pièce stockée (ex. la signature pour régénérer un PDF
+ * après modification de la lettre par le juriste). Retourne null si absente
+ * ou illisible. En local : lecture dans `public/uploads/` ; en S3 : GetObject.
+ */
+export async function storageRead(raw: string | null | undefined): Promise<Buffer | null> {
+  if (!raw || !raw.startsWith(UPLOADS_PREFIX)) return null;
+
+  const key = raw.slice(UPLOADS_PREFIX.length);
+  if (isStorageS3()) {
+    const { GetObjectCommand } = await import("@aws-sdk/client-s3");
+    const client = await getS3Client();
+    try {
+      const res = await client.send(
+        new GetObjectCommand({ Bucket: bucket(), Key: key }),
+      );
+      if (!res.Body) return null;
+      return Buffer.from(await res.Body.transformToByteArray());
+    } catch {
+      return null;
+    }
+  }
+
+  const filePath = path.join(process.cwd(), "public", "uploads", key);
+  try {
+    const { readFile } = await import("node:fs/promises");
+    return await readFile(filePath);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Supprime un fichier (RGPD : effacement des pièces lors de la suppression du
  * compte). En local : suppression du fichier dans `public/uploads/`. En S3 :
  * DeleteObject (best-effort).

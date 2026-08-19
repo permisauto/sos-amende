@@ -77,7 +77,12 @@ export default async function JuristeFaillesPage(
             };
             const jurisprudence = (
               faille.jurisprudence as
-                | { reference: string; url?: string | null; verifiee?: boolean }[]
+                | {
+                    reference: string;
+                    url?: string | null;
+                    verifiee?: boolean;
+                    resume?: string | null;
+                  }[]
                 | null
             ) ?? [];
             return (
@@ -98,6 +103,14 @@ export default async function JuristeFaillesPage(
                     <p className="mt-1 text-sm font-medium text-zinc-700">
                       {faille.articleLoi}
                     </p>
+                    {faille.regle && (
+                      <p className="mt-2 rounded-xl bg-zinc-50 px-3 py-2 text-sm leading-relaxed text-zinc-700">
+                        <span className="font-semibold text-zinc-800">
+                          Règle dégagée :{" "}
+                        </span>
+                        {faille.regle}
+                      </p>
+                    )}
                     <p className="mt-0.5 text-xs text-zinc-500">
                       {faille.typeInfraction === "AMENDE"
                         ? "Amende"
@@ -114,29 +127,38 @@ export default async function JuristeFaillesPage(
                     </h3>
                     <ul className="mt-2 flex flex-col gap-2">
                       {jurisprudence.map((j, i) => (
-                        <li
-                          key={i}
-                          className="flex flex-wrap items-center gap-2 text-sm"
-                        >
-                          <span
-                            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                              j.verifiee
-                                ? "bg-emerald-100 text-emerald-800"
-                                : "bg-red-100 text-red-700"
-                            }`}
-                          >
-                            {j.verifiee ? "Vérifiée" : "À vérifier"}
-                          </span>
-                          <span className="text-zinc-700">{j.reference}</span>
-                          {j.url && (
-                            <a
-                              href={j.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="font-medium text-emerald-700 hover:underline"
+                        <li key={i} className="rounded-xl bg-zinc-50 p-3">
+                          <div className="flex flex-wrap items-center gap-2 text-sm">
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                j.verifiee
+                                  ? "bg-emerald-100 text-emerald-800"
+                                  : "bg-red-100 text-red-700"
+                              }`}
                             >
-                              Consulter la source
-                            </a>
+                              {j.verifiee ? "Vérifiée" : "À vérifier"}
+                            </span>
+                            <span className="text-zinc-700">
+                              {j.reference}
+                            </span>
+                            {j.url && (
+                              <a
+                                href={j.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="font-medium text-emerald-700 hover:underline"
+                              >
+                                Consulter la source
+                              </a>
+                            )}
+                          </div>
+                          {j.resume && (
+                            <p className="mt-2 text-xs leading-relaxed text-zinc-700">
+                              <span className="font-semibold text-zinc-800">
+                                Résumé de la décision :{" "}
+                              </span>
+                              {j.resume}
+                            </p>
                           )}
                         </li>
                       ))}

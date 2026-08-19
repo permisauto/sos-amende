@@ -125,6 +125,7 @@ model FailleJuridique {
   typeInfraction String // AMENDE | SUSPENSION
   titreFaille    String
   articleLoi     String
+  regle          String?      @db.Text // règle dégagée : ce que la jurisprudence + l'article imposent
   templateLettre String       @db.Text // variables {nom}, {plaque}, {num_pv}…
   source         String?
   reglesDetection Json? // règles de détection automatique (scan PV/lettre) — voir src/lib/moteur.ts

@@ -4,8 +4,6 @@ import { useActionState, useState } from "react";
 import Link from "next/link";
 import {
   basculerFaille,
-  creerFaille,
-  importerFailles,
   importerFaillesDepuisSources,
   modifierFaille,
   validerPropositionFaille,
@@ -18,6 +16,7 @@ export type FailleDto = {
   typeInfraction: string;
   titreFaille: string;
   articleLoi: string;
+  regle: string | null;
   templateLettre: string;
   source: string | null;
   statut: string;
@@ -43,7 +42,8 @@ const jurisprudencePlaceholder = `[
     "juridiction": "Cour de cassation",
     "date": "2026-01-12",
     "url": "https://www.courdecassation.fr/...",
-    "verifiee": false
+    "verifiee": false,
+    "resume": "L'essentiel de la décision, contextualisé (ce qu'elle tranche)."
   }
 ]`;
 
@@ -63,14 +63,6 @@ export function FaillesAdmin({
   failles: FailleDto[];
   filter: string;
 }) {
-  const [createState, createAction, createPending] = useActionState(
-    creerFaille,
-    undefined,
-  );
-  const [importState, importAction, importPending] = useActionState(
-    importerFailles,
-    undefined,
-  );
   const [sourcesState, sourcesAction, sourcesPending] = useActionState(
     importerFaillesDepuisSources,
     undefined,
@@ -95,9 +87,11 @@ export function FaillesAdmin({
             <p className="mt-1 text-sm text-zinc-600">
               La base se synchronise automatiquement avec le catalogue de la
               recherche documentaire (articles de loi + jurisprudences, sources
-              publiques). Les propositions arrivent en statut « Proposition » —
-              le moteur ne les utilise jamais tant que vous ne les avez pas
-              validées (Active) ou écartées (Inactive).
+              publiques). Chaque proposition indique la règle dégagée, les
+              articles de loi et l&apos;essentiel de chaque jurisprudence pour
+              une visibilité complète. Votre rôle : lire, vérifier, puis valider
+              (Active) ou écarter (Inactive) — le moteur n&apos;utilise jamais
+              une proposition tant qu&apos;elle n&apos;est pas Active.
             </p>
           </div>
           <form action={sourcesAction}>
@@ -122,88 +116,6 @@ export function FaillesAdmin({
             {sourcesState.count ?? 0} proposition(s) en attente de validation.
           </p>
         )}
-      </section>
-
-      <section className="rounded-2xl border border-zinc-200 bg-white p-6">
-        <h2 className="text-lg font-semibold">Nouvelle faille juridique</h2>
-        <p className="mt-1 text-sm text-zinc-600">
-          Seules les failles ACTIVE sont utilisées par le moteur de détection
-          (scan du PV/lettre). La lettre ne peut être générée qu&apos;à partir
-          de ces templates validés.
-        </p>
-        <form action={createAction} className="mt-5 flex flex-col gap-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <FailleFields />
-          </div>
-          <button
-            type="submit"
-            disabled={createPending}
-            className="rounded-full bg-emerald-600 px-6 py-3 font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
-          >
-            {createPending ? "Création…" : "Créer la faille"}
-          </button>
-          {createState?.error && (
-            <p className="rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700">
-              {createState.error}
-            </p>
-          )}
-          {createState?.ok && (
-            <p className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800">
-              Faille créée.
-            </p>
-          )}
-        </form>
-      </section>
-
-      <section className="rounded-2xl border border-zinc-200 bg-white p-6">
-        <h2 className="text-lg font-semibold">
-          Mises à jour de la base (import)
-        </h2>
-        <p className="mt-1 text-sm text-zinc-600">
-          La base juridique s&apos;alimente par mises à jour : exportez le JSON,
-          faites évoluer le contenu (juriste), puis réimportez — le moteur
-          l&apos;utilise immédiatement (upsert par id).
-        </p>
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <a
-            href="/api/admin/failles/export"
-            className="rounded-full border border-zinc-300 px-5 py-2.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
-          >
-            Exporter la base (JSON)
-          </a>
-        </div>
-        <form action={importAction} className="mt-4 flex flex-col gap-3">
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium text-zinc-700">
-              JSON à importer
-            </span>
-            <textarea
-              name="json"
-              rows={6}
-              placeholder='[ { "id": "faille-x", "typeInfraction": "AMENDE", "titreFaille": "…", "articleLoi": "…", "templateLettre": "…", "reglesDetection": […], "jurisprudence": […] } ]'
-              className={inputCls}
-            />
-          </label>
-          <button
-            type="submit"
-            disabled={importPending}
-            className="rounded-full bg-emerald-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
-          >
-            {importPending ? "Import…" : "Importer la base"}
-          </button>
-          {importState?.error && (
-            <p className="rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700">
-              {importState.error}
-            </p>
-          )}
-          {importState?.ok && (
-            <p className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800">
-              {importState.count ?? 0} faille
-              {(importState.count ?? 0) > 1 ? "s" : ""} mise
-              {(importState.count ?? 0) > 1 ? "s" : ""} à jour.
-            </p>
-          )}
-        </form>
       </section>
 
       <section>
@@ -296,6 +208,18 @@ function FailleFields({ initial }: { initial?: FailleDto }) {
           required
           defaultValue={initial?.articleLoi}
           className={inputCls}
+        />
+      </label>
+      <label className="col-span-full flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-zinc-700">
+          Règle dégagée (ce que l&apos;article + la jurisprudence imposent)
+        </span>
+        <textarea
+          name="regle"
+          rows={3}
+          defaultValue={initial?.regle ?? ""}
+          className={inputCls}
+          placeholder="Ex. : l'amende majorée n'est recouvrable que si l'avis initial a été régulièrement notifié…"
         />
       </label>
       <label className="flex flex-col gap-1.5">
@@ -417,6 +341,12 @@ function FailleRow({ faille }: { faille: FailleDto }) {
         <div>
           <h3 className="font-semibold">{faille.titreFaille}</h3>
           <p className="mt-0.5 text-sm text-zinc-600">{faille.articleLoi}</p>
+          {faille.regle && (
+            <p className="mt-2 rounded-xl bg-zinc-50 px-3 py-2 text-sm leading-relaxed text-zinc-700">
+              <span className="font-semibold text-zinc-800">Règle dégagée : </span>
+              {faille.regle}
+            </p>
+          )}
           <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-zinc-500">
             <span
               className={`rounded-full px-2.5 py-0.5 font-medium ${meta.cls}`}
@@ -549,6 +479,16 @@ function FailleRow({ faille }: { faille: FailleDto }) {
             </h4>
             <p className="mt-1 text-sm text-zinc-800">{faille.articleLoi}</p>
           </div>
+          {faille.regle && (
+            <div>
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                Règle dégagée (rappel)
+              </h4>
+              <p className="mt-1 text-sm leading-relaxed text-zinc-800">
+                {faille.regle}
+              </p>
+            </div>
+          )}
           <div>
             <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
               Source
@@ -624,6 +564,14 @@ function FailleRow({ faille }: { faille: FailleDto }) {
                       >
                         Ouvrir la source
                       </a>
+                    )}
+                    {"resume" in j && j.resume && (
+                      <p className="mt-2 text-xs leading-relaxed text-zinc-700">
+                        <span className="font-semibold text-zinc-800">
+                          Résumé :{" "}
+                        </span>
+                        {j.resume}
+                      </p>
                     )}
                   </li>
                 ))}

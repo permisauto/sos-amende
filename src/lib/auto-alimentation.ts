@@ -22,11 +22,23 @@ export async function synchroniserCatalogue(): Promise<number> {
   for (const f of CATALOGUE_SOURCES) {
     const existing = await prisma.failleJuridique.findUnique({
       where: { id: f.id },
-      select: { statut: true },
+      select: { statut: true, regle: true },
     });
-    if (existing && existing.statut !== "PROPOSEE") {
-      // Déjà validée (ACTIVE) ou écartée (INACTIVE) : on ne touche pas au
-      // contenu ni au statut — la décision admin prime.
+    if (existing?.statut === "INACTIVE") {
+      // Proposition écartée par l'admin : on ne touche à rien (décision prime).
+      continue;
+    }
+    if (existing?.statut === "ACTIVE") {
+      // Faille déjà validée : enrichissement non destructif — on complète
+      // seulement `regle` (nouveau champ) si vide, sans toucher au statut ni
+      // au template (les éventuels ajustements admin sont conservés).
+      if (!existing.regle) {
+        await prisma.failleJuridique.update({
+          where: { id: f.id },
+          data: { regle: f.regle },
+        });
+        count += 1;
+      }
       continue;
     }
 
@@ -34,6 +46,7 @@ export async function synchroniserCatalogue(): Promise<number> {
       typeInfraction: f.typeInfraction,
       titreFaille: f.titreFaille,
       articleLoi: f.articleLoi,
+      regle: f.regle,
       templateLettre: f.templateLettre,
       source: f.source,
       reglesDetection: f.reglesDetection as Prisma.InputJsonValue,

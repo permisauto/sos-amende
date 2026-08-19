@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireJuriste } from "@/lib/dal";
 import { storageUrl } from "@/lib/storage";
 import { JuristeActions, DecisionOmpForm } from "./juriste-actions";
+import { LettreEdition } from "./lettre-edition";
 import { AvocatTraitement } from "./avocat-traitement";
 import { FaillesCandidates } from "./failles-candidates";
 import { Preuves, type PreuveDto } from "@/components/preuves";
@@ -109,6 +110,7 @@ export default async function JuristeCasePage(
       date: x.date ?? null,
       url: x.url ?? null,
       verifiee: x.verifiee,
+      resume: x.resume ?? null,
     }));
   const failleRetenue: FailleBibliotheque | null = item.failleJuridique
     ? {
@@ -116,6 +118,7 @@ export default async function JuristeCasePage(
         titreFaille: item.failleJuridique.titreFaille,
         articleLoi: item.failleJuridique.articleLoi,
         statut: item.failleJuridique.statut,
+        regle: item.failleJuridique.regle,
         jurisprudence: toRefs(item.failleJuridique.jurisprudence),
       }
     : null;
@@ -124,6 +127,7 @@ export default async function JuristeCasePage(
     titreFaille: f.titreFaille,
     articleLoi: f.articleLoi,
     statut: f.statut,
+    regle: f.regle,
     jurisprudence: toRefs(f.jurisprudence),
   }));
 
@@ -331,10 +335,24 @@ export default async function JuristeCasePage(
 
       {item.lettreGeneree && (
         <div className="mt-8 rounded-2xl border border-zinc-200 bg-white p-6">
-          <h2 className="text-lg font-semibold">Lettre générée</h2>
-          <div className="mt-4 whitespace-pre-wrap rounded-xl bg-zinc-50 p-6 text-sm leading-relaxed text-zinc-800">
-            {item.lettreGeneree}
-          </div>
+          <h2 className="text-lg font-semibold">
+            {item.statut === "A_VERIFIER" || item.statut === "PRET"
+              ? "Lettre de contestation — à relire et corriger"
+              : "Lettre générée"}
+          </h2>
+          {item.statut === "A_VERIFIER" || item.statut === "PRET" ? (
+            <div className="mt-4">
+              <LettreEdition
+                dossierId={item.id}
+                lettre={item.lettreGeneree}
+                signee={item.statut === "PRET"}
+              />
+            </div>
+          ) : (
+            <div className="mt-4 whitespace-pre-wrap rounded-xl bg-zinc-50 p-6 text-sm leading-relaxed text-zinc-800">
+              {item.lettreGeneree}
+            </div>
+          )}
         </div>
       )}
 
