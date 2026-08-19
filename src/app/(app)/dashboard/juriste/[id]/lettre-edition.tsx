@@ -25,18 +25,14 @@ export function LettreEdition({
   return (
     <form action={formAction} className="flex flex-col gap-3">
       <input type="hidden" name="dossierId" value={dossierId} />
-      <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium text-zinc-700">
-          Lettre de contestation (modifiable avant validation)
-        </span>
-        <textarea
-          name="lettre"
-          required
-          rows={16}
-          defaultValue={lettre}
-          className="rounded-xl border border-zinc-300 bg-zinc-50 px-4 py-3 text-sm leading-relaxed text-zinc-800 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-100"
-        />
-      </label>
+      <textarea
+        name="lettre"
+        required
+        rows={16}
+        aria-label="Texte de la lettre de contestation"
+        defaultValue={lettre}
+        className="rounded-xl border border-zinc-300 bg-zinc-50 px-4 py-3 text-sm leading-relaxed text-zinc-800 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-100"
+      />
       <p className="text-xs text-zinc-500">
         {signee
           ? "La lettre est déjà signée par le client : votre signature restera collée en bas de la nouvelle version (PDF régénéré automatiquement)."

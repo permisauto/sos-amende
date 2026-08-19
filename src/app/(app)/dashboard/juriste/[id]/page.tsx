@@ -28,6 +28,24 @@ const statusLabels: Record<string, string> = {
   ANNULE: "Annulé",
 };
 
+const statutChip: Record<string, { label: string; cls: string }> = {
+  A_VERIFIER: {
+    label: "À corriger avant envoi",
+    cls: "bg-amber-100 text-amber-800",
+  },
+  PRET: { label: "Signée — à valider", cls: "bg-emerald-100 text-emerald-800" },
+  ENVOYE: { label: "Envoyée (LRAR)", cls: "bg-blue-100 text-blue-800" },
+  RESOLU: { label: "Résolu", cls: "bg-emerald-100 text-emerald-800" },
+  REJETE: { label: "Rejetée", cls: "bg-red-100 text-red-700" },
+  EN_ANALYSE: { label: "En analyse", cls: "bg-zinc-100 text-zinc-600" },
+};
+
+const dateFormat = new Intl.DateTimeFormat("fr-FR", {
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+});
+
 export default async function JuristeCasePage(
   props: PageProps<"/dashboard/juriste/[id]">,
 ) {
@@ -131,24 +149,58 @@ export default async function JuristeCasePage(
     jurisprudence: toRefs(f.jurisprudence),
   }));
 
+  const dateLimite = item.dateLimite
+    ? dateFormat.format(item.dateLimite)
+    : null;
+
+  const editable = item.statut === "A_VERIFIER" || item.statut === "PRET";
+  const chip = statutChip[item.statut] ?? {
+    label: statusLabels[item.statut] ?? item.statut,
+    cls: "bg-zinc-100 text-zinc-600",
+  };
+  const lettreAccroche =
+    item.statut === "A_VERIFIER"
+      ? "Lettre générée par le moteur, à relire et corriger avant la signature du client."
+      : item.statut === "PRET"
+        ? "Lettre signée par le client. Corrigez si nécessaire (la signature est recollée automatiquement), puis approuvez l'envoi."
+        : "Lettre de contestation transmise pour ce dossier.";
+
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="mx-auto max-w-7xl">
       <Link
         href="/dashboard/juriste"
         className="text-sm font-medium text-zinc-500 hover:text-zinc-900"
       >
-        ← Retour à la file d'attente
+        ← Retour à la file d&apos;attente
       </Link>
 
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold">
-          {item.user.name ?? item.user.email}
-        </h1>
-        <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
-          {statusLabels[item.statut] ?? item.statut}
-        </span>
+      <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold">
+              {item.user.name ?? item.user.email}
+            </h1>
+            <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
+              {statusLabels[item.statut] ?? item.statut}
+            </span>
+            <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-600">
+              {item.type === "AMENDE" ? "Amende" : "Suspension de permis"}
+            </span>
+          </div>
+          <p className="mt-1 text-sm text-zinc-500">{item.user.email}</p>
+        </div>
+        {dateLimite && (
+          <div className="text-right">
+            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Date limite de contestation
+            </p>
+            <p className="mt-1 text-lg font-bold text-zinc-900">{dateLimite}</p>
+            <p className="text-xs font-medium text-zinc-500">
+              Respectez ce délai pour l&apos;envoi (LRAR)
+            </p>
+          </div>
+        )}
       </div>
-      <p className="text-sm text-zinc-500">{item.user.email}</p>
 
       {(searchParams.valide === "ok" ||
         searchParams.retourne === "ok" ||
@@ -182,52 +234,142 @@ export default async function JuristeCasePage(
           </div>
         )}
 
-      <div className="mt-6 grid gap-6 md:grid-cols-2">
-        <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-            Avis de contravention
-          </h2>
-          {item.pvUrl &&
-            pvUrl &&
-            (isImage ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={pvUrl}
-                alt="Avis de contravention"
-                className="mt-3 rounded-2xl border border-zinc-200 bg-zinc-50 object-contain"
-              />
-            ) : (
-              <a
-                href={pvUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-3 inline-block rounded-xl border border-zinc-200 px-4 py-3 text-sm font-medium text-emerald-700 hover:bg-zinc-50"
-              >
-                Ouvrir le PV (PDF)
-              </a>
-            ))}
-
-          {courrier?.pdfUrl && pdfUrl && (
-            <div className="mt-4">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-                Lettre signée
-              </h2>
-              <a
-                href={pdfUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-2 inline-block rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
-              >
-                Télécharger la lettre signée (PDF)
-              </a>
+      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+        {/* Colonne principale — la lettre, objet du travail du juriste */}
+        <div className="flex flex-col gap-6 lg:col-span-2">
+          <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 bg-emerald-50/70 px-6 py-4">
+              <div>
+                <h2 className="text-lg font-semibold">Lettre de contestation</h2>
+                <p className="mt-0.5 text-sm text-zinc-600">{lettreAccroche}</p>
+              </div>
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${chip.cls}`}>
+                {chip.label}
+              </span>
             </div>
+            <div className="p-6">
+              {editable ? (
+                <>
+                  {item.lettreGeneree ? (
+                    <LettreEdition
+                      dossierId={item.id}
+                      lettre={item.lettreGeneree}
+                      signee={item.statut === "PRET"}
+                    />
+                  ) : (
+                    <p className="rounded-xl bg-zinc-50 px-4 py-3 text-sm text-zinc-600">
+                      Aucune lettre générée pour ce dossier (aucun fondement
+                      juridique applicable). Le dossier est soumis à votre
+                      examen : rejetez-le avec un motif si nécessaire.
+                    </p>
+                  )}
+                  {item.statut === "PRET" && courrier?.pdfUrl && pdfUrl && (
+                    <div className="mt-5 border-t border-zinc-100 pt-5">
+                      <a
+                        href={pdfUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-block rounded-xl border border-emerald-200 px-5 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
+                      >
+                        Télécharger la lettre signée (PDF)
+                      </a>
+                    </div>
+                  )}
+                  <div className="mt-6 border-t border-zinc-100 pt-6">
+                    {item.statut === "PRET" ? (
+                      <JuristeActions dossierId={item.id} />
+                    ) : (
+                      <JuristeActions dossierId={item.id} mode="rejet" />
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  {item.lettreGeneree && (
+                    <div className="whitespace-pre-wrap rounded-xl bg-zinc-50 p-6 text-sm leading-relaxed text-zinc-800">
+                      {item.lettreGeneree}
+                    </div>
+                  )}
+                  {courrier?.pdfUrl && pdfUrl && (
+                    <a
+                      href={pdfUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-4 inline-block rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                    >
+                      Télécharger la lettre (PDF)
+                    </a>
+                  )}
+                </>
+              )}
+            </div>
+          </section>
+
+          {item.statut === "ENVOYE" && (
+            <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
+              <h2 className="font-semibold text-emerald-900">
+                Dossier envoyé par le client (LRAR)
+              </h2>
+              <p className="mt-1 text-sm text-emerald-800">
+                Le client a confirmé l&apos;envoi de sa lettre en recommandé
+                avec accusé de réception. À la réception de la réponse de
+                l&apos;OMP, enregistrez la décision pour clore le dossier.
+              </p>
+
+              <div className="mt-6 rounded-2xl border border-emerald-200 bg-white p-6">
+                <h3 className="font-semibold text-zinc-800">
+                  Suivi de la décision (OMP)
+                </h3>
+                <p className="mt-1 text-sm text-zinc-600">
+                  Une fois la réponse de l&apos;OMP reçue, enregistrez la
+                  décision pour clore le dossier (statut « Résolu ») et en
+                  informer le client.
+                </p>
+                <div className="mt-4">
+                  <DecisionOmpForm dossierId={item.id} />
+                </div>
+              </div>
+            </section>
+          )}
+
+          {item.statut === "RESOLU" && item.decisionOmp && (
+            <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
+              <h2 className="font-semibold text-emerald-900">
+                Dossier résolu — décision :{" "}
+                {item.decisionOmp === "ACCEPTE"
+                  ? "requête acceptée"
+                  : "requête rejetée"}
+              </h2>
+              {item.decisionDetail && (
+                <p className="mt-2 text-sm text-emerald-800">
+                  {item.decisionDetail}
+                </p>
+              )}
+            </section>
           )}
         </div>
 
-        <div className="flex flex-col gap-4">
-          <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+        {/* Colonne latérale — références et contexte de vérification */}
+        <div className="flex flex-col gap-6">
+          <BibliothequeJuriste
+            failleRetenue={failleRetenue}
+            bibliotheque={bibliothequeDto}
+          />
+
+          {candidats.length > 0 && (
+            <section className="rounded-2xl border border-zinc-200 bg-white p-6">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
+                Failles détectées — à confirmer ou écarter
+              </h2>
+              <div className="mt-3">
+                <FaillesCandidates dossierId={item.id} candidats={candidats} />
+              </div>
+            </section>
+          )}
+
+          <section className="rounded-2xl border border-zinc-200 bg-white p-6">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-              Données extraites
+              Données du dossier
             </h2>
             <dl className="mt-3 space-y-2 text-sm">
               {data ? (
@@ -245,12 +387,6 @@ export default async function JuristeCasePage(
                     <dd className="font-medium">{String(data.date ?? "—")}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-zinc-500">Type</dt>
-                    <dd className="font-medium">
-                      {item.type === "AMENDE" ? "Amende" : "Suspension"}
-                    </dd>
-                  </div>
-                  <div className="flex justify-between">
                     <dt className="text-zinc-500">Prix</dt>
                     <dd className="font-medium">{item.prix.toString()} €</dd>
                   </div>
@@ -259,173 +395,79 @@ export default async function JuristeCasePage(
                 <p className="text-zinc-500">Aucune donnée extraite.</p>
               )}
             </dl>
-          </div>
-
-          <div className="rounded-2xl border border-zinc-200 bg-white p-5">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-              Contexte (questionnaire)
-            </h2>
-            {questionnaire.length > 0 ? (
-              <ul className="mt-3 space-y-1.5 text-sm text-zinc-700">
-                {questionnaire.map((lib) => (
-                  <li key={lib} className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
-                    {lib}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-3 text-sm text-zinc-500">
-                Aucun signalement particulier.
-              </p>
-            )}
-          </div>
-
-          <div className="rounded-2xl border border-zinc-200 bg-white p-5">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-              Failles détectées
-            </h2>
-            {item.failleJuridique && candidats.length === 0 ? (
-              <div className="mt-3">
-                <p className="font-medium">
-                  {item.failleJuridique.titreFaille}
+            <div className="mt-4 border-t border-zinc-100 pt-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                Contexte (questionnaire)
+              </h3>
+              {questionnaire.length > 0 ? (
+                <ul className="mt-2 space-y-1.5 text-sm text-zinc-700">
+                  {questionnaire.map((lib) => (
+                    <li key={lib} className="flex items-center gap-2">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+                      {lib}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-sm text-zinc-500">
+                  Aucun signalement particulier.
                 </p>
-                <p className="mt-1 text-sm text-zinc-600">
-                  {item.failleJuridique.articleLoi}
-                </p>
-              </div>
-            ) : (
-              <FaillesCandidates dossierId={item.id} candidats={candidats} />
-            )}
-          </div>
-        </div>
-      </div>
-
-      {item.evenements.length > 0 && (
-        <div className="mt-8">
-          <DossierTimeline events={evenements} />
-        </div>
-      )}
-
-      <div className="mt-8">
-        <Preuves
-          dossierId={item.id}
-          preuves={preuvesDto}
-          currentUserId={null}
-        />
-      </div>
-
-      <div className="mt-8">
-        <AvocatTraitement
-          matchId={item.lawyerMatch?.id ?? ""}
-          match={
-            item.lawyerMatch
-              ? {
-                  statut: item.lawyerMatch.statut,
-                  motif: item.lawyerMatch.motif,
-                  partnerName: item.lawyerMatch.partnerName,
-                  partnerBarreau: item.lawyerMatch.partnerBarreau,
-                  partnerEmail: item.lawyerMatch.partnerEmail,
-                  note: item.lawyerMatch.note,
-                }
-              : null
-          }
-        />
-      </div>
-
-      {item.lettreGeneree && (
-        <div className="mt-8 rounded-2xl border border-zinc-200 bg-white p-6">
-          <h2 className="text-lg font-semibold">
-            {item.statut === "A_VERIFIER" || item.statut === "PRET"
-              ? "Lettre de contestation — à relire et corriger"
-              : "Lettre générée"}
-          </h2>
-          {item.statut === "A_VERIFIER" || item.statut === "PRET" ? (
-            <div className="mt-4">
-              <LettreEdition
-                dossierId={item.id}
-                lettre={item.lettreGeneree}
-                signee={item.statut === "PRET"}
-              />
+              )}
             </div>
-          ) : (
-            <div className="mt-4 whitespace-pre-wrap rounded-xl bg-zinc-50 p-6 text-sm leading-relaxed text-zinc-800">
-              {item.lettreGeneree}
-            </div>
+          </section>
+
+          <section className="rounded-2xl border border-zinc-200 bg-white p-6">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
+              Avis de contravention
+            </h2>
+            {item.pvUrl &&
+              pvUrl &&
+              (isImage ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={pvUrl}
+                  alt="Avis de contravention"
+                  className="mt-3 rounded-2xl border border-zinc-200 bg-zinc-50 object-contain"
+                />
+              ) : (
+                <a
+                  href={pvUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-3 inline-block rounded-xl border border-zinc-200 px-4 py-3 text-sm font-medium text-emerald-700 hover:bg-zinc-50"
+                >
+                  Ouvrir le PV (PDF)
+                </a>
+              ))}
+          </section>
+
+          <Preuves
+            dossierId={item.id}
+            preuves={preuvesDto}
+            currentUserId={null}
+          />
+
+          <AvocatTraitement
+            matchId={item.lawyerMatch?.id ?? ""}
+            match={
+              item.lawyerMatch
+                ? {
+                    statut: item.lawyerMatch.statut,
+                    motif: item.lawyerMatch.motif,
+                    partnerName: item.lawyerMatch.partnerName,
+                    partnerBarreau: item.lawyerMatch.partnerBarreau,
+                    partnerEmail: item.lawyerMatch.partnerEmail,
+                    note: item.lawyerMatch.note,
+                  }
+                : null
+            }
+          />
+
+          {item.evenements.length > 0 && (
+            <DossierTimeline events={evenements} />
           )}
         </div>
-      )}
-
-      <BibliothequeJuriste
-        failleRetenue={failleRetenue}
-        bibliotheque={bibliothequeDto}
-      />
-
-      {item.statut === "PRET" && (
-        <div className="mt-8 rounded-2xl border border-zinc-200 bg-white p-6">
-          <h2 className="text-lg font-semibold">Validation juriste</h2>
-          <p className="mt-1 text-sm text-zinc-600">
-            Vérifiez la lettre signée puis approuvez-la : le client recevra
-            son kit d&apos;envoi en recommandé avec accusé de réception (LRAR).
-            Vous pouvez aussi le retourner ou le rejeter.
-          </p>
-          <div className="mt-5">
-            <JuristeActions dossierId={item.id} />
-          </div>
-        </div>
-      )}
-
-      {item.statut === "A_VERIFIER" && (
-        <div className="mt-8 rounded-2xl border border-zinc-200 bg-white p-6">
-          <h2 className="text-lg font-semibold">Rejet</h2>
-          <p className="mt-1 text-sm text-zinc-600">
-            Lettre non encore signée : si aucun motif de contestation ne
-            s&apos;applique, rejetez le dossier avec un motif.
-          </p>
-          <div className="mt-5">
-            <JuristeActions dossierId={item.id} mode="rejet" />
-          </div>
-        </div>
-      )}
-
-      {item.statut === "ENVOYE" && (
-        <div className="mt-8 rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
-          <h2 className="font-semibold text-emerald-900">
-            Dossier envoyé par le client (LRAR)
-          </h2>
-          <p className="mt-1 text-sm text-emerald-800">
-            Le client a confirmé l&apos;envoi de sa lettre en recommandé avec
-            accusé de réception. À la réception de la réponse de l&apos;OMP,
-            enregistrez la décision pour clore le dossier.
-          </p>
-
-          <div className="mt-6 rounded-2xl border border-emerald-200 bg-white p-6">
-            <h3 className="font-semibold text-zinc-800">
-              Suivi de la décision (OMP)
-            </h3>
-            <p className="mt-1 text-sm text-zinc-600">
-              Une fois la réponse de l&apos;OMP reçue, enregistrez la décision
-              pour clore le dossier (statut « Résolu ») et en informer le
-              client.
-            </p>
-            <div className="mt-4">
-              <DecisionOmpForm dossierId={item.id} />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {item.statut === "RESOLU" && item.decisionOmp && (
-        <div className="mt-8 rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
-          <h2 className="font-semibold text-emerald-900">
-            Dossier résolu — décision :{" "}
-            {item.decisionOmp === "ACCEPTE" ? "requête acceptée" : "requête rejetée"}
-          </h2>
-          {item.decisionDetail && (
-            <p className="mt-2 text-sm text-emerald-800">{item.decisionDetail}</p>
-          )}
-        </div>
-      )}
+      </div>
     </div>
   );
 }
