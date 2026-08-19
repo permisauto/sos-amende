@@ -390,6 +390,7 @@ function FailleFields({ initial }: { initial?: FailleDto }) {
 
 function FailleRow({ faille }: { faille: FailleDto }) {
   const [editing, setEditing] = useState(false);
+  const [detail, setDetail] = useState(false);
   const [toggleState, toggleAction, togglePending] = useActionState(
     basculerFaille,
     undefined,
@@ -475,7 +476,14 @@ function FailleRow({ faille }: { faille: FailleDto }) {
             </p>
           )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setDetail((v) => !v)}
+            className="rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+          >
+            {detail ? "Masquer le détail" : "Lire en détail"}
+          </button>
           <button
             type="button"
             onClick={() => setEditing((v) => !v)}
@@ -531,6 +539,98 @@ function FailleRow({ faille }: { faille: FailleDto }) {
         <p className="mt-3 rounded-xl bg-red-50 px-4 py-2 text-sm text-red-700">
           {propState.error}
         </p>
+      )}
+
+      {detail && (
+        <div className="mt-5 flex flex-col gap-4 rounded-xl border border-zinc-100 bg-zinc-50 p-5">
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Article / base légale
+            </h4>
+            <p className="mt-1 text-sm text-zinc-800">{faille.articleLoi}</p>
+          </div>
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Source
+            </h4>
+            <p className="mt-1 text-sm text-zinc-800">
+              {faille.source ?? "—"}
+            </p>
+          </div>
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Template de lettre
+            </h4>
+            <pre className="mt-1 whitespace-pre-wrap rounded-xl bg-white p-4 font-mono text-xs leading-relaxed text-zinc-700">
+              {faille.templateLettre}
+            </pre>
+          </div>
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Règles de détection
+            </h4>
+            {faille.reglesDetection?.length ? (
+              <ul className="mt-1 flex flex-col gap-1">
+                {faille.reglesDetection.map((r, i) => (
+                  <li key={i} className="text-sm text-zinc-700">
+                    {r.type}
+                    {"motif" in r && r.motif ? ` — ${r.motif}` : ""}
+                    {"champ" in r && r.champ ? ` — champ ${r.champ}` : ""}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-1 text-sm text-zinc-600">
+                Prédicats par défaut (failles historiques).
+              </p>
+            )}
+          </div>
+          {jurisprudence.length > 0 && (
+            <div>
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                Jurisprudence
+              </h4>
+              <ul className="mt-1 flex flex-col gap-2">
+                {jurisprudence.map((j, i) => (
+                  <li key={i} className="rounded-xl bg-white p-3 text-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                          j.verifiee
+                            ? "bg-emerald-100 text-emerald-800"
+                            : "bg-red-100 text-red-700"
+                        }`}
+                      >
+                        {j.verifiee ? "Vérifiée" : "À vérifier"}
+                      </span>
+                      <span className="font-medium text-zinc-800">
+                        {j.reference}
+                      </span>
+                    </div>
+                    {j.date && (
+                      <p className="mt-1 text-xs text-zinc-500">{j.date}</p>
+                    )}
+                    {j.juridiction && (
+                      <p className="mt-0.5 text-xs text-zinc-500">
+                        {j.juridiction}
+                      </p>
+                    )}
+                    {j.url && (
+                      <a
+                        href={j.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-1 inline-block text-xs font-medium text-emerald-700 hover:underline"
+                      >
+                        Ouvrir la source
+                      </a>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
       )}
 
       {editing && (

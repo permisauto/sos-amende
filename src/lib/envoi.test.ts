@@ -5,6 +5,7 @@ import {
   destinataireLrar,
   numeroRefLibelle,
   pieceAJoindre,
+  portailEnLigne,
   titreAnalyse,
 } from "./envoi";
 
@@ -31,5 +32,15 @@ describe("envoi — libellés par type d'infraction", () => {
     expect(dateRefLibelle("SUSPENSION")).toBe("Date de la décision");
     expect(titreAnalyse("AMENDE")).toContain("avis");
     expect(titreAnalyse("SUSPENSION")).toContain("décision");
+  });
+
+  it("portails officiels de dépôt en ligne : ANTAI vs Télérecours", () => {
+    const amende = portailEnLigne("AMENDE");
+    expect(amende.label).toContain("ANTAI");
+    expect(amende.url).toContain("usagers.antai.gouv.fr");
+
+    const suspension = portailEnLigne("SUSPENSION");
+    expect(suspension.label).toContain("Télérecours");
+    expect(suspension.url).toContain("citoyens.telerecours.fr");
   });
 });

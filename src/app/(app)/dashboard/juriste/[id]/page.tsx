@@ -8,6 +8,12 @@ import { AvocatTraitement } from "./avocat-traitement";
 import { FaillesCandidates } from "./failles-candidates";
 import { Preuves, type PreuveDto } from "@/components/preuves";
 import { DossierTimeline } from "@/components/dossier-timeline";
+import {
+  BibliothequeJuriste,
+  type FailleBibliotheque,
+  type RefJurisprudentielle,
+} from "@/components/bibliotheque-juriste";
+import type { JurisprudenceRef } from "@/lib/catalogue-sources";
 
 const statusLabels: Record<string, string> = {
   BROUILLON: "Brouillon",
@@ -88,6 +94,38 @@ export default async function JuristeCasePage(
       detailUrl: e.detail ? await storageUrl(e.detail) : null,
     })),
   );
+
+  // Bibliothèque juridique dynamique : les références de la faille retenue
+  // (celles qui fondent la lettre) + toutes les failles de la bibliothèque
+  // pour vérifier que les références citées sont exactes et conformes.
+  const bibliotheque = await prisma.failleJuridique.findMany({
+    where: { statut: { in: ["ACTIVE", "PROPOSEE"] } },
+    orderBy: [{ statut: "asc" }, { createdAt: "desc" }],
+  });
+  const toRefs = (j: unknown): RefJurisprudentielle[] =>
+    ((j as JurisprudenceRef[]) ?? []).map((x) => ({
+      reference: x.reference,
+      juridiction: x.juridiction ?? null,
+      date: x.date ?? null,
+      url: x.url ?? null,
+      verifiee: x.verifiee,
+    }));
+  const failleRetenue: FailleBibliotheque | null = item.failleJuridique
+    ? {
+        id: item.failleJuridique.id,
+        titreFaille: item.failleJuridique.titreFaille,
+        articleLoi: item.failleJuridique.articleLoi,
+        statut: item.failleJuridique.statut,
+        jurisprudence: toRefs(item.failleJuridique.jurisprudence),
+      }
+    : null;
+  const bibliothequeDto: FailleBibliotheque[] = bibliotheque.map((f) => ({
+    id: f.id,
+    titreFaille: f.titreFaille,
+    articleLoi: f.articleLoi,
+    statut: f.statut,
+    jurisprudence: toRefs(f.jurisprudence),
+  }));
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -299,6 +337,11 @@ export default async function JuristeCasePage(
           </div>
         </div>
       )}
+
+      <BibliothequeJuriste
+        failleRetenue={failleRetenue}
+        bibliotheque={bibliothequeDto}
+      />
 
       {item.statut === "PRET" && (
         <div className="mt-8 rounded-2xl border border-zinc-200 bg-white p-6">

@@ -46,5 +46,8 @@ next-env.d.ts
 # generated prisma client
 /src/generated/prisma
 
+# tesseract.js language data (downloaded at runtime)
+*.traineddata
+
 # uploaded PV (dev storage)
 /public/uploads

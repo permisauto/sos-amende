@@ -10,9 +10,11 @@ import { useState } from "react";
 export function PayerCta({
   type = "AMENDE",
   label,
+  className,
 }: {
   type?: "AMENDE" | "SUSPENSION";
   label: string;
+  className?: string;
 }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +44,10 @@ export function PayerCta({
       <button
         onClick={lancerPaiement}
         disabled={pending}
-        className="rounded-full bg-emerald-600 px-6 py-3 text-center font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
+        className={
+          className ??
+          "rounded-full bg-emerald-600 px-6 py-3 text-center font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
+        }
       >
         {pending ? "Redirection vers le paiement…" : label}
       </button>

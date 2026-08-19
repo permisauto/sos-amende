@@ -86,6 +86,12 @@ export default async function CaseDetailPage(
             text: "Délai dépassé — agissez immédiatement",
           };
 
+  const data = item.extractedData as Record<string, unknown> | null;
+  const numPv = typeof data?.num_pv === "string" ? data.num_pv : null;
+  // La lettre n'est révélée au client qu'après l'envoi effectif de la
+  // contestation (vérifiée et validée par le juriste).
+  const lettreVisible = item.statut === "ENVOYE" || item.statut === "RESOLU";
+
   const workflow = [
     { statut: "BROUILLON", label: "Création" },
     { statut: "EN_ANALYSE", label: "Analyse" },
@@ -408,21 +414,42 @@ export default async function CaseDetailPage(
         <div className="mt-8 flex flex-col gap-6">
           <div className="rounded-2xl border border-zinc-200 bg-white p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold">Lettre de contestation</h2>
+              <h2 className="text-lg font-semibold">Signature de la lettre</h2>
               <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
                 En attente de votre signature
               </span>
             </div>
-            <div className="mt-4 whitespace-pre-wrap rounded-xl bg-zinc-50 p-6 text-sm leading-relaxed text-zinc-800">
-              {item.lettreGeneree}
+            <p className="mt-2 text-sm text-zinc-600">
+              Votre lettre de contestation a été préparée par notre équipe
+              juridique. Elle vous sera présentée après l&apos;envoi de la
+              contestation. Tracez simplement votre signature ci-dessous :
+              elle sera apposée en bas de la lettre et le PDF final généré.
+            </p>
+            <div className="mt-4 flex items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+              <svg
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                className="h-5 w-5 shrink-0 text-zinc-400"
+                aria-hidden
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              <p className="text-sm text-zinc-600">
+                Lettre confidentielle — révélée après l&apos;envoi validé par
+                un juriste.
+              </p>
             </div>
           </div>
 
           <div className="rounded-2xl border border-zinc-200 bg-white p-6">
             <h2 className="text-lg font-semibold">Signature électronique</h2>
             <p className="mt-1 text-sm text-zinc-600">
-              Tracez votre signature ci-dessous : elle sera apposée sur la
-              lettre et le PDF final généré.
+              Votre signature sera collée automatiquement en bas de la lettre
+              de contestation.
             </p>
             <div className="mt-6">
               <SignaturePad dossierId={item.id} />
@@ -434,8 +461,8 @@ export default async function CaseDetailPage(
           <LrKit
             dossierId={item.id}
             dateLimite={item.dateLimite}
-            pdfUrl={pdfUrl}
             type={item.type}
+            numPv={numPv}
           />
         ) : (
           <div className="mt-8 rounded-2xl border border-zinc-200 bg-white p-6">
@@ -447,19 +474,9 @@ export default async function CaseDetailPage(
             </div>
             <p className="mt-1 text-sm text-zinc-600">
               Votre lettre est signée. Un juriste la vérifie avant que vous
-              puissiez l&apos;envoyer en recommandé avec accusé de réception.
+              puissiez transmettre votre contestation.
             </p>
             <div className="mt-4 flex flex-wrap items-center gap-4">
-              {pdfUrl && (
-                <a
-                  href={pdfUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="rounded-full bg-emerald-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
-                >
-                  Télécharger la lettre PDF
-                </a>
-              )}
               {signatureUrl && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -471,12 +488,50 @@ export default async function CaseDetailPage(
             </div>
           </div>
         )
+      ) : item.statut === "ENVOYE" || item.statut === "RESOLU" ? (
+        <div className="mt-8 flex flex-col gap-6">
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
+            <h2 className="font-semibold text-emerald-900">
+              Contestation envoyée
+            </h2>
+            <p className="mt-1 text-sm text-emerald-800">
+              {item.type === "AMENDE"
+                ? "L'OMP examinera votre requête"
+                : "Le préfet examinera votre recours"}{" "}
+              — pensez à conserver votre accusé d&apos;envoi.
+            </p>
+          </div>
+          {lettreVisible && item.lettreGeneree && (
+            <div className="rounded-2xl border border-zinc-200 bg-white p-6">
+              <h2 className="text-lg font-semibold">
+                Votre lettre de contestation
+              </h2>
+              <p className="mt-1 text-sm text-zinc-600">
+                Contenu de la lettre vérifiée et validée par un juriste, telle
+                que transmise.
+              </p>
+              <div className="mt-4 whitespace-pre-wrap rounded-xl bg-zinc-50 p-6 text-sm leading-relaxed text-zinc-800">
+                {item.lettreGeneree}
+              </div>
+              {pdfUrl && (
+                <a
+                  href={pdfUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-4 inline-block rounded-full bg-emerald-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                >
+                  Télécharger la lettre signée (PDF)
+                </a>
+              )}
+            </div>
+          )}
+        </div>
       ) : (
         <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-6">
           <h2 className="font-semibold text-amber-900">Prochaines étapes</h2>
           <p className="mt-1 text-sm text-amber-800">
-            La lettre, une fois signée et validée par un juriste, pourra être
-            envoyée en recommandé avec accusé de réception (LRAR).
+            Une fois signée et validée par un juriste, votre lettre pourra être
+            transmise en ligne ou en recommandé avec accusé de réception (LRAR).
           </p>
         </div>
       )}

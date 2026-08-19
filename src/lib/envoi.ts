@@ -38,3 +38,24 @@ export function numeroRefLibelle(type: InfractionType): string {
 export function dateRefLibelle(type: InfractionType): string {
   return type === "SUSPENSION" ? "Date de la décision" : "Date du PV";
 }
+
+/**
+ * Portail officiel de dépôt en ligne de la contestation.
+ * - AMENDE : téléservice ANTAI « Désigner ou contester en ligne »
+ * - SUSPENSION : Télérecours citoyens (tribunal administratif)
+ * URLs officielles vérifiées (antai.gouv.fr / telerecours.fr).
+ */
+export function portailEnLigne(type: InfractionType): {
+  label: string;
+  url: string;
+} {
+  return type === "SUSPENSION"
+    ? {
+        label: "Télérecours citoyens (tribunal administratif)",
+        url: "https://citoyens.telerecours.fr/#/authentication",
+      }
+    : {
+        label: "ANTAI — Désigner ou contester en ligne",
+        url: "https://www.usagers.antai.gouv.fr/demarches/saisienumero?lang=fr",
+      };
+}

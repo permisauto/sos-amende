@@ -103,18 +103,23 @@ test("flux complet : dépôt → analyse → signature → validation juriste �
     page.getByText("En attente de validation du juriste", { exact: false }),
   ).toBeVisible();
 
-  // Le juriste approuve la lettre → le kit LRAR apparaît côté client
+  // Le juriste approuve la lettre → le kit d'envoi apparaît côté client
   await approuverLettre(browser);
   await page.goto(`/dashboard/cases/${dossierId}`);
   await expect(
     page.getByRole("heading", { name: "Kit d'envoi — lettre validée" }),
   ).toBeVisible();
   await expect(
+    page.getByText("ANTAI — Désigner ou contester en ligne", { exact: false }),
+  ).toBeVisible();
+  await expect(
     page.getByText("recommandé avec accusé de réception", { exact: false }),
   ).toBeVisible();
 
-  // Le client confirme son envoi LRAR → statut Envoyé
-  await page.getByRole("button", { name: "J'ai envoyé ma lettre" }).click();
+  // Le client confirme sa transmission → statut Envoyé
+  await page
+    .getByRole("button", { name: "J'ai envoyé ma contestation" })
+    .click();
   await expect(
     page.getByText(
       "Votre lettre a été envoyée. L'OMP examinera votre requête",
@@ -125,6 +130,14 @@ test("flux complet : dépôt → analyse → signature → validation juriste �
     page.getByText("Envoyé par le client en recommandé avec accusé de réception", {
       exact: true,
     }),
+  ).toBeVisible();
+
+  // Après l'envoi, la lettre est révélée au client
+  await expect(
+    page.getByRole("heading", { name: "Votre lettre de contestation" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("vérifiée et validée par un juriste", { exact: false }),
   ).toBeVisible();
 
   // Le juriste enregistre la décision OMP → dossier Résolu

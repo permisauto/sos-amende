@@ -52,7 +52,13 @@ export async function analyserDossier(page: Page): Promise<void> {
     .getByRole("button", { name: "Analyser et générer la lettre" })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Lettre de contestation" }),
+    page.getByRole("heading", { name: "Signature de la lettre" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "Lettre confidentielle — révélée après l'envoi validé par un juriste.",
+      { exact: true },
+    ),
   ).toBeVisible();
 }
 

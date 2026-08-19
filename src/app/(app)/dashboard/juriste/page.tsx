@@ -34,6 +34,14 @@ const statusValues = [
 ] as const;
 type Statut = (typeof statusValues)[number];
 
+const statutBadge: Record<string, string> = {
+  PRET: "bg-amber-100 text-amber-800",
+  A_VERIFIER: "bg-indigo-100 text-indigo-800",
+  ENVOYE: "bg-emerald-100 text-emerald-800",
+  REJETE: "bg-red-100 text-red-800",
+  RESOLU: "bg-emerald-100 text-emerald-800",
+};
+
 export default async function JuristePage(
   props: PageProps<"/dashboard/juriste">,
 ) {
@@ -47,25 +55,75 @@ export default async function JuristePage(
         ? (raw as Statut)
         : "PRET";
 
-  const dossiers = await prisma.dossier.findMany({
-    where: statut === "ALL" ? undefined : { statut },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-    include: {
-      user: { select: { name: true, email: true } },
-      failleJuridique: { select: { titreFaille: true } },
-    },
-  });
+  const [dossiers, stats] = await Promise.all([
+    prisma.dossier.findMany({
+      where: statut === "ALL" ? undefined : { statut },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      include: {
+        user: { select: { name: true, email: true } },
+        failleJuridique: { select: { titreFaille: true } },
+      },
+    }),
+    prisma.dossier.groupBy({
+      by: ["statut"],
+      _count: true,
+    }),
+  ]);
+
+  const countBy = (s: string) =>
+    stats.find((x) => x.statut === s)?._count ?? 0;
 
   return (
-    <div>
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Espace juriste</h1>
-        <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-600">
-          {dossiers.length} dossier{dossiers.length > 1 ? "s" : ""}
-        </span>
+    <div className="mx-auto max-w-5xl">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">Espace juriste</h1>
+          <p className="mt-1 text-sm text-zinc-600">
+            Validez les lettres, suivez les envois et renseignez les décisions.
+          </p>
+        </div>
+        <Link
+          href="/dashboard/juriste/failles"
+          className="rounded-full border border-zinc-300 px-5 py-2.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
+        >
+          Bibliothèque juridique
+        </Link>
       </div>
 
+      {/* Statistiques */}
+      <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+          <p className="text-sm font-medium text-amber-700">À valider</p>
+          <p className="mt-1 text-3xl font-bold text-amber-900">
+            {countBy("PRET")}
+          </p>
+          <p className="mt-1 text-xs text-amber-700">
+            Lettres signées à approuver
+          </p>
+        </div>
+        <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-5">
+          <p className="text-sm font-medium text-indigo-700">À vérifier</p>
+          <p className="mt-1 text-3xl font-bold text-indigo-900">
+            {countBy("A_VERIFIER")}
+          </p>
+          <p className="mt-1 text-xs text-indigo-700">
+            En attente de signature client
+          </p>
+        </div>
+        <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+          <p className="text-sm font-medium text-zinc-500">Envoyés</p>
+          <p className="mt-1 text-3xl font-bold">{countBy("ENVOYE")}</p>
+          <p className="mt-1 text-xs text-zinc-500">Décision OMP à suivre</p>
+        </div>
+        <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+          <p className="text-sm font-medium text-zinc-500">Résolus</p>
+          <p className="mt-1 text-3xl font-bold">{countBy("RESOLU")}</p>
+          <p className="mt-1 text-xs text-zinc-500">Dossiers clôturés</p>
+        </div>
+      </section>
+
+      {/* Filtres */}
       <div className="mt-6 flex flex-wrap gap-2">
         {filters.map((item) => (
           <Link
@@ -78,12 +136,15 @@ export default async function JuristePage(
             }`}
           >
             {item.label}
+            {item.value !== "ALL" && countBy(item.value) > 0
+              ? ` (${countBy(item.value)})`
+              : ""}
           </Link>
         ))}
       </div>
 
       {dossiers.length === 0 ? (
-        <div className="mt-8 rounded-2xl border border-dashed border-zinc-300 p-12 text-center">
+        <div className="mt-6 rounded-2xl border border-dashed border-zinc-300 p-12 text-center">
           <p className="text-zinc-600">Aucun dossier dans cette catégorie.</p>
         </div>
       ) : (
@@ -127,7 +188,12 @@ export default async function JuristePage(
                       {item.failleJuridique?.titreFaille ?? "—"}
                     </td>
                     <td className="px-4 py-3">
-                      <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-700">
+                      <span
+                        className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                          statutBadge[item.statut] ??
+                          "bg-zinc-100 text-zinc-700"
+                        }`}
+                      >
                         {statusLabels[item.statut] ?? item.statut}
                       </span>
                     </td>

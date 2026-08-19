@@ -28,6 +28,6 @@ test("paiement mock (inscription inversée) : payer → compte crédité → con
   await expect(page.getByText("Crédits", { exact: true }).locator("..")).toContainText("1");
   // Le crédit débloque l'accès au dépôt.
   await expect(
-    page.getByRole("link", { name: "Nouveau dossier" }),
+    page.getByRole("link", { name: "Téléverser un PV" }),
   ).toBeVisible();
 });
