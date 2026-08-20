@@ -30,20 +30,44 @@ async function soumettreEtMarquerEnvoye(dossierId: string) {
     },
   });
   if (!dossier) return { ok: false as const, error: "Dossier introuvable." };
+  // Garde de statut : seul un dossier PRET (signé, validé) peut être envoyé.
+  // Évite un double envoi (course avec l'envoi LRAR du client, relance…).
+  if (dossier.statut !== "PRET") {
+    return {
+      ok: false as const,
+      error: "Ce dossier n'est plus en attente d'envoi (déjà transmis ?).",
+    };
+  }
+
+  // Verrou atomique : la transition PRET → ENVOYE se fait AVANT l'appel
+  // externe pour empêcher deux soumissions concurrentes (deux clics, relance
+  // simultanée du client et du juriste). Si la soumission échoue, on revient
+  // en PRET (le client conserve son kit LRAR en secours).
+  const verrou = await prisma.dossier.updateMany({
+    where: { id: dossier.id, statut: "PRET" },
+    data: { statut: "ENVOYE" },
+  });
+  if (verrou.count === 0) {
+    return { ok: false as const, error: "Dossier déjà envoyé." };
+  }
 
   const organisme = organismeEnvoi(dossier.type);
   const result = await soumettreDossier(
     dossier,
     dossier.preuves.map((p) => ({ nom: p.nom })),
   );
-  if (!result.ok) return result;
+  if (!result.ok) {
+    // Rollback : retour en PRET (lettre validée) — le client peut poster en
+    // LRAR ou le juriste relancer via `envoyerContestation`.
+    await prisma.dossier.update({
+      where: { id: dossier.id },
+      data: { statut: "PRET" },
+    });
+    return result;
+  }
 
   const courrier = dossier.courriers[dossier.courriers.length - 1];
   await prisma.$transaction([
-    prisma.dossier.update({
-      where: { id: dossier.id },
-      data: { statut: "ENVOYE" },
-    }),
     ...(courrier
       ? [
           prisma.courrier.update({
@@ -232,15 +256,21 @@ export async function modifierLettre(
   let pdfUrl: string | null = courrier?.pdfUrl ?? null;
   if (courrier?.signatureUrl) {
     // Lettre déjà signée : on régénère le PDF avec la signature existante.
+    // Si la signature ne peut pas être relue, on refuse de modifier la lettre
+    // plutôt que de laisser un PDF périmé (nouveau texte, vieux PDF signé).
     const sig = await storageRead(courrier.signatureUrl);
-    if (sig) {
-      const sigDataUrl = `data:image/png;base64,${sig.toString("base64")}`;
-      const pdfBuffer = await generateLettrePdf(lettre, sigDataUrl);
-      pdfUrl = await storageWrite(
-        `pdfs/lettre-${dossier.id}-${Date.now()}.pdf`,
-        pdfBuffer,
-      );
+    if (!sig) {
+      return {
+        error:
+          "Impossible de relire la signature existante pour régénérer le PDF. La lettre n'a pas été modifiée.",
+      };
     }
+    const sigDataUrl = `data:image/png;base64,${sig.toString("base64")}`;
+    const pdfBuffer = await generateLettrePdf(lettre, sigDataUrl);
+    pdfUrl = await storageWrite(
+      `pdfs/lettre-${dossier.id}-${Date.now()}.pdf`,
+      pdfBuffer,
+    );
   }
 
   await prisma.$transaction([
@@ -289,7 +319,7 @@ export async function retournerDossier(
   await prisma.$transaction([
     prisma.dossier.update({
       where: { id: dossier.id },
-      data: { statut: "EN_ANALYSE" },
+      data: { statut: "EN_ANALYSE", valideLe: null },
     }),
     prisma.dossierEvent.create({
       data: { dossierId: dossier.id, type: "RETOUR" },
@@ -374,11 +404,24 @@ export async function confirmerFaille(
   if (!dossier) {
     return { error: "Dossier introuvable." };
   }
+  if (dossier.statut !== "A_VERIFIER" && dossier.statut !== "PRET") {
+    return {
+      error:
+        "La faille ne peut être confirmée que tant que la lettre n'est pas envoyée.",
+    };
+  }
   const faille = await prisma.failleJuridique.findUnique({
     where: { id: failleId },
   });
   if (!faille) {
     return { error: "Faille introuvable." };
+  }
+  // Garde-fou : seules les failles validées par l'admin (ACTIVE) alimentent
+  // les lettres — jamais une proposition (PROPOSEE) ni une écartée (INACTIVE).
+  if (faille.statut !== "ACTIVE") {
+    return {
+      error: "Cette faille n'est pas validée par la base juridique (ACTIVE).",
+    };
   }
 
   const data = (dossier.extractedData ?? {}) as Record<string, unknown>;

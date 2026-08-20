@@ -27,21 +27,19 @@ export async function ajouterPreuve(
   const type = TYPES.find((t) => t === typeRaw) ?? "AUTRE";
 
   // Accès : client propriétaire du dossier OU juriste (JURISTE/ADMIN).
-  let auteurId: string | null = null;
-  const user = await requireUser().catch(() => null);
-  if (user) {
-    const dossier = await prisma.dossier.findFirst({
-      where: { id: dossierId, userId: user.id },
-    });
-    if (!dossier) return { error: "Dossier introuvable." };
-    auteurId = user.id;
+  const user = await requireUser();
+  const dossier = await prisma.dossier.findFirst({
+    where: { id: dossierId, userId: user.id },
+  });
+  if (dossier) {
+    // Client propriétaire
   } else {
     const juriste = await requireJuriste().catch(() => null);
     if (!juriste) return { error: "Accès refusé." };
-    const dossier = await prisma.dossier.findUnique({ where: { id: dossierId } });
-    if (!dossier) return { error: "Dossier introuvable." };
-    auteurId = juriste.id;
+    const d = await prisma.dossier.findUnique({ where: { id: dossierId } });
+    if (!d) return { error: "Dossier introuvable." };
   }
+  const auteurId = user.id;
 
   if (!(file instanceof File) || file.size === 0) {
     return { error: "Veuillez sélectionner une pièce." };
@@ -76,35 +74,32 @@ export async function ajouterPreuve(
   return { ok: true };
 }
 
-/**
- * Suppression d'une pièce par le client propriétaire (RGPD) ou le juriste.
- */
+// Suppression d'une pièce par le client propriétaire (RGPD) ou le juriste.
 export async function supprimerPreuve(
   _prev: PreuveState,
   formData: FormData,
 ): Promise<PreuveState> {
   const preuveId = String(formData.get("preuveId") ?? "");
 
-  const user = await requireUser().catch(() => null);
-  if (user) {
-    const preuve = await prisma.preuve.findFirst({
-      where: { id: preuveId, dossier: { userId: user.id } },
-    });
-    if (!preuve) return { error: "Pièce introuvable." };
+  const user = await requireUser();
+  const preuve = await prisma.preuve.findFirst({
+    where: { id: preuveId, dossier: { userId: user.id } },
+  });
+  if (!preuve) {
+    // Pas le client propriétaire : seul un juriste (JURISTE/ADMIN) peut agir.
+    const juriste = await requireJuriste().catch(() => null);
+    if (!juriste) return { error: "Accès refusé." };
+    const p = await prisma.preuve.findUnique({ where: { id: preuveId } });
+    if (!p) return { error: "Pièce introuvable." };
     const { storageDelete } = await import("@/lib/storage");
-    await prisma.preuve.delete({ where: { id: preuve.id } });
-    await storageDelete(preuve.url);
-    revalidatePath(`/dashboard/cases/${preuve.dossierId}`);
+    await prisma.preuve.delete({ where: { id: p.id } });
+    await storageDelete(p.url);
+    revalidatePath(`/dashboard/juriste/${p.dossierId}`);
     return { ok: true };
   }
-
-  const juriste = await requireJuriste().catch(() => null);
-  if (!juriste) return { error: "Accès refusé." };
-  const preuve = await prisma.preuve.findUnique({ where: { id: preuveId } });
-  if (!preuve) return { error: "Pièce introuvable." };
   const { storageDelete } = await import("@/lib/storage");
   await prisma.preuve.delete({ where: { id: preuve.id } });
   await storageDelete(preuve.url);
-  revalidatePath(`/dashboard/juriste/${preuve.dossierId}`);
+  revalidatePath(`/dashboard/cases/${preuve.dossierId}`);
   return { ok: true };
 }

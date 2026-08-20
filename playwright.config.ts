@@ -30,6 +30,13 @@ export default defineConfig({
       OCR_PROVIDER: "mock",
       // Paiement de dev : checkout Stripe simulé (portail /mock-stripe).
       STRIPE_MOCK: "1",
+      // Mock ANTAI (garde-fou) : opt-in explicite pour les E2E — le build prod
+      // local expose le mock uniquement si ANTAI_MOCK=1 (et le token est fourni).
+      ANTAI_MOCK: "1",
+      ANTAI_MOCK_TOKEN: "dev-antai-mock",
+      // Magic-links dev : en build prod (next start), le fallback fichier doit
+      // être explicitement autorisé pour les E2E (AUTH_DEV_FILE=1).
+      AUTH_DEV_FILE: "1",
     },
   },
 });

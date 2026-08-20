@@ -69,6 +69,16 @@ export async function createDossier(
   const prix = parsedType.data === "AMENDE" ? 39 : 59;
 
   const dossier = await prisma.$transaction(async (tx) => {
+    // Débit atomique du crédit : le décrément ne réussit que si le client a
+    // encore au moins 1 crédit. Deux requêtes simultanées ne peuvent pas
+    // consommer un même crédit (garde-fou anti-course TOCTOU).
+    const debit = await tx.user.updateMany({
+      where: { id: user.id, credits: { gte: 1 } },
+      data: { credits: { decrement: 1 } },
+    });
+    if (debit.count === 0) {
+      throw new Error("CREDIT_INSUFFISANT");
+    }
     const d = await tx.dossier.create({
       data: {
         userId: user.id,
@@ -83,12 +93,19 @@ export async function createDossier(
     await tx.dossierEvent.create({
       data: { dossierId: d.id, type: "CREATION" },
     });
-    await tx.user.update({
-      where: { id: user.id },
-      data: { credits: { decrement: 1 } },
-    });
     return d;
+  }).catch((e) => {
+    if ((e as Error).message === "CREDIT_INSUFFISANT") {
+      return null;
+    }
+    throw e;
   });
+
+  if (!dossier) {
+    return {
+      error: "Vous n'avez plus de crédit. Un paiement est requis pour lancer un dossier.",
+    };
+  }
 
   revalidatePath("/dashboard");
   redirect(`/dashboard/cases/${dossier.id}`);

@@ -27,7 +27,9 @@ export async function soumettreDossier(
       headers: { "Content-Type": "application/json" },
       cache: "no-store",
       body: JSON.stringify({
-        token: process.env.ANTAI_MOCK_TOKEN ?? "dev-antai-mock",
+        token:
+          process.env.ANTAI_MOCK_TOKEN ??
+          (process.env.NODE_ENV === "production" ? "" : "dev-antai-mock"),
         numPv: data.num_pv,
         plaque: data.plaque,
         type: dossier.type,

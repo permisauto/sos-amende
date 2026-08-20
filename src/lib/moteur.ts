@@ -179,10 +179,23 @@ function evalRegle(
         !!texte && texte.toLowerCase().includes(regle.motif.toLowerCase())
       );
     case "texteAbsent":
+      // Anti-faux-positif : l'absence d'une mention ne déclenche que si le
+      // texte ressemble réellement à un PV/lettre (données extraites ou mots
+      // clés) — un texte arbitraire ne doit pas matcher « mention absente ».
       return (
-        !!texte && !texte.toLowerCase().includes(regle.motif.toLowerCase())
+        !!texte &&
+        texteDePv(texte, data) &&
+        !texte.toLowerCase().includes(regle.motif.toLowerCase())
       );
   }
+}
+
+/** Le texte ressemble-t-il à un avis/lettre de PV ? (anti-faux-positifs). */
+function texteDePv(texte: string, data: ExtractedData): boolean {
+  if (data.num_pv || data.plaque || data.date) return true;
+  return /(contravention|suspension|amende|avis|d[eé]cision|infraction|pv\b|n[°o]\s?\d)/i.test(
+    texte,
+  );
 }
 
 // Prédicats hérités pour les failles connues sans règles explicites.

@@ -6,7 +6,8 @@ import {
   type ExtractedData,
   type RegleDetection,
 } from "@/lib/moteur";
-import { extrairePv, normaliserPv } from "@/lib/ocr";
+import { extrairePv, getOcrProvider, normaliserPv } from "@/lib/ocr";
+import { consommerCreneau } from "@/lib/rate-limit";
 import type { JurisprudenceRef } from "@/lib/catalogue-sources";
 
 /**
@@ -109,14 +110,46 @@ export async function POST(req: Request) {
   let simule = true;
 
   try {
+    // Garde-fou anti-abus : la démo publique est une simulation — on borne le
+    // nombre d'appels par IP et la taille des fichiers acceptés.
+    const ip = (req.headers.get("x-forwarded-for") ?? "inconnue")
+      .split(",")[0]
+      .trim()
+      .slice(0, 64);
+    if (consommerCreneau(`demo:${ip}`, 20, 60 * 1000) === 0) {
+      return new Response(
+        JSON.stringify({
+          erreur:
+            "Trop de demandes de démonstration. Réessayez dans une minute.",
+        }),
+        { status: 429, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
     const form = await req.formData();
     const typeRaw = String(form.get("type") ?? "AMENDE");
     if (typeRaw === "SUSPENSION") type = "SUSPENSION";
 
     const fichier = form.get("pv");
     if (fichier instanceof File && fichier.size > 0) {
+      if (fichier.size > 8 * 1024 * 1024) {
+        return new Response(
+          JSON.stringify({
+            erreur: "Fichier trop volumineux (maximum 8 Mo).",
+          }),
+          { status: 400, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      // Garde-fou RGPD/coût : la démo publique n'exécute JAMAIS d'OCR payant
+      // (Google Vision / Mistral hébergé). Seuls les providers locaux et
+      // gratuits (mock, tesseract) peuvent scanner un fichier ici — sinon on
+      // retombe sur l'échantillon simulé.
+      const provider = getOcrProvider();
       const buffer = Buffer.from(await fichier.arrayBuffer());
-      const ocr = await extrairePv(buffer);
+      const ocr =
+        provider === "google-vision" || provider === "mistral-ocr"
+          ? null
+          : await extrairePv(buffer);
       if (ocr?.texte) {
         texte = ocr.texte;
         data = { ...data, ...normaliserPv(ocr.texte) };
