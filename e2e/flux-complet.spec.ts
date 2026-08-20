@@ -36,16 +36,20 @@ async function approuverLettre(browser: Browser) {
   await page.getByRole("link", { name: "Client E2E" }).first().click();
   await page.waitForURL(/\/dashboard\/juriste\/[^/]+$/);
   await page
-    .getByRole("button", { name: "Approuver la lettre pour l'envoi" })
+    .getByRole("button", { name: "Approuver la lettre et envoyer la contestation" })
     .click();
+  // Validation → envoi automatique à ANTAI (mock) avec accusé de dépôt
   await expect(
-    page.getByText("Lettre validée, le client peut maintenant l'envoyer (LRAR).", {
+    page.getByText("Lettre validée et contestation envoyée à ANTAI", {
       exact: false,
     }),
   ).toBeVisible();
-  // La timeline juriste retrace la validation
+  // La timeline juriste retrace la validation puis l'envoi
   await expect(
     page.getByText("Validation par le juriste", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Envoyé à ANTAI", { exact: false }).first(),
   ).toBeVisible();
 
   await ctx.close();
@@ -61,7 +65,9 @@ async function decisionOmpJuriste(browser: Browser) {
   await page.waitForURL(/\/dashboard\/juriste\/[^/]+$/);
 
   await expect(
-    page.getByText("Dossier envoyé par le client (LRAR)", { exact: false }),
+    page.getByText("Dossier envoyé — contestation transmise", {
+      exact: true,
+    }),
   ).toBeVisible();
 
   // Suivi post-envoi : le juriste enregistre la décision OMP → dossier Résolu
@@ -86,7 +92,7 @@ async function decisionOmpJuriste(browser: Browser) {
   await ctx.close();
 }
 
-test("flux complet : dépôt → analyse → signature → validation juriste → envoi LRAR client → décision OMP", async ({
+test("flux complet : dépôt → analyse → signature → validation juriste → envoi automatique ANTAI → décision OMP", async ({
   page,
   browser,
 }) => {
@@ -103,36 +109,17 @@ test("flux complet : dépôt → analyse → signature → validation juriste �
     page.getByText("En attente de validation du juriste", { exact: false }),
   ).toBeVisible();
 
-  // Le juriste approuve la lettre → le kit d'envoi apparaît côté client
+  // Le juriste approuve la lettre → envoi automatique à ANTAI (mock)
   await approuverLettre(browser);
   await page.goto(`/dashboard/cases/${dossierId}`);
-  await expect(
-    page.getByRole("heading", { name: "Kit d'envoi — lettre validée" }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("ANTAI — Désigner ou contester en ligne", { exact: false }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("recommandé avec accusé de réception", { exact: false }),
-  ).toBeVisible();
 
-  // Le client confirme sa transmission → statut Envoyé
-  await page
-    .getByRole("button", { name: "J'ai envoyé ma contestation" })
-    .click();
+  // Côté client : la contestation est envoyée, la lettre est révélée
   await expect(
-    page.getByText(
-      "Votre lettre a été envoyée. L'OMP examinera votre requête",
-      { exact: false },
-    ),
+    page.getByRole("heading", { name: "Contestation envoyée" }),
   ).toBeVisible();
   await expect(
-    page.getByText("Envoyé par le client en recommandé avec accusé de réception", {
-      exact: true,
-    }),
+    page.getByText("Envoyé à ANTAI", { exact: false }).first(),
   ).toBeVisible();
-
-  // Après l'envoi, la lettre est révélée au client
   await expect(
     page.getByRole("heading", { name: "Votre lettre de contestation" }),
   ).toBeVisible();
@@ -152,9 +139,7 @@ test("flux complet : dépôt → analyse → signature → validation juriste �
     ),
   ).toBeVisible();
   await expect(
-    page.getByText("Envoyé par le client en recommandé avec accusé de réception", {
-      exact: true,
-    }),
+    page.getByText("Envoyé à ANTAI", { exact: false }).first(),
   ).toBeVisible();
   await expect(
     page.getByText("Décision OMP enregistrée", { exact: false }),

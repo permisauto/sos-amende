@@ -1,17 +1,19 @@
 import type { Dossier } from "@/generated/prisma/client";
+import { organismeEnvoi } from "./envoi";
 
 export type SoumissionResult =
   | { ok: true; numeroDepot: string; preuveUrl: string }
   | { ok: false; error: string };
 
 /**
- * Soumission du dossier vers l'ANTAI.
- * Dev/E2E uniquement : appelle le portail ANTAI MOCK local (/api/antai/mock).
+ * Soumission du dossier vers le portail (ANTAI / Télérecours).
+ * Dev/E2E uniquement : appelle le portail MOCK local (/api/antai/mock).
  * Jamais le portail réel (garde-fou produit). En prod, brancher RPA/Playwright
  * ou l'API officielle derrière ce point d'entrée.
  */
 export async function soumettreDossier(
   dossier: Dossier,
+  preuves?: { nom: string }[],
 ): Promise<SoumissionResult> {
   const data = (dossier.extractedData ?? {}) as Record<
     string,
@@ -31,13 +33,15 @@ export async function soumettreDossier(
         type: dossier.type,
         nom: data.nom,
         lettre: dossier.lettreGeneree,
+        organisme: organismeEnvoi(dossier.type),
+        preuves: preuves ?? [],
       }),
     });
 
     if (!res.ok) {
       return {
         ok: false,
-        error: `Le portail ANTAI (mock) a répondu ${res.status}.`,
+        error: `Le portail ${organismeEnvoi(dossier.type)} (mock) a répondu ${res.status}.`,
       };
     }
 
@@ -53,7 +57,7 @@ export async function soumettreDossier(
   } catch {
     return {
       ok: false,
-      error: "Impossible de joindre le portail ANTAI (mock).",
+      error: `Impossible de joindre le portail ${organismeEnvoi(dossier.type)} (mock).`,
     };
   }
 }

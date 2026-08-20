@@ -8,10 +8,64 @@ import { remplirTemplate } from "@/lib/moteur";
 import { notifierStatut } from "@/lib/notifications";
 import { storageRead, storageWrite } from "@/lib/storage";
 import { generateLettrePdf } from "@/lib/lettre-pdf";
+import { soumettreDossier } from "@/lib/antai";
+import { organismeEnvoi } from "@/lib/envoi";
 
 export type ValidationState = { error?: string; ok?: boolean } | undefined;
 
 const DECISION_OMP = ["ACCEPTE", "REJETE"] as const;
+
+/**
+ * Soumission de la contestation (lettre + pièces jointes) vers le portail
+ * ANTAI / Télérecours dès la validation du juriste. En cas de succès le
+ * dossier passe en ENVOYE avec accusé de dépôt ; en cas d'échec il reste
+ * PRET/validé et le client conserve son kit LRAR en secours.
+ */
+async function soumettreEtMarquerEnvoye(dossierId: string) {
+  const dossier = await prisma.dossier.findUnique({
+    where: { id: dossierId },
+    include: {
+      preuves: { orderBy: { createdAt: "asc" } },
+      courriers: { orderBy: { createdAt: "asc" } },
+    },
+  });
+  if (!dossier) return { ok: false as const, error: "Dossier introuvable." };
+
+  const organisme = organismeEnvoi(dossier.type);
+  const result = await soumettreDossier(
+    dossier,
+    dossier.preuves.map((p) => ({ nom: p.nom })),
+  );
+  if (!result.ok) return result;
+
+  const courrier = dossier.courriers[dossier.courriers.length - 1];
+  await prisma.$transaction([
+    prisma.dossier.update({
+      where: { id: dossier.id },
+      data: { statut: "ENVOYE" },
+    }),
+    ...(courrier
+      ? [
+          prisma.courrier.update({
+            where: { id: courrier.id },
+            data: { preuveDepotUrl: result.preuveUrl },
+          }),
+        ]
+      : []),
+    prisma.dossierEvent.create({
+      data: {
+        dossierId: dossier.id,
+        type: "ENVOI",
+        detail: `Envoyé à ${organisme} (n° dépôt ${result.numeroDepot}).`,
+      },
+    }),
+  ]);
+
+  // Notification (défensive : sans AUTH_RESEND_KEY, aucun e-mail envoyé).
+  await notifierStatut(dossier.id).catch(() => false);
+
+  return { ok: true as const, numeroDepot: result.numeroDepot };
+}
 
 export async function enregistrerDecisionOmp(
   _prev: ValidationState,
@@ -84,8 +138,7 @@ export async function validerDossier(
     return { error: "Aucune lettre signée à valider." };
   }
 
-  // Validation humaine de la lettre (garde-fou) : le client reçoit ensuite son
-  // kit d'envoi LRAR. La transmission (RPA ANTAI réelle ou LRAR) arrive après.
+  // Validation humaine de la lettre (garde-fou).
   await prisma.$transaction([
     prisma.dossier.update({
       where: { id: dossier.id },
@@ -99,10 +152,50 @@ export async function validerDossier(
   // Notification (défensive : sans AUTH_RESEND_KEY, aucun e-mail envoyé).
   await notifierStatut(dossier.id).catch(() => false);
 
+  // Envoi immédiat de la contestation (lettre + preuves) au portail
+  // ANTAI / Télérecours. En cas d'échec le dossier reste validé et le client
+  // conserve son kit LRAR en secours (bouton de relance côté juriste).
+  const envoi = await soumettreEtMarquerEnvoye(dossier.id);
+
   revalidatePath("/dashboard/juriste");
   revalidatePath(`/dashboard/juriste/${dossier.id}`);
   revalidatePath(`/dashboard/cases/${dossier.id}`);
-  redirect(`/dashboard/juriste/${dossier.id}?valide=ok`);
+  if (envoi.ok) {
+    redirect(`/dashboard/juriste/${dossier.id}?valide=ok&envoye=ok`);
+  }
+  redirect(`/dashboard/juriste/${dossier.id}?valide=ok&envoi=echec`);
+}
+
+/**
+ * Relance de l'envoi par le juriste quand la validation a été enregistrée mais
+ * que la soumission au portail a échoué (dossier PRET + validé, jamais ENVOYE).
+ */
+export async function envoyerContestation(
+  _prev: ValidationState,
+  formData: FormData,
+): Promise<ValidationState> {
+  await requireJuriste();
+
+  const dossierId = String(formData.get("dossierId") ?? "");
+  const dossier = await prisma.dossier.findUnique({ where: { id: dossierId } });
+  if (!dossier) {
+    return { error: "Dossier introuvable." };
+  }
+  if (dossier.statut !== "PRET" || !dossier.valideLe) {
+    return {
+      error: "La contestation doit être validée et pas encore envoyée.",
+    };
+  }
+
+  const envoi = await soumettreEtMarquerEnvoye(dossierId);
+
+  revalidatePath("/dashboard/juriste");
+  revalidatePath(`/dashboard/juriste/${dossier.id}`);
+  revalidatePath(`/dashboard/cases/${dossier.id}`);
+  if (envoi.ok) {
+    redirect(`/dashboard/juriste/${dossier.id}?envoye=ok`);
+  }
+  return { error: envoi.error };
 }
 
 /**

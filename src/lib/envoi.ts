@@ -31,6 +31,13 @@ export function titreAnalyse(type: InfractionType): string {
     : "de votre avis de contravention";
 }
 
+/** Organisme destinataire de la contestation (envoi automatisé / accusé). */
+export function organismeEnvoi(type: InfractionType): string {
+  return type === "SUSPENSION"
+    ? "Télérecours (tribunal administratif)"
+    : "ANTAI";
+}
+
 export function numeroRefLibelle(type: InfractionType): string {
   return type === "SUSPENSION" ? "Numéro de décision" : "Numéro de PV";
 }

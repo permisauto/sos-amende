@@ -24,10 +24,30 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "numPv requis" }, { status: 400 });
   }
 
-  const numeroDepot = `ANTAI-${Date.now().toString(36).toUpperCase()}`;
+  const organisme =
+    typeof body.organisme === "string" && body.organisme
+      ? body.organisme
+      : "ANTAI";
+  const prefix =
+    organisme.toLowerCase().includes("télérecours") ||
+    organisme.toLowerCase().includes("telerecours")
+      ? "TELER"
+      : "ANTAI";
+  const numeroDepot = `${prefix}-${Date.now().toString(36).toUpperCase()}`;
   const dateDepot = new Date().toISOString();
 
   const preuveName = `preuves/preuve-${Date.now()}.pdf`;
+
+  const preuves = Array.isArray(body.preuves)
+    ? body.preuves
+        .filter(
+          (p): p is { nom: string } =>
+            typeof p === "object" &&
+            p !== null &&
+            typeof (p as { nom?: unknown }).nom === "string",
+        )
+        .map((p) => p.nom)
+    : [];
 
   const pdf = await generatePreuvePdf({
     numeroDepot,
@@ -36,6 +56,8 @@ export async function POST(req: Request) {
     plaque: typeof body.plaque === "string" ? body.plaque : undefined,
     type: typeof body.type === "string" ? body.type : undefined,
     nom: typeof body.nom === "string" ? body.nom : undefined,
+    organisme,
+    preuves,
   });
   const preuveUrl = await storageWrite(preuveName, pdf);
 

@@ -35,6 +35,10 @@ export type PreuveInfo = {
   plaque?: string;
   type?: string;
   nom?: string;
+  /** Organisme destinataire (ANTAI / Télérecours) — simule le portail. */
+  organisme?: string;
+  /** Noms des pièces jointes transmises avec la contestation. */
+  preuves?: string[];
 };
 
 export async function generatePreuvePdf(
@@ -46,7 +50,7 @@ export async function generatePreuvePdf(
     <Document>
       <Page size="A4" style={styles.page}>
         <Text style={styles.title}>
-          Accusé de dépôt — ANTAI (portail de simulation)
+          Accusé de dépôt — {info.organisme ?? "ANTAI"} (portail de simulation)
         </Text>
         <View style={styles.row}>
           <Text style={styles.label}>Numéro de dépôt</Text>
@@ -74,9 +78,21 @@ export async function generatePreuvePdf(
             <Text>{info.nom}</Text>
           </View>
         )}
+        {info.preuves && info.preuves.length > 0 && (
+          <View style={{ marginTop: 24 }}>
+            <Text style={{ fontSize: 12, fontWeight: "bold", marginBottom: 6 }}>
+              Pièces jointes transmises
+            </Text>
+            {info.preuves.map((nom) => (
+              <Text key={nom} style={styles.row}>
+                — {nom}
+              </Text>
+            ))}
+          </View>
+        )}
         <Text style={styles.footer}>
-          Document généré par la plateforme de simulation ANTAI (développement).
-          Ne constitue pas un justificatif officiel.
+          Document généré par la plateforme de simulation {info.organisme ?? "ANTAI"}{" "}
+          (développement). Ne constitue pas un justificatif officiel.
         </Text>
       </Page>
     </Document>

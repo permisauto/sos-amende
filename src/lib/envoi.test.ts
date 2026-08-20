@@ -4,6 +4,7 @@ import {
   delaiLibelle,
   destinataireLrar,
   numeroRefLibelle,
+  organismeEnvoi,
   pieceAJoindre,
   portailEnLigne,
   titreAnalyse,
@@ -42,5 +43,10 @@ describe("envoi — libellés par type d'infraction", () => {
     const suspension = portailEnLigne("SUSPENSION");
     expect(suspension.label).toContain("Télérecours");
     expect(suspension.url).toContain("citoyens.telerecours.fr");
+  });
+
+  it("organisme destinataire de l'envoi automatisé", () => {
+    expect(organismeEnvoi("AMENDE")).toContain("ANTAI");
+    expect(organismeEnvoi("SUSPENSION")).toContain("Télérecours");
   });
 });

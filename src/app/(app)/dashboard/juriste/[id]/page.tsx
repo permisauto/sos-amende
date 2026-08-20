@@ -15,6 +15,7 @@ import {
   type RefJurisprudentielle,
 } from "@/components/bibliotheque-juriste";
 import type { JurisprudenceRef } from "@/lib/catalogue-sources";
+import { organismeEnvoi } from "@/lib/envoi";
 
 const statusLabels: Record<string, string> = {
   BROUILLON: "Brouillon",
@@ -34,7 +35,10 @@ const statutChip: Record<string, { label: string; cls: string }> = {
     cls: "bg-amber-100 text-amber-800",
   },
   PRET: { label: "Signée — à valider", cls: "bg-emerald-100 text-emerald-800" },
-  ENVOYE: { label: "Envoyée (LRAR)", cls: "bg-blue-100 text-blue-800" },
+  ENVOYE: {
+    label: "Envoyée (ANTAI/Télérecours)",
+    cls: "bg-blue-100 text-blue-800",
+  },
   RESOLU: { label: "Résolu", cls: "bg-emerald-100 text-emerald-800" },
   REJETE: { label: "Rejetée", cls: "bg-red-100 text-red-700" },
   EN_ANALYSE: { label: "En analyse", cls: "bg-zinc-100 text-zinc-600" },
@@ -107,6 +111,7 @@ export default async function JuristeCasePage(
   const pvUrl = await storageUrl(item.pvUrl);
   const isImage = pvUrl?.match(/\.(jpe?g|png|webp)(\?.*)?$/i);
   const pdfUrl = await storageUrl(courrier?.pdfUrl ?? null);
+  const accuseUrl = await storageUrl(courrier?.preuveDepotUrl ?? null);
   const evenements = await Promise.all(
     item.evenements.map(async (e) => ({
       ...e,
@@ -153,6 +158,8 @@ export default async function JuristeCasePage(
     ? dateFormat.format(item.dateLimite)
     : null;
 
+  const envoiEvent = evenements.find((e) => e.type === "ENVOI");
+
   const editable = item.statut === "A_VERIFIER" || item.statut === "PRET";
   const chip = statutChip[item.statut] ?? {
     label: statusLabels[item.statut] ?? item.statut,
@@ -162,8 +169,8 @@ export default async function JuristeCasePage(
     item.statut === "A_VERIFIER"
       ? "Lettre générée par le moteur, à relire et corriger avant la signature du client."
       : item.statut === "PRET"
-        ? "Lettre signée par le client. Corrigez si nécessaire (la signature est recollée automatiquement), puis approuvez l'envoi."
-        : "Lettre de contestation transmise pour ce dossier.";
+        ? `Lettre signée par le client. Corrigez si nécessaire (la signature est recollée automatiquement), puis approuvez l'envoi — la contestation sera transmise à ${organismeEnvoi(item.type)}.`
+        : `Lettre de contestation transmise à ${organismeEnvoi(item.type)} pour ce dossier.`;
 
   return (
     <div className="mx-auto max-w-7xl">
@@ -196,26 +203,46 @@ export default async function JuristeCasePage(
             </p>
             <p className="mt-1 text-lg font-bold text-zinc-900">{dateLimite}</p>
             <p className="text-xs font-medium text-zinc-500">
-              Respectez ce délai pour l&apos;envoi (LRAR)
+              Respectez ce délai pour la transmission
             </p>
           </div>
         )}
       </div>
 
-      {(searchParams.valide === "ok" ||
-        searchParams.retourne === "ok" ||
-        searchParams.rejete === "ok" ||
-        searchParams.decision === "ok") && (
+      {searchParams.valide === "ok" &&
+        (searchParams.envoye === "ok" ? (
+          <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            Lettre validée et contestation envoyée à{" "}
+            {organismeEnvoi(item.type)} (lettre + pièces jointes). Accusé de
+            dépôt enregistré.
+          </div>
+        ) : searchParams.envoi === "echec" ? (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Lettre validée, mais l&apos;envoi à {organismeEnvoi(item.type)} a
+            échoué. Relancez l&apos;envoi ci-dessous ou laissez le client
+            transmettre sa contestation par LRAR (kit d&apos;envoi).
+          </div>
+        ) : (
+          <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            Lettre validée, le client peut maintenant transmettre sa
+            contestation (en ligne ou par LRAR).
+          </div>
+        ))}
+
+      {(searchParams.envoye === "ok" && searchParams.valide !== "ok") ||
+      searchParams.retourne === "ok" ||
+      searchParams.rejete === "ok" ||
+      searchParams.decision === "ok" ? (
         <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          {searchParams.valide === "ok"
-            ? "Lettre validée, le client peut maintenant l'envoyer (LRAR)."
+          {searchParams.envoye === "ok" && searchParams.valide !== "ok"
+            ? `Contestation envoyée à ${organismeEnvoi(item.type)} (lettre + pièces jointes).`
             : searchParams.retourne === "ok"
               ? "Dossier retourné pour nouvelle analyse."
               : searchParams.rejete === "ok"
                 ? "Dossier rejeté, le client est informé du motif."
                 : "Décision OMP enregistrée, dossier résolu."}
         </div>
-      )}
+      ) : null}
 
       {item.type === "SUSPENSION" &&
         item.statut !== "REJETE" &&
@@ -277,7 +304,11 @@ export default async function JuristeCasePage(
                   )}
                   <div className="mt-6 border-t border-zinc-100 pt-6">
                     {item.statut === "PRET" ? (
-                      <JuristeActions dossierId={item.id} />
+                      <JuristeActions
+                        dossierId={item.id}
+                        validee={Boolean(item.valideLe)}
+                        organisme={organismeEnvoi(item.type)}
+                      />
                     ) : (
                       <JuristeActions dossierId={item.id} mode="rejet" />
                     )}
@@ -308,13 +339,31 @@ export default async function JuristeCasePage(
           {item.statut === "ENVOYE" && (
             <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
               <h2 className="font-semibold text-emerald-900">
-                Dossier envoyé par le client (LRAR)
+                Dossier envoyé — contestation transmise
               </h2>
               <p className="mt-1 text-sm text-emerald-800">
-                Le client a confirmé l&apos;envoi de sa lettre en recommandé
-                avec accusé de réception. À la réception de la réponse de
-                l&apos;OMP, enregistrez la décision pour clore le dossier.
+                La contestation (lettre + pièces jointes) a été transmise à{" "}
+                {organismeEnvoi(item.type)} — ou confirmée en recommandé avec
+                accusé de réception par le client. À la réception de la réponse
+                de l&apos;OMP, enregistrez la décision pour clore le dossier.
               </p>
+
+              {envoiEvent?.detail && (
+                <p className="mt-3 rounded-xl bg-white px-4 py-2.5 text-sm text-emerald-800">
+                  {envoiEvent.detail}
+                </p>
+              )}
+
+              {accuseUrl && (
+                <a
+                  href={accuseUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-3 inline-block rounded-xl border border-emerald-200 bg-white px-5 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
+                >
+                  Télécharger l&apos;accusé de dépôt (PDF)
+                </a>
+              )}
 
               <div className="mt-6 rounded-2xl border border-emerald-200 bg-white p-6">
                 <h3 className="font-semibold text-zinc-800">
