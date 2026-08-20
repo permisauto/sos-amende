@@ -59,7 +59,7 @@ export const CATALOGUE_SOURCES: FailleSourcee[] = [
 
 Je n'ai jamais reçu l'avis de contravention initial correspondant à cette infraction : celui-ci ne m'a pas été notifié personnellement ni à mon domicile avant l'application de la majoration.
 
-En application des articles 529-2 et 530 du Code de procédure pénale, l'amende forfaitaire majorée ne peut être mise en recouvrement que si l'avis de contravention initial a été régulièrement notifié et demeurait impayé à l'expiration du délai légal. À défaut de notification préalable, la majoration ne peut être valablement appliquée.
+En application des articles 529-2 et 530 du Code de procédure pénale, l'amende forfaitaire majorée ne peut être mise en recouvrement que si l'avis de contravention initial a été régulièrement notifié et demeurait impayé à l'expiration du délai légal. À défaut de notification préalable, la majoration ne peut être valablement appliquée (Cass. crim., 29 octobre 1997, Bull. crim. n° 357).
 
 Je demande en conséquence l'annulation de la majoration et la restitution de l'amende au montant forfaitaire initial.`,
   },
@@ -97,9 +97,27 @@ Je demande en conséquence l'annulation de la majoration et la restitution de l'
 
 Cet avis a été établi par la procédure de l'amende forfaitaire alors que les conditions légales de cette procédure n'étaient pas réunies : l'infraction aurait dû donner lieu à une procédure contraventionnelle classique (procès-verbal constaté personnellement), et non à une amende forfaitaire, en raison d'une infraction concomitante non forfaitisable.
 
-En application de l'article 529 du Code de procédure pénale, l'action de l'administration n'a pas été exercée selon la procédure prévue par la loi. L'avis est donc entaché de nullité.
+En application de l'article 529 du Code de procédure pénale, l'action de l'administration n'a pas été exercée selon la procédure prévue par la loi. L'avis est donc entaché de nullité (Cass. crim., 30 avril 2024, n° 23-86.163 ; Cass. crim., 18 novembre 2025, n° 25-80.227).
 
 Je demande en conséquence l'annulation de l'amende qui m'est réclamée.`,
+  },
+  {
+    id: "faille-avis-mentions-obligatoires",
+    typeInfraction: "AMENDE",
+    titreFaille:
+      "Avis de contravention ne comportant pas les mentions obligatoires (vice de forme)",
+    articleLoi:
+      "art. A. 37-1 et A. 37-4 du Code de procédure pénale",
+    source: "Legifrance (LEGIARTI000024079513 ; LEGIARTI000024079449)",
+    regle:
+      "L'avis de contravention doit comporter les mentions obligatoires prévues aux articles A. 37-1 et A. 37-4 du code de procédure pénale : identification de l'infraction, montant de l'amende, délai et voies de recours (requête en exonération, réclamation). L'absence de l'une de ces mentions est un vice de forme qui entache la régularité de la procédure d'amende forfaitaire et peut être opposé à l'OMP ou au juge.",
+    reglesDetection: [{ type: "texteAbsent", motif: "voie de recours" }],
+    jurisprudence: [],
+    templateLettre: `Je soussigné(e) {nom}, conteste l'avis de contravention n° {num_pv} reçu le {date} et relatif au véhicule immatriculé {plaque}.
+
+Cet avis ne comporte pas l'ensemble des mentions obligatoires exigées par les articles A. 37-1 et A. 37-4 du code de procédure pénale (identification de l'infraction, montant de l'amende, délai et voies de recours), en particulier la mention relative aux voies de recours et au délai de contestation.
+
+Cette omission constitue un vice de forme qui entache la régularité de la procédure d'amende forfaitaire. Je demande en conséquence l'annulation de l'amende d'un montant de {montant} qui m'est réclamée.`,
   },
   {
     id: "faille-exoneration-vol-usurpation",
@@ -134,7 +152,7 @@ Je demande en conséquence l'annulation de l'amende qui m'est réclamée.`,
 
 Je n'étais pas le conducteur de ce véhicule au moment des faits : le véhicule était [volé / cédé / utilisé sans mon accord] à la date de l'infraction. Vous trouverez en pièce jointe les justificatifs [récépissé de plainte / certificat de cession] en ma possession.
 
-En application de l'article 529-10 du Code de procédure pénale, la requête en exonération est recevable lorsque le titulaire du certificat d'immatriculation établit qu'il n'est pas l'auteur de l'infraction, notamment en cas de vol, d'usurpation de plaque ou de cession du véhicule.
+En application de l'article 529-10 du Code de procédure pénale, la requête en exonération est recevable lorsque le titulaire du certificat d'immatriculation établit qu'il n'est pas l'auteur de l'infraction, notamment en cas de vol, d'usurpation de plaque ou de cession du véhicule (Conseil d'État, 9 juillet 2010, n° 339261).
 
 Je demande en conséquence l'exonération de l'amende qui m'est réclamée.`,
   },
@@ -317,7 +335,7 @@ Je demande en conséquence le retrait de la décision de suspension prise à mon
     ],
     templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} du {date} par laquelle le préfet a suspendu mon permis de conduire.
 
-Cette décision ne m'a pas été régulièrement notifiée (remise directe ou lettre recommandée avec demande d'avis de réception), conformément aux articles L. 224-16 et R. 224-4 du code de la route. Une décision de suspension non notifiée n'est pas opposable à l'intéressé.
+Cette décision ne m'a pas été régulièrement notifiée (remise directe ou lettre recommandée avec demande d'avis de réception), conformément aux articles L. 224-16 et R. 224-4 du code de la route. Une décision de suspension non notifiée n'est pas opposable à l'intéressé (Cass. crim., 1er avril 2021, n° 20-82.815).
 
 Je demande en conséquence le retrait de la décision de suspension prise à mon encontre.`,
   },
