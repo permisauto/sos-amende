@@ -1,36 +1,42 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# sos-amende-
 
-## Getting Started
+**SOS Amende** — SaaS français de contestation d'amendes (LegalTech). Le client paie d'abord, téléverse son PV, l'OCR + le moteur juridique détectent une faille (base juridique sourcée), une lettre motivée est générée, signée électroniquement, validée par un juriste puis transmise à ANTAI / Télérecours — avec suivi jusqu'à la décision de l'OMP.
 
-First, run the development server:
+## Stack
+
+- Next.js 16 (App Router, Server Actions) + React 19 + Tailwind CSS v4
+- Prisma 7 (driver-adapter) + PostgreSQL
+- Auth.js v5 (magic-link, Resend) — aucun mot de passe
+- Stripe (paiement à l'acte, inscription inversée) — portail mock en dev (`STRIPE_MOCK=1`)
+- OCR : Tesseract.js (local) / Mistral OCR / Google Vision — relecture humaine obligatoire
+- Stockage : local (`public/uploads/`) en dev, S3-compatible UE en prod
+- Tests : Vitest (moteur juridique) + Playwright (E2E, port 3200)
+
+## Commandes
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install        # lance prisma generate (postinstall)
+npm run dev        # serveur de dev (port 3001)
+npm run build      # build de production
+npm run lint       # eslint
+npm test           # tests unitaires Vitest
+npm run test:e2e   # E2E Playwright (construit + sert l'app sur le port 3200)
+npx prisma db seed # pré-remplit les 4 failles AMENDE ACTIVE
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Environnement
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Copier `.env.example` → `.env` (dev) et renseigner les valeurs de production via `.env.production.example`. `.env` est gitignoré — jamais committer de secret.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Garde-fous produit
 
-## Learn More
+- Jamais d'article de loi inventé : les lettres n'utilisent que les `FailleJuridique.templateLettre` validées par l'admin.
+- Les propositions du catalogue sourcé (`src/lib/catalogue-sources.ts`) arrivent en `PROPOSEE` et ne sont jamais utilisées par le moteur avant validation.
+- OCR = brouillon human-in-the-loop (vérification humaine obligatoire).
+- L'envoi ANTAI/Télérecours passe par un mock local en dev/E2E — jamais le portail réel.
 
-To learn more about Next.js, take a look at the following resources:
+## Références
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `AGENTS.md` — guide opérationnel du codebase (architecture, commandes, schéma Prisma).
+- `FAILLES.md` — inventaire interne des failles juridiques (à garder synchronisé).
+- `PLAN.md` — vision produit complète.
