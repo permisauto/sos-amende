@@ -51,3 +51,6 @@ next-env.d.ts
 
 # uploaded PV (dev storage)
 /public/uploads
+
+.vercel
+.env*
