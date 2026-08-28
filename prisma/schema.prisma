@@ -98,12 +98,14 @@ model Dossier {
   pvUrl            String? // avis de contravention uploadé
   pvTexte          String? @db.Text // texte brut extrait par l'OCR (détection par scan)
   extractedData    Json? // OCR : {nom, plaque, num_pv, date, heure, typeRadar, numTelePaiement, cle}
+  conditions_meteo String? // résumé météo au jour de l'infraction (pluie, brouillard etc.)
   lettreGeneree    String? @db.Text // lettre remplie à partir du templateLettre (sect. 5)
   motifRejet       String? @db.Text // raison du rejet juriste (statut REJETE)
   decisionOmp      String? // décision OMP après envoi : ACCEPTE | REJETE
   decisionDetail   String? @db.Text // note du juriste sur la décision OMP
   valideLe         DateTime? // validation de la lettre par le juriste (PRET → kit LRAR)
   dateLimite       DateTime? // délai de contestation : 45 j (amende) / 2 mois (suspension)
+  travaux_présents Boolean? //TRUE si travaux connus sur la route au jour de l'infraction
   prix             Decimal       @db.Decimal(10, 2)
   failleJuridiqueId String? // faille retenue (principale) par le moteur (sect. 5)
   failleJuridique FailleJuridique? @relation(fields: [failleJuridiqueId], references: [id])
@@ -210,8 +212,10 @@ model DossierEvent {
 
 model RadarCalibration {
   id             String   @id @default(cuid())
-  radarId        String
+  radarId        String   @unique
   dateExpiration DateTime
+  date_dernier_renouvellement DateTime? // dernière année de vérification certifiée
+  etat_certificat String? // valide / expiré / défaut_de_calibrage
   preuveUrl      String
 
   createdAt DateTime @default(now())
