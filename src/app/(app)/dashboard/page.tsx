@@ -3,7 +3,9 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/dal";
 import { joursRestants } from "@/lib/moteur";
+import { Suspense } from "react";
 import { PayerCta } from "@/components/payer-cta";
+import { DashboardCheckoutBanner } from "@/components/dashboard-checkout-banner";
 
 export default async function DashboardPage() {
   const user = await requireUser();
@@ -55,6 +57,9 @@ export default async function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-5xl">
+      <Suspense>
+        <DashboardCheckoutBanner />
+      </Suspense>
       {/* Hero */}
       <section className="rounded-3xl bg-gradient-to-br from-emerald-600 via-emerald-600 to-teal-700 px-8 py-10 text-white shadow-sm">
         <p className="text-sm font-medium text-emerald-100">
@@ -67,6 +72,9 @@ export default async function DashboardPage() {
           Contester une amende ou un retrait de permis n&apos;a jamais été aussi
           simple : téléversez votre PV, nos juristes préparent votre lettre,
           vous signez, nous la vérifions — vous l&apos;envoyez.
+        </p>
+        <p className="mt-3 max-w-xl text-xs text-emerald-100/90">
+          Démo gratuite sur la page d&apos;accueil (aucun fichier stocké). Le dépôt d&apos;un vrai dossier nécessite un crédit — 39&nbsp;€ / amende, 59&nbsp;€ / suspension, paiement à l&apos;acte sans abonnement.
         </p>
 
         <div className="mt-6 flex flex-wrap gap-3">

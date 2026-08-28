@@ -22,6 +22,14 @@ export const metadata: Metadata = {
   metadataBase: new URL(
     process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
   ),
+  alternates: { canonical: "/" },
+  openGraph: {
+    title: "SOS Amende — Contester vos amendes",
+    description: "Analyse des motifs juridiques, lettre de recours validée par un juriste, suivi LRAR.",
+    locale: "fr_FR",
+    type: "website",
+  },
+  robots: { index: true, follow: true },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -31,7 +39,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-white text-zinc-900">
-        {children}
+        <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 rounded bg-zinc-900 px-4 py-2 text-white">
+          Aller au contenu principal
+        </a>
+        <main id="main">{children}</main>
       </body>
     </html>
   );

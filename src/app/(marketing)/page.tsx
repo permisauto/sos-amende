@@ -140,15 +140,26 @@ export default function HomePage() {
             Un délai passe vite. Saisissez la vôtre.
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-zinc-400">
-            Analyse gratuite de votre situation, sans engagement. Vous ne payez
-            que si vous lancez votre contestation.
+            La démo ci-dessus est <span className="font-semibold text-white">gratuite et sans stockage</span> — aucun fichier requis.
+            Pour déposer votre vrai dossier (PV réel, lettre validée par un juriste), un crédit est requis : 39&nbsp;€ par amende, 59&nbsp;€ par suspension. Paiement à l&apos;acte, sans abonnement.
           </p>
-          <Link
-            href="/login"
-            className="mt-8 inline-block rounded-full bg-emerald-500 px-8 py-3 font-semibold text-white hover:bg-emerald-400"
-          >
-            Démarrer gratuitement
-          </Link>
+          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <Link
+              href="/login"
+              className="inline-block rounded-full bg-emerald-500 px-8 py-3 font-semibold text-white hover:bg-emerald-400"
+            >
+              Déposer mon dossier (39€ / 59€)
+            </Link>
+            <Link
+              href="/pricing"
+              className="inline-block rounded-full border border-white/20 px-8 py-3 font-semibold text-white hover:bg-white/10"
+            >
+              Voir les tarifs
+            </Link>
+          </div>
+          <p className="mx-auto mt-4 max-w-xl text-xs text-zinc-500">
+            Démo gratuite ≠ dossier réel. Aucun paiement n&apos;est prélevé lors de la démo.
+          </p>
         </div>
       </section>
     </div>

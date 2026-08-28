@@ -63,6 +63,7 @@ export default async function CaseDetailPage(
   const courrier = item.courriers[item.courriers.length - 1];
   const pdfUrl = await storageUrl(courrier?.pdfUrl ?? null);
   const signatureUrl = await storageUrl(courrier?.signatureUrl ?? null);
+  const preuveDepotUrl = await storageUrl(courrier?.preuveDepotUrl ?? null);
   const preuveEtalonnage =
     typeof item.extractedData === "object" &&
     item.extractedData !== null &&
@@ -171,13 +172,13 @@ export default async function CaseDetailPage(
       )}
 
       {item.statut === "RESOLU" && item.decisionOmp && (
-        <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
-          <h2 className="font-semibold text-emerald-900">
+        <div className={`mt-6 rounded-2xl border p-6 ${item.decisionOmp === "ACCEPTE" ? "border-emerald-200 bg-emerald-50" : "border-zinc-300 bg-zinc-50"}`}>
+          <h2 className={`font-semibold ${item.decisionOmp === "ACCEPTE" ? "text-emerald-900" : "text-zinc-900"}`}>
             {item.decisionOmp === "ACCEPTE"
               ? "Dossier résolu : votre contestation a été acceptée"
               : "Dossier résolu : votre contestation a été rejetée"}
           </h2>
-          <p className="mt-1 text-sm text-emerald-800">
+          <p className={`mt-1 text-sm ${item.decisionOmp === "ACCEPTE" ? "text-emerald-800" : "text-zinc-600"}`}>
             {item.decisionOmp === "ACCEPTE"
               ? "L'amende a été annulée. Vous n'avez plus rien à faire."
               : "La requête a été rejetée par l'OMP. Pour toute question, contactez le support avec la référence de ce dossier."}
@@ -498,8 +499,24 @@ export default async function CaseDetailPage(
               {item.type === "AMENDE"
                 ? "L'OMP examinera votre requête"
                 : "Le préfet examinera votre recours"}{" "}
-              — pensez à conserver votre accusé d&apos;envoi.
+              — conservez votre accusé d&apos;envoi, il fait foi de la date.
             </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {preuveDepotUrl ? (
+                <a href={preuveDepotUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-emerald-700 shadow hover:bg-emerald-50">
+                  Voir l&apos;accusé de dépôt
+                </a>
+              ) : (
+                <span className="inline-flex items-center gap-2 rounded-full bg-white/70 px-4 py-2 text-sm font-medium text-zinc-600">
+                  Accusé : conservez le récépissé LRAR / dépôt en ligne
+                </span>
+              )}
+              {pdfUrl && (
+                <a href={pdfUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100">
+                  Télécharger la lettre envoyée (PDF)
+                </a>
+              )}
+            </div>
           </div>
           {lettreVisible && item.lettreGeneree && (
             <div className="rounded-2xl border border-zinc-200 bg-white p-6">

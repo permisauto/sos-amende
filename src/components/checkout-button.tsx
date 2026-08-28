@@ -27,12 +27,10 @@ export function CheckoutButton({
       if (res.ok && data.url) {
         router.push(data.url);
       } else {
-        router.push(
-          `/login?callbackUrl=/pricing&error=${encodeURIComponent(data.error ?? "checkout")}`,
-        );
+        router.push(`/pricing?error=${encodeURIComponent(data.error ?? "checkout")}`);
       }
     } catch {
-      router.push("/login?callbackUrl=/pricing&error=checkout");
+      router.push("/pricing?error=checkout");
     } finally {
       setLoading(false);
     }

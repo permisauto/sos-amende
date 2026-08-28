@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { CheckoutButton } from "@/components/checkout-button";
+import { PricingBanners } from "@/components/pricing-banners";
 
 export const metadata: Metadata = {
   title: "Tarifs",
@@ -8,12 +10,14 @@ export const metadata: Metadata = {
 export default function PricingPage() {
   return (
     <div className="mx-auto max-w-6xl px-6 py-20">
+      <Suspense>
+        <PricingBanners />
+      </Suspense>
       <div className="text-center">
         <h1 className="text-4xl font-bold">Des tarifs simples, sans surprise</h1>
         <p className="mx-auto mt-4 max-w-xl text-zinc-600">
-          L'analyse de votre dossier est gratuite. Vous ne payez que pour
-          lancer votre contestation. Le paiement débloque un crédit dossier sur
-          votre compte.
+          La <span className="font-semibold">démo d&apos;analyse</span> sur la page d&apos;accueil est gratuite et ne stocke rien.
+          Le dépôt d&apos;un <span className="font-semibold">vrai dossier</span> (téléversement de votre PV, génération de la lettre, validation juriste) nécessite un crédit : 39&nbsp;€ / amende, 59&nbsp;€ / suspension. Paiement à l&apos;acte, sans abonnement.
         </p>
       </div>
 

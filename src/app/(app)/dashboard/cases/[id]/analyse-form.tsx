@@ -56,10 +56,7 @@ export function AnalyseForm({
           </>
         ) : (
           <>
-            L'OCR automatique arrive dans le flux complet. Pour l'instant,
-            saisissez les informations lues {titreAnalyse(type)} : elles
-            seront vérifiées avant toute génération de lettre (vérification
-            humaine obligatoire).
+            Aucun pré-remplissage automatique n&apos;a été détecté (qualité du scan ou champ manquant) — saisissez les informations lues {titreAnalyse(type)} : elles seront vérifiées avant toute génération de lettre (vérification humaine obligatoire).
           </>
         )}
       </div>
