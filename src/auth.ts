@@ -7,9 +7,8 @@ import path from "node:path";
 import { prisma } from "@/lib/prisma";
 import { authConfig } from "@/auth.config";
 
-const resend = process.env.AUTH_RESEND_KEY
-  ? new ResendClient(process.env.AUTH_RESEND_KEY)
-  : null;
+const cleanResendKey = process.env.AUTH_RESEND_KEY?.replace(/^\uFEFF/, "").trim();
+const resend = cleanResendKey ? new ResendClient(cleanResendKey) : null;
 
 // Expéditeur des e-mails (Resend). Configurable via EMAIL_FROM : en prod, il
 // doit être un domaine vérifié sur Resend, sinon Resend refuse l'envoi (le
@@ -22,7 +21,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
     Resend({
       from: EMAIL_FROM,
-      apiKey: process.env.AUTH_RESEND_KEY,
+      apiKey: cleanResendKey,
       sendVerificationRequest: async ({ identifier, url }) => {
         if (!resend) {
           // Mode dev (E2E) : le lien est écrit dans un fichier par email au
