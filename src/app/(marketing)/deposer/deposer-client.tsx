@@ -11,7 +11,31 @@ export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPEN
   const [file, setFile] = useState<File | null>(null);
   const [infos, setInfos] = useState({ plaque: "", num_pv: "", date: "", montant: "", heure: "" });
   const [loading, setLoading] = useState(false);
+  const [autoFilling, setAutoFilling] = useState(false);
   const [reponse, setReponse] = useState<Reponse | null>(null);
+
+  async function handleFileChange(f: File | null) {
+    setFile(f);
+    if (!f) return;
+    setAutoFilling(true);
+    try {
+      const fd = new FormData();
+      fd.set("type", type);
+      fd.set("pv", f);
+      const res = await fetch("/api/demo/analyse", { method: "POST", body: fd });
+      const body = (await res.json()) as Reponse & { data?: Record<string, string> };
+      if (body.data) {
+        setInfos((prev) => ({
+          plaque: (body.data?.plaque as string) || prev.plaque,
+          num_pv: (body.data?.num_pv as string) || prev.num_pv,
+          date: (body.data?.date as string) || prev.date,
+          montant: (body.data?.montant as string) || prev.montant,
+          heure: (body.data?.heure as string) || prev.heure,
+        }));
+      }
+    } catch {}
+    finally { setAutoFilling(false); }
+  }
 
   async function handleScan() {
     setLoading(true);
@@ -51,20 +75,25 @@ export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPEN
 
         <label className="mt-4 flex flex-col gap-1.5">
           <span className="text-sm font-medium">Téléverser PV / lettre (JPEG, PNG, PDF, 8 Mo max)</span>
-          <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm" />
+          <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm" />
+          {autoFilling && <span className="text-xs text-emerald-600">Lecture automatique en cours… les champs vont se pré-remplir.</span>}
         </label>
 
+        <div className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          Les champs ci-dessous se pré-remplissent automatiquement à l'upload (OCR). Vérifiez-les avant de valider.
+        </div>
+
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <label className="flex flex-col gap-1"><span className="text-xs font-medium">Plaque</span><input value={infos.plaque} onChange={(e) => setInfos({ ...infos, plaque: e.target.value })} placeholder="AB-123-CD" className="rounded-xl border border-zinc-300 px-3 py-2 text-sm" /></label>
-          <label className="flex flex-col gap-1"><span className="text-xs font-medium">N° PV / décision</span><input value={infos.num_pv} onChange={(e) => setInfos({ ...infos, num_pv: e.target.value })} className="rounded-xl border border-zinc-300 px-3 py-2 text-sm" /></label>
-          <label className="flex flex-col gap-1"><span className="text-xs font-medium">Date</span><input type="date" value={infos.date} onChange={(e) => setInfos({ ...infos, date: e.target.value })} className="rounded-xl border border-zinc-300 px-3 py-2 text-sm" /></label>
-          <label className="flex flex-col gap-1"><span className="text-xs font-medium">Montant / Heure</span><input value={infos.montant} onChange={(e) => setInfos({ ...infos, montant: e.target.value })} placeholder="135 € ou 14h32" className="rounded-xl border border-zinc-300 px-3 py-2 text-sm" /></label>
+          <label className="flex flex-col gap-1"><span className="text-xs font-medium">Plaque {infos.plaque && <span className="text-emerald-600">✓ pré-rempli</span>}</span><input value={infos.plaque} onChange={(e) => setInfos({ ...infos, plaque: e.target.value })} placeholder="AB-123-CD" className={`rounded-xl border px-3 py-2 text-sm ${infos.plaque ? "border-emerald-300 bg-emerald-50" : "border-zinc-300"}`} /></label>
+          <label className="flex flex-col gap-1"><span className="text-xs font-medium">N° PV / décision {infos.num_pv && <span className="text-emerald-600">✓ pré-rempli</span>}</span><input value={infos.num_pv} onChange={(e) => setInfos({ ...infos, num_pv: e.target.value })} className={`rounded-xl border px-3 py-2 text-sm ${infos.num_pv ? "border-emerald-300 bg-emerald-50" : "border-zinc-300"}`} /></label>
+          <label className="flex flex-col gap-1"><span className="text-xs font-medium">Date {infos.date && <span className="text-emerald-600">✓ pré-rempli</span>}</span><input type="date" value={infos.date} onChange={(e) => setInfos({ ...infos, date: e.target.value })} className={`rounded-xl border px-3 py-2 text-sm ${infos.date ? "border-emerald-300 bg-emerald-50" : "border-zinc-300"}`} /></label>
+          <label className="flex flex-col gap-1"><span className="text-xs font-medium">Montant / Heure {infos.montant && <span className="text-emerald-600">✓ pré-rempli</span>}</span><input value={infos.montant} onChange={(e) => setInfos({ ...infos, montant: e.target.value })} placeholder="135 € ou 14h32" className={`rounded-xl border px-3 py-2 text-sm ${infos.montant ? "border-emerald-300 bg-emerald-50" : "border-zinc-300"}`} /></label>
         </div>
 
         <button onClick={handleScan} disabled={loading} className="mt-6 w-full rounded-full bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
-          {loading ? "Scan en cours…" : "Lancer le scan et le scoring"}
+          {loading ? "Scan en cours…" : "Vérifier et valider — lancer le scoring"}
         </button>
-        <p className="mt-2 text-center text-xs text-zinc-500">Aucun email demandé — analyse gratuite, rien n'est stocké avant paiement.</p>
+        <p className="mt-2 text-center text-xs text-zinc-500">Vérifiez les champs pré-remplis, corrigez si besoin, puis validez pour le scoring. Aucun email demandé — analyse gratuite.</p>
       </div>
 
       {hasResult && (
