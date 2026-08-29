@@ -11,6 +11,8 @@ export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPEN
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [infos, setInfos] = useState({ plaque: "", num_pv: "", date: "", montant: "", heure: "", adresse: "", lieu: "", prefecture: "", duree: "", motif: "" });
+  const [complement, setComplement] = useState({ paiementDejaFait: false, vehiculeCede: false, vehiculeVole: false, conducteurDifferent: false, plaqueIncorrecte: false, travaux: false, meteoPluie: false, adresseIncorrecte: false });
+  const [showComplement, setShowComplement] = useState(false);
   const [loading, setLoading] = useState(false);
   const [autoFilling, setAutoFilling] = useState(false);
   const [reponse, setReponse] = useState<Reponse | null>(null);
@@ -66,12 +68,20 @@ export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPEN
       fd.set("type", type);
       if (file) fd.set("pv", file);
       Object.entries(infos).forEach(([k, v]) => v && fd.set(k, v));
+      // Questions complémentaires dynamiques (affinent le scoring)
+      if (complement.paiementDejaFait) fd.set("paiementDejaFait", "on");
+      if (complement.vehiculeCede) fd.set("vehiculeCede", "on");
+      if (complement.vehiculeVole) fd.set("vehiculeVole", "on");
+      if (complement.conducteurDifferent) fd.set("conducteurDifferent", "on");
+      if (complement.plaqueIncorrecte) fd.set("plaqueIncorrecte", "on");
+      if (complement.travaux) fd.set("travaux_présents", "true");
+      if (complement.meteoPluie) fd.set("conditions_meteo", "Pluie");
+      if (complement.adresseIncorrecte) fd.set("adresseIncorrecte", "on");
       // Réutilise l'API démo (scan réel si fichier fourni, sans stockage)
       const res = await fetch("/api/demo/analyse", { method: "POST", body: fd });
       const body = (await res.json()) as Reponse;
       setReponse(body);
       if (body.data) {
-        // Sauvegarde temporaire pour la page paiement (sans email)
         sessionStorage.setItem("deposer_data", JSON.stringify({ type, data: body.data, scoreGlobal: body.scoreGlobal, resultats: body.resultats }));
       }
     } catch {
@@ -157,10 +167,39 @@ export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPEN
           )}
         </div>
 
+        <div className="mt-6 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+          <button type="button" onClick={() => setShowComplement(!showComplement)} className="flex w-full items-center justify-between text-left">
+            <span className="text-sm font-semibold text-zinc-800">Questions complémentaires — scan très complet {showComplement ? "▼" : "▶"}</span>
+            <span className="text-xs text-zinc-500">{showComplement ? "Masquer" : "Afficher"} — affinent le scoring</span>
+          </button>
+          {showComplement && (
+            <div className="mt-4 grid gap-2.5">
+              {type === "AMENDE" ? (
+                <>
+                  <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={complement.paiementDejaFait} onChange={(e) => setComplement({ ...complement, paiementDejaFait: e.target.checked })} className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-emerald-600" /> J'ai déjà payé cette amende</label>
+                  <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={complement.vehiculeCede} onChange={(e) => setComplement({ ...complement, vehiculeCede: e.target.checked })} className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-emerald-600" /> Véhicule vendu/cédé avant la date</label>
+                  <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={complement.vehiculeVole} onChange={(e) => setComplement({ ...complement, vehiculeVole: e.target.checked })} className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-emerald-600" /> Véhicule volé / plaque usurpée</label>
+                  <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={complement.conducteurDifferent} onChange={(e) => setComplement({ ...complement, conducteurDifferent: e.target.checked })} className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-emerald-600" /> Je n'étais pas au volant</label>
+                  <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={complement.plaqueIncorrecte} onChange={(e) => setComplement({ ...complement, plaqueIncorrecte: e.target.checked })} className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-emerald-600" /> Plaque sur PV incorrecte</label>
+                  <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={complement.adresseIncorrecte} onChange={(e) => setComplement({ ...complement, adresseIncorrecte: e.target.checked })} className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-emerald-600" /> Adresse/lieu sur PV incorrect</label>
+                </>
+              ) : (
+                <>
+                  <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={complement.vehiculeCede} onChange={(e) => setComplement({ ...complement, vehiculeCede: e.target.checked })} className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-emerald-600" /> Notification LRAR non reçue</label>
+                  <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={complement.plaqueIncorrecte} onChange={(e) => setComplement({ ...complement, plaqueIncorrecte: e.target.checked })} className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-emerald-600" /> Erreur sur la décision</label>
+                </>
+              )}
+              <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={complement.travaux} onChange={(e) => setComplement({ ...complement, travaux: e.target.checked })} className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-emerald-600" /> Travaux présents sur la route ce jour-là</label>
+              <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={complement.meteoPluie} onChange={(e) => setComplement({ ...complement, meteoPluie: e.target.checked })} className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-emerald-600" /> Conditions météo défavorables (pluie/brouillard)</label>
+              <p className="text-xs text-zinc-500">Ces réponses affinent le scoring — le moteur croise failles + preuves (étalonnage, météo, travaux) via API.</p>
+            </div>
+          )}
+        </div>
+
         <button onClick={handleScan} disabled={loading || autoFilling} className="mt-6 w-full rounded-full bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
-          {loading ? "Scan en cours…" : autoFilling ? "OCR en cours…" : hasResult ? "Re-vérifier et relancer le scoring" : "Vérifier et valider — relancer le scoring"}
+          {loading ? "Scan en cours…" : autoFilling ? "OCR en cours…" : hasResult ? "Re-vérifier et relancer le scoring complet" : "Vérifier et valider — lancer le scoring complet"}
         </button>
-        <p className="mt-2 text-center text-xs text-zinc-500">Le scan s'est lancé automatiquement à l'upload. Corrigez les champs si besoin et re-validez. Aucun email demandé — analyse gratuite.</p>
+        <p className="mt-2 text-center text-xs text-zinc-500">Le scan s'est lancé automatiquement à l'upload. Répondez aux questions complémentaires pour un scan dynamique et complet, puis re-validez. Aucun email demandé — analyse gratuite.</p>
       </div>
 
       {hasResult && (

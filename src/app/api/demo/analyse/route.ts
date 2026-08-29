@@ -170,6 +170,13 @@ export async function POST(req: Request) {
       const v = String(form.get(k) ?? "").trim();
       if (v) (data as Record<string, unknown>)[k] = v;
     }
+    // Questions complémentaires dynamiques (scan complet) — booléens
+    for (const k of ["paiementDejaFait", "vehiculeCede", "vehiculeVole", "conducteurDifferent", "plaqueIncorrecte"] as const) {
+      if (String(form.get(k) ?? "") === "on") (data as Record<string, unknown>)[k] = true;
+    }
+    if (String(form.get("travaux_présents") ?? "") === "true") (data as Record<string, unknown>).travaux_présents = true;
+    if (String(form.get("conditions_meteo") ?? "").trim()) (data as Record<string, unknown>).conditions_meteo = String(form.get("conditions_meteo") ?? "").trim();
+    if (String(form.get("adresseIncorrecte") ?? "") === "on") (data as Record<string, unknown>).adresseIncorrecte = true;
 
     // Sans document fourni : la démo simule le téléversement d'un échantillon.
     if (!texte) {
