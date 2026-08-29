@@ -41,10 +41,10 @@ export default function PricingPage() {
             <li>Kit d&apos;envoi en recommandé avec accusé de réception (LRAR)</li>
             <li>Suivi jusqu&apos;à la décision</li>
           </ul>
-          <Link href="/dashboard/cases/new?type=AMENDE" className="mt-6 inline-block w-full rounded-full bg-emerald-600 px-6 py-3 text-center font-semibold text-white transition hover:bg-emerald-700">
+          <Link href="/deposer?type=AMENDE" className="mt-6 inline-block w-full rounded-full bg-emerald-600 px-6 py-3 text-center font-semibold text-white transition hover:bg-emerald-700">
             Contester mon amende — analyse gratuite
           </Link>
-          <p className="mt-2 text-center text-xs text-zinc-500">Paiement (Stripe ou virement) uniquement si faille validée</p>
+          <p className="mt-2 text-center text-xs text-zinc-500">Sans email au départ — scan + scoring offerts</p>
         </div>
 
         <div className="flex flex-col rounded-2xl border-2 border-zinc-300 p-8">
@@ -64,10 +64,10 @@ export default function PricingPage() {
             <li>Kit d&apos;envoi en recommandé avec accusé de réception (LRAR)</li>
             <li>Suivi des délais et de la commission médicale</li>
           </ul>
-          <Link href="/dashboard/cases/new?type=SUSPENSION" className="mt-6 inline-block w-full rounded-full bg-emerald-600 px-6 py-3 text-center font-semibold text-white transition hover:bg-emerald-700">
+          <Link href="/deposer?type=SUSPENSION" className="mt-6 inline-block w-full rounded-full bg-emerald-600 px-6 py-3 text-center font-semibold text-white transition hover:bg-emerald-700">
             Défendre mon permis — analyse gratuite
           </Link>
-          <p className="mt-2 text-center text-xs text-zinc-500">Paiement (Stripe ou virement) uniquement si faille validée</p>
+          <p className="mt-2 text-center text-xs text-zinc-500">Sans email au départ — scan + scoring offerts</p>
         </div>
       </div>
 
