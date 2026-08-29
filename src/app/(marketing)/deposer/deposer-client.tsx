@@ -150,27 +150,51 @@ export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPEN
       </div>
 
       {hasResult && (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
-          <h3 className="font-semibold text-emerald-900">Résultat du scoring</h3>
-          {typeof reponse?.scoreGlobal === "number" && (
-            <p className="mt-2 text-3xl font-bold text-emerald-700">{reponse.scoreGlobal}% de succès estimé</p>
-          )}
-          {reponse?.resultats && reponse.resultats.length > 0 ? (
-            <ul className="mt-3 space-y-2">
-              {reponse.resultats.map((r, i) => (
-                <li key={i} className="rounded-xl bg-white px-4 py-3 text-sm">
-                  <span className="font-medium">{r.titreFaille}</span> <span className="text-zinc-500">({r.articleLoi})</span> — <span className={`font-bold ${r.score >= 50 ? "text-emerald-600" : "text-amber-600"}`}>{r.score}%</span>
-                  {r.proposition && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs">Proposition à valider</span>}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="mt-2 text-sm text-zinc-600">Aucune faille automatique détectée — un juriste examinerait tout de même.</p>
-          )}
-          <Link href={`/paiement?type=${type}`} className="mt-6 inline-block w-full rounded-full bg-zinc-900 px-6 py-3 text-center font-semibold text-white hover:bg-black">
+        <div className="flex flex-col gap-4">
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
+            <h3 className="flex items-center gap-2 font-semibold text-emerald-900">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-xs text-white">✓</span>
+              Scoring vérifié — failles & preuves
+            </h3>
+            {typeof reponse?.scoreGlobal === "number" && (
+              <p className="mt-2 text-3xl font-bold text-emerald-700">{reponse.scoreGlobal}% de succès estimé</p>
+            )}
+            <p className="mt-1 text-xs text-emerald-700">Vérification automatique par règles juridiques (moteur) + contrôle des preuves jointes.</p>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <div className="rounded-xl bg-white p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Failles juridiques vérifiées</p>
+                {reponse?.resultats && reponse.resultats.length > 0 ? (
+                  <ul className="mt-2 space-y-2">
+                    {reponse.resultats.map((r, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm">
+                        <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs ${r.score >= 50 ? "bg-emerald-600 text-white" : "bg-amber-500 text-white"}`}>✓</span>
+                        <span><span className="font-medium">{r.titreFaille}</span> <span className="text-zinc-500">({r.articleLoi})</span> — <span className="font-bold">{r.score}%</span>{r.proposition && <span className="ml-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px]">proposition</span>}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-sm text-zinc-600">Aucune faille auto détectée — relecture juriste prévue.</p>
+                )}
+              </div>
+              <div className="rounded-xl bg-white p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Preuves vérifiées</p>
+                <ul className="mt-2 space-y-1.5 text-sm">
+                  <li className="flex items-center gap-2">{file ? <span className="text-emerald-600">✓</span> : <span className="text-zinc-300">○</span>} <span className={file ? "text-zinc-800" : "text-zinc-400"}>PV/lettre téléversé{file ? ` — ${file.name}` : ""}</span></li>
+                  <li className="flex items-center gap-2">{infos.plaque ? <span className="text-emerald-600">✓</span> : <span className="text-amber-600">!</span>} Plaque {infos.plaque || "manquante"}</li>
+                  <li className="flex items-center gap-2">{infos.num_pv ? <span className="text-emerald-600">✓</span> : <span className="text-amber-600">!</span>} N° PV/décision {infos.num_pv || "manquant"}</li>
+                  <li className="flex items-center gap-2">{infos.date ? <span className="text-emerald-600">✓</span> : <span className="text-amber-600">!</span>} Date {infos.date || "manquante"}</li>
+                  <li className="flex items-center gap-2">{infos.montant || infos.heure ? <span className="text-emerald-600">✓</span> : <span className="text-zinc-300">○</span>} Montant/heure {infos.montant || infos.heure || "—"}</li>
+                  <li className="flex items-center gap-2">{reponse?.texte ? <span className="text-emerald-600">✓</span> : <span className="text-zinc-300">○</span>} Texte OCR {reponse?.texte ? "capté" : "—"}</li>
+                </ul>
+                <p className="mt-3 text-[11px] text-zinc-500">Les preuves (certificat étalonnage, météo, travaux) seront ajoutées à l'étape juriste si pertinentes.</p>
+              </div>
+            </div>
+          </div>
+          <Link href={`/paiement?type=${type}`} className="inline-block w-full rounded-full bg-zinc-900 px-6 py-3 text-center font-semibold text-white hover:bg-black">
             Continuer vers le paiement
           </Link>
-          <p className="mt-2 text-center text-xs text-zinc-500">Vous y renseignerez nom, prénom, email, téléphone et choisirez virement ou carte.</p>
+          <p className="text-center text-xs text-zinc-500">Vous y renseignerez nom, prénom, email, téléphone et choisirez virement ou carte.</p>
         </div>
       )}
       {reponse?.erreur && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{reponse.erreur}</p>}
