@@ -13,6 +13,8 @@ export const runtime = "nodejs";
 
 const bodySchema = z.object({
   type: z.enum(["AMENDE", "SUSPENSION"]),
+  dossierId: z.string().optional(),
+  contact: z.object({ nom: z.string().optional(), prenom: z.string().optional(), email: z.string().email().optional(), whatsapp: z.string().optional() }).optional(),
 });
 
 const PRICE_IDS: Record<string, string | undefined> = {
@@ -39,7 +41,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { type } = parsed.data;
+  const { type, dossierId, contact } = parsed.data;
   const session = await auth();
   const user = session?.user;
 
@@ -50,7 +52,9 @@ export async function POST(request: Request) {
   if (process.env.STRIPE_MOCK === "1") {
     const params = new URLSearchParams({ type });
     if (user?.email) params.set("email", user.email);
+    if (contact?.email) params.set("email", contact.email);
     if (user?.id) params.set("client", user.id);
+    if (dossierId) params.set("dossierId", dossierId);
     return NextResponse.json({ url: `${appUrl}/mock-stripe?${params}` });
   }
 
@@ -79,10 +83,10 @@ export async function POST(request: Request) {
     mode: "payment",
     line_items: lineItems,
     client_reference_id: user?.id,
-    customer_email: user?.email ?? undefined,
-    metadata: { type },
-    success_url: `${appUrl}/dashboard?checkout=success`,
-    cancel_url: `${appUrl}/pricing?checkout=cancelled`,
+    customer_email: contact?.email ?? user?.email ?? undefined,
+    metadata: { type, dossierId: dossierId ?? "", whatsapp: contact?.whatsapp ?? "" },
+    success_url: dossierId ? `${appUrl}/dashboard/cases/${dossierId}?checkout=success` : `${appUrl}/dashboard?checkout=success`,
+    cancel_url: dossierId ? `${appUrl}/dashboard/paiement/${dossierId}?checkout=cancelled` : `${appUrl}/pricing?checkout=cancelled`,
   });
 
   return NextResponse.json({ url: checkout.url });

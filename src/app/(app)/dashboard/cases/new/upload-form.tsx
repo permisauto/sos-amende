@@ -3,9 +3,9 @@
 import { useActionState, useRef, useState } from "react";
 import { createDossier } from "../actions";
 
-export function UploadForm() {
+export function UploadForm({ defaultType }: { defaultType?: "AMENDE" | "SUSPENSION" | null }) {
   const [state, formAction, pending] = useActionState(createDossier, undefined);
-  const [type, setType] = useState("AMENDE");
+  const [type, setType] = useState(defaultType ?? "AMENDE");
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -36,7 +36,7 @@ export function UploadForm() {
         </span>
         <select
           value={type}
-          onChange={(e) => setType(e.target.value)}
+          onChange={(e) => setType(e.target.value as "AMENDE" | "SUSPENSION")}
           className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
         >
           <option value="AMENDE">Amende</option>

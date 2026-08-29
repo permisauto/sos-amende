@@ -74,40 +74,21 @@ export default async function DashboardPage() {
           vous signez, nous la vérifions — vous l&apos;envoyez.
         </p>
         <p className="mt-3 max-w-xl text-xs text-emerald-100/90">
-          Démo gratuite sur la page d&apos;accueil (aucun fichier stocké). Le dépôt d&apos;un vrai dossier nécessite un crédit — 39&nbsp;€ / amende, 59&nbsp;€ / suspension, paiement à l&apos;acte sans abonnement.
+          Analyse gratuite : déposez votre PV, scan + scoring offerts. Vous ne payez (39&nbsp;€ / 59&nbsp;€, Stripe ou virement) que si une faille est validée.
         </p>
 
         <div className="mt-6 flex flex-wrap gap-3">
-          {credits > 0 ? (
-            <Link
-              href="/dashboard/cases/new"
-              className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 font-semibold text-emerald-700 shadow transition hover:bg-emerald-50"
-            >
-              <svg
-                viewBox="0 0 20 20"
-                fill="currentColor"
-                className="h-5 w-5"
-                aria-hidden
-              >
-                <path d="M10 12.5a.75.75 0 01-.75-.75V7.81L8.03 9.03a.75.75 0 01-1.06-1.06l2.5-2.5a.75.75 0 011.06 0l2.5 2.5a.75.75 0 01-1.06 1.06l-1.22-1.22v3.94a.75.75 0 01-.75.75z" />
-                <path d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" />
-              </svg>
-              Téléverser un PV
-            </Link>
-          ) : (
-            <div className="flex flex-wrap gap-3">
-              <PayerCta
-                label="Activer le service — amende (39 €)"
-                className="rounded-full bg-white px-6 py-3 font-semibold text-emerald-700 shadow transition hover:bg-emerald-50"
-              />
-              <PayerCta
-                type="SUSPENSION"
-                label="Recours suspension (59 €)"
-                className="rounded-full border border-white/40 bg-white/10 px-6 py-3 font-semibold text-white transition hover:bg-white/20"
-              />
-            </div>
-          )}
-          {credits > 0 && openCases > 0 && (
+          <Link
+            href="/dashboard/cases/new"
+            className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 font-semibold text-emerald-700 shadow transition hover:bg-emerald-50"
+          >
+            <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5" aria-hidden>
+              <path d="M10 12.5a.75.75 0 01-.75-.75V7.81L8.03 9.03a.75.75 0 01-1.06-1.06l2.5-2.5a.75.75 0 011.06 0l2.5 2.5a.75.75 0 01-1.06 1.06l-1.22-1.22v3.94a.75.75 0 01-.75.75z" />
+              <path d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" />
+            </svg>
+            Téléverser un PV — gratuit
+          </Link>
+          {openCases > 0 && (
             <Link
               href="/dashboard/cases"
               className="inline-flex items-center gap-2 rounded-full border border-white/40 bg-white/10 px-6 py-3 font-semibold text-white transition hover:bg-white/20"

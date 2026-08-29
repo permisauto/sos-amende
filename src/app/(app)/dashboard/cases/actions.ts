@@ -47,12 +47,8 @@ export async function createDossier(
     return { error: "Fichier trop volumineux (maximum 8 Mo)." };
   }
 
-  if (user.credits < 1) {
-    return {
-      error: "Vous n'avez plus de crédit. Un paiement est requis pour lancer un dossier.",
-    };
-  }
-
+  // Parcours analyse d'abord : le dépôt est gratuit, le paiement n'intervient
+  // qu'après le scoring si une faille est validée (le crédit sera débité à ce moment-là).
   const ext = (file.name.split(".").pop() ?? "jpg").replace(/[^a-z0-9]/gi, "");
   const safeName = `pv/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
   const buffer = Buffer.from(await file.arrayBuffer());
@@ -69,16 +65,6 @@ export async function createDossier(
   const prix = parsedType.data === "AMENDE" ? 39 : 59;
 
   const dossier = await prisma.$transaction(async (tx) => {
-    // Débit atomique du crédit : le décrément ne réussit que si le client a
-    // encore au moins 1 crédit. Deux requêtes simultanées ne peuvent pas
-    // consommer un même crédit (garde-fou anti-course TOCTOU).
-    const debit = await tx.user.updateMany({
-      where: { id: user.id, credits: { gte: 1 } },
-      data: { credits: { decrement: 1 } },
-    });
-    if (debit.count === 0) {
-      throw new Error("CREDIT_INSUFFISANT");
-    }
     const d = await tx.dossier.create({
       data: {
         userId: user.id,
@@ -94,18 +80,7 @@ export async function createDossier(
       data: { dossierId: d.id, type: "CREATION" },
     });
     return d;
-  }).catch((e) => {
-    if ((e as Error).message === "CREDIT_INSUFFISANT") {
-      return null;
-    }
-    throw e;
   });
-
-  if (!dossier) {
-    return {
-      error: "Vous n'avez plus de crédit. Un paiement est requis pour lancer un dossier.",
-    };
-  }
 
   revalidatePath("/dashboard");
   redirect(`/dashboard/cases/${dossier.id}`);
@@ -318,6 +293,15 @@ export async function signerDossier(
   }
   if (!signature.startsWith("data:image/png;base64,")) {
     return { error: "Signature invalide." };
+  }
+
+  // Paiement requis : le dépôt est gratuit, la signature débloque le crédit
+  const debit = await prisma.user.updateMany({
+    where: { id: user.id, credits: { gte: 1 } },
+    data: { credits: { decrement: 1 } },
+  });
+  if (debit.count === 0) {
+    return { error: "Paiement requis : finalisez votre paiement (Stripe ou virement) avant de signer." };
   }
 
   const png = Buffer.from(signature.split(",")[1], "base64");

@@ -1,17 +1,17 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/dal";
-import { PayerCta } from "@/components/payer-cta";
 import { UploadForm } from "./upload-form";
 
-export default async function NewCasePage() {
+export default async function NewCasePage(props: PageProps<"/dashboard/cases/new">) {
   const user = await requireUser();
 
-  // Seul le client crée des dossiers (paiement à l'avance) : les juristes et
-  // administrateurs n'ont pas à voir le paywall.
+  // Seul le client crée des dossiers : les juristes et administrateurs n'ont pas à voir le dépôt.
   if (user.role !== "CLIENT") {
     redirect("/dashboard/cases");
   }
+  const sp = await props.searchParams;
+  const typeParam = sp.type === "SUSPENSION" ? "SUSPENSION" : sp.type === "AMENDE" ? "AMENDE" : null;
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -22,38 +22,15 @@ export default async function NewCasePage() {
         ← Retour aux dossiers
       </Link>
       <h1 className="mt-2 text-2xl font-bold">Nouveau dossier</h1>
-
-      {user.credits < 1 ? (
-        <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-6">
-          <h2 className="font-semibold text-amber-900">
-            Plus de crédit disponible
-          </h2>
-          <p className="mt-1 text-sm text-amber-800">
-            Un crédit est requis pour lancer un dossier. Payez d&apos;abord,
-            puis revenez ici pour uploader votre avis de contravention ou votre
-            décision de suspension.
-          </p>
-          <div className="mt-4 flex flex-wrap gap-3">
-            <PayerCta label="Payer un dossier d'amende (39 €)" />
-            <PayerCta
-              type="SUSPENSION"
-              label="Payer un recours suspension (59 €)"
-            />
-          </div>
-        </div>
-      ) : (
-        <>
-          <p className="mt-2 text-sm text-zinc-600">
-            Uploadez votre avis de contravention ou votre décision de
-            suspension. Un crédit ({user.credits} restant
-            {user.credits > 1 ? "s" : ""}) sera consommé pour lancer le
-            dossier.
-          </p>
-          <div className="mt-8 rounded-2xl border border-zinc-200 bg-white p-6">
-            <UploadForm />
-          </div>
-        </>
+      <p className="mt-2 text-sm text-zinc-600">
+        Téléversez votre PV ou lettre de suspension — <span className="font-semibold">analyse gratuite</span>. Le scan, le scoring et la détection de faille sont offerts. Vous ne payez (39&nbsp;€ / amende, 59&nbsp;€ / suspension, virement ou Stripe) que si une faille est validée et que vous souhaitez lancer la contestation.
+      </p>
+      {typeParam && (
+        <p className="mt-2 text-xs text-emerald-700">Type pré-sélectionné : {typeParam === "AMENDE" ? "Amende" : "Suspension de permis"}</p>
       )}
+      <div className="mt-8 rounded-2xl border border-zinc-200 bg-white p-6">
+        <UploadForm defaultType={typeParam} />
+      </div>
     </div>
   );
 }

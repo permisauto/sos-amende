@@ -412,51 +412,64 @@ export default async function CaseDetailPage(
           </span>
         </div>
       ) : item.statut === "A_VERIFIER" && item.lettreGeneree ? (
-        <div className="mt-8 flex flex-col gap-6">
-          <div className="rounded-2xl border border-zinc-200 bg-white p-6">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold">Signature de la lettre</h2>
-              <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
-                En attente de votre signature
-              </span>
-            </div>
-            <p className="mt-2 text-sm text-zinc-600">
-              Votre lettre de contestation a été préparée par notre équipe
-              juridique. Elle vous sera présentée après l&apos;envoi de la
-              contestation. Tracez simplement votre signature ci-dessous :
-              elle sera apposée en bas de la lettre et le PDF final généré.
+        user.credits < 1 ? (
+          <div className="mt-8 rounded-2xl border-2 border-emerald-600 bg-emerald-50 p-6">
+            <h2 className="text-lg font-semibold text-emerald-900">✓ Faille validée — finalisez votre paiement</h2>
+            <p className="mt-2 text-sm text-emerald-800">
+              Le scan et le scoring ({item.failleJuridique ? "faille détectée" : "analyse terminée"}) sont gratuits. Pour débloquer la lettre ({item.type === "AMENDE" ? "39 €" : "59 €"}) et la faire signer/valider par un juriste, renseignez vos coordonnées et choisissez votre paiement.
             </p>
-            <div className="mt-4 flex items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
-              <svg
-                viewBox="0 0 20 20"
-                fill="currentColor"
-                className="h-5 w-5 shrink-0 text-zinc-400"
-                aria-hidden
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              <p className="text-sm text-zinc-600">
-                Lettre confidentielle — révélée après l&apos;envoi validé par
-                un juriste.
+            <Link href={`/dashboard/paiement/${item.id}`} className="mt-4 inline-block rounded-full bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700">
+              Payer — virement ou Stripe
+            </Link>
+            <p className="mt-2 text-xs text-emerald-700">Nom, prénom, email, WhatsApp demandés à l'étape suivante.</p>
+          </div>
+        ) : (
+          <div className="mt-8 flex flex-col gap-6">
+            <div className="rounded-2xl border border-zinc-200 bg-white p-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-lg font-semibold">Signature de la lettre</h2>
+                <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+                  En attente de votre signature
+                </span>
+              </div>
+              <p className="mt-2 text-sm text-zinc-600">
+                Votre lettre de contestation a été préparée par notre équipe
+                juridique. Elle vous sera présentée après l&apos;envoi de la
+                contestation. Tracez simplement votre signature ci-dessous :
+                elle sera apposée en bas de la lettre et le PDF final généré.
               </p>
+              <div className="mt-4 flex items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                <svg
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  className="h-5 w-5 shrink-0 text-zinc-400"
+                  aria-hidden
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                <p className="text-sm text-zinc-600">
+                  Lettre confidentielle — révélée après l&apos;envoi validé par
+                  un juriste.
+                </p>
+              </div>
             </div>
-          </div>
 
-          <div className="rounded-2xl border border-zinc-200 bg-white p-6">
-            <h2 className="text-lg font-semibold">Signature électronique</h2>
-            <p className="mt-1 text-sm text-zinc-600">
-              Votre signature sera collée automatiquement en bas de la lettre
-              de contestation.
-            </p>
-            <div className="mt-6">
-              <SignaturePad dossierId={item.id} />
+            <div className="rounded-2xl border border-zinc-200 bg-white p-6">
+              <h2 className="text-lg font-semibold">Signature électronique</h2>
+              <p className="mt-1 text-sm text-zinc-600">
+                Votre signature sera collée automatiquement en bas de la lettre
+                de contestation.
+              </p>
+              <div className="mt-6">
+                <SignaturePad dossierId={item.id} />
+              </div>
             </div>
           </div>
-        </div>
+        )
       ) : item.statut === "PRET" && item.courriers.length > 0 ? (
         item.valideLe ? (
           <LrKit
