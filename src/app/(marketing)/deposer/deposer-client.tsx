@@ -27,7 +27,9 @@ export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPEN
       return;
     }
     setAutoFilling(true);
+    setReponse(null);
     try {
+      // Upload -> OCR extrait les données ET lance directement le scan/scoring (une seule requête)
       const fd = new FormData();
       fd.set("type", type);
       fd.set("pv", f);
@@ -41,6 +43,11 @@ export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPEN
           montant: (body.data?.montant as string) || prev.montant,
           heure: (body.data?.heure as string) || prev.heure,
         }));
+      }
+      // L'OCR a extrait -> on affiche directement le scoring (l'utilisateur vérifie ensuite)
+      if (body.scoreGlobal !== undefined || body.resultats) {
+        setReponse(body);
+        if (body.data) sessionStorage.setItem("deposer_data", JSON.stringify({ type, data: body.data, scoreGlobal: body.scoreGlobal, resultats: body.resultats }));
       }
     } catch {}
     finally { setAutoFilling(false); }
@@ -126,7 +133,7 @@ export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPEN
         </div>
 
         <div className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          Les champs ci-dessous se pré-remplissent automatiquement à l'upload (OCR). Vérifiez-les avant de valider.
+          L'OCR extrait les données dès le téléversement et lance le scan. Vérifiez les champs pré-remplis ci-dessous, corrigez si besoin, puis validez.
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -136,10 +143,10 @@ export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPEN
           <label className="flex flex-col gap-1"><span className="text-xs font-medium">Montant / Heure {infos.montant && <span className="text-emerald-600">✓ pré-rempli</span>}</span><input value={infos.montant} onChange={(e) => setInfos({ ...infos, montant: e.target.value })} placeholder="135 € ou 14h32" className={`rounded-xl border px-3 py-2 text-sm ${infos.montant ? "border-emerald-300 bg-emerald-50" : "border-zinc-300"}`} /></label>
         </div>
 
-        <button onClick={handleScan} disabled={loading} className="mt-6 w-full rounded-full bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
-          {loading ? "Scan en cours…" : "Vérifier et valider — lancer le scoring"}
+        <button onClick={handleScan} disabled={loading || autoFilling} className="mt-6 w-full rounded-full bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+          {loading ? "Scan en cours…" : autoFilling ? "OCR en cours…" : hasResult ? "Re-vérifier et relancer le scoring" : "Vérifier et valider — relancer le scoring"}
         </button>
-        <p className="mt-2 text-center text-xs text-zinc-500">Vérifiez les champs pré-remplis, corrigez si besoin, puis validez pour le scoring. Aucun email demandé — analyse gratuite.</p>
+        <p className="mt-2 text-center text-xs text-zinc-500">Le scan s'est lancé automatiquement à l'upload. Corrigez les champs si besoin et re-validez. Aucun email demandé — analyse gratuite.</p>
       </div>
 
       {hasResult && (
