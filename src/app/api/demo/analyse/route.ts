@@ -176,16 +176,18 @@ export async function POST(req: Request) {
       simule = true;
     }
 
-    // Démo : failles ACTIVE (validées) **et** PROPOSEE (propositions du
-    // catalogue, clairement étiquetées dans l'UI) — jamais INACTIVE. Le scan
-    // reste une simulation : le résultat n'est pas un avis juridique.
-    const faillesDb = await prisma.failleJuridique.findMany({
-      where: {
-        typeInfraction: type,
-        statut: { in: ["ACTIVE", "PROPOSEE"] },
-      },
-      orderBy: { createdAt: "desc" },
-    });
+    // Démo : failles ACTIVE (validées) **et** PROPOSEE — jamais INACTIVE.
+    // Résilient : si la DB est indisponible (TLS pooler), on dégrade en scoring vide mais l'OCR reste utile.
+    let faillesDb: FailleDb[] = [];
+    try {
+      faillesDb = (await prisma.failleJuridique.findMany({
+        where: { typeInfraction: type, statut: { in: ["ACTIVE", "PROPOSEE"] } },
+        orderBy: { createdAt: "desc" },
+      })) as unknown as FailleDb[];
+    } catch (e) {
+      console.error("demo analyse: prisma findMany fail, fallback vide", e);
+      faillesDb = [];
+    }
 
     const candidats = detecterFailles(
       data,
