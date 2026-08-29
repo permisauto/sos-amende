@@ -2,9 +2,8 @@ import { Resend } from "resend";
 import { prisma } from "@/lib/prisma";
 import { joursRestants } from "@/lib/moteur";
 
-const resend = process.env.AUTH_RESEND_KEY
-  ? new Resend(process.env.AUTH_RESEND_KEY)
-  : null;
+const cleanKey = process.env.AUTH_RESEND_KEY?.replace(/^\uFEFF/, "").trim();
+const resend = cleanKey ? new Resend(cleanKey) : null;
 
 export const RAPPEL_TYPES = ["J10", "J3", "J0"] as const;
 export type RappelType = (typeof RAPPEL_TYPES)[number];

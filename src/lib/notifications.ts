@@ -1,9 +1,8 @@
 import { Resend } from "resend";
 import { prisma } from "@/lib/prisma";
 
-const resend = process.env.AUTH_RESEND_KEY
-  ? new Resend(process.env.AUTH_RESEND_KEY)
-  : null;
+const cleanKey = process.env.AUTH_RESEND_KEY?.replace(/^\uFEFF/, "").trim();
+const resend = cleanKey ? new Resend(cleanKey) : null;
 
 const ACCUEIL = `<p>Connectez-vous à votre espace SOS Amende pour suivre votre dossier.</p>`;
 
