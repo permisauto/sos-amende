@@ -145,10 +145,12 @@ const NUM_RE = /(\d{3,4}[\s-]?\d{3,4}[\s-]?\d{3,4})/;
 const PLAQUE_SIV_RE = /\b[A-Z]{2,3}[\s-]\d{2,4}[\s-][A-Z]{2}\b/;
 /** Plaque FNI (ancien format) : 1234 AB 75. */
 const PLAQUE_FNI_RE = /\b\d{2,4}[\s-][A-Z]{1,2}[\s-]\d{2,3}\b/;
-/** Adresse : cherche une ligne contenant rue/avenue/bd + code postal. */
-const ADRESSE_RE = /(?:\b\d{1,4}\s+(?:rue|avenue|av\.|boulevard|bd|chemin|impasse)[^\n]{0,60}\n?[^\n]{0,40}\b\d{5}\s+[A-ZÉÈÀÂÊÎÔÛÇ][^\n]{0,30})/i;
+/** Adresse : tolérant — numéro + rue/bd/av/... + code postal + ville (1 ou 2 lignes). */
+const ADRESSE_RE = /\b\d{1,4}\s+(?:rue|avenue|av\.?|boulevard|bd|chemin|impasse|all[eé]e|place|route|quai)[^\n]{0,80}\b\d{5}\s+[A-Za-zÉÈÀÂÊÎÔÛÇéèàâêîôûç\- ]{2,40}/i;
+const ADRESSE_FALLBACK_RE = /\b\d{5}\s+[A-ZÉÈÀÂÊÎÔÛÇ][A-ZÉÈÀÂÊÎÔÛÇa-zéèàâêîôûç\- ]{2,30}\b/;
 /** Lieu d'infraction : après "lieu" ou "à" + adresse. */
 const LIEU_RE = /lieu[^\n]{0,5}[:\-]\s*([^\n]{5,80})/i;
+const LIEU_FALLBACK_RE = /(?:à|au|lieu)\s+([A-ZÉÈÀÂÊÎÔÛÇa-zéèàâêîôûç0-9][^\n]{5,60})/i;
 
 function extrairePlaque(texte: string): string | undefined {
   // On cherche d'abord près des mots-clés pour éviter les faux positifs
@@ -200,11 +202,28 @@ export function normaliserPv(texte: string): Partial<ExtractedData> {
     result.heure = `${heureMatch[1].padStart(2, "0")}h${heureMatch[2]}`;
   }
 
+  // Adresse : essai strict puis fallback code postal générique (puis ligne autour)
+  let adresse: string | undefined;
   const adresseMatch = texte.match(ADRESSE_RE);
-  if (adresseMatch) result.adresse = adresseMatch[0].replace(/\s+/g, " ").trim().slice(0, 120);
+  if (adresseMatch) adresse = adresseMatch[0];
+  else {
+    const fallback = texte.match(ADRESSE_FALLBACK_RE);
+    if (fallback) {
+      const idx = fallback.index ?? 0;
+      const start = Math.max(0, idx - 40);
+      adresse = texte.slice(start, idx + fallback[0].length + 20).replace(/\n/g, " ");
+    }
+  }
+  if (adresse) result.adresse = adresse.replace(/\s+/g, " ").trim().slice(0, 140);
 
+  let lieu: string | undefined;
   const lieuMatch = texte.match(LIEU_RE);
-  if (lieuMatch) result.lieu = lieuMatch[1].trim().slice(0, 120);
+  if (lieuMatch) lieu = lieuMatch[1];
+  else {
+    const fb = texte.match(LIEU_FALLBACK_RE);
+    if (fb) lieu = fb[1];
+  }
+  if (lieu) result.lieu = lieu.trim().slice(0, 120);
 
   // SUSPENSION : motif / préfecture / durée
   if (/suspension|pr[eé]fet/i.test(texte)) {
