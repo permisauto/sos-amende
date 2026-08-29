@@ -14,6 +14,8 @@ export type ExtractedData = {
   prefecture?: string; // préfecture émettrice (SUSPENSION)
   duree?: string; // durée de suspension (SUSPENSION)
   motif?: string; // motif de suspension (alcool, stup, vitesse...)
+  conditions_meteo?: string;
+  travaux_présents?: boolean;
   plaqueIncorrecte?: boolean;
   preuveEtalonnage?: string;
   // Questionnaire ciblé (flux A, étape 2) : contexte apporté par le client,
@@ -99,6 +101,8 @@ export type RegleDetection =
   | { type: "datePrescrite" }
   | { type: "plaqueIncorrecte" }
   | { type: "etalonnageExpire" }
+  | { type: "travauxPresents" }
+  | { type: "meteoDefavorable" }
   | { type: "texteContient"; motif: string }
   | { type: "texteAbsent"; motif: string };
 
@@ -179,6 +183,10 @@ function evalRegle(
         !!contexte?.dateExpirationEtalonnage &&
         etalonnageExpire(contexte.dateExpirationEtalonnage, data.date)
       );
+    case "travauxPresents":
+      return (data as Record<string, unknown>).travaux_présents === true || (data as Record<string, unknown>).travaux === true;
+    case "meteoDefavorable":
+      return !!((data as Record<string, unknown>).conditions_meteo) && /pluie|neige|brouillard|verglas|orage/i.test(String((data as Record<string, unknown>).conditions_meteo));
     case "texteContient":
       return (
         !!texte && texte.toLowerCase().includes(regle.motif.toLowerCase())

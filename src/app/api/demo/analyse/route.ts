@@ -193,29 +193,34 @@ export async function POST(req: Request) {
       faillesDb = [];
     }
 
+    // Preuve radar : si radarId présent, on vérifie l'étalonnage (faille + preuve)
+    let dateExpirationEtalonnage: Date | null = null;
+    const radarId = (data as Record<string, unknown>).radarId as string | undefined;
+    if (radarId) {
+      try {
+        const cal = await prisma.radarCalibration.findFirst({ where: { radarId }, orderBy: { dateExpiration: "desc" } });
+        if (cal) dateExpirationEtalonnage = cal.dateExpiration;
+      } catch {}
+    }
+
     const candidats = detecterFailles(
       data,
       texte,
       faillesDb.map((f) => ({
         id: f.id,
-        reglesDetection: f.reglesDetection as unknown as
-          | RegleDetection[]
-          | null,
+        reglesDetection: f.reglesDetection as unknown as | RegleDetection[] | null,
       })),
+      { dateExpirationEtalonnage },
     );
 
     let resultats = candidats.map((id) => {
       const faille = faillesDb.find((f) => f.id === id) ?? null;
       const score = faille
         ? scoreFaille(
-            {
-              id: faille.id,
-              reglesDetection: faille.reglesDetection as unknown as
-                | RegleDetection[]
-                | null,
-            },
+            { id: faille.id, reglesDetection: faille.reglesDetection as unknown as | RegleDetection[] | null },
             data,
             texte,
+            { dateExpirationEtalonnage },
           )
         : null;
       return construireResultat(faille, score, texte ?? "", simule);
