@@ -20,6 +20,11 @@ export type AnalysePrefill = {
   cle?: string;
   typeRadar?: string;
   radarId?: string;
+  adresse?: string;
+  lieu?: string;
+  prefecture?: string;
+  duree?: string;
+  motif?: string;
   plaqueIncorrecte?: boolean;
   paiementDejaFait?: boolean;
   vehiculeCede?: boolean;
@@ -72,10 +77,28 @@ export function AnalyseForm({
           />
         </label>
         <label className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium text-zinc-700">Plaque</span>
+          <span className="text-sm font-medium text-zinc-700">Adresse {type === "SUSPENSION" ? "(titulaire / préfecture)" : "(titulaire)"} — vérifiable</span>
+          <input
+            name="adresse"
+            placeholder="12 rue de Paris, 75001 Paris"
+            defaultValue={prefill?.adresse}
+            className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+          />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium text-zinc-700">Lieu {type === "SUSPENSION" ? "de la rétention" : "de l'infraction"}</span>
+          <input
+            name="lieu"
+            placeholder={type === "SUSPENSION" ? "Route D123, Préfecture de ..." : "Avenue, ville, département"}
+            defaultValue={prefill?.lieu}
+            className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+          />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium text-zinc-700">Plaque {type === "SUSPENSION" ? "(si mentionnée)" : ""}</span>
           <input
             name="plaque"
-            required
+            required={type === "AMENDE"}
             defaultValue={prefill?.plaque}
             className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
           />
@@ -103,64 +126,83 @@ export function AnalyseForm({
             className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
           />
         </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium text-zinc-700">Heure</span>
-          <input
-            name="heure"
-            placeholder="14h32"
-            defaultValue={prefill?.heure}
-            className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-          />
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium text-zinc-700">Montant</span>
-          <input
-            name="montant"
-            placeholder="135,00 €"
-            defaultValue={prefill?.montant}
-            className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-          />
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium text-zinc-700">
-            Type de radar
-          </span>
-          <input
-            name="typeRadar"
-            placeholder="Radar fixe / mobile"
-            defaultValue={prefill?.typeRadar}
-            className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-          />
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium text-zinc-700">
-            N° du radar
-          </span>
-          <input
-            name="radarId"
-            placeholder="Réf. du radar (si visible)"
-            defaultValue={prefill?.radarId}
-            className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-          />
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium text-zinc-700">
-            N° de télépaiement
-          </span>
-          <input
-            name="numTelePaiement"
-            defaultValue={prefill?.numTelePaiement}
-            className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-          />
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium text-zinc-700">Clé</span>
-          <input
-            name="cle"
-            defaultValue={prefill?.cle}
-            className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-          />
-        </label>
+        {type === "AMENDE" ? (
+          <>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-zinc-700">Heure</span>
+              <input
+                name="heure"
+                placeholder="14h32"
+                defaultValue={prefill?.heure}
+                className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+              />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-zinc-700">Montant</span>
+              <input
+                name="montant"
+                placeholder="135,00 €"
+                defaultValue={prefill?.montant}
+                className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+              />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-zinc-700">
+                Type de radar
+              </span>
+              <input
+                name="typeRadar"
+                placeholder="Radar fixe / mobile"
+                defaultValue={prefill?.typeRadar}
+                className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+              />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-zinc-700">
+                N° du radar
+              </span>
+              <input
+                name="radarId"
+                placeholder="Réf. du radar (si visible)"
+                defaultValue={prefill?.radarId}
+                className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+              />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-zinc-700">
+                N° de télépaiement
+              </span>
+              <input
+                name="numTelePaiement"
+                defaultValue={prefill?.numTelePaiement}
+                className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+              />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-zinc-700">Clé</span>
+              <input
+                name="cle"
+                defaultValue={prefill?.cle}
+                className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+              />
+            </label>
+          </>
+        ) : (
+          <>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-zinc-700">Préfecture émettrice</span>
+              <input name="prefecture" placeholder="Préfecture de…" defaultValue={prefill?.prefecture} className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100" />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-zinc-700">Durée de suspension</span>
+              <input name="duree" placeholder="6 mois" defaultValue={prefill?.duree} className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100" />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-zinc-700">Motif</span>
+              <input name="motif" placeholder="alcool / stupéfiants / vitesse" defaultValue={prefill?.motif} className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100" />
+            </label>
+          </>
+        )}
       </div>
 
       <label className="flex items-start gap-2 text-sm text-zinc-700">

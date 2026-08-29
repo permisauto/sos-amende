@@ -166,6 +166,10 @@ export async function POST(req: Request) {
 
     const date = String(form.get("date") ?? "").trim();
     if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) data.date = date;
+    for (const k of ["adresse", "lieu", "prefecture", "duree", "motif", "plaque", "num_pv", "heure", "montant"] as const) {
+      const v = String(form.get(k) ?? "").trim();
+      if (v) (data as Record<string, unknown>)[k] = v;
+    }
 
     // Sans document fourni : la démo simule le téléversement d'un échantillon.
     if (!texte) {

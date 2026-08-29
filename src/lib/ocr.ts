@@ -145,6 +145,10 @@ const NUM_RE = /(\d{3,4}[\s-]?\d{3,4}[\s-]?\d{3,4})/;
 const PLAQUE_SIV_RE = /\b[A-Z]{2,3}[\s-]\d{2,4}[\s-][A-Z]{2}\b/;
 /** Plaque FNI (ancien format) : 1234 AB 75. */
 const PLAQUE_FNI_RE = /\b\d{2,4}[\s-][A-Z]{1,2}[\s-]\d{2,3}\b/;
+/** Adresse : cherche une ligne contenant rue/avenue/bd + code postal. */
+const ADRESSE_RE = /(?:\b\d{1,4}\s+(?:rue|avenue|av\.|boulevard|bd|chemin|impasse)[^\n]{0,60}\n?[^\n]{0,40}\b\d{5}\s+[A-ZÉÈÀÂÊÎÔÛÇ][^\n]{0,30})/i;
+/** Lieu d'infraction : après "lieu" ou "à" + adresse. */
+const LIEU_RE = /lieu[^\n]{0,5}[:\-]\s*([^\n]{5,80})/i;
 
 function extrairePlaque(texte: string): string | undefined {
   // On cherche d'abord près des mots-clés pour éviter les faux positifs
@@ -194,6 +198,22 @@ export function normaliserPv(texte: string): Partial<ExtractedData> {
   const heureMatch = texte.match(HEURE_RE);
   if (heureMatch) {
     result.heure = `${heureMatch[1].padStart(2, "0")}h${heureMatch[2]}`;
+  }
+
+  const adresseMatch = texte.match(ADRESSE_RE);
+  if (adresseMatch) result.adresse = adresseMatch[0].replace(/\s+/g, " ").trim().slice(0, 120);
+
+  const lieuMatch = texte.match(LIEU_RE);
+  if (lieuMatch) result.lieu = lieuMatch[1].trim().slice(0, 120);
+
+  // SUSPENSION : motif / préfecture / durée
+  if (/suspension|pr[eé]fet/i.test(texte)) {
+    const motifM = texte.match(/(?:alcool|stup[eé]fiant|vitesse|excès|points)/i);
+    if (motifM) result.motif = motifM[0].toLowerCase();
+    const dureeM = texte.match(/(\d+\s*(?:mois|jours|ans))/i);
+    if (dureeM) result.duree = dureeM[1];
+    const prefM = texte.match(/pr[eé]fecture[^\n]{0,40}/i);
+    if (prefM) result.prefecture = prefM[0].trim().slice(0, 80);
   }
 
   return result;

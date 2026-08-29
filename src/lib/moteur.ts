@@ -9,6 +9,11 @@ export type ExtractedData = {
   montant?: string;
   typeRadar?: string;
   radarId?: string;
+  adresse?: string; // adresse du titulaire / lieu - vérifiable
+  lieu?: string; // lieu de l'infraction (AMENDE) ou lieu de rétention (SUSPENSION)
+  prefecture?: string; // préfecture émettrice (SUSPENSION)
+  duree?: string; // durée de suspension (SUSPENSION)
+  motif?: string; // motif de suspension (alcool, stup, vitesse...)
   plaqueIncorrecte?: boolean;
   preuveEtalonnage?: string;
   // Questionnaire ciblé (flux A, étape 2) : contexte apporté par le client,

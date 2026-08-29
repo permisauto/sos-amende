@@ -88,7 +88,7 @@ export async function createDossier(
 
 const analyseSchema = z.object({
   nom: z.string().trim().min(1, "Nom requis"),
-  plaque: z.string().trim().min(1, "Plaque requise"),
+  plaque: z.string().trim().optional(),
   num_pv: z.string().trim().min(1, "Numéro PV requis"),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date invalide"),
   heure: z.string().trim().optional(),
@@ -97,6 +97,11 @@ const analyseSchema = z.object({
   cle: z.string().trim().optional(),
   typeRadar: z.string().trim().optional(),
   radarId: z.string().trim().optional(),
+  adresse: z.string().trim().optional(),
+  lieu: z.string().trim().optional(),
+  prefecture: z.string().trim().optional(),
+  duree: z.string().trim().optional(),
+  motif: z.string().trim().optional(),
 });
 
 export type AnalyseState = { error?: string } | undefined;

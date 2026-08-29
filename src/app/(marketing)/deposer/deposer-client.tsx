@@ -10,7 +10,7 @@ export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPEN
   const [type, setType] = useState<"AMENDE" | "SUSPENSION">(initialType);
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [infos, setInfos] = useState({ plaque: "", num_pv: "", date: "", montant: "", heure: "" });
+  const [infos, setInfos] = useState({ plaque: "", num_pv: "", date: "", montant: "", heure: "", adresse: "", lieu: "", prefecture: "", duree: "", motif: "" });
   const [loading, setLoading] = useState(false);
   const [autoFilling, setAutoFilling] = useState(false);
   const [reponse, setReponse] = useState<Reponse | null>(null);
@@ -42,6 +42,11 @@ export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPEN
           date: (body.data?.date as string) || prev.date,
           montant: (body.data?.montant as string) || prev.montant,
           heure: (body.data?.heure as string) || prev.heure,
+          adresse: (body.data?.adresse as string) || prev.adresse,
+          lieu: (body.data?.lieu as string) || prev.lieu,
+          prefecture: (body.data?.prefecture as string) || prev.prefecture,
+          duree: (body.data?.duree as string) || prev.duree,
+          motif: (body.data?.motif as string) || prev.motif,
         }));
       }
       // L'OCR a extrait -> on affiche directement le scoring (l'utilisateur vérifie ensuite)
@@ -137,10 +142,19 @@ export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPEN
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <label className="flex flex-col gap-1"><span className="text-xs font-medium">Plaque {infos.plaque && <span className="text-emerald-600">✓ pré-rempli</span>}</span><input value={infos.plaque} onChange={(e) => setInfos({ ...infos, plaque: e.target.value })} placeholder="AB-123-CD" className={`rounded-xl border px-3 py-2 text-sm ${infos.plaque ? "border-emerald-300 bg-emerald-50" : "border-zinc-300"}`} /></label>
+          <label className="flex flex-col gap-1 sm:col-span-2"><span className="text-xs font-medium">Adresse {type === "SUSPENSION" ? "(titulaire / préfecture)" : "(titulaire)"} — vérifiable {infos.adresse && <span className="text-emerald-600">✓ pré-rempli</span>}</span><input value={infos.adresse} onChange={(e) => setInfos({ ...infos, adresse: e.target.value })} placeholder="12 rue de Paris, 75001 Paris" className={`rounded-xl border px-3 py-2 text-sm ${infos.adresse ? "border-emerald-300 bg-emerald-50" : "border-zinc-300"}`} /></label>
+          <label className="flex flex-col gap-1"><span className="text-xs font-medium">Lieu {type === "SUSPENSION" ? "de la rétention" : "de l'infraction"} {infos.lieu && <span className="text-emerald-600">✓ pré-rempli</span>}</span><input value={infos.lieu} onChange={(e) => setInfos({ ...infos, lieu: e.target.value })} placeholder={type === "SUSPENSION" ? "Route, préfecture" : "Avenue, ville"} className={`rounded-xl border px-3 py-2 text-sm ${infos.lieu ? "border-emerald-300 bg-emerald-50" : "border-zinc-300"}`} /></label>
+          <label className="flex flex-col gap-1"><span className="text-xs font-medium">Plaque {type === "SUSPENSION" ? "(si mentionnée)" : ""} {infos.plaque && <span className="text-emerald-600">✓ pré-rempli</span>}</span><input value={infos.plaque} onChange={(e) => setInfos({ ...infos, plaque: e.target.value })} placeholder="AB-123-CD" className={`rounded-xl border px-3 py-2 text-sm ${infos.plaque ? "border-emerald-300 bg-emerald-50" : "border-zinc-300"}`} /></label>
           <label className="flex flex-col gap-1"><span className="text-xs font-medium">N° PV / décision {infos.num_pv && <span className="text-emerald-600">✓ pré-rempli</span>}</span><input value={infos.num_pv} onChange={(e) => setInfos({ ...infos, num_pv: e.target.value })} className={`rounded-xl border px-3 py-2 text-sm ${infos.num_pv ? "border-emerald-300 bg-emerald-50" : "border-zinc-300"}`} /></label>
           <label className="flex flex-col gap-1"><span className="text-xs font-medium">Date {infos.date && <span className="text-emerald-600">✓ pré-rempli</span>}</span><input type="date" value={infos.date} onChange={(e) => setInfos({ ...infos, date: e.target.value })} className={`rounded-xl border px-3 py-2 text-sm ${infos.date ? "border-emerald-300 bg-emerald-50" : "border-zinc-300"}`} /></label>
-          <label className="flex flex-col gap-1"><span className="text-xs font-medium">Montant / Heure {infos.montant && <span className="text-emerald-600">✓ pré-rempli</span>}</span><input value={infos.montant} onChange={(e) => setInfos({ ...infos, montant: e.target.value })} placeholder="135 € ou 14h32" className={`rounded-xl border px-3 py-2 text-sm ${infos.montant ? "border-emerald-300 bg-emerald-50" : "border-zinc-300"}`} /></label>
+          {type === "AMENDE" ? (
+            <label className="flex flex-col gap-1"><span className="text-xs font-medium">Montant / Heure {infos.montant && <span className="text-emerald-600">✓ pré-rempli</span>}</span><input value={infos.montant} onChange={(e) => setInfos({ ...infos, montant: e.target.value })} placeholder="135 € ou 14h32" className={`rounded-xl border px-3 py-2 text-sm ${infos.montant ? "border-emerald-300 bg-emerald-50" : "border-zinc-300"}`} /></label>
+          ) : (
+            <>
+              <label className="flex flex-col gap-1"><span className="text-xs font-medium">Préfecture {infos.prefecture && <span className="text-emerald-600">✓ pré-rempli</span>}</span><input value={infos.prefecture} onChange={(e) => setInfos({ ...infos, prefecture: e.target.value })} placeholder="Préfecture de…" className={`rounded-xl border px-3 py-2 text-sm ${infos.prefecture ? "border-emerald-300 bg-emerald-50" : "border-zinc-300"}`} /></label>
+              <label className="flex flex-col gap-1"><span className="text-xs font-medium">Durée / Motif {infos.duree && <span className="text-emerald-600">✓ pré-rempli</span>}</span><input value={infos.duree || infos.motif} onChange={(e) => setInfos({ ...infos, duree: e.target.value })} placeholder="6 mois, alcool" className="rounded-xl border border-zinc-300 px-3 py-2 text-sm" /></label>
+            </>
+          )}
         </div>
 
         <button onClick={handleScan} disabled={loading || autoFilling} className="mt-6 w-full rounded-full bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
