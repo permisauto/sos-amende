@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 
 type Resultat = { titreFaille: string | null; articleLoi: string | null; score: number; proposition: boolean };
@@ -9,14 +9,23 @@ type Reponse = { scoreGlobal?: number; resultats?: Resultat[]; data?: Record<str
 export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPENSION" }) {
   const [type, setType] = useState<"AMENDE" | "SUSPENSION">(initialType);
   const [file, setFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [infos, setInfos] = useState({ plaque: "", num_pv: "", date: "", montant: "", heure: "" });
   const [loading, setLoading] = useState(false);
   const [autoFilling, setAutoFilling] = useState(false);
   const [reponse, setReponse] = useState<Reponse | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   async function handleFileChange(f: File | null) {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
     setFile(f);
+    if (f?.type.startsWith("image/")) setPreviewUrl(URL.createObjectURL(f));
+    else setPreviewUrl(null);
     if (!f) return;
+    if (f.size > 8 * 1024 * 1024) {
+      setReponse({ erreur: "Fichier trop volumineux (8 Mo max). Réduisez la qualité photo dans les réglages de l'appareil." });
+      return;
+    }
     setAutoFilling(true);
     try {
       const fd = new FormData();
@@ -73,11 +82,48 @@ export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPEN
           </select>
         </label>
 
-        <label className="mt-4 flex flex-col gap-1.5">
-          <span className="text-sm font-medium">Téléverser PV / lettre (JPEG, PNG, PDF, 8 Mo max)</span>
-          <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm" />
-          {autoFilling && <span className="text-xs text-emerald-600">Lecture automatique en cours… les champs vont se pré-remplir.</span>}
-        </label>
+        <div className="mt-4">
+          <p className="text-sm font-medium">Téléverser avec votre smartphone — scan auto</p>
+          <p className="text-xs text-zinc-500">Cadrez bien le PV, lumière uniforme, évitez le flou. Le formulaire se pré-remplit seul.</p>
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => inputRef.current?.click()}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") inputRef.current?.click(); }}
+            className={`mt-3 flex cursor-pointer flex-col items-center gap-3 rounded-2xl border-2 border-dashed p-6 text-center transition ${autoFilling ? "border-emerald-400 bg-emerald-50" : "border-zinc-300 bg-zinc-50 hover:border-emerald-400"}`}
+          >
+            <input
+              ref={inputRef}
+              type="file"
+              accept="image/*,application/pdf"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
+            />
+            {previewUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={previewUrl} alt="Aperçu PV" className="max-h-48 rounded-xl object-contain shadow" />
+            ) : (
+              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-600 text-2xl text-white" aria-hidden>📷</span>
+            )}
+            {file ? (
+              <>
+                <p className="text-sm font-medium text-zinc-800">{file.name} — {(file.size / 1024).toFixed(0)} Ko</p>
+                <button type="button" onClick={(e) => { e.stopPropagation(); handleFileChange(null); }} className="text-xs font-medium text-emerald-700 hover:underline">Changer de photo</button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-medium text-zinc-700">Appuyez pour scanner avec votre smartphone</p>
+                <p className="text-xs text-zinc-500">Photo ou PDF — JPEG/PNG/WebP/PDF, 8 Mo max. L'OCR capte les infos dès l'upload.</p>
+              </>
+            )}
+            {autoFilling && (
+              <span className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white">
+                <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" /> OCR en cours — pré-remplissage…
+              </span>
+            )}
+          </div>
+        </div>
 
         <div className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
           Les champs ci-dessous se pré-remplissent automatiquement à l'upload (OCR). Vérifiez-les avant de valider.
