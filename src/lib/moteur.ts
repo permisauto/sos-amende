@@ -247,11 +247,10 @@ export function remplirTemplate(
 }
 
 /**
- * Score de confiance d'une faille candidate (démo/simulation) : nombre de
- * règles qui matchent rapporté au nombre de règles évaluées. Retourne null si
- * aucune règle ne matche (faille non candidate). Sans règles explicites, on
- * évalue le prédicat hérité (1/1 s'il matche). Ne constitue pas un avis
- * juridique — la validation reste humaine (juriste).
+ * Score pointu par faille — pondéré par faille + preuves + questionnaire.
+ * Le questionnaire affine : chaque réponse complémentaire qui matche renforce
+ * le score (ex: plaqueIncorrecte + adresseIncorrecte + travaux).
+ * Retourne null si non candidate. Ne constitue pas un avis juridique.
  */
 export function scoreFaille(
   faille: FailleDetectable,
@@ -272,5 +271,50 @@ export function scoreFaille(
     if (predicatHerite(faille.id, data, texte, contexte)) matchees = 1;
   }
   if (matchees === 0) return null;
-  return { matchees, total, score: Math.round((matchees / total) * 100) };
+  let base = Math.round((matchees / total) * 100);
+
+  // Pondération pointue par faille + preuves + questionnaire
+  const d = data as Record<string, unknown>;
+  let bonus = 0;
+  let malus = 0;
+
+  switch (faille.id) {
+    case FAILLE_IDS.prescription:
+      base = 88; // datePrescrite déjà vérifiée
+      if (texte && /prescription|délai/i.test(texte)) bonus += 7;
+      if (d.adresseIncorrecte) bonus += 5;
+      break;
+    case FAILLE_IDS.erreurPlaque:
+      base = d.plaqueIncorrecte ? 98 : base;
+      if (d.vehiculeVole) bonus += 2;
+      if (!d.plaque) malus += 15;
+      break;
+    case FAILLE_IDS.mentions:
+      // 1 mention manquante 72%, 2+ 92%
+      base = matchees >= 2 ? 92 : 72;
+      if (d.adresseIncorrecte) bonus += 8;
+      break;
+    case FAILLE_IDS.etalonnage:
+      base = 82;
+      if (d.preuveEtalonnage || contexte?.dateExpirationEtalonnage) bonus += 13;
+      if (d.lieu) bonus += 5;
+      break;
+    default: {
+      // Travaux / météo / générique : questionnaire affine fortement
+      if (d.travaux_présents) bonus += 18;
+      if (d.conditions_meteo) bonus += 14;
+      if (d.vehiculeCede) bonus += 12;
+      if (d.conducteurDifferent) bonus += 10;
+      if (d.paiementDejaFait) bonus += 8;
+      if (d.adresse && d.lieu) bonus += 5;
+      if (texte && texte.length > 200) bonus += 3;
+      break;
+    }
+  }
+
+  // Preuve textuelle renforce
+  if (texte && d.adresse && texte.toLowerCase().includes(String(d.adresse).toLowerCase().slice(0, 8))) bonus += 4;
+
+  const score = Math.max(0, Math.min(98, base + bonus - malus));
+  return { matchees, total, score };
 }

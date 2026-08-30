@@ -247,12 +247,16 @@ export async function POST(req: Request) {
       );
     }
 
-    // Score global de réussite (démo) : le meilleur score parmi les failles
-    // détectées — simple agrégat de confiance, jamais un avis juridique.
-    const scoreGlobal =
-      resultats.length > 0
-        ? Math.max(...resultats.map((r) => r.score))
-        : 0;
+    // Score global pointu : pondéré par questionnaire + preuves
+    // Top1 70% + top2 30% si 2 failles, sinon max. Questionnaire affine déjà chaque score.
+    let scoreGlobal = 0;
+    if (resultats.length > 0) {
+      const sorted = [...resultats].sort((a, b) => b.score - a.score);
+      if (sorted.length === 1) scoreGlobal = sorted[0].score;
+      else scoreGlobal = Math.round(sorted[0].score * 0.7 + sorted[1].score * 0.3);
+      // Bonus si 2 failles >60% (dossier très solide)
+      if (sorted.length >= 2 && sorted[0].score >= 70 && sorted[1].score >= 60) scoreGlobal = Math.min(98, scoreGlobal + 4);
+    }
 
     // Lettre de recours (démo) : générée depuis le template de la faille
     // principale (la première candidate). Identité fictive pour l'échantillon.
