@@ -208,12 +208,12 @@ export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPEN
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
             <h3 className="flex items-center gap-2 font-semibold text-emerald-900">
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-xs text-white">✓</span>
-              Scoring vérifié — failles & preuves
+              Scoring vérifié — failles & preuves (API)
             </h3>
             {typeof reponse?.scoreGlobal === "number" && (
               <p className="mt-2 text-3xl font-bold text-emerald-700">{reponse.scoreGlobal}% de succès estimé</p>
             )}
-            <p className="mt-1 text-xs text-emerald-700">Vérification automatique par règles juridiques (moteur) + contrôle des preuves jointes.</p>
+            <p className="mt-1 text-xs text-emerald-700">Appels : <code>/api/demo/analyse</code> (failles) + <code>/api/radars</code> (étalonnage) + <code>preuves météo/travaux</code> — croisement automatique.</p>
 
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <div className="rounded-xl bg-white p-4">
