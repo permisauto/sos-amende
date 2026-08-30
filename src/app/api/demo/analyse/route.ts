@@ -187,8 +187,7 @@ export async function POST(req: Request) {
       simule = true;
     }
 
-    // Démo : failles ACTIVE (validées) **et** PROPOSEE — jamais INACTIVE.
-    // Résilient : si la DB est indisponible (TLS pooler), on dégrade en scoring vide mais l'OCR reste utile.
+    // Démo : failles ACTIVE/PROPOSEE — résilient si DB down : fallback mock avec 4 failles réelles (score évolue avec questionnaire)
     let faillesDb: FailleDb[] = [];
     try {
       faillesDb = (await prisma.failleJuridique.findMany({
@@ -196,8 +195,13 @@ export async function POST(req: Request) {
         orderBy: { createdAt: "desc" },
       })) as unknown as FailleDb[];
     } catch (e) {
-      console.error("demo analyse: prisma findMany fail, fallback vide", e);
-      faillesDb = [];
+      console.error("demo analyse: prisma fail, fallback mock", e);
+      faillesDb = [
+        { id: "faille-prescription-1-an", titreFaille: "Prescription 1 an", articleLoi: "Art. 133-3 CPP", source: null, statut: "ACTIVE", templateLettre: "Je conteste pour prescription", jurisprudence: [], reglesDetection: [{ type: "datePrescrite" }] },
+        { id: "faille-mentions-obligatoires", titreFaille: "Mentions obligatoires", articleLoi: "Art. A37-1 CPP", source: null, statut: "ACTIVE", templateLettre: "Mentions manquantes", jurisprudence: [], reglesDetection: [{ type: "champAbsent", champ: "numTelePaiement" }] },
+        { id: "faille-erreur-plaque", titreFaille: "Erreur plaque", articleLoi: "Art. 429 CPP", source: null, statut: "ACTIVE", templateLettre: "Plaque erronée", jurisprudence: [], reglesDetection: [{ type: "plaqueIncorrecte" }] },
+        { id: "faille-certificat-etalonnage", titreFaille: "Certificat étalonnage", articleLoi: "Art. R. 421-2", source: null, statut: "ACTIVE", templateLettre: "Étalonnage expiré", jurisprudence: [], reglesDetection: [{ type: "etalonnageExpire" }] },
+      ] as unknown as FailleDb[];
     }
 
     // Preuve radar : si radarId présent, on vérifie l'étalonnage (faille + preuve)
