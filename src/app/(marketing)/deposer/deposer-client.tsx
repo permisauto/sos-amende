@@ -23,7 +23,8 @@ export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPEN
     setFile(f);
     if (f?.type.startsWith("image/")) setPreviewUrl(URL.createObjectURL(f));
     else setPreviewUrl(null);
-    if (!f) return;
+    if (!f) { setShowComplement(false); return; }
+    setShowComplement(true);
     if (f.size > 8 * 1024 * 1024) {
       setReponse({ erreur: "Fichier trop volumineux (8 Mo max). Réduisez la qualité photo dans les réglages de l'appareil." });
       return;
