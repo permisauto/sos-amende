@@ -280,38 +280,36 @@ export function scoreFaille(
 
   switch (faille.id) {
     case FAILLE_IDS.prescription:
-      base = 88; // datePrescrite déjà vérifiée
+      base = 88;
       if (texte && /prescription|délai/i.test(texte)) bonus += 7;
-      if (d.adresseIncorrecte) bonus += 5;
       break;
     case FAILLE_IDS.erreurPlaque:
       base = d.plaqueIncorrecte ? 98 : base;
-      if (d.vehiculeVole) bonus += 2;
       if (!d.plaque) malus += 15;
       break;
     case FAILLE_IDS.mentions:
-      // 1 mention manquante 72%, 2+ 92%
       base = matchees >= 2 ? 92 : 72;
-      if (d.adresseIncorrecte) bonus += 8;
       break;
     case FAILLE_IDS.etalonnage:
       base = 82;
       if (d.preuveEtalonnage || contexte?.dateExpirationEtalonnage) bonus += 13;
       if (d.lieu) bonus += 5;
       break;
-    default: {
-      // Travaux / météo / générique : questionnaire affine fortement
-      if (d.travaux_présents) bonus += 18;
-      if (d.conditions_meteo) bonus += 14;
-      if (d.vehiculeCede) bonus += 12;
-      if (d.conducteurDifferent) bonus += 10;
-      if (d.paiementDejaFait) bonus += 8;
-      if (d.adresse && d.lieu) bonus += 5;
+    default:
       if (texte && texte.length > 200) bonus += 3;
       break;
-    }
   }
 
+  // Bonus questionnaire global — affine tout scoring (très pointu, chaque réponse fait évoluer)
+  if (d.vehiculeCede) bonus += 12;
+  if (d.vehiculeVole) bonus += 10;
+  if (d.conducteurDifferent) bonus += 9;
+  if (d.paiementDejaFait) bonus += 8;
+  if (d.travaux_présents) bonus += 14;
+  if (d.conditions_meteo) bonus += 10;
+  if (d.adresseIncorrecte) bonus += 8;
+  if (d.plaqueIncorrecte && faille.id !== FAILLE_IDS.erreurPlaque) bonus += 6;
+  if (d.adresse && d.lieu) bonus += 4;
   // Preuve textuelle renforce
   if (texte && d.adresse && texte.toLowerCase().includes(String(d.adresse).toLowerCase().slice(0, 8))) bonus += 4;
 
