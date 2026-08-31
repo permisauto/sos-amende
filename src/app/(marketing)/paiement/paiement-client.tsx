@@ -79,19 +79,15 @@ export function PaiementPublicClient({ initialType }: { initialType: "AMENDE" | 
 
       {message && <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{message}</p>}
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <button onClick={handleStripe} disabled={pending !== null} className="rounded-2xl border-2 border-emerald-600 bg-white p-6 text-left hover:bg-emerald-50 disabled:opacity-50">
-          <p className="font-semibold text-emerald-700">Payer par carte (Stripe)</p>
-          <p className="mt-1 text-sm text-zinc-600">Sécurisé, instantané.</p>
-          <p className="mt-3 text-2xl font-bold">{type === "SUSPENSION" ? "59 €" : "39 €"}</p>
-          <span className="mt-4 inline-block rounded-full bg-emerald-600 px-6 py-2 text-sm font-semibold text-white">{pending === "stripe" ? "Redirection…" : "Payer par carte"}</span>
+      <div className="rounded-2xl border-2 border-emerald-600 bg-white p-6">
+        <p className="font-semibold text-emerald-700">Payer par virement bancaire</p>
+        <p className="mt-1 text-sm text-zinc-600">RIB fourni après validation — virement unique, validation sous 24h ouvrées. Référence à indiquer : votre email.</p>
+        <p className="mt-3 text-2xl font-bold">{type === "SUSPENSION" ? "59 €" : "39 €"}</p>
+        <p className="mt-2 text-xs text-zinc-500">Le RIB définitif vous sera communiqué ici dès réception de votre RIB — en attendant, votre demande est enregistrée et un juriste vous contactera sur WhatsApp.</p>
+        <button onClick={handleVirement} disabled={pending !== null} className="mt-4 w-full rounded-full bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+          {pending === "virement" ? "Enregistrement…" : "Valider et recevoir le RIB"}
         </button>
-        <button onClick={handleVirement} disabled={pending !== null} className="rounded-2xl border-2 border-zinc-300 bg-white p-6 text-left hover:bg-zinc-50 disabled:opacity-50">
-          <p className="font-semibold">Payer par virement</p>
-          <p className="mt-1 text-sm text-zinc-600">RIB affiché après, validation 24h.</p>
-          <p className="mt-3 text-2xl font-bold">{type === "SUSPENSION" ? "59 €" : "39 €"}</p>
-          <span className="mt-4 inline-block rounded-full border border-zinc-300 bg-white px-6 py-2 text-sm font-semibold text-zinc-700">{pending === "virement" ? "Enregistrement…" : "Choisir virement"}</span>
-        </button>
+        <p className="mt-3 text-center text-xs text-zinc-400">Paiement par carte (Stripe) — bientôt disponible.</p>
       </div>
     </div>
   );

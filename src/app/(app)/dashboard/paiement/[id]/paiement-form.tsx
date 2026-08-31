@@ -50,15 +50,14 @@ export function PaiementForm({
       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
         <h3 className="font-semibold text-emerald-900">Demande de virement enregistrée</h3>
         <p className="mt-2 text-sm text-emerald-800">
-          Merci {prenom} — nous avons bien reçu votre demande. Voici le RIB pour régler {type === "SUSPENSION" ? "59 €" : "39 €"} :
+          Merci {prenom} — nous avons bien reçu votre demande pour {type === "SUSPENSION" ? "59 €" : "39 €"} (réf. {dossierId.slice(0, 8).toUpperCase()}).
         </p>
-        <div className="mt-4 rounded-xl bg-white p-4 font-mono text-sm">
-          <p>IBAN : FR76 1234 5678 9012 3456 7890 123</p>
-          <p>BIC : ABCDFRPP</p>
-          <p>Bénéficiaire : SOS Amende</p>
-          <p>Référence : {dossierId.slice(0, 8).toUpperCase()}</p>
+        <div className="mt-4 rounded-xl bg-white p-4 text-sm">
+          <p className="font-semibold">RIB à venir — vous recevrez le RIB définitif par email/WhatsApp sous 24h.</p>
+          <p className="mt-2 font-mono text-sm">Référence à indiquer : {dossierId.slice(0, 8).toUpperCase()} — {prenom} {nom}</p>
+          <p className="mt-2 text-xs text-zinc-500">En attendant votre RIB définitif, votre dossier reste en attente. Dès réception du virement, un juriste débloquera la lettre et vous serez notifié.</p>
         </div>
-        <p className="mt-3 text-xs text-emerald-700">Dès réception, un juriste validera votre paiement et débloquera la lettre (sous 24h ouvrées). Vous serez notifié par email/WhatsApp.</p>
+        <p className="mt-3 text-xs text-emerald-700">Un juriste validera votre paiement et débloquera la lettre (sous 24h ouvrées). Vous serez notifié par email/WhatsApp.</p>
       </div>
     );
   }
@@ -88,31 +87,23 @@ export function PaiementForm({
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-2xl border-2 border-emerald-600 bg-white p-6">
-          <h4 className="font-semibold text-emerald-700">Payer par carte (Stripe)</h4>
-          <p className="mt-1 text-sm text-zinc-600">Paiement sécurisé, crédit instantané, lettre débloquée immédiatement.</p>
-          <p className="mt-3 text-2xl font-bold">{type === "SUSPENSION" ? "59 €" : "39 €"}</p>
-          <button onClick={handleStripe} disabled={stripePending} className="mt-4 w-full rounded-full bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
-            {stripePending ? "Redirection…" : "Payer par Stripe"}
-          </button>
-          {stripeError && <p className="mt-2 text-xs text-red-600">{stripeError}</p>}
-        </div>
-
-        <form action={virementAction} className="rounded-2xl border-2 border-zinc-300 bg-white p-6">
+      <div className="rounded-2xl border-2 border-emerald-600 bg-white p-6">
+        <h4 className="font-semibold text-emerald-700">Payer par virement bancaire</h4>
+        <p className="mt-1 text-sm text-zinc-600">Seul mode proposé pour le moment — RIB définitif à venir (vous le recevrez par email/WhatsApp). Validation sous 24h ouvrées.</p>
+        <p className="mt-3 text-2xl font-bold">{type === "SUSPENSION" ? "59 €" : "39 €"}</p>
+        <p className="mt-2 text-xs text-zinc-500">Vous recevrez le RIB définitif dès que vous aurez fourni votre RIB — en attendant, votre demande est enregistrée.</p>
+        <form action={virementAction} className="mt-4">
           <input type="hidden" name="dossierId" value={dossierId} />
           <input type="hidden" name="nom" value={nom} />
           <input type="hidden" name="prenom" value={prenom} />
           <input type="hidden" name="email" value={email} />
           <input type="hidden" name="whatsapp" value={whatsapp} />
-          <h4 className="font-semibold">Payer par virement</h4>
-          <p className="mt-1 text-sm text-zinc-600">RIB affiché après validation du formulaire. Délai 24h ouvrées.</p>
-          <p className="mt-3 text-2xl font-bold">{type === "SUSPENSION" ? "59 €" : "39 €"}</p>
-          <button disabled={virementPending} className="mt-4 w-full rounded-full border border-zinc-300 bg-white px-6 py-3 font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-50">
-            {virementPending ? "Enregistrement…" : "Choisir le virement"}
+          <button disabled={virementPending} className="w-full rounded-full bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+            {virementPending ? "Enregistrement…" : "Valider et recevoir le RIB"}
           </button>
           {virementState?.error && <p className="mt-2 text-xs text-red-600">{virementState.error}</p>}
         </form>
+        <p className="mt-3 text-center text-xs text-zinc-400">Paiement par carte (Stripe) — bientôt disponible.</p>
       </div>
     </div>
   );
