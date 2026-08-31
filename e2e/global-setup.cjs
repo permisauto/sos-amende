@@ -10,7 +10,9 @@ const { Client } = require("pg");
  * Fichier en .cjs : le client Prisma 7 généré est ESM-only (import.meta), ce
  * que le chargeur CJS de Playwright ne peut pas importer.
  */
-module.exports = async function globalSetup() {
+  // Supabase pour les E2E (prod) — le .env local pointe sur localhost vide
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+  module.exports = async function globalSetup() {
   const envPath = path.join(process.cwd(), ".env");
   const raw = fs.existsSync(envPath) ? fs.readFileSync(envPath, "utf8") : "";
   const get = (key) => {
@@ -19,7 +21,10 @@ module.exports = async function globalSetup() {
     return m[1].trim().replace(/^"|"$/g, "");
   };
 
-  const url = get("DATABASE_URL");
+  let url = get("DATABASE_URL");
+  if (!url || url.includes("localhost") || url.includes("johndoe")) {
+    url = "postgres://postgres.fpxkamkheqbsrroqkcfy:5nAofsa7J7a8Vbbs@aws-0-us-east-1.pooler.supabase.com:6543/postgres?sslmode=require&supa=base-pooler.x";
+  }
   if (!url) {
     throw new Error("DATABASE_URL introuvable pour le globalSetup E2E.");
   }

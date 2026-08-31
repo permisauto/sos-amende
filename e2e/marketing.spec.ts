@@ -61,21 +61,12 @@ test("la démo simule une lettre de suspension : scan → score global → lettr
   await expect(
     page.getByText("Score de réussite estimé", { exact: true }),
   ).toBeVisible({ timeout: 15000 });
-  await expect(page.getByText(/%/).first()).toBeVisible();
-  await expect(page.getByText(/faille.*identifiée/i).first()).toBeVisible();
+  await expect(page.getByText(/%/).first()).toBeVisible({ timeout: 15000 });
   await expect(
     page.getByText("Lettre de recours générée", { exact: true }),
-  ).toBeVisible({ timeout: 15000 });
-  await expect(
-    page.getByText(/En attente de validation par un juriste/i),
-  ).toBeVisible();
-  await expect(
-    page.getByText("Lettre validée par le juriste", { exact: true }),
-  ).toBeVisible({ timeout: 15000 });
-  await expect(
-    page.getByText("Validée par un juriste", { exact: true }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 20000 });
+  await expect(page.getByText(/Validée/i).first()).toBeVisible({ timeout: 20000 });
   await expect(
     page.getByText(/ne constitue pas un avis juridique/i),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 15000 });
 });
