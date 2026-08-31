@@ -29,10 +29,10 @@ export function SiteHeader() {
           ))}
         </nav>
         <div className="flex items-center gap-3">
-          <Link href="/login" className="hidden text-sm font-medium text-zinc-700 hover:text-zinc-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-600 md:inline">
-            Connexion
+          <Link href="/deposer?type=AMENDE" className="hidden text-sm font-medium text-zinc-700 hover:text-zinc-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-600 md:inline">
+            Déposer
           </Link>
-          <Link href="/login" className="hidden rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-600 focus-visible:outline-offset-2 md:inline">
+          <Link href="/deposer?type=AMENDE" className="hidden rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-600 focus-visible:outline-offset-2 md:inline">
             Commencer
           </Link>
           <button
@@ -58,10 +58,10 @@ export function SiteHeader() {
               </li>
             ))}
             <li className="mt-2 flex gap-2 border-t border-zinc-100 pt-3">
-              <Link href="/login" onClick={() => setOpen(false)} className="flex-1 rounded-full border border-zinc-300 px-4 py-2 text-center text-sm font-semibold text-zinc-700 hover:bg-zinc-50">
-                Connexion
+              <Link href="/deposer?type=AMENDE" onClick={() => setOpen(false)} className="flex-1 rounded-full border border-zinc-300 px-4 py-2 text-center text-sm font-semibold text-zinc-700 hover:bg-zinc-50">
+                Déposer
               </Link>
-              <Link href="/login" onClick={() => setOpen(false)} className="flex-1 rounded-full bg-emerald-600 px-4 py-2 text-center text-sm font-semibold text-white hover:bg-emerald-700">
+              <Link href="/deposer?type=AMENDE" onClick={() => setOpen(false)} className="flex-1 rounded-full bg-emerald-600 px-4 py-2 text-center text-sm font-semibold text-white hover:bg-emerald-700">
                 Commencer
               </Link>
             </li>

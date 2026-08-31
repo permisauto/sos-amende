@@ -19,16 +19,16 @@ export default function HomePage() {
           </p>
           <div className="mt-10 flex flex-col items-center gap-3 sm:flex-row lg:justify-start">
             <Link
-              href="/login"
+              href="/deposer?type=AMENDE"
               className="rounded-full bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700"
             >
               Lancer mon analyse
             </Link>
             <Link
-              href="/pricing"
+              href="/deposer?type=AMENDE"
               className="rounded-full border border-zinc-300 px-6 py-3 font-semibold text-zinc-700 hover:bg-zinc-50"
             >
-              Voir les tarifs
+              Déposer ma contravention
             </Link>
           </div>
         </div>
@@ -82,7 +82,7 @@ export default function HomePage() {
               le fondement le plus solide pour votre dossier.
             </p>
             <Link
-              href="/login"
+              href="/deposer?type=AMENDE"
               className="mt-6 inline-block rounded-full bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700"
             >
               Contester une amende
@@ -125,7 +125,7 @@ export default function HomePage() {
               nécessaire, mise en relation avec un avocat partenaire.
             </p>
             <Link
-              href="/login"
+              href="/deposer?type=SUSPENSION"
               className="mt-6 inline-block rounded-full bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700"
             >
               Défendre mon permis
@@ -145,16 +145,16 @@ export default function HomePage() {
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
-              href="/login"
+              href="/deposer?type=AMENDE"
               className="inline-block rounded-full bg-emerald-500 px-8 py-3 font-semibold text-white hover:bg-emerald-400"
             >
-              Déposer mon dossier (39€ / 59€)
+              Déposer ma contravention
             </Link>
             <Link
-              href="/pricing"
+              href="/deposer?type=SUSPENSION"
               className="inline-block rounded-full border border-white/20 px-8 py-3 font-semibold text-white hover:bg-white/10"
             >
-              Voir les tarifs
+              Déposer ma lettre de suspension
             </Link>
           </div>
           <p className="mx-auto mt-4 max-w-xl text-xs text-zinc-500">

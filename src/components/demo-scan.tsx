@@ -448,10 +448,10 @@ export function DemoScan() {
       )}
 
       <Link
-        href="/pricing"
+        href="/deposer?type=AMENDE"
         className="mt-5 block rounded-full bg-emerald-600 px-6 py-3 text-center font-semibold text-white transition hover:bg-emerald-700"
       >
-        Lancer la procédure complète
+        Déposer ma contravention — upload libre
       </Link>
     </div>
   );
