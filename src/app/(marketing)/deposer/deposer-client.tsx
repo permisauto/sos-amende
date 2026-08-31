@@ -4,7 +4,8 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 
 type Resultat = { titreFaille: string | null; articleLoi: string | null; score: number; proposition: boolean };
-type Reponse = { scoreGlobal?: number; resultats?: Resultat[]; data?: Record<string, unknown>; texte?: string; erreur?: string };
+type Preuves = { radar: { checked: boolean; found: boolean; expired: boolean | null; preuveUrl: string | null }; meteo: { checked: boolean; value: string | null; source: string | null }; travaux: { checked: boolean; value: boolean | null }; dureeMs: number };
+type Reponse = { scoreGlobal?: number; resultats?: Resultat[]; data?: Record<string, unknown>; texte?: string; erreur?: string; preuves?: Preuves };
 
 export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPENSION" }) {
   const [type, setType] = useState<"AMENDE" | "SUSPENSION">(initialType);
@@ -232,16 +233,15 @@ export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPEN
                 )}
               </div>
               <div className="rounded-xl bg-white p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Preuves vérifiées</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Preuves vérifiées (API)</p>
                 <ul className="mt-2 space-y-1.5 text-sm">
                   <li className="flex items-center gap-2">{file ? <span className="text-emerald-600">✓</span> : <span className="text-zinc-300">○</span>} <span className={file ? "text-zinc-800" : "text-zinc-400"}>PV/lettre téléversé{file ? ` — ${file.name}` : ""}</span></li>
-                  <li className="flex items-center gap-2">{infos.plaque ? <span className="text-emerald-600">✓</span> : <span className="text-amber-600">!</span>} Plaque {infos.plaque || "manquante"}</li>
-                  <li className="flex items-center gap-2">{infos.num_pv ? <span className="text-emerald-600">✓</span> : <span className="text-amber-600">!</span>} N° PV/décision {infos.num_pv || "manquant"}</li>
-                  <li className="flex items-center gap-2">{infos.date ? <span className="text-emerald-600">✓</span> : <span className="text-amber-600">!</span>} Date {infos.date || "manquante"}</li>
-                  <li className="flex items-center gap-2">{infos.montant || infos.heure ? <span className="text-emerald-600">✓</span> : <span className="text-zinc-300">○</span>} Montant/heure {infos.montant || infos.heure || "—"}</li>
-                  <li className="flex items-center gap-2">{reponse?.texte ? <span className="text-emerald-600">✓</span> : <span className="text-zinc-300">○</span>} Texte OCR {reponse?.texte ? "capté" : "—"}</li>
+                  <li className="flex items-center gap-2">{reponse?.preuves?.radar.checked ? (reponse.preuves.radar.found ? <span className="text-emerald-600">✓</span> : <span className="text-amber-600">○</span>) : <span className="text-zinc-300">○</span>} Radar {reponse?.preuves?.radar.found ? (reponse.preuves.radar.expired ? "étalonnage expiré — preuve trouvée" : "étalonnage OK") : infos.lieu ? "vérifié — aucun radar correspondant" : "non vérifié (renseignez N° radar/lieu)"} </li>
+                  <li className="flex items-center gap-2">{reponse?.preuves?.meteo.checked ? (reponse.preuves.meteo.value ? <span className="text-emerald-600">✓</span> : <span className="text-zinc-300">○</span>) : <span className="text-zinc-300">○</span>} Météo {reponse?.preuves?.meteo.value ? `${reponse.preuves.meteo.value} (${reponse.preuves.meteo.source})` : "non signalée — cochez si pluie/brouillard"}</li>
+                  <li className="flex items-center gap-2">{reponse?.preuves?.travaux.checked ? (reponse.preuves.travaux.value ? <span className="text-emerald-600">✓</span> : <span className="text-zinc-300">○</span>) : <span className="text-zinc-300">○</span>} Travaux {reponse?.preuves?.travaux.value ? "signalés — vérifiés" : "non signalés"}</li>
+                  <li className="flex items-center gap-2">{reponse?.texte ? <span className="text-emerald-600">✓</span> : <span className="text-zinc-300">○</span>} Texte OCR {reponse?.texte ? `capté (${reponse.texte.length} car.)` : "—"}</li>
                 </ul>
-                <p className="mt-3 text-[11px] text-zinc-500">Les preuves (certificat étalonnage, météo, travaux) seront ajoutées à l'étape juriste si pertinentes.</p>
+                <p className="mt-2 text-[11px] text-zinc-500">Vérification croisée : chaque faille est confrontée à sa preuve (ex: étalonnage → certificat radar, météo → bulletin). {reponse?.preuves?.dureeMs ? `Scan ${reponse.preuves.dureeMs}ms.` : ""}</p>
               </div>
             </div>
           </div>

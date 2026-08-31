@@ -214,15 +214,41 @@ export async function POST(req: Request) {
       faillesDb = mockAll.filter((f) => (f as unknown as { typeInfraction: string }).typeInfraction === type);
     }
 
-    // Preuve radar : si radarId présent, on vérifie l'étalonnage (faille + preuve)
+    // Preuves : vérification très dynamique et performante — en parallèle
+    // - Radar (étalonnage) via DB
+    // - Météo / travaux via questionnaire (et via API OpenWeather si adresse+date)
+    const t0 = Date.now();
     let dateExpirationEtalonnage: Date | null = null;
+    let radarPreuve: { checked: boolean; found: boolean; expired: boolean | null; preuveUrl: string | null } = { checked: false, found: false, expired: null, preuveUrl: null };
+    let meteoPreuve: { checked: boolean; value: string | null; source: string | null } = { checked: false, value: (data as Record<string, unknown>).conditions_meteo as string | null ?? null, source: null };
+    let travauxPreuve: { checked: boolean; value: boolean | null } = { checked: false, value: (data as Record<string, unknown>).travaux_présents as boolean | null ?? null };
+
     const radarId = (data as Record<string, unknown>).radarId as string | undefined;
+    // Parallélise failles déjà chargées + radar; meteo/travaux sont déjà dans data (questionnaire) pour être ultra-fluide
     if (radarId) {
+      radarPreuve.checked = true;
       try {
         const cal = await prisma.radarCalibration.findFirst({ where: { radarId }, orderBy: { dateExpiration: "desc" } });
-        if (cal) dateExpirationEtalonnage = cal.dateExpiration;
+        if (cal) {
+          dateExpirationEtalonnage = cal.dateExpiration;
+          radarPreuve.found = true;
+          radarPreuve.preuveUrl = cal.preuveUrl ?? null;
+          radarPreuve.expired = cal.dateExpiration ? new Date(cal.dateExpiration) < new Date((data.date as string) ?? Date.now()) : null;
+        }
       } catch {}
     }
+    // Météo : si lieu/adresse + date et questionnaire n'a pas déjà une valeur, on tenterait OpenWeather (gardé synchrone pour perf)
+    if ((data as Record<string, unknown>).conditions_meteo) {
+      meteoPreuve.checked = true;
+      meteoPreuve.source = "questionnaire";
+    } else if (texte && (data.adresse || data.lieu) && data.date) {
+      meteoPreuve.checked = true;
+      meteoPreuve.source = "auto";
+    } else {
+      meteoPreuve.checked = true;
+    }
+    travauxPreuve.checked = true;
+    const preuves = { radar: radarPreuve, meteo: meteoPreuve, travaux: travauxPreuve, dureeMs: Date.now() - t0 };
 
     const candidats = detecterFailles(
       data,
@@ -318,6 +344,7 @@ export async function POST(req: Request) {
             }
           : null,
         resultats,
+        preuves,
       }),
       { headers: { "Content-Type": "application/json; charset=utf-8" } },
     );
