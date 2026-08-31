@@ -31,6 +31,10 @@ export const FAILLE_IDS = {
   mentions: "faille-mentions-obligatoires",
   erreurPlaque: "faille-erreur-plaque",
   etalonnage: "faille-certificat-etalonnage",
+  travaux: "faille-travaux-signalisation",
+  meteo: "faille-meteo-visibilite",
+  cession: "faille-cession-vehicule",
+  conducteur: "faille-conducteur-different",
 } as const;
 
 export function datePrescrite(datePv?: string): boolean {
@@ -111,13 +115,16 @@ export type FailleDetectable = {
   reglesDetection?: RegleDetection[] | null;
 };
 
-// Ordre de priorité des failles connues (la première qui matche est retenue
-// comme faille principale du dossier).
+// Ordre de priorité — questionnaire + preuves d'abord (très pointu)
 const PRIORITE_DETECTION = [
   FAILLE_IDS.prescription,
   FAILLE_IDS.erreurPlaque,
-  FAILLE_IDS.mentions,
   FAILLE_IDS.etalonnage,
+  FAILLE_IDS.travaux,
+  FAILLE_IDS.meteo,
+  FAILLE_IDS.cession,
+  FAILLE_IDS.conducteur,
+  FAILLE_IDS.mentions,
 ];
 
 /**
@@ -211,25 +218,31 @@ function texteDePv(texte: string, data: ExtractedData): boolean {
   );
 }
 
-// Prédicats hérités pour les failles connues sans règles explicites.
+// Prédicats hérités — chaque question du questionnaire mappe immédiatement à une faille
 function predicatHerite(
   id: string,
   data: ExtractedData,
   _texte: string | null | undefined,
   contexte?: { dateExpirationEtalonnage?: Date | string | null },
 ): boolean {
+  const d = data as Record<string, unknown>;
   switch (id) {
     case FAILLE_IDS.prescription:
       return datePrescrite(data.date);
     case FAILLE_IDS.erreurPlaque:
       return data.plaqueIncorrecte === true;
     case FAILLE_IDS.mentions:
-      return !data.numTelePaiement || !data.cle;
+      return !data.numTelePaiement || !data.cle || d.adresseIncorrecte === true;
     case FAILLE_IDS.etalonnage:
-      return (
-        !!contexte?.dateExpirationEtalonnage &&
-        etalonnageExpire(contexte.dateExpirationEtalonnage, data.date)
-      );
+      return !!contexte?.dateExpirationEtalonnage && etalonnageExpire(contexte.dateExpirationEtalonnage, data.date);
+    case FAILLE_IDS.travaux:
+      return d.travaux_présents === true;
+    case FAILLE_IDS.meteo:
+      return !!d.conditions_meteo && /pluie|neige|brouillard|verglas|orage/i.test(String(d.conditions_meteo));
+    case FAILLE_IDS.cession:
+      return d.vehiculeCede === true;
+    case FAILLE_IDS.conducteur:
+      return d.conducteurDifferent === true || d.vehiculeVole === true;
     default:
       return false;
   }
@@ -294,6 +307,23 @@ export function scoreFaille(
       base = 82;
       if (d.preuveEtalonnage || contexte?.dateExpirationEtalonnage) bonus += 13;
       if (d.lieu) bonus += 5;
+      break;
+    case FAILLE_IDS.travaux:
+      base = 78;
+      if (d.lieu) bonus += 8;
+      if (texte && /travaux|chantier/i.test(texte)) bonus += 6;
+      break;
+    case FAILLE_IDS.meteo:
+      base = 74;
+      if (d.lieu) bonus += 6;
+      if (d.conditions_meteo) bonus += 8;
+      break;
+    case FAILLE_IDS.cession:
+      base = 85;
+      if (d.vehiculeCede) bonus += 10;
+      break;
+    case FAILLE_IDS.conducteur:
+      base = d.vehiculeVole ? 92 : 80;
       break;
     default:
       if (texte && texte.length > 200) bonus += 3;

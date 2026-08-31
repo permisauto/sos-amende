@@ -201,6 +201,10 @@ export async function POST(req: Request) {
         { id: "faille-mentions-obligatoires", titreFaille: "Mentions obligatoires", articleLoi: "Art. A37-1 CPP", source: null, statut: "ACTIVE", templateLettre: "Mentions manquantes", jurisprudence: [], reglesDetection: [{ type: "champAbsent", champ: "numTelePaiement" }] },
         { id: "faille-erreur-plaque", titreFaille: "Erreur plaque", articleLoi: "Art. 429 CPP", source: null, statut: "ACTIVE", templateLettre: "Plaque erronée", jurisprudence: [], reglesDetection: [{ type: "plaqueIncorrecte" }] },
         { id: "faille-certificat-etalonnage", titreFaille: "Certificat étalonnage", articleLoi: "Art. R. 421-2", source: null, statut: "ACTIVE", templateLettre: "Étalonnage expiré", jurisprudence: [], reglesDetection: [{ type: "etalonnageExpire" }] },
+        { id: "faille-travaux-signalisation", titreFaille: "Travaux et signalisation temporaire", articleLoi: "Art. R. 411-8 CR", source: null, statut: "ACTIVE", templateLettre: "Travaux", jurisprudence: [], reglesDetection: [{ type: "travauxPresents" }] },
+        { id: "faille-meteo-visibilite", titreFaille: "Météo dégradée — visibilité", articleLoi: "Art. R. 413-17 CR", source: null, statut: "ACTIVE", templateLettre: "Météo", jurisprudence: [], reglesDetection: [{ type: "meteoDefavorable" }] },
+        { id: "faille-cession-vehicule", titreFaille: "Véhicule cédé avant infraction", articleLoi: "Art. 529-10 CPP", source: null, statut: "ACTIVE", templateLettre: "Cession", jurisprudence: [], reglesDetection: [{ type: "texteContient", motif: "cession" }] },
+        { id: "faille-conducteur-different", titreFaille: "Conducteur différent / vol", articleLoi: "Art. 529-10 CPP", source: null, statut: "ACTIVE", templateLettre: "Conducteur différent", jurisprudence: [], reglesDetection: [{ type: "texteContient", motif: "vol" }] },
       ] as unknown as FailleDb[];
     }
 
