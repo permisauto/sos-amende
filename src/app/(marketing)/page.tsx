@@ -17,18 +17,12 @@ export default function HomePage() {
             votre courrier de recours prêt à envoyer et suivez vos délais — sans
             vous perdre dans la procédure.
           </p>
-          <div className="mt-10 flex flex-col items-center gap-3 sm:flex-row lg:justify-start">
+          <div className="mt-10">
             <Link
               href="/deposer?type=AMENDE"
               className="rounded-full bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700"
             >
               Lancer mon analyse
-            </Link>
-            <Link
-              href="/deposer?type=AMENDE"
-              className="rounded-full border border-zinc-300 px-6 py-3 font-semibold text-zinc-700 hover:bg-zinc-50"
-            >
-              Déposer ma contravention
             </Link>
           </div>
         </div>
