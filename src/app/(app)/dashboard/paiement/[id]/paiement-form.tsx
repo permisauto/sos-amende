@@ -45,18 +45,38 @@ export function PaiementForm({
     }
   }
 
+  const [virementConfirme, setVirementConfirme] = useState(false);
+  const RIB_IBAN = process.env.NEXT_PUBLIC_RIB_IBAN ?? "FR76 1234 5678 9012 3456 7890 123";
+  const RIB_BIC = process.env.NEXT_PUBLIC_RIB_BIC ?? "ABCDFRPPXXX";
+  const RIB_TITULAIRE = process.env.NEXT_PUBLIC_RIB_TITULAIRE ?? "SOS Amende";
+
   if (virementState?.ok) {
     return (
       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
-        <h3 className="font-semibold text-emerald-900">Demande de virement enregistrée</h3>
+        <h3 className="font-semibold text-emerald-900">Demande de virement enregistrée — voici le RIB à utiliser</h3>
         <p className="mt-2 text-sm text-emerald-800">
-          Merci {prenom} — nous avons bien reçu votre demande pour {type === "SUSPENSION" ? "59 €" : "39 €"} (réf. {dossierId.slice(0, 8).toUpperCase()}).
+          Merci {prenom} — votre demande pour {type === "SUSPENSION" ? "59 €" : "39 €"} (réf. {dossierId.slice(0, 8).toUpperCase()}) est enregistrée. Copiez le RIB ci-dessous dans votre application bancaire :
         </p>
         <div className="mt-4 rounded-xl bg-white p-4 text-sm">
-          <p className="font-semibold">RIB à venir — vous recevrez le RIB définitif par email/WhatsApp sous 24h.</p>
-          <p className="mt-2 font-mono text-sm">Référence à indiquer : {dossierId.slice(0, 8).toUpperCase()} — {prenom} {nom}</p>
-          <p className="mt-2 text-xs text-zinc-500">En attendant votre RIB définitif, votre dossier reste en attente. Dès réception du virement, un juriste débloquera la lettre et vous serez notifié.</p>
+          <div className="flex items-center justify-between"><span className="font-semibold">IBAN</span><button type="button" onClick={() => navigator.clipboard.writeText(RIB_IBAN.replace(/\s/g, ""))} className="text-xs text-emerald-700 hover:underline">Copier</button></div>
+          <p className="font-mono text-sm">{RIB_IBAN}</p>
+          <div className="mt-2 flex items-center justify-between"><span className="font-semibold">BIC</span><button type="button" onClick={() => navigator.clipboard.writeText(RIB_BIC)} className="text-xs text-emerald-700 hover:underline">Copier</button></div>
+          <p className="font-mono text-sm">{RIB_BIC}</p>
+          <p className="mt-2"><span className="font-semibold">Titulaire :</span> {RIB_TITULAIRE}</p>
+          <p className="mt-2"><span className="font-semibold">Montant :</span> {type === "SUSPENSION" ? "59,00 €" : "39,00 €"}</p>
+          <p className="mt-2 font-mono text-sm bg-amber-50 px-2 py-1 rounded">Référence obligatoire : {dossierId.slice(0, 8).toUpperCase()} — {prenom} {nom}</p>
+          <p className="mt-2 text-xs text-zinc-500">Vous recevrez le RIB définitif par email/WhatsApp si celui-ci change. Conservez la référence.</p>
         </div>
+        {!virementConfirme ? (
+          <button type="button" onClick={() => setVirementConfirme(true)} className="mt-4 w-full rounded-full bg-zinc-900 px-6 py-3 font-semibold text-white hover:bg-black">
+            J'ai effectué le virement
+          </button>
+        ) : (
+          <div className="mt-4 rounded-xl bg-white p-4 text-sm text-emerald-800">
+            <p className="font-semibold">✓ Merci — virement signalé</p>
+            <p className="mt-1">Dès réception sur notre compte (sous 24h ouvrées), un juriste validera votre paiement, débloquera la lettre et vous notifiera par email/WhatsApp. Votre dossier passe en “En attente de validation virement”.</p>
+          </div>
+        )}
         <p className="mt-3 text-xs text-emerald-700">Un juriste validera votre paiement et débloquera la lettre (sous 24h ouvrées). Vous serez notifié par email/WhatsApp.</p>
       </div>
     );
@@ -89,9 +109,15 @@ export function PaiementForm({
 
       <div className="rounded-2xl border-2 border-emerald-600 bg-white p-6">
         <h4 className="font-semibold text-emerald-700">Payer par virement bancaire</h4>
-        <p className="mt-1 text-sm text-zinc-600">Seul mode proposé pour le moment — RIB définitif à venir (vous le recevrez par email/WhatsApp). Validation sous 24h ouvrées.</p>
+        <p className="mt-1 text-sm text-zinc-600">Seul mode proposé pour le moment — copiez le RIB ci-dessous dans votre banque.</p>
+        <div className="mt-3 rounded-xl bg-zinc-50 p-3 text-sm">
+          <div className="flex items-center justify-between"><span className="font-semibold">IBAN</span><button type="button" onClick={() => navigator.clipboard.writeText(RIB_IBAN.replace(/\s/g, ""))} className="text-xs text-emerald-700 hover:underline">Copier</button></div>
+          <p className="font-mono">{RIB_IBAN}</p>
+          <p className="mt-1 flex items-center gap-2"><span className="font-semibold">BIC</span> {RIB_BIC} <button type="button" onClick={() => navigator.clipboard.writeText(RIB_BIC)} className="text-xs text-emerald-700 hover:underline">Copier</button></p>
+          <p className="mt-1"><span className="font-semibold">Titulaire :</span> {RIB_TITULAIRE}</p>
+          <p className="mt-1 font-mono bg-amber-50 px-1 rounded">Référence : {dossierId.slice(0, 8).toUpperCase()} — {prenom || "Prénom"} {nom || "Nom"}</p>
+        </div>
         <p className="mt-3 text-2xl font-bold">{type === "SUSPENSION" ? "59 €" : "39 €"}</p>
-        <p className="mt-2 text-xs text-zinc-500">Vous recevrez le RIB définitif dès que vous aurez fourni votre RIB — en attendant, votre demande est enregistrée.</p>
         <form action={virementAction} className="mt-4">
           <input type="hidden" name="dossierId" value={dossierId} />
           <input type="hidden" name="nom" value={nom} />
