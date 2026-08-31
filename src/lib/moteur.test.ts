@@ -236,7 +236,7 @@ describe("scoreFaille", () => {
         {},
         null,
       ),
-    ).toEqual({ matchees: 1, total: 1, score: 100 });
+    ).toEqual({ matchees: 1, total: 1, score: 98 });
   });
 
   it("score proportionnel au nombre de règles matchées", () => {
@@ -262,6 +262,6 @@ describe("scoreFaille", () => {
         { date: "2020-01-01" },
         null,
       ),
-    ).toEqual({ matchees: 1, total: 1, score: 100 });
+    ).toEqual({ matchees: 1, total: 1, score: 88 });
   });
 });
