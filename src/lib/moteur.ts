@@ -35,6 +35,8 @@ export const FAILLE_IDS = {
   meteo: "faille-meteo-visibilite",
   cession: "faille-cession-vehicule",
   conducteur: "faille-conducteur-different",
+  paiement: "faille-paiement-deja-effectue",
+  adresse: "faille-adresse-erronee",
 } as const;
 
 export function datePrescrite(datePv?: string): boolean {
@@ -107,6 +109,11 @@ export type RegleDetection =
   | { type: "etalonnageExpire" }
   | { type: "travauxPresents" }
   | { type: "meteoDefavorable" }
+  | { type: "vehiculeCede" }
+  | { type: "vehiculeVole" }
+  | { type: "conducteurDifferent" }
+  | { type: "paiementDejaFait" }
+  | { type: "adresseIncorrecte" }
   | { type: "texteContient"; motif: string }
   | { type: "texteAbsent"; motif: string };
 
@@ -115,7 +122,7 @@ export type FailleDetectable = {
   reglesDetection?: RegleDetection[] | null;
 };
 
-// Ordre de priorité — questionnaire + preuves d'abord (très pointu)
+// Ordre de priorité — questionnaire + preuves d'abord (très pointu, chaque réponse = faille)
 const PRIORITE_DETECTION = [
   FAILLE_IDS.prescription,
   FAILLE_IDS.erreurPlaque,
@@ -124,6 +131,8 @@ const PRIORITE_DETECTION = [
   FAILLE_IDS.meteo,
   FAILLE_IDS.cession,
   FAILLE_IDS.conducteur,
+  FAILLE_IDS.paiement,
+  FAILLE_IDS.adresse,
   FAILLE_IDS.mentions,
 ];
 
@@ -194,6 +203,16 @@ function evalRegle(
       return (data as Record<string, unknown>).travaux_présents === true || (data as Record<string, unknown>).travaux === true;
     case "meteoDefavorable":
       return !!((data as Record<string, unknown>).conditions_meteo) && /pluie|neige|brouillard|verglas|orage/i.test(String((data as Record<string, unknown>).conditions_meteo));
+    case "vehiculeCede":
+      return (data as Record<string, unknown>).vehiculeCede === true;
+    case "vehiculeVole":
+      return (data as Record<string, unknown>).vehiculeVole === true;
+    case "conducteurDifferent":
+      return (data as Record<string, unknown>).conducteurDifferent === true;
+    case "paiementDejaFait":
+      return (data as Record<string, unknown>).paiementDejaFait === true;
+    case "adresseIncorrecte":
+      return (data as Record<string, unknown>).adresseIncorrecte === true;
     case "texteContient":
       return (
         !!texte && texte.toLowerCase().includes(regle.motif.toLowerCase())
@@ -243,6 +262,10 @@ function predicatHerite(
       return d.vehiculeCede === true;
     case FAILLE_IDS.conducteur:
       return d.conducteurDifferent === true || d.vehiculeVole === true;
+    case FAILLE_IDS.paiement:
+      return d.paiementDejaFait === true;
+    case FAILLE_IDS.adresse:
+      return d.adresseIncorrecte === true;
     default:
       return false;
   }
@@ -324,6 +347,13 @@ export function scoreFaille(
       break;
     case FAILLE_IDS.conducteur:
       base = d.vehiculeVole ? 92 : 80;
+      break;
+    case FAILLE_IDS.paiement:
+      base = 90;
+      break;
+    case FAILLE_IDS.adresse:
+      base = 76;
+      if (d.adresse && d.lieu) bonus += 8;
       break;
     default:
       if (texte && texte.length > 200) bonus += 3;
