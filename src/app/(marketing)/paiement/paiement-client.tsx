@@ -21,9 +21,9 @@ export function PaiementPublicClient({ initialType }: { initialType: "AMENDE" | 
     }
   }, []);
 
-  const RIB_IBAN = process.env.NEXT_PUBLIC_RIB_IBAN ?? "FR76 1234 5678 9012 3456 7890 123";
-  const RIB_BIC = process.env.NEXT_PUBLIC_RIB_BIC ?? "ABCDFRPPXXX";
-  const RIB_TITULAIRE = process.env.NEXT_PUBLIC_RIB_TITULAIRE ?? "SOS Amende";
+  const RIB_IBAN = process.env.NEXT_PUBLIC_RIB_IBAN ?? "FR76 3000 4000 0500 0012 3456 789";
+  const RIB_BIC = process.env.NEXT_PUBLIC_RIB_BIC ?? "BNPAFRPPXXX";
+  const RIB_TITULAIRE = process.env.NEXT_PUBLIC_RIB_TITULAIRE ?? "SOS AMENDE - TEST";
   const [virementDone, setVirementDone] = useState(false);
 
   async function handleVirement() {

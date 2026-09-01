@@ -46,35 +46,38 @@ export function PaiementForm({
   }
 
   const [virementConfirme, setVirementConfirme] = useState(false);
-  const RIB_IBAN = process.env.NEXT_PUBLIC_RIB_IBAN ?? "FR76 1234 5678 9012 3456 7890 123";
-  const RIB_BIC = process.env.NEXT_PUBLIC_RIB_BIC ?? "ABCDFRPPXXX";
-  const RIB_TITULAIRE = process.env.NEXT_PUBLIC_RIB_TITULAIRE ?? "SOS Amende";
+  const RIB_IBAN = process.env.NEXT_PUBLIC_RIB_IBAN ?? "FR76 3000 4000 0500 0012 3456 789";
+  const RIB_BIC = process.env.NEXT_PUBLIC_RIB_BIC ?? "BNPAFRPPXXX";
+  const RIB_TITULAIRE = process.env.NEXT_PUBLIC_RIB_TITULAIRE ?? "SOS AMENDE - TEST";
 
   if (virementState?.ok) {
     return (
       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
-        <h3 className="font-semibold text-emerald-900">Demande de virement enregistrée — voici le RIB à utiliser</h3>
+        <h3 className="font-semibold text-emerald-900">Demande de virement enregistrée — voici le RIB de test à utiliser</h3>
+        <p className="mt-1 text-xs font-semibold text-amber-700">⚠️ RIB de test — remplacez par votre RIB définitif dès réception.</p>
         <p className="mt-2 text-sm text-emerald-800">
-          Merci {prenom} — votre demande pour {type === "SUSPENSION" ? "59 €" : "39 €"} (réf. {dossierId.slice(0, 8).toUpperCase()}) est enregistrée. Copiez le RIB ci-dessous dans votre application bancaire :
+          Merci {prenom} — votre demande pour {type === "SUSPENSION" ? "59 €" : "39 €"} (réf. {dossierId.slice(0, 8).toUpperCase()}) est enregistrée. Copiez le RIB ci-dessous dans votre banque :
         </p>
-        <div className="mt-4 rounded-xl bg-white p-4 text-sm">
-          <div className="flex items-center justify-between"><span className="font-semibold">IBAN</span><button type="button" onClick={() => navigator.clipboard.writeText(RIB_IBAN.replace(/\s/g, ""))} className="text-xs text-emerald-700 hover:underline">Copier</button></div>
+        <div className="mt-4 rounded-xl bg-white p-4 text-sm border-2 border-amber-200">
+          <div className="flex items-center justify-between"><span className="font-semibold">IBAN (test)</span><button type="button" onClick={() => navigator.clipboard.writeText(RIB_IBAN.replace(/\s/g, ""))} className="text-xs text-emerald-700 hover:underline">Copier</button></div>
           <p className="font-mono text-sm">{RIB_IBAN}</p>
           <div className="mt-2 flex items-center justify-between"><span className="font-semibold">BIC</span><button type="button" onClick={() => navigator.clipboard.writeText(RIB_BIC)} className="text-xs text-emerald-700 hover:underline">Copier</button></div>
           <p className="font-mono text-sm">{RIB_BIC}</p>
           <p className="mt-2"><span className="font-semibold">Titulaire :</span> {RIB_TITULAIRE}</p>
           <p className="mt-2"><span className="font-semibold">Montant :</span> {type === "SUSPENSION" ? "59,00 €" : "39,00 €"}</p>
           <p className="mt-2 font-mono text-sm bg-amber-50 px-2 py-1 rounded">Référence obligatoire : {dossierId.slice(0, 8).toUpperCase()} — {prenom} {nom}</p>
-          <p className="mt-2 text-xs text-zinc-500">Vous recevrez le RIB définitif par email/WhatsApp si celui-ci change. Conservez la référence.</p>
         </div>
         {!virementConfirme ? (
-          <button type="button" onClick={() => setVirementConfirme(true)} className="mt-4 w-full rounded-full bg-zinc-900 px-6 py-3 font-semibold text-white hover:bg-black">
-            J'ai effectué le virement
-          </button>
+          <>
+            <button type="button" onClick={() => setVirementConfirme(true)} className="mt-4 w-full rounded-full bg-zinc-900 px-6 py-3 font-semibold text-white hover:bg-black">
+              J'ai effectué le virement
+            </button>
+            <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">Dès que le virement est effectué, envoyez la référence <span className="font-mono font-semibold">{dossierId.slice(0, 8).toUpperCase()}</span> + preuve (capture d'écran) par email à <span className="font-semibold">contact@sos-amende.fr</span> ou WhatsApp <span className="font-semibold">+33 6 12 34 56 78</span>. Un juriste validera sous 24h ouvrées.</p>
+          </>
         ) : (
           <div className="mt-4 rounded-xl bg-white p-4 text-sm text-emerald-800">
             <p className="font-semibold">✓ Merci — virement signalé</p>
-            <p className="mt-1">Dès réception sur notre compte (sous 24h ouvrées), un juriste validera votre paiement, débloquera la lettre et vous notifiera par email/WhatsApp. Votre dossier passe en “En attente de validation virement”.</p>
+            <p className="mt-1">Parfait. Envoyez maintenant la référence <span className="font-mono font-semibold">{dossierId.slice(0, 8).toUpperCase()}</span> + capture du virement par email <span className="font-semibold">contact@sos-amende.fr</span> ou WhatsApp <span className="font-semibold">+33 6 12 34 56 78</span>. Dès réception, un juriste validera votre paiement et débloquera la lettre. Vous serez notifié.</p>
           </div>
         )}
         <p className="mt-3 text-xs text-emerald-700">Un juriste validera votre paiement et débloquera la lettre (sous 24h ouvrées). Vous serez notifié par email/WhatsApp.</p>
@@ -108,14 +111,16 @@ export function PaiementForm({
       </div>
 
       <div className="rounded-2xl border-2 border-emerald-600 bg-white p-6">
-        <h4 className="font-semibold text-emerald-700">Payer par virement bancaire</h4>
-        <p className="mt-1 text-sm text-zinc-600">Seul mode proposé pour le moment — copiez le RIB ci-dessous dans votre banque.</p>
-        <div className="mt-3 rounded-xl bg-zinc-50 p-3 text-sm">
-          <div className="flex items-center justify-between"><span className="font-semibold">IBAN</span><button type="button" onClick={() => navigator.clipboard.writeText(RIB_IBAN.replace(/\s/g, ""))} className="text-xs text-emerald-700 hover:underline">Copier</button></div>
+        <h4 className="font-semibold text-emerald-700">Payer par virement bancaire — RIB de test</h4>
+        <p className="mt-1 text-xs font-semibold text-amber-700">⚠️ RIB de test pour tester la procédure — à remplacer par votre RIB définitif.</p>
+        <p className="mt-1 text-sm text-zinc-600">Copiez le RIB ci-dessous dans votre banque. Montant à virer : {type === "SUSPENSION" ? "59 €" : "39 €"}.</p>
+        <div className="mt-3 rounded-xl bg-zinc-50 p-3 text-sm border border-amber-200">
+          <div className="flex items-center justify-between"><span className="font-semibold">IBAN (test)</span><button type="button" onClick={() => navigator.clipboard.writeText(RIB_IBAN.replace(/\s/g, ""))} className="text-xs text-emerald-700 hover:underline">Copier</button></div>
           <p className="font-mono">{RIB_IBAN}</p>
           <p className="mt-1 flex items-center gap-2"><span className="font-semibold">BIC</span> {RIB_BIC} <button type="button" onClick={() => navigator.clipboard.writeText(RIB_BIC)} className="text-xs text-emerald-700 hover:underline">Copier</button></p>
           <p className="mt-1"><span className="font-semibold">Titulaire :</span> {RIB_TITULAIRE}</p>
-          <p className="mt-1 font-mono bg-amber-50 px-1 rounded">Référence : {dossierId.slice(0, 8).toUpperCase()} — {prenom || "Prénom"} {nom || "Nom"}</p>
+          <p className="mt-1 font-mono bg-amber-50 px-1 rounded">Référence obligatoire : {dossierId.slice(0, 8).toUpperCase()} — {prenom || "Prénom"} {nom || "Nom"}</p>
+          <p className="mt-2 text-xs text-zinc-500">Dès que le virement est effectué, envoyez la référence par email <span className="font-semibold">contact@sos-amende.fr</span> ou WhatsApp <span className="font-semibold">+33 6 12 34 56 78</span> avec capture d'écran.</p>
         </div>
         <p className="mt-3 text-2xl font-bold">{type === "SUSPENSION" ? "59 €" : "39 €"}</p>
         <form action={virementAction} className="mt-4">
