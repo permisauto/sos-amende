@@ -35,9 +35,6 @@ export function SiteHeader() {
           <Link href="/deposer?type=AMENDE" className="hidden rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-600 focus-visible:outline-offset-2 md:inline">
             Commencer
           </Link>
-          <Link href="/login" aria-label="Accès juriste et admin — réservé" title="Accès juriste / admin — réservé" className="hidden text-[10px] tracking-wide text-zinc-300 hover:text-zinc-500 focus-visible:outline focus-visible:outline-1 focus-visible:outline-zinc-400 md:inline">
-            ·
-          </Link>
           <button
             type="button"
             aria-label={open ? "Fermer le menu" : "Ouvrir le menu"}
@@ -66,11 +63,6 @@ export function SiteHeader() {
               </Link>
               <Link href="/deposer?type=AMENDE" onClick={() => setOpen(false)} className="flex-1 rounded-full bg-emerald-600 px-4 py-2 text-center text-sm font-semibold text-white hover:bg-emerald-700">
                 Commencer
-              </Link>
-            </li>
-            <li className="mt-3 text-center">
-              <Link href="/login" onClick={() => setOpen(false)} className="text-[10px] tracking-wide text-zinc-300 hover:text-zinc-500">
-                Accès juriste / admin — réservé ·
               </Link>
             </li>
           </ul>

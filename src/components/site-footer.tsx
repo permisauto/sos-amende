@@ -19,6 +19,11 @@ export function SiteFooter() {
           ))}
         </nav>
       </div>
+      <div className="pb-6 text-center">
+        <Link href="/login" aria-label="Accès juriste et administrateur — réservé" className="text-[10px] tracking-widest text-zinc-300 hover:text-zinc-500">
+          · Accès juriste / admin ·
+        </Link>
+      </div>
     </footer>
   );
 }
