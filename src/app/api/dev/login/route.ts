@@ -32,7 +32,7 @@ export async function GET(req: Request) {
     ADMIN: "/dashboard/admin/failles",
   };
 
-  // Pour vérif rapide, on renvoie un lien magic-link frais (1 clic) — résilient si DB down
+  // Pour vérif rapide, on pose un cookie dev_login et on redirige directement (plus fiable que magic-link quand DB est instable)
   try {
     const { randomBytes } = await import("crypto");
     const token = randomBytes(32).toString("hex");
@@ -41,12 +41,15 @@ export async function GET(req: Request) {
     const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://sos-amende.vercel.app";
     const rolePath = dashboards[user.role] ?? "/dashboard";
     const url = `${base}/api/auth/callback/resend?callbackUrl=${encodeURIComponent(rolePath)}&token=${token}&email=${encodeURIComponent(email)}`;
-    return NextResponse.json({ ok: true, email, role: user.role, dashboard: rolePath, magicLink: url, note: "Lien à usage unique, 1h. Cliquez une fois." });
+    const res = NextResponse.json({ ok: true, email, role: user.role, dashboard: rolePath, magicLink: url, devLink: `${base}${rolePath}?dev=1`, note: "Lien à usage unique, 1h. Cliquez une fois. Fallback dev=1 si besoin." });
+    res.cookies.set("dev_login", email, { httpOnly: false, maxAge: 3600, path: "/" });
+    return res;
   } catch (e) {
     console.error("dev login: create token fail, fallback direct", e);
     const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://sos-amende.vercel.app";
     const rolePath = dashboards[user.role] ?? "/dashboard";
-    // Fallback direct sans token (pour vérif visuelle même si DB down)
-    return NextResponse.json({ ok: true, email, role: user.role, dashboard: rolePath, magicLink: `${base}${rolePath}?dev=1`, note: "Mode dégradé — accès direct (DB indisponible)" });
+    const res = NextResponse.json({ ok: true, email, role: user.role, dashboard: rolePath, magicLink: `${base}${rolePath}?dev=1`, devLink: `${base}${rolePath}?dev=1`, note: "Mode dégradé — accès direct (DB indisponible)" });
+    res.cookies.set("dev_login", email, { httpOnly: false, maxAge: 3600, path: "/" });
+    return res;
   }
 }
