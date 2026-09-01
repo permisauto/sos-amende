@@ -13,7 +13,7 @@ export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPEN
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [infos, setInfos] = useState({ plaque: "", num_pv: "", date: "", montant: "", heure: "", adresse: "", lieu: "", prefecture: "", duree: "", motif: "" });
   const [complement, setComplement] = useState({ paiementDejaFait: false, vehiculeCede: false, vehiculeVole: false, conducteurDifferent: false, plaqueIncorrecte: false, travaux: false, meteoPluie: false, adresseIncorrecte: false });
-  const [showComplement, setShowComplement] = useState(false);
+  const [showComplement, setShowComplement] = useState(true);
   const [loading, setLoading] = useState(false);
   const [autoFilling, setAutoFilling] = useState(false);
   const [reponse, setReponse] = useState<Reponse | null>(null);
@@ -24,7 +24,8 @@ export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPEN
     setFile(f);
     if (f?.type.startsWith("image/")) setPreviewUrl(URL.createObjectURL(f));
     else setPreviewUrl(null);
-    if (!f) { setShowComplement(false); return; }
+    if (!f) return;
+    // Questions ouvertes dès le départ pour un scoring complet
     setShowComplement(true);
     if (f.size > 8 * 1024 * 1024) {
       setReponse({ erreur: "Fichier trop volumineux (8 Mo max). Réduisez la qualité photo dans les réglages de l'appareil." });
