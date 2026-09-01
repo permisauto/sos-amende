@@ -31,7 +31,7 @@ export async function GET(req: Request) {
   await prisma.verificationToken.create({ data: { identifier: email, token, expires } });
   const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://sos-amende.vercel.app";
   const rolePath = dashboards[user.role] ?? "/dashboard";
-  const url = `${base}/api/auth/callback/email?callbackUrl=${encodeURIComponent(rolePath)}&token=${token}&email=${encodeURIComponent(email)}`;
+  const url = `${base}/api/auth/callback/resend?callbackUrl=${encodeURIComponent(rolePath)}&token=${token}&email=${encodeURIComponent(email)}`;
 
   return NextResponse.json({
     ok: true,
