@@ -8,9 +8,24 @@ export default auth((req) => {
   const { nextUrl } = req;
   const isLoggedIn = !!req.auth?.user;
   const isOnDashboard = nextUrl.pathname.startsWith("/dashboard");
-  const isDevBypass = nextUrl.searchParams.get("dev") === "1" || req.cookies.get("dev_login")?.value;
+  const hasDevParam = nextUrl.searchParams.get("dev") === "1";
+  const hasDevCookie = !!req.cookies.get("dev_login")?.value;
+  const isDevBypass = hasDevParam || hasDevCookie;
 
-  if (isOnDashboard && !isLoggedIn && !isDevBypass) {
+  if (isDevBypass && isOnDashboard) {
+    const res = NextResponse.next();
+    if (hasDevParam && !hasDevCookie) {
+      const devEmail = nextUrl.pathname.includes("/juriste")
+        ? "e2e-juriste@test.local"
+        : nextUrl.pathname.includes("/admin")
+          ? "e2e-admin@test.local"
+          : "e2e-client@test.local";
+      res.cookies.set("dev_login", devEmail, { httpOnly: false, maxAge: 3600, path: "/" });
+    }
+    return res;
+  }
+
+  if (isOnDashboard && !isLoggedIn) {
     return NextResponse.redirect(new URL("/login", nextUrl));
   }
 

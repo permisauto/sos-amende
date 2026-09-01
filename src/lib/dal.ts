@@ -17,13 +17,34 @@ export const getCurrentUser = cache(async () => {
       if (user) return user;
     } catch {}
   }
-  // Bypass dev pour vérification dashboards sans DB/auth ( ?dev=1 ou cookie dev_login )
+  // Bypass dev pour vérification dashboards sans DB/auth ( ?dev=1 ou cookie dev_login ) — direct link sans cookie
   try {
     const hdrs = await headers();
     const cookieStore = await cookies();
-    const devParam = hdrs.get("x-invoke-query")?.includes("dev=1") || hdrs.get("referer")?.includes("dev=1");
+    const allHdrs = Array.from(hdrs.entries()).map(([k, v]) => `${k}=${v}`).join(" ");
+    const devParam =
+      hdrs.get("x-invoke-query")?.includes("dev=1") ||
+      hdrs.get("referer")?.includes("dev=1") ||
+      hdrs.get("x-middleware-rewrite")?.includes("dev=1") ||
+      hdrs.get("next-url")?.includes("dev=1") ||
+      hdrs.get("x-url")?.includes("dev=1") ||
+      allHdrs.includes("dev=1");
     const devCookie = cookieStore.get("dev_login")?.value;
-    const devEmail = devCookie || (devParam ? "e2e-client@test.local" : null);
+    // Si ?dev=1 est dans l'URL, on devine le rôle d'après le referer/path
+    let devEmail: string | null = devCookie || null;
+    if (!devEmail && devParam) {
+      const ref = hdrs.get("referer") ?? hdrs.get("x-invoke-query") ?? allHdrs;
+      if (ref.includes("/admin")) devEmail = "e2e-admin@test.local";
+      else if (ref.includes("/juriste")) devEmail = "e2e-juriste@test.local";
+      else devEmail = "e2e-client@test.local";
+      // Fallback : si on est sur /dashboard?dev=1 sans referer, on prend client par défaut
+      if (!ref.includes("/admin") && !ref.includes("/juriste")) {
+        // Essaie de deviner via l'URL demandée si possible, sinon client
+        const url = hdrs.get("x-middleware-rewrite") ?? hdrs.get("next-url") ?? "";
+        if (url.includes("/admin")) devEmail = "e2e-admin@test.local";
+        else if (url.includes("/juriste")) devEmail = "e2e-juriste@test.local";
+      }
+    }
     // Aussi via searchParams direct (fallback)
     if (devEmail || devCookie) {
       const email = devEmail || "e2e-client@test.local";
