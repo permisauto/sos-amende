@@ -9,7 +9,7 @@ const legal = [
 export function SiteFooter() {
   return (
     <footer className="border-t border-zinc-200 bg-zinc-50">
-      <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 py-10 text-sm text-zinc-500 md:flex-row">
+      <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 py-8 text-sm text-zinc-500 md:flex-row">
         <p>© {new Date().getFullYear()} SOS Amende. Tous droits réservés.</p>
         <nav className="flex flex-wrap items-center justify-center gap-6">
           {legal.map((item) => (
@@ -18,10 +18,8 @@ export function SiteFooter() {
             </Link>
           ))}
         </nav>
-      </div>
-      <div className="pb-6 text-center">
-        <Link href="/login" aria-label="Accès juriste et administrateur — réservé" className="text-[10px] tracking-widest text-zinc-300 hover:text-zinc-500">
-          · Accès juriste / admin ·
+        <Link href="/login" aria-label="Accès juriste et administrateur — réservé" className="text-[10px] tracking-widest text-zinc-300 hover:text-zinc-500 md:ml-auto">
+          Accès juriste / admin ·
         </Link>
       </div>
     </footer>
