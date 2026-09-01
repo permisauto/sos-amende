@@ -20,30 +20,17 @@ export default async function DashboardPage() {
     );
   }
 
-  const [caseCount, openCases, dossiersProches, dernierDossier] =
-    await Promise.all([
+  let caseCount = 0, openCases = 0, dossiersProches: Array<{ id: string; type: string; dateLimite: Date | null }> = [], dernierDossier: { id: string; statut: string; type: string; createdAt: Date } | null = null;
+  try {
+    [caseCount, openCases, dossiersProches, dernierDossier] = await Promise.all([
       prisma.dossier.count({ where: { userId: user.id } }),
-      prisma.dossier.count({
-        where: {
-          userId: user.id,
-          statut: { notIn: ["RESOLU", "ANNULE", "REJETE"] },
-        },
-      }),
-      prisma.dossier.findMany({
-        where: {
-          userId: user.id,
-          dateLimite: { not: null },
-          statut: { notIn: ["RESOLU", "ANNULE", "REJETE"] },
-        },
-        orderBy: { dateLimite: "asc" },
-        take: 4,
-      }),
-      prisma.dossier.findFirst({
-        where: { userId: user.id },
-        orderBy: { createdAt: "desc" },
-        select: { id: true, statut: true, type: true, createdAt: true },
-      }),
+      prisma.dossier.count({ where: { userId: user.id, statut: { notIn: ["RESOLU", "ANNULE", "REJETE"] } } }),
+      prisma.dossier.findMany({ where: { userId: user.id, dateLimite: { not: null }, statut: { notIn: ["RESOLU", "ANNULE", "REJETE"] } }, orderBy: { dateLimite: "asc" }, take: 4 }),
+      prisma.dossier.findFirst({ where: { userId: user.id }, orderBy: { createdAt: "desc" }, select: { id: true, statut: true, type: true, createdAt: true } }),
     ]);
+  } catch (e) {
+    console.error("dashboard: DB indisponible, fallback vide", e);
+  }
 
   const firstName = user.name?.split(" ")[0] ?? user.email?.split("@")[0] ?? "";
   const credits = user.credits;
