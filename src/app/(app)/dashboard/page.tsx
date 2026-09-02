@@ -9,6 +9,8 @@ import { Suspense } from "react";
 import { PayerCta } from "@/components/payer-cta";
 import { DashboardCheckoutBanner } from "@/components/dashboard-checkout-banner";
 
+const MOCK_NOW = new Date("2026-07-15T12:00:00Z").getTime();
+
 export default async function DashboardPage() {
   const user = await requireUser();
 
@@ -50,11 +52,11 @@ export default async function DashboardPage() {
     if (user.id.startsWith("dev-")) {
       caseCount = 9;
       openCases = 6;
-      dernierDossier = { id: "cmtk0aw780017hcug36o8l1t0", statut: "RESOLU", type: "AMENDE", createdAt: new Date() } as never;
+      dernierDossier = { id: "cmtk0aw780017hcug36o8l1t0", statut: "RESOLU", type: "AMENDE", createdAt: new Date(MOCK_NOW) } as never;
       dossiersProches = [
-        { id: "cmtk0apw00000hcugk1udcck6", type: "AMENDE", dateLimite: new Date(Date.now() + 86400000 * 25) },
-        { id: "cmtk0aq4b0002hcuglu8njo5u", type: "AMENDE", dateLimite: new Date(Date.now() + 86400000 * 10) },
-        { id: "cmtk0ar830009hcugg4ip17ca", type: "AMENDE", dateLimite: new Date(Date.now() + 86400000 * 5) },
+        { id: "cmtk0apw00000hcugk1udcck6", type: "AMENDE", dateLimite: new Date(MOCK_NOW + 86400000 * 25) },
+        { id: "cmtk0aq4b0002hcuglu8njo5u", type: "AMENDE", dateLimite: new Date(MOCK_NOW + 86400000 * 10) },
+        { id: "cmtk0ar830009hcugg4ip17ca", type: "AMENDE", dateLimite: new Date(MOCK_NOW + 86400000 * 5) },
       ] as never;
     }
   }

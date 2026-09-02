@@ -50,6 +50,8 @@ const dateFormat = new Intl.DateTimeFormat("fr-FR", {
   year: "numeric",
 });
 
+const MOCK_NOW_JURISTE = new Date("2026-07-15T12:00:00Z").getTime();
+
 export default async function JuristeCasePage(
   props: PageProps<"/dashboard/juriste/[id]">,
 ) {
@@ -87,8 +89,8 @@ export default async function JuristeCasePage(
       extractedData: { plaque: "AB-123-CD", num_pv: params.id.slice(0, 8), date: "2026-07-10", adresse: "12 RUE DE LA PAIX 75001 PARIS", lieu: "A6" },
       lettreGeneree: "À l'attention de l'Officier du Ministère Public,\nJe soussigné TEST CLIENT conteste l'avis n° " + params.id.slice(0, 8) + ".\nFondement : Prescription — Art. 133-3 CPP\n...",
       prix: 39,
-      dateLimite: new Date(Date.now() + 86400000 * 20),
-      createdAt: new Date(),
+      dateLimite: new Date(MOCK_NOW_JURISTE + 86400000 * 20),
+      createdAt: new Date(MOCK_NOW_JURISTE),
       failleJuridique: { id: "faille-prescription-1-an", titreFaille: "Prescription 1 an", articleLoi: "Art. 133-3 CPP", statut: "ACTIVE", regle: "Prescription", jurisprudence: [] },
       faillesRetenues: [],
       lawyerMatch: null,
