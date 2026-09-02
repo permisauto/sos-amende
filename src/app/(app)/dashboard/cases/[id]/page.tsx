@@ -61,16 +61,51 @@ export default async function CaseDetailPage(
   }
 
   if (!item) {
-    // Fallback pour mode dev sans DB ou dossier inexistant
     if (user.id.startsWith("dev-")) {
-      return (
-        <div className="mx-auto max-w-4xl p-8">
-          <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Mode démo — dossier non trouvé (DB indisponible). Revenez à <a href="/dashboard?dev=1" className="font-semibold underline">/dashboard?dev=1</a>.</p>
-          <Link href="/dashboard?dev=1" className="mt-4 inline-block rounded-full bg-emerald-600 px-6 py-3 text-sm font-semibold text-white">Retour</Link>
-        </div>
-      );
+      // Mock ultra-réaliste par id pour que le clic soit toujours vérifiable même si DB down
+      const mockById: Record<string, Record<string, any>> = {
+        "cmtk0apw00000hcugk1udcck6": { type: "AMENDE", statut: "EN_ANALYSE", pvTexte: "CONTRAVENTION N° PV-ANALYSE-001 Vitesse 96km/h limitée 70 le 10/07/2026 à 15:00 Lieu: A6 km 42 Radar MESTA 210C n° 777 Plaque AB-123-CD Montant 135€ Adresse 12 RUE DE LA PAIX 75001 PARIS", extractedData: { plaque: "AB-123-CD", num_pv: "PV-ANALYSE-001", date: "2026-07-10", heure: "15h00", lieu: "A6 km 42", adresse: "12 RUE DE LA PAIX 75001 PARIS", montant: "135,00 €", radarId: "777" }, failleJuridique: null, lettreGeneree: null },
+        "cmtk0aq4b0002hcuglu8njo5u": { type: "AMENDE", statut: "A_VERIFIER", pvTexte: "CONTRAVENTION N° PV-SIGN-002 Plaque XY-999-ZZ", extractedData: { plaque: "XY-999-ZZ", num_pv: "PV-SIGN-002", date: "2026-05-20", lieu: "Rue de Rivoli Paris", adresse: "8 impasse des Lilas 13001 MARSEILLE", plaqueIncorrecte: true }, failleJuridique: { titreFaille: "Erreur plaque", articleLoi: "Art. 429 CPP" }, lettreGeneree: "À l'attention de l'Officier du Ministère Public,\nJe soussigné TEST CLIENT conteste l'avis n° PV-SIGN-002 du 2026-05-20 concernant le véhicule XY-999-ZZ.\nFondement : Erreur plaque — Art. 429 CPP\nLieu : Rue de Rivoli Paris" },
+        "cmtk0ar830009hcugg4ip17ca": { type: "AMENDE", statut: "PRET", pvTexte: "CONTRAVENTION N° PV-PRET-003 Date 10/05/2026 Plaque CD-456-EF Travaux présents", extractedData: { plaque: "CD-456-EF", num_pv: "PV-PRET-003", date: "2026-05-10", lieu: "A10 - Orléans", travaux_présents: true, adresse: "45 Avenue des Champs 75008 PARIS" }, failleJuridique: { titreFaille: "Travaux et signalisation temporaire", articleLoi: "Art. R. 411-8 CR" }, lettreGeneree: "À l'attention de l'Officier,\nJe conteste l'avis n° PV-PRET-003 — travaux présents au lieu dit A10 le 2026-05-10.\nFondement : Travaux — Art. R. 411-8" },
+        "cmtk0askl000jhcugj7gkzkbs": { type: "AMENDE", statut: "ENVOYE", pvTexte: "CONTRAVENTION N° PV-ENVOYE-004 Date 01/04/2026 Plaque EF-012-IJ", extractedData: { plaque: "EF-012-IJ", num_pv: "PV-ENVOYE-004", date: "2026-04-01", adresse: "22 rue Nationale 75013 PARIS", lieu: "A6" }, failleJuridique: { titreFaille: "Prescription 1 an", articleLoi: "Art. 133-3 CPP" }, lettreGeneree: "À l'attention de l'Officier,\nJe conteste l'avis n° PV-ENVOYE-004 du 2026-04-01.\nFondement : Prescription — Art. 133-3 CPP" },
+        "cmtk0aub2000uhcuglwnrhfxz": { type: "SUSPENSION", statut: "EN_ANALYSE", pvTexte: "DECISION DE SUSPENSION N° DEC-ANALYSE-005 Préfecture de Paris Durée 6 mois Motif alcoolémie", extractedData: { num_pv: "DEC-ANALYSE-005", date: "2026-07-01", prefecture: "Préfecture de Paris", duree: "6 mois", motif: "alcoolémie", adresse: "12 RUE DE LA PAIX 75001 PARIS" }, failleJuridique: null, lettreGeneree: null },
+        "cmtk0aunj000whcugh58j35e7": { type: "SUSPENSION", statut: "A_VERIFIER", pvTexte: "DECISION SUSPENSION N° DEC-SIGN-006 Préfecture des Bouches-du-Rhône Vitesse 180km/h", extractedData: { num_pv: "DEC-SIGN-006", date: "2026-06-01", prefecture: "Préfecture des Bouches-du-Rhône", duree: "4 mois", motif: "vitesse", lieu: "A7 - Marseille" }, failleJuridique: { titreFaille: "Suspension sans contradictoire", articleLoi: "Art. L121-1 CRPA" }, lettreGeneree: "À l'attention de Monsieur le Préfet,\nJe conteste la décision DEC-SIGN-006 du 2026-06-01.\nFondement : Suspension sans contradictoire — Art. L121-1 CRPA" },
+      };
+      const mock = mockById[id];
+      if (mock) {
+        item = {
+          id,
+          userId: user.id,
+          type: mock.type,
+          statut: mock.statut,
+          pvUrl: "/uploads/demo-pv.jpg",
+          pvTexte: mock.pvTexte,
+          extractedData: mock.extractedData,
+          lettreGeneree: mock.lettreGeneree ?? null,
+          failleJuridique: mock.failleJuridique,
+          courriers: mock.statut === "PRET" || mock.statut === "ENVOYE" ? [{ pdfUrl: "/uploads/demo-lettre.pdf", signatureUrl: "/uploads/demo-signature.png", preuveDepotUrl: mock.statut === "ENVOYE" ? "/uploads/demo-accuse.pdf" : null }] : [],
+          preuves: [],
+          evenements: [{ type: "CREATION", detail: "Dossier de démo", createdAt: new Date(), detailUrl: null }],
+          lawyerMatch: null,
+          prix: mock.type === "AMENDE" ? 39 : 59,
+          createdAt: new Date(),
+          dateLimite: new Date(Date.now() + 86400000 * 30),
+          motifRejet: null,
+          decisionOmp: null,
+          decisionDetail: null,
+          valideLe: mock.statut === "PRET" || mock.statut === "ENVOYE" ? new Date() : null,
+        } as unknown as Record<string, any>;
+      } else {
+        return (
+          <div className="mx-auto max-w-4xl p-8">
+            <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Mode démo — dossier {id.slice(0, 8)} non trouvé. Revenez à <a href="/dashboard?dev=1" className="font-semibold underline">/dashboard?dev=1</a> et cliquez sur un des 9 dossiers listés (PV-TEST-00X).</p>
+            <Link href="/dashboard?dev=1" className="mt-4 inline-block rounded-full bg-emerald-600 px-6 py-3 text-sm font-semibold text-white">Retour</Link>
+          </div>
+        );
+      }
+    } else {
+      notFound();
     }
-    notFound();
   }
 
   // @ts-ignore
