@@ -57,6 +57,9 @@ export default async function DashboardLayout({
                   >
                     Radars
                   </Link>
+                  <Link href="/dashboard/admin/paiements" className="hover:text-zinc-900">
+                    Paiements
+                  </Link>
                 </>
               )}
             </nav>

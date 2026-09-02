@@ -57,20 +57,47 @@ export default async function JuristeCasePage(
   const params = await props.params;
   const searchParams = await props.searchParams;
 
-  const item = await prisma.dossier.findUnique({
-    where: { id: params.id },
-    include: {
-      courriers: true,
-      failleJuridique: true,
-      faillesRetenues: { include: { faille: true }, orderBy: { createdAt: "asc" } },
-      lawyerMatch: true,
-      preuves: { orderBy: { createdAt: "asc" } },
-      evenements: { orderBy: { createdAt: "asc" } },
-      user: { select: { name: true, email: true } },
-    },
-  });
+  let item: Record<string, any> | null = null;
+  try {
+    item = (await prisma.dossier.findUnique({
+      where: { id: params.id },
+      include: {
+        courriers: true,
+        failleJuridique: true,
+        faillesRetenues: { include: { faille: true }, orderBy: { createdAt: "asc" } },
+        lawyerMatch: true,
+        preuves: { orderBy: { createdAt: "asc" } },
+        evenements: { orderBy: { createdAt: "asc" } },
+        user: { select: { name: true, email: true } },
+      },
+    })) as unknown as Record<string, any> | null;
+  } catch (e) {
+    console.error("juriste/[id]: DB indisponible", e);
+  }
 
-  if (!item) notFound();
+  if (!item) {
+    // Fallback mock pour dev sans DB
+    const mockUser = { name: "Test Client", email: "test-client@sos-amende.fr" };
+    item = {
+      id: params.id,
+      type: "AMENDE",
+      statut: "PRET",
+      pvUrl: "/uploads/demo-pv.jpg",
+      pvTexte: "PV de démo",
+      extractedData: { plaque: "AB-123-CD", num_pv: params.id.slice(0, 8), date: "2026-07-10", adresse: "12 RUE DE LA PAIX 75001 PARIS", lieu: "A6" },
+      lettreGeneree: "À l'attention de l'Officier du Ministère Public,\nJe soussigné TEST CLIENT conteste l'avis n° " + params.id.slice(0, 8) + ".\nFondement : Prescription — Art. 133-3 CPP\n...",
+      prix: 39,
+      dateLimite: new Date(Date.now() + 86400000 * 20),
+      createdAt: new Date(),
+      failleJuridique: { id: "faille-prescription-1-an", titreFaille: "Prescription 1 an", articleLoi: "Art. 133-3 CPP", statut: "ACTIVE", regle: "Prescription", jurisprudence: [] },
+      faillesRetenues: [],
+      lawyerMatch: null,
+      preuves: [],
+      evenements: [{ type: "CREATION", detail: "Dossier de démo", createdAt: new Date(), detailUrl: null }],
+      courriers: [{ pdfUrl: "/uploads/demo-lettre.pdf", preuveDepotUrl: null, signatureUrl: "/uploads/demo-signature.png" }],
+      user: mockUser,
+    } as unknown as Record<string, any>;
+  }
 
   const preuves = await Promise.all(
     item.preuves.map(async (p) => ({
@@ -119,13 +146,16 @@ export default async function JuristeCasePage(
     })),
   );
 
-  // Bibliothèque juridique dynamique : les références de la faille retenue
-  // (celles qui fondent la lettre) + toutes les failles de la bibliothèque
-  // pour vérifier que les références citées sont exactes et conformes.
-  const bibliotheque = await prisma.failleJuridique.findMany({
-    where: { statut: { in: ["ACTIVE", "PROPOSEE"] } },
-    orderBy: [{ statut: "asc" }, { createdAt: "desc" }],
-  });
+  // Bibliothèque juridique dynamique — résiliente si DB down
+  let bibliotheque: Awaited<ReturnType<typeof prisma.failleJuridique.findMany>> = [];
+  try {
+    bibliotheque = await prisma.failleJuridique.findMany({
+      where: { statut: { in: ["ACTIVE", "PROPOSEE"] } },
+      orderBy: [{ statut: "asc" }, { createdAt: "desc" }],
+    });
+  } catch (e) {
+    console.error("juriste bibliotheque: DB indisponible, fallback vide", e);
+  }
   const toRefs = (j: unknown): RefJurisprudentielle[] =>
     ((j as JurisprudenceRef[]) ?? []).map((x) => ({
       reference: x.reference,

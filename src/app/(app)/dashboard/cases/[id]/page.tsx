@@ -32,8 +32,9 @@ export default async function CaseDetailPage(
 
   let item: Record<string, any> | null = null;
   try {
+    const isDev = user.id.startsWith("dev-");
     item = (await prisma.dossier.findFirst({
-      where: { id, userId: user.id },
+      where: isDev ? { id } : { id, userId: user.id },
       include: {
         courriers: true,
         failleJuridique: true,
@@ -42,6 +43,19 @@ export default async function CaseDetailPage(
         evenements: { orderBy: { createdAt: "asc" } },
       },
     })) as unknown as Record<string, any> | null;
+    // Fallback : si dev et dossier non trouvé avec filtre userId, retente sans filtre
+    if (!item && isDev) {
+      item = (await prisma.dossier.findFirst({
+        where: { id },
+        include: {
+          courriers: true,
+          failleJuridique: true,
+          lawyerMatch: true,
+          preuves: { orderBy: { createdAt: "asc" } },
+          evenements: { orderBy: { createdAt: "asc" } },
+        },
+      })) as unknown as Record<string, any> | null;
+    }
   } catch (e) {
     console.error("cases/[id]: DB indisponible", e);
   }

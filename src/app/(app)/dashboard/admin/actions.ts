@@ -332,3 +332,38 @@ export async function supprimerRadar(
   revalidatePath("/dashboard/admin/radars");
   return { ok: true };
 }
+
+export async function validerVirement(
+  _prev: FailleState,
+  formData: FormData,
+): Promise<FailleState> {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  const payment = await prisma.payment.findUnique({ where: { id } });
+  if (!payment) return { error: "Paiement introuvable." };
+  if (payment.status !== "PENDING_VIREMENT") return { error: "Seuls les virements en attente peuvent être validés." };
+
+  await prisma.$transaction([
+    prisma.payment.update({ where: { id }, data: { status: "PAID" } }),
+    prisma.user.update({ where: { id: payment.userId }, data: { credits: { increment: 1 } } }),
+  ]);
+
+  revalidatePath("/dashboard/admin/paiements");
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
+export async function refuserVirement(
+  _prev: FailleState,
+  formData: FormData,
+): Promise<FailleState> {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  const payment = await prisma.payment.findUnique({ where: { id } });
+  if (!payment) return { error: "Paiement introuvable." };
+  if (payment.status !== "PENDING_VIREMENT") return { error: "Seuls les virements en attente peuvent être refusés." };
+
+  await prisma.payment.update({ where: { id }, data: { status: "REFUSED" } });
+  revalidatePath("/dashboard/admin/paiements");
+  return { ok: true };
+}
