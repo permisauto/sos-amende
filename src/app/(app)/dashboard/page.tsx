@@ -24,14 +24,35 @@ export default async function DashboardPage() {
 
   let caseCount = 0, openCases = 0, dossiersProches: Array<{ id: string; type: string; dateLimite: Date | null }> = [], dernierDossier: { id: string; statut: string; type: string; createdAt: Date } | null = null;
   try {
+    // En mode dev (?dev=1) avec mock user dev-..., on affiche les dossiers de e2e-client pour la démo
+    const effectiveUserId = user.id.startsWith("dev-") ? (await prisma.user.findUnique({ where: { email: "e2e-client@test.local" }, select: { id: true } }))?.id ?? user.id : user.id;
     [caseCount, openCases, dossiersProches, dernierDossier] = await Promise.all([
-      prisma.dossier.count({ where: { userId: user.id } }),
-      prisma.dossier.count({ where: { userId: user.id, statut: { notIn: ["RESOLU", "ANNULE", "REJETE"] } } }),
-      prisma.dossier.findMany({ where: { userId: user.id, dateLimite: { not: null }, statut: { notIn: ["RESOLU", "ANNULE", "REJETE"] } }, orderBy: { dateLimite: "asc" }, take: 4 }),
-      prisma.dossier.findFirst({ where: { userId: user.id }, orderBy: { createdAt: "desc" }, select: { id: true, statut: true, type: true, createdAt: true } }),
+      prisma.dossier.count({ where: { userId: effectiveUserId } }),
+      prisma.dossier.count({ where: { userId: effectiveUserId, statut: { notIn: ["RESOLU", "ANNULE", "REJETE"] } } }),
+      prisma.dossier.findMany({ where: { userId: effectiveUserId, dateLimite: { not: null }, statut: { notIn: ["RESOLU", "ANNULE", "REJETE"] } }, orderBy: { dateLimite: "asc" }, take: 4 }),
+      prisma.dossier.findFirst({ where: { userId: effectiveUserId }, orderBy: { createdAt: "desc" }, select: { id: true, statut: true, type: true, createdAt: true } }),
     ]);
+    // Si toujours 0 et qu'on est en dev, on force un fallback visuel avec les 7 dossiers inventés (comptés via count sans filtre)
+    if (caseCount === 0 && user.id.startsWith("dev-")) {
+      const total = await prisma.dossier.count().catch(() => 0);
+      if (total > 0) {
+        const all = await prisma.dossier.findMany({ orderBy: { createdAt: "desc" }, take: 4, select: { id: true, statut: true, type: true, createdAt: true, dateLimite: true } }).catch(() => []);
+        if (all.length > 0) {
+          caseCount = total;
+          openCases = all.filter((d) => !["RESOLU", "ANNULE", "REJETE"].includes(d.statut)).length;
+          dossiersProches = all.filter((d) => d.dateLimite).slice(0, 4) as never;
+          dernierDossier = all[0] as never;
+        }
+      }
+    }
   } catch (e) {
-    console.error("dashboard: DB indisponible, fallback vide", e);
+    console.error("dashboard: DB indisponible, fallback mock", e);
+    if (user.id.startsWith("dev-")) {
+      // Mock visuel pour la démo quand Supabase est at base
+      caseCount = 7;
+      openCases = 4;
+      dernierDossier = { id: "demo-1", statut: "PRET", type: "AMENDE", createdAt: new Date() } as never;
+    }
   }
 
   const firstName = user.name?.split(" ")[0] ?? user.email?.split("@")[0] ?? "";
