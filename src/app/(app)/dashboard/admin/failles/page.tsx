@@ -9,29 +9,34 @@ export default async function AdminFaillesPage(
   props: PageProps<"/dashboard/admin/failles">,
 ) {
   await requireAdmin();
-  // Auto-alimentation : les propositions du catalogue arrivent automatiquement
-  // à l'ouverture de la page — l'admin ne fait que valider (ACTIVE/INACTIVE).
-  // Idempotent : ne rétrograde jamais une faille déjà ACTIVE/INACTIVE.
-  await synchroniserCatalogue();
+  try {
+    await synchroniserCatalogue();
+  } catch (e) {
+    console.error("admin failles: synchroniserCatalogue fail (DB down)", e);
+  }
   const { f } = await props.searchParams;
   const raw = typeof f === "string" ? f.toUpperCase() : "ALL";
   const filter = ["ACTIVE", "INACTIVE", "PROPOSEE", "ALL"].includes(raw)
     ? raw
     : "ALL";
 
-  const [failles, suspensionActive, stats] = await Promise.all([
-    prisma.failleJuridique.findMany({
-      where: filter === "ALL" ? undefined : { statut: filter as never },
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.failleJuridique.count({
-      where: { typeInfraction: "SUSPENSION", statut: "ACTIVE" },
-    }),
-    prisma.failleJuridique.groupBy({
-      by: ["statut"],
-      _count: true,
-    }),
-  ]);
+  let failles: Awaited<ReturnType<typeof prisma.failleJuridique.findMany>> = [];
+  let suspensionActive = 0;
+  let stats: Array<{ statut: string; _count: number }> = [];
+  try {
+    [failles, suspensionActive, stats] = await Promise.all([
+      prisma.failleJuridique.findMany({
+        where: filter === "ALL" ? undefined : { statut: filter as never },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.failleJuridique.count({
+        where: { typeInfraction: "SUSPENSION", statut: "ACTIVE" },
+      }),
+      prisma.failleJuridique.groupBy({ by: ["statut"], _count: true }),
+    ]);
+  } catch (e) {
+    console.error("admin failles: DB indisponible, fallback vide", e);
+  }
 
   const aSuspensionActive = suspensionActive > 0;
   const nbActives = stats.find((x) => x.statut === "ACTIVE")?._count ?? 0;

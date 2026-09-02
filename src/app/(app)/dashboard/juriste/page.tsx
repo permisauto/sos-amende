@@ -55,21 +55,26 @@ export default async function JuristePage(
         ? (raw as Statut)
         : "PRET";
 
-  const [dossiers, stats] = await Promise.all([
-    prisma.dossier.findMany({
-      where: statut === "ALL" ? undefined : { statut },
-      orderBy: { createdAt: "desc" },
-      take: 100,
-      include: {
-        user: { select: { name: true, email: true } },
-        failleJuridique: { select: { titreFaille: true } },
-      },
-    }),
-    prisma.dossier.groupBy({
-      by: ["statut"],
-      _count: true,
-    }),
-  ]);
+  let dossiers: Array<Record<string, any>> = [];
+  let stats: Array<{ statut: string; _count: number }> = [];
+  try {
+    const res = await Promise.all([
+      prisma.dossier.findMany({
+        where: statut === "ALL" ? undefined : { statut },
+        orderBy: { createdAt: "desc" },
+        take: 100,
+        include: {
+          user: { select: { name: true, email: true } },
+          failleJuridique: { select: { titreFaille: true } },
+        },
+      }),
+      prisma.dossier.groupBy({ by: ["statut"], _count: true }),
+    ]);
+    dossiers = res[0] as unknown as Array<Record<string, any>>;
+    stats = res[1] as unknown as Array<{ statut: string; _count: number }>;
+  } catch (e) {
+    console.error("juriste dashboard: DB indisponible, fallback vide", e);
+  }
 
   const countBy = (s: string) =>
     stats.find((x) => x.statut === s)?._count ?? 0;
