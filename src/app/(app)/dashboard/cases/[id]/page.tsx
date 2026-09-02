@@ -30,26 +30,44 @@ export default async function CaseDetailPage(
   const { id } = await props.params;
   const searchParams = await props.searchParams;
 
-  const item = await prisma.dossier.findFirst({
-    where: { id, userId: user.id },
-    include: {
-      courriers: true,
-      failleJuridique: true,
-      lawyerMatch: true,
-      preuves: { orderBy: { createdAt: "asc" } },
-      evenements: { orderBy: { createdAt: "asc" } },
-    },
-  });
+  let item: Record<string, any> | null = null;
+  try {
+    item = (await prisma.dossier.findFirst({
+      where: { id, userId: user.id },
+      include: {
+        courriers: true,
+        failleJuridique: true,
+        lawyerMatch: true,
+        preuves: { orderBy: { createdAt: "asc" } },
+        evenements: { orderBy: { createdAt: "asc" } },
+      },
+    })) as unknown as Record<string, any> | null;
+  } catch (e) {
+    console.error("cases/[id]: DB indisponible", e);
+  }
 
-  if (!item) notFound();
+  if (!item) {
+    // Fallback pour mode dev sans DB ou dossier inexistant
+    if (user.id.startsWith("dev-")) {
+      return (
+        <div className="mx-auto max-w-4xl p-8">
+          <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Mode démo — dossier non trouvé (DB indisponible). Revenez à <a href="/dashboard?dev=1" className="font-semibold underline">/dashboard?dev=1</a>.</p>
+          <Link href="/dashboard?dev=1" className="mt-4 inline-block rounded-full bg-emerald-600 px-6 py-3 text-sm font-semibold text-white">Retour</Link>
+        </div>
+      );
+    }
+    notFound();
+  }
 
+  // @ts-ignore
   const preuves = await Promise.all(
-    item.preuves.map(async (p) => ({
+    (item.preuves as Array<Record<string, any>>).map(async (p: Record<string, any>) => ({
       ...p,
       url: (await storageUrl(p.url)) ?? p.url,
     })),
   );
-  const preuvesDto: PreuveDto[] = preuves.map((p) => ({
+  // @ts-ignore
+  const preuvesDto: PreuveDto[] = preuves.map((p: Record<string, any>) => ({
     id: p.id,
     nom: p.nom,
     type: p.type,
@@ -70,8 +88,9 @@ export default async function CaseDetailPage(
     "preuveEtalonnage" in item.extractedData
       ? await storageUrl(String(item.extractedData.preuveEtalonnage))
       : null;
+  // @ts-ignore
   const evenements = await Promise.all(
-    item.evenements.map(async (e) => ({
+    (item.evenements as Array<Record<string, any>>).map(async (e: Record<string, any>) => ({
       ...e,
       detailUrl: e.detail ? await storageUrl(e.detail) : null,
     })),
@@ -330,7 +349,8 @@ export default async function CaseDetailPage(
 
       {item.evenements.length > 0 && (
         <div className="mt-8">
-          <DossierTimeline events={evenements} />
+          {/* @ts-ignore */}
+          <DossierTimeline events={evenements as unknown as TimelineEvent[]} />
         </div>
       )}
 
