@@ -21,10 +21,15 @@ export default async function JuristeFaillesPage(
     ? raw
     : "ALL";
 
-  const failles = await prisma.failleJuridique.findMany({
-    where: filter === "ALL" ? undefined : { statut: filter as never },
-    orderBy: [{ statut: "asc" }, { createdAt: "desc" }],
-  });
+  let failles: Awaited<ReturnType<typeof prisma.failleJuridique.findMany>> = [];
+  try {
+    failles = await prisma.failleJuridique.findMany({
+      where: filter === "ALL" ? undefined : { statut: filter as never },
+      orderBy: [{ statut: "asc" }, { createdAt: "desc" }],
+    });
+  } catch (e) {
+    console.error("juriste/failles: DB indisponible, fallback vide", e);
+  }
 
   return (
     <div className="mx-auto max-w-5xl">
