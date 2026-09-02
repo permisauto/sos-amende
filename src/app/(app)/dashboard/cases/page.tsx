@@ -37,7 +37,17 @@ export default async function CasesPage() {
       }
     }
   } catch (e) {
-    console.error("cases: DB indisponible, fallback vide", e);
+    console.error("cases: DB indisponible, fallback mock", e);
+    if (user.id.startsWith("dev-")) {
+      dossiers = [
+        { id: "cmtk0apw00000hcugk1udcck6", type: "AMENDE", statut: "EN_ANALYSE", createdAt: new Date(), prix: 39 },
+        { id: "cmtk0aq4b0002hcuglu8njo5u", type: "AMENDE", statut: "A_VERIFIER", createdAt: new Date(), prix: 39 },
+        { id: "cmtk0ar830009hcugg4ip17ca", type: "AMENDE", statut: "PRET", createdAt: new Date(), prix: 39 },
+        { id: "cmtk0aub2000uhcuglwnrhfxz", type: "SUSPENSION", statut: "EN_ANALYSE", createdAt: new Date(), prix: 59 },
+        { id: "cmtk0askl000jhcugj7gkzkbs", type: "AMENDE", statut: "ENVOYE", createdAt: new Date(), prix: 39 },
+        { id: "cmtk0axuz001ihcug4zp7yw12", type: "AMENDE", statut: "A_VERIFIER", createdAt: new Date(), prix: 39 },
+      ] as unknown as typeof dossiers;
+    }
   }
 
   return (
