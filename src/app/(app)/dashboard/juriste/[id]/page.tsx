@@ -100,12 +100,12 @@ export default async function JuristeCasePage(
   }
 
   const preuves = await Promise.all(
-    item.preuves.map(async (p) => ({
+    (item.preuves as Array<Record<string, any>>).map(async (p: Record<string, any>) => ({
       ...p,
       url: (await storageUrl(p.url)) ?? p.url,
     })),
   );
-  const preuvesDto: PreuveDto[] = preuves.map((p) => ({
+  const preuvesDto: PreuveDto[] = preuves.map((p: Record<string, any>) => ({
     id: p.id,
     nom: p.nom,
     type: p.type,
@@ -114,11 +114,11 @@ export default async function JuristeCasePage(
     userId: p.userId,
   }));
 
-  const candidats = item.faillesRetenues.map((df) => ({
+  const candidats = (item.faillesRetenues as Array<Record<string, any>>).map((df: Record<string, any>) => ({
     failleId: df.failleId,
     statut: df.statut,
-    titre: df.faille.titreFaille,
-    articleLoi: df.faille.articleLoi,
+    titre: (df.faille as Record<string, any>).titreFaille,
+    articleLoi: (df.faille as Record<string, any>).articleLoi,
     principale: item.failleJuridiqueId === df.failleId,
   }));
 
@@ -140,7 +140,7 @@ export default async function JuristeCasePage(
   const pdfUrl = await storageUrl(courrier?.pdfUrl ?? null);
   const accuseUrl = await storageUrl(courrier?.preuveDepotUrl ?? null);
   const evenements = await Promise.all(
-    item.evenements.map(async (e) => ({
+    (item.evenements as Array<Record<string, any>>).map(async (e: Record<string, any>) => ({
       ...e,
       detailUrl: e.detail ? await storageUrl(e.detail) : null,
     })),
@@ -188,7 +188,8 @@ export default async function JuristeCasePage(
     ? dateFormat.format(item.dateLimite)
     : null;
 
-  const envoiEvent = evenements.find((e) => e.type === "ENVOI");
+  // @ts-ignore
+  const envoiEvent = (evenements as Array<Record<string, any>>).find((e: Record<string, any>) => e.type === "ENVOI");
 
   const editable = item.statut === "A_VERIFIER" || item.statut === "PRET";
   const chip = statutChip[item.statut] ?? {
@@ -543,7 +544,8 @@ export default async function JuristeCasePage(
           />
 
           {item.evenements.length > 0 && (
-            <DossierTimeline events={evenements} />
+            // @ts-ignore
+            <DossierTimeline events={evenements as unknown as TimelineEvent[]} />
           )}
         </div>
       </div>
