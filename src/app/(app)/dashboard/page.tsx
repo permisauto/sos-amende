@@ -48,13 +48,13 @@ export default async function DashboardPage() {
   } catch (e) {
     console.error("dashboard: DB indisponible, fallback mock", e);
     if (user.id.startsWith("dev-")) {
-      // Mock visuel ultra-réaliste pour la démo quand Supabase est at base — 9 dossiers avec vrais PV
       caseCount = 9;
       openCases = 6;
-      dernierDossier = { id: "cmtk0apw00000hcugk1udcck6", statut: "RESOLU", type: "AMENDE", createdAt: new Date() } as never;
+      dernierDossier = { id: "cmtk0aw780017hcug36o8l1t0", statut: "RESOLU", type: "AMENDE", createdAt: new Date() } as never;
       dossiersProches = [
         { id: "cmtk0apw00000hcugk1udcck6", type: "AMENDE", dateLimite: new Date(Date.now() + 86400000 * 25) },
         { id: "cmtk0aq4b0002hcuglu8njo5u", type: "AMENDE", dateLimite: new Date(Date.now() + 86400000 * 10) },
+        { id: "cmtk0ar830009hcugg4ip17ca", type: "AMENDE", dateLimite: new Date(Date.now() + 86400000 * 5) },
       ] as never;
     }
   }

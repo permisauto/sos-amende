@@ -40,12 +40,15 @@ export default async function CasesPage() {
     console.error("cases: DB indisponible, fallback mock", e);
     if (user.id.startsWith("dev-")) {
       dossiers = [
-        { id: "cmtk0apw00000hcugk1udcck6", type: "AMENDE", statut: "EN_ANALYSE", createdAt: new Date(), prix: 39 },
-        { id: "cmtk0aq4b0002hcuglu8njo5u", type: "AMENDE", statut: "A_VERIFIER", createdAt: new Date(), prix: 39 },
-        { id: "cmtk0ar830009hcugg4ip17ca", type: "AMENDE", statut: "PRET", createdAt: new Date(), prix: 39 },
-        { id: "cmtk0aub2000uhcuglwnrhfxz", type: "SUSPENSION", statut: "EN_ANALYSE", createdAt: new Date(), prix: 59 },
-        { id: "cmtk0askl000jhcugj7gkzkbs", type: "AMENDE", statut: "ENVOYE", createdAt: new Date(), prix: 39 },
-        { id: "cmtk0axuz001ihcug4zp7yw12", type: "AMENDE", statut: "A_VERIFIER", createdAt: new Date(), prix: 39 },
+        { id: "cmtk0apw00000hcugk1udcck6", type: "AMENDE", statut: "EN_ANALYSE", createdAt: new Date(Date.now() - 86400000 * 6), prix: 39 },
+        { id: "cmtk0aq4b0002hcuglu8njo5u", type: "AMENDE", statut: "A_VERIFIER", createdAt: new Date(Date.now() - 86400000 * 5), prix: 39 },
+        { id: "cmtk0ar830009hcugg4ip17ca", type: "AMENDE", statut: "PRET", createdAt: new Date(Date.now() - 86400000 * 4), prix: 39 },
+        { id: "cmtk0aub2000uhcuglwnrhfxz", type: "SUSPENSION", statut: "EN_ANALYSE", createdAt: new Date(Date.now() - 86400000 * 3), prix: 59 },
+        { id: "cmtk0aunj000whcugh58j35e7", type: "SUSPENSION", statut: "A_VERIFIER", createdAt: new Date(Date.now() - 86400000 * 3), prix: 59 },
+        { id: "cmtk0askl000jhcugj7gkzkbs", type: "AMENDE", statut: "ENVOYE", createdAt: new Date(Date.now() - 86400000 * 2), prix: 39 },
+        { id: "cmtk0avnu0013hcugdkrpk2hi", type: "AMENDE", statut: "REJETE", createdAt: new Date(Date.now() - 86400000 * 7), prix: 39 },
+        { id: "cmtk0aw780017hcug36o8l1t0", type: "AMENDE", statut: "RESOLU", createdAt: new Date(Date.now() - 86400000 * 8), prix: 39 },
+        { id: "cmtk0axuz001ihcug4zp7yw12", type: "AMENDE", statut: "A_VERIFIER", createdAt: new Date(Date.now() - 86400000 * 1), prix: 39 },
       ] as unknown as typeof dossiers;
     }
   }
