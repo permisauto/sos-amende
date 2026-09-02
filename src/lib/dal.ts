@@ -35,7 +35,7 @@ export const getCurrentUser = cache(async () => {
     const devCookie = cookieStore.get("dev_login")?.value;
     let devEmail: string | null = devCookie || null;
     if (!devEmail && devParam) {
-      const ref = urlFromHdrs || hdrs.get("referer") ?? hdrs.get("x-invoke-query") ?? allHdrs;
+      const ref = urlFromHdrs || (hdrs.get("referer") ?? hdrs.get("x-invoke-query") ?? allHdrs);
       if (ref.includes("/admin")) devEmail = "e2e-admin@test.local";
       else if (ref.includes("/juriste")) devEmail = "e2e-juriste@test.local";
       else devEmail = "e2e-client@test.local";
