@@ -19,11 +19,16 @@ export default async function CasesPage() {
   const user = await requireUser();
   const isClient = user.role === "CLIENT";
 
-  const dossiers = await prisma.dossier.findMany({
-    where: { userId: user.id },
-    orderBy: { createdAt: "desc" },
-    take: 50,
-  });
+  let dossiers: Awaited<ReturnType<typeof prisma.dossier.findMany>> = [];
+  try {
+    dossiers = await prisma.dossier.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    });
+  } catch (e) {
+    console.error("cases: DB indisponible, fallback vide", e);
+  }
 
   return (
     <div>
