@@ -18,7 +18,7 @@ export function SiteFooter() {
             </Link>
           ))}
         </nav>
-        <Link href="/login" aria-label="Accès juriste et administrateur — réservé" className="text-[10px] tracking-widest text-zinc-300 hover:text-zinc-500 md:ml-auto">
+        <Link href="/acces-pro" aria-label="Accès juriste et administrateur — réservé" className="text-[10px] tracking-widest text-zinc-300 hover:text-zinc-500 md:ml-auto">
           Accès juriste / admin ·
         </Link>
       </div>
