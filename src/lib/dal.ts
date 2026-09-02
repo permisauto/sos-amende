@@ -22,27 +22,30 @@ export const getCurrentUser = cache(async () => {
     const hdrs = await headers();
     const cookieStore = await cookies();
     const allHdrs = Array.from(hdrs.entries()).map(([k, v]) => `${k}=${v}`).join(" ");
+    const urlFromHdrs = hdrs.get("x-middleware-rewrite") ?? hdrs.get("next-url") ?? hdrs.get("x-url") ?? hdrs.get("referer") ?? "";
     const devParam =
       hdrs.get("x-invoke-query")?.includes("dev=1") ||
       hdrs.get("referer")?.includes("dev=1") ||
       hdrs.get("x-middleware-rewrite")?.includes("dev=1") ||
       hdrs.get("next-url")?.includes("dev=1") ||
       hdrs.get("x-url")?.includes("dev=1") ||
+      hdrs.get("x-matched-path")?.includes("dev=1") ||
+      urlFromHdrs.includes("dev=1") ||
       allHdrs.includes("dev=1");
     const devCookie = cookieStore.get("dev_login")?.value;
-    // Si ?dev=1 est dans l'URL, on devine le rôle d'après le referer/path
     let devEmail: string | null = devCookie || null;
     if (!devEmail && devParam) {
-      const ref = hdrs.get("referer") ?? hdrs.get("x-invoke-query") ?? allHdrs;
+      const ref = urlFromHdrs || hdrs.get("referer") ?? hdrs.get("x-invoke-query") ?? allHdrs;
       if (ref.includes("/admin")) devEmail = "e2e-admin@test.local";
       else if (ref.includes("/juriste")) devEmail = "e2e-juriste@test.local";
       else devEmail = "e2e-client@test.local";
-      // Fallback : si on est sur /dashboard?dev=1 sans referer, on prend client par défaut
-      if (!ref.includes("/admin") && !ref.includes("/juriste")) {
-        // Essaie de deviner via l'URL demandée si possible, sinon client
-        const url = hdrs.get("x-middleware-rewrite") ?? hdrs.get("next-url") ?? "";
-        if (url.includes("/admin")) devEmail = "e2e-admin@test.local";
-        else if (url.includes("/juriste")) devEmail = "e2e-juriste@test.local";
+    }
+    // Fallback ultime : si ?dev=1 est présent dans l'URL demandée (même sans header), on force le rôle d'après le path
+    if (!devEmail) {
+      const hasDevInUrl = allHdrs.includes("dev=1") || urlFromHdrs.includes("dev=1");
+      if (hasDevInUrl) {
+        if (allHdrs.includes("/admin") || urlFromHdrs.includes("/admin")) devEmail = "e2e-admin@test.local";
+        else if (allHdrs.includes("/juriste") || urlFromHdrs.includes("/juriste")) devEmail = "e2e-juriste@test.local";
       }
     }
     // Aussi via searchParams direct (fallback)

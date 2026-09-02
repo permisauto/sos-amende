@@ -14,11 +14,11 @@ export default auth((req) => {
 
   if (isDevBypass && isOnDashboard) {
     const res = NextResponse.next();
-    if (hasDevParam && !hasDevCookie) {
-      const devEmail = nextUrl.pathname.includes("/juriste")
-        ? "e2e-juriste@test.local"
-        : nextUrl.pathname.includes("/admin")
-          ? "e2e-admin@test.local"
+    if (hasDevParam) {
+      const devEmail = nextUrl.pathname.includes("/admin")
+        ? "e2e-admin@test.local"
+        : nextUrl.pathname.includes("/juriste")
+          ? "e2e-juriste@test.local"
           : "e2e-client@test.local";
       res.cookies.set("dev_login", devEmail, { httpOnly: false, maxAge: 3600, path: "/" });
     }
