@@ -8,6 +8,7 @@ import { Prisma } from "@/generated/prisma/client";
 import type { RegleDetection } from "@/lib/moteur";
 import type { JurisprudenceRef } from "@/lib/catalogue-sources";
 import { synchroniserCatalogue } from "@/lib/auto-alimentation";
+import { validateMockFaille } from "@/lib/mock-failles";
 
 export type FailleState =
   | { error?: string; ok?: boolean; count?: number }
@@ -200,6 +201,7 @@ export async function validerPropositionFaille(
   const action = PROPOSEE_ACTIONS.find((a) => a === formData.get("action"));
   if (!action) return { error: "Action invalide." };
 
+  let dbOk = false;
   try {
     const faille = await prisma.failleJuridique.findUnique({ where: { id } });
     if (!faille) return { error: "Faille introuvable." };
@@ -211,10 +213,12 @@ export async function validerPropositionFaille(
       where: { id },
       data: { statut: action },
     });
+    dbOk = true;
   } catch (e) {
     console.error("validerPropositionFaille: DB indisponible, fallback mock", e);
     // Fallback mock si DB down : on simule la validation pour la démo
     if (!id.startsWith("faille-")) return { error: "Faille introuvable (mock)." };
+    validateMockFaille(id, action);
   }
 
   revalidatePath("/dashboard/admin/failles");
