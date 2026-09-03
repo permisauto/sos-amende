@@ -1,11 +1,13 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 type Resultat = { titreFaille: string | null; articleLoi: string | null; score: number; proposition: boolean };
 type Preuves = { radar: { checked: boolean; found: boolean; expired: boolean | null; preuveUrl: string | null }; meteo: { checked: boolean; value: string | null; source: string | null }; travaux: { checked: boolean; value: boolean | null }; dureeMs: number };
 type Reponse = { scoreGlobal?: number; resultats?: Resultat[]; data?: Record<string, unknown>; texte?: string; erreur?: string; preuves?: Preuves };
+
+type DynQ = { id: string; champ: string; label: string; articleLoi: string; failleId: string };
 
 export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPENSION" }) {
   const [type, setType] = useState<"AMENDE" | "SUSPENSION">(initialType);
@@ -13,7 +15,17 @@ export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPEN
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [infos, setInfos] = useState({ plaque: "", num_pv: "", date: "", montant: "", heure: "", adresse: "", lieu: "", prefecture: "", duree: "", motif: "" });
   const [complement, setComplement] = useState({ paiementDejaFait: false, vehiculeCede: false, vehiculeVole: false, conducteurDifferent: false, plaqueIncorrecte: false, travaux: false, meteoPluie: false, adresseIncorrecte: false });
+  const [dynQuestions, setDynQuestions] = useState<DynQ[] | null>(null);
   const [showComplement, setShowComplement] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/questionnaire?type=${type}`)
+      .then((r) => r.json())
+      .then((j) => {
+        if (Array.isArray(j.questions) && j.questions.length > 0) setDynQuestions(j.questions);
+      })
+      .catch(() => {});
+  }, [type]);
   const [loading, setLoading] = useState(false);
   const [autoFilling, setAutoFilling] = useState(false);
   const [reponse, setReponse] = useState<Reponse | null>(null);
@@ -177,7 +189,35 @@ export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPEN
           </button>
           {showComplement && (
             <div className="mt-4 grid gap-2.5">
-              {type === "AMENDE" ? (
+              {dynQuestions ? (
+                dynQuestions.map((q) => {
+                  const checked =
+                    q.champ === "paiementDejaFait" ? complement.paiementDejaFait :
+                    q.champ === "vehiculeCede" ? complement.vehiculeCede :
+                    q.champ === "vehiculeVole" ? complement.vehiculeVole :
+                    q.champ === "conducteurDifferent" ? complement.conducteurDifferent :
+                    q.champ === "plaqueIncorrecte" ? complement.plaqueIncorrecte :
+                    q.champ === "adresseIncorrecte" ? complement.adresseIncorrecte :
+                    q.champ === "travaux_présents" ? complement.travaux :
+                    q.champ === "conditions_meteo" ? complement.meteoPluie : false;
+                  const toggle = () => {
+                    if (q.champ === "paiementDejaFait") setComplement({ ...complement, paiementDejaFait: !complement.paiementDejaFait });
+                    else if (q.champ === "vehiculeCede") setComplement({ ...complement, vehiculeCede: !complement.vehiculeCede });
+                    else if (q.champ === "vehiculeVole") setComplement({ ...complement, vehiculeVole: !complement.vehiculeVole });
+                    else if (q.champ === "conducteurDifferent") setComplement({ ...complement, conducteurDifferent: !complement.conducteurDifferent });
+                    else if (q.champ === "plaqueIncorrecte") setComplement({ ...complement, plaqueIncorrecte: !complement.plaqueIncorrecte });
+                    else if (q.champ === "adresseIncorrecte") setComplement({ ...complement, adresseIncorrecte: !complement.adresseIncorrecte });
+                    else if (q.champ === "travaux_présents") setComplement({ ...complement, travaux: !complement.travaux });
+                    else if (q.champ === "conditions_meteo") setComplement({ ...complement, meteoPluie: !complement.meteoPluie });
+                  };
+                  return (
+                    <label key={q.id} className="flex items-start gap-2 text-sm" title={`${q.articleLoi} — ${q.failleId}`}>
+                      <input type="checkbox" checked={checked} onChange={toggle} className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-emerald-600" />
+                      <span>{q.label} <span className="text-xs text-zinc-400">· {q.articleLoi}</span></span>
+                    </label>
+                  );
+                })
+              ) : type === "AMENDE" ? (
                 <>
                   <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={complement.paiementDejaFait} onChange={(e) => setComplement({ ...complement, paiementDejaFait: e.target.checked })} className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-emerald-600" /> J'ai déjà payé cette amende</label>
                   <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={complement.vehiculeCede} onChange={(e) => setComplement({ ...complement, vehiculeCede: e.target.checked })} className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-emerald-600" /> Véhicule vendu/cédé avant la date</label>
@@ -192,9 +232,13 @@ export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPEN
                   <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={complement.plaqueIncorrecte} onChange={(e) => setComplement({ ...complement, plaqueIncorrecte: e.target.checked })} className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-emerald-600" /> Erreur sur la décision</label>
                 </>
               )}
-              <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={complement.travaux} onChange={(e) => setComplement({ ...complement, travaux: e.target.checked })} className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-emerald-600" /> Travaux présents sur la route ce jour-là</label>
-              <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={complement.meteoPluie} onChange={(e) => setComplement({ ...complement, meteoPluie: e.target.checked })} className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-emerald-600" /> Conditions météo défavorables (pluie/brouillard)</label>
-              <p className="text-xs text-zinc-500">Ces réponses affinent le scoring — le moteur croise failles + preuves (étalonnage, météo, travaux) via API.</p>
+              {!dynQuestions && (
+                <>
+                  <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={complement.travaux} onChange={(e) => setComplement({ ...complement, travaux: e.target.checked })} className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-emerald-600" /> Travaux présents sur la route ce jour-là</label>
+                  <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={complement.meteoPluie} onChange={(e) => setComplement({ ...complement, meteoPluie: e.target.checked })} className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-emerald-600" /> Conditions météo défavorables (pluie/brouillard)</label>
+                </>
+              )}
+              <p className="text-xs text-zinc-500">Questionnaire généré depuis la bibliothèque active — chaque nouvelle faille validée par l'admin enrichit automatiquement cette liste. Le moteur croise failles + preuves via API.</p>
             </div>
           )}
         </div>
