@@ -1,5 +1,8 @@
 import type { RegleDetection } from "@/lib/moteur";
 import type { JurisprudenceRef } from "@/lib/catalogue-sources";
+import { readFileSync, writeFileSync, existsSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
 
 export interface MockFaille {
   id: string;
@@ -89,14 +92,30 @@ const baseMocks: MockFaille[] = [
   },
 ];
 
-const validatedMocks = new Map<string, "ACTIVE" | "INACTIVE">();
+const STORE_FILE = join(tmpdir(), "sos-amende-mock-failles.json");
+
+function readStore(): Map<string, "ACTIVE" | "INACTIVE"> {
+  if (!existsSync(STORE_FILE)) return new Map();
+  try {
+    const data = JSON.parse(readFileSync(STORE_FILE, "utf-8"));
+    return new Map(Object.entries(data));
+  } catch {
+    return new Map();
+  }
+}
+
+function writeStore(store: Map<string, "ACTIVE" | "INACTIVE">): void {
+  const obj = Object.fromEntries(store);
+  writeFileSync(STORE_FILE, JSON.stringify(obj), "utf-8");
+}
 
 function generateMocks(): MockFaille[] {
+  const validated = readStore();
   const mocks: MockFaille[] = [];
   for (let i = 0; i < 20; i++) {
     const base = baseMocks[i % baseMocks.length];
     const id = `${base.id}-${i}`;
-    const validatedStatut = validatedMocks.get(id);
+    const validatedStatut = validated.get(id);
     mocks.push({
       ...base,
       id,
@@ -129,14 +148,16 @@ export function getSuspensionActiveCount(): number {
 
 export function validateMockFaille(id: string, action: "ACTIVE" | "INACTIVE"): boolean {
   if (!id.startsWith("faille-")) return false;
-  validatedMocks.set(id, action);
+  const store = readStore();
+  store.set(id, action);
+  writeStore(store);
   return true;
 }
 
 export function isMockValidated(id: string): "ACTIVE" | "INACTIVE" | null {
-  return validatedMocks.get(id) ?? null;
+  return readStore().get(id) ?? null;
 }
 
 export function resetMockValidations(): void {
-  validatedMocks.clear();
+  writeStore(new Map());
 }
