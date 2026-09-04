@@ -1,9 +1,6 @@
 import type { RegleDetection } from "@/lib/moteur";
 import type { JurisprudenceRef } from "@/lib/catalogue-sources";
 import { CATALOGUE_SOURCES } from "@/lib/catalogue-sources";
-import { readFileSync, writeFileSync, existsSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
 
 export interface MockFaille {
   id: string;
@@ -19,7 +16,6 @@ export interface MockFaille {
   createdAt: Date;
 }
 
-// Build base mocks from CATALOGUE_SOURCES (28 total)
 const isHistorique = new Set([
   "faille-prescription-1-an",
   "faille-mentions-obligatoires",
@@ -48,30 +44,13 @@ const baseMocks: MockFaille[] = CATALOGUE_SOURCES.map((f) => ({
   createdAt: new Date(),
 }));
 
-const STORE_FILE = join(tmpdir(), "sos-amende-mock-failles.json");
-
-function readStore(): Map<string, "ACTIVE" | "INACTIVE"> {
-  if (!existsSync(STORE_FILE)) return new Map();
-  try {
-    const data = JSON.parse(readFileSync(STORE_FILE, "utf-8"));
-    return new Map(Object.entries(data));
-  } catch {
-    return new Map();
-  }
-}
-
-function writeStore(store: Map<string, "ACTIVE" | "INACTIVE">): void {
-  const obj = Object.fromEntries(store);
-  writeFileSync(STORE_FILE, JSON.stringify(obj), "utf-8");
-}
+// In-memory store persistant dans le container Vercel
+const validatedStore = new Map<string, "ACTIVE" | "INACTIVE">();
 
 function generateMocks(): MockFaille[] {
-  const validated = readStore();
   const mocks: MockFaille[] = [];
-  // Generate 28 entries (one per catalog faille) - no duplication
-  for (let i = 0; i < baseMocks.length; i++) {
-    const base = baseMocks[i];
-    const validatedStatut = validated.get(base.id);
+  for (const base of baseMocks) {
+    const validatedStatut = validatedStore.get(base.id);
     mocks.push({
       ...base,
       statut: validatedStatut ?? base.statut,
@@ -103,16 +82,14 @@ export function getSuspensionActiveCount(): number {
 
 export function validateMockFaille(id: string, action: "ACTIVE" | "INACTIVE"): boolean {
   if (!id.startsWith("faille-")) return false;
-  const store = readStore();
-  store.set(id, action);
-  writeStore(store);
+  validatedStore.set(id, action);
   return true;
 }
 
 export function isMockValidated(id: string): "ACTIVE" | "INACTIVE" | null {
-  return readStore().get(id) ?? null;
+  return validatedStore.get(id) ?? null;
 }
 
 export function resetMockValidations(): void {
-  writeStore(new Map());
+  validatedStore.clear();
 }
