@@ -337,7 +337,7 @@ function FailleRow({ faille }: { faille: FailleDto }) {
     } catch {}
   }, []);
 
-  const effectiveStatut: "ACTIVE" | "INACTIVE" | "PROPOSEE" = localValidated[faille.id] ?? faille.statut;
+  const effectiveStatut = (localValidated[faille.id] ?? faille.statut) as "ACTIVE" | "INACTIVE" | "PROPOSEE";
   const meta = statusMeta[effectiveStatut] ?? {
     label: effectiveStatut,
     cls: "bg-zinc-100 text-zinc-500",
