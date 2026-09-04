@@ -2,6 +2,8 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireJuriste } from "@/lib/dal";
 
+const MOCK_NOW = new Date("2026-07-15T12:00:00Z").getTime();
+
 const statusLabels: Record<string, string> = {
   BROUILLON: "Brouillon",
   EN_ANALYSE: "En analyse",
