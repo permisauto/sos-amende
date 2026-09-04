@@ -236,7 +236,7 @@ async function main() {
 
     // Upload PV
     const pvKey = `uploads/pv/test-${d.numPv}.png`;
-    await storageWrite(pvKey, pngBuffer, "image/png");
+    await storageWrite(pvKey, pngBuffer);
 
     // Create dossier
     const dossier = await prisma.dossier.create({
@@ -291,10 +291,10 @@ async function main() {
     // Create signature + PDF + Courrier for PRET/ENVOYE/RESOLU
     if (["PRET", "ENVOYE", "RESOLU"].includes(d.statut)) {
       const sigKey = `uploads/signatures/sig-${d.numPv}.png`;
-      await storageWrite(sigKey, pngBuffer, "image/png");
+      await storageWrite(sigKey, pngBuffer);
 
       const pdfKey = `uploads/lettres/lettre-${d.numPv}.pdf`;
-      await storageWrite(pdfKey, Buffer.from("%PDF-1.4 mock"), "application/pdf");
+      await storageWrite(pdfKey, Buffer.from("%PDF-1.4 mock"));
 
       await prisma.courrier.create({
         data: {
@@ -306,17 +306,17 @@ async function main() {
       });
 
       // Add DossierEvents timeline
-      const events = [
-        { type: "CREATION" as const, detail: "Dossier créé", createdAt: new Date(d.date) },
-        { type: "ANALYSE" as const, detail: "Analyse OCR + questionnaire complétée", createdAt: new Date(Date.parse(d.date) + 86400000) },
-        { type: "LETTRE_GENEREE" as const, detail: `Lettre générée (faille: ${faille.titreFaille})`, createdAt: d.valideLe ? new Date(d.valideLe.getTime() - 86400000) : undefined },
-        { type: "VALIDATION" as const, detail: "Lettre validée par le juriste", createdAt: d.valideLe },
+      const events: Array<{ type: string; detail: string; createdAt?: Date }> = [
+        { type: "CREATION", detail: "Dossier créé", createdAt: new Date(d.date) },
+        { type: "ANALYSE", detail: "Analyse OCR + questionnaire complétée", createdAt: new Date(Date.parse(d.date) + 86400000) },
+        { type: "LETTRE_GENEREE", detail: `Lettre générée (faille: ${faille.titreFaille})`, createdAt: d.valideLe ? new Date(d.valideLe.getTime() - 86400000) : undefined },
+        { type: "VALIDATION", detail: "Lettre validée par le juriste", createdAt: d.valideLe },
       ];
       if (d.statut === "ENVOYE" || d.statut === "RESOLU") {
-        events.push({ type: "ENVOI" as const, detail: "Envoyé par le client en recommandé avec accusé de réception", createdAt: d.dateLimite ? new Date(d.dateLimite.getTime() - 86400000) : undefined });
+        events.push({ type: "ENVOI", detail: "Envoyé par le client en recommandé avec accusé de réception", createdAt: d.dateLimite ? new Date(d.dateLimite.getTime() - 86400000) : undefined });
       }
       if (d.statut === "RESOLU") {
-        events.push({ type: "DECISION" as const, detail: `Décision OMP: ${d.decisionOmp} - ${d.decisionDetail}`, createdAt: new Date() });
+        events.push({ type: "DECISION", detail: `Décision OMP: ${d.decisionOmp} - ${d.decisionDetail}`, createdAt: new Date() });
       }
 
       for (const ev of events) {
