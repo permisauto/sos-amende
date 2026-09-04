@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useState, useEffect } from "react";
 import Link from "next/link";
 import {
   basculerFaille,
@@ -328,8 +328,18 @@ function FailleRow({ faille }: { faille: FailleDto }) {
     undefined,
   );
 
-  const meta = statusMeta[faille.statut] ?? {
-    label: faille.statut,
+  // Client-side validated state (persists across page reloads in demo mode)
+  const [localValidated, setLocalValidated] = useState<Record<string, "ACTIVE" | "INACTIVE">>({});
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("sos-amende-validated-failles");
+      if (stored) setLocalValidated(JSON.parse(stored));
+    } catch {}
+  }, []);
+
+  const effectiveStatut = localValidated[faille.id] ?? faille.statut;
+  const meta = statusMeta[effectiveStatut] ?? {
+    label: effectiveStatut,
     cls: "bg-zinc-100 text-zinc-500",
   };
   const jurisprudence = faille.jurisprudence ?? [];
@@ -421,7 +431,7 @@ function FailleRow({ faille }: { faille: FailleDto }) {
           >
             {editing ? "Fermer" : "Modifier"}
           </button>
-          {faille.statut === "PROPOSEE" ? (
+          {effectiveStatut === "PROPOSEE" ? (
             <form action={propAction}>
               <input type="hidden" name="id" value={faille.id} />
               <input type="hidden" name="action" value="ACTIVE" />
@@ -441,13 +451,13 @@ function FailleRow({ faille }: { faille: FailleDto }) {
                 disabled={togglePending}
                 className="rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
               >
-                {faille.statut === "ACTIVE" ? "Désactiver" : "Activer"}
+                {effectiveStatut === "ACTIVE" ? "Désactiver" : "Activer"}
               </button>
             </form>
           )}
         </div>
       </div>
-      {faille.statut === "PROPOSEE" && (
+      {effectiveStatut === "PROPOSEE" && (
         <form action={propAction} className="mt-3">
           <input type="hidden" name="id" value={faille.id} />
           <input type="hidden" name="action" value="INACTIVE" />
@@ -465,10 +475,55 @@ function FailleRow({ faille }: { faille: FailleDto }) {
           {toggleState.error}
         </p>
       )}
+      {toggleState?.ok && (
+        <>
+          <p className="mt-3 rounded-xl bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
+            Statut mis à jour.
+          </p>
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `
+                (function() {
+                  try {
+                    const stored = localStorage.getItem("sos-amende-validated-failles");
+                    const data = stored ? JSON.parse(stored) : {};
+                    const newStatut = "${faille.statut}" === "ACTIVE" ? "INACTIVE" : "ACTIVE";
+                    data["${faille.id}"] = newStatut;
+                    localStorage.setItem("sos-amende-validated-failles", JSON.stringify(data));
+                    window.location.reload();
+                  } catch(e) { console.error(e); }
+                })();
+              `,
+            }}
+          />
+        </>
+      )}
       {propState?.error && (
         <p className="mt-3 rounded-xl bg-red-50 px-4 py-2 text-sm text-red-700">
           {propState.error}
         </p>
+      )}
+      {propState?.ok && (
+        <>
+          <p className="mt-3 rounded-xl bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
+            Faille mise à jour.
+          </p>
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `
+                (function() {
+                  try {
+                    const stored = localStorage.getItem("sos-amende-validated-failles");
+                    const data = stored ? JSON.parse(stored) : {};
+                    data["${faille.id}"] = "${faille.statut === "PROPOSEE" ? "ACTIVE" : "INACTIVE"}";
+                    localStorage.setItem("sos-amende-validated-failles", JSON.stringify(data));
+                    window.location.reload();
+                  } catch(e) { console.error(e); }
+                })();
+              `,
+            }}
+          />
+        </>
       )}
 
       {detail && (
