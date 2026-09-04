@@ -52,11 +52,11 @@ export default async function DashboardPage() {
     if (user.id.startsWith("dev-")) {
       caseCount = 9;
       openCases = 6;
-      dernierDossier = { id: "cmtk0aw780017hcug36o8l1t0", statut: "RESOLU", type: "AMENDE", createdAt: new Date(MOCK_NOW) } as never;
+      dernierDossier = { id: "pv-resolu-006", statut: "RESOLU", type: "AMENDE", createdAt: new Date(MOCK_NOW) } as never;
       dossiersProches = [
-        { id: "cmtk0apw00000hcugk1udcck6", type: "AMENDE", dateLimite: new Date(MOCK_NOW + 86400000 * 25) },
-        { id: "cmtk0aq4b0002hcuglu8njo5u", type: "AMENDE", dateLimite: new Date(MOCK_NOW + 86400000 * 10) },
-        { id: "cmtk0ar830009hcugg4ip17ca", type: "AMENDE", dateLimite: new Date(MOCK_NOW + 86400000 * 5) },
+        { id: "pv-envoye-004", type: "AMENDE", dateLimite: new Date(MOCK_NOW + 86400000 * 25) },
+        { id: "pv-sign-002", type: "AMENDE", dateLimite: new Date(MOCK_NOW + 86400000 * 10) },
+        { id: "pv-pret-003", type: "AMENDE", dateLimite: new Date(MOCK_NOW + 86400000 * 5) },
       ] as never;
     }
   }

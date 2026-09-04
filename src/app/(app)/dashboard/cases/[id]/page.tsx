@@ -64,12 +64,69 @@ export default async function CaseDetailPage(
     if (user.id.startsWith("dev-")) {
       // Mock ultra-réaliste par id pour que le clic soit toujours vérifiable même si DB down
       const mockById: Record<string, Record<string, any>> = {
-        "cmtk0apw00000hcugk1udcck6": { type: "AMENDE", statut: "EN_ANALYSE", pvTexte: "CONTRAVENTION N° PV-ANALYSE-001 Vitesse 96km/h limitée 70 le 10/07/2026 à 15:00 Lieu: A6 km 42 Radar MESTA 210C n° 777 Plaque AB-123-CD Montant 135€ Adresse 12 RUE DE LA PAIX 75001 PARIS", extractedData: { plaque: "AB-123-CD", num_pv: "PV-ANALYSE-001", date: "2026-07-10", heure: "15h00", lieu: "A6 km 42", adresse: "12 RUE DE LA PAIX 75001 PARIS", montant: "135,00 €", radarId: "777" }, failleJuridique: null, lettreGeneree: null },
-        "cmtk0aq4b0002hcuglu8njo5u": { type: "AMENDE", statut: "A_VERIFIER", pvTexte: "CONTRAVENTION N° PV-SIGN-002 Plaque XY-999-ZZ", extractedData: { plaque: "XY-999-ZZ", num_pv: "PV-SIGN-002", date: "2026-05-20", lieu: "Rue de Rivoli Paris", adresse: "8 impasse des Lilas 13001 MARSEILLE", plaqueIncorrecte: true }, failleJuridique: { titreFaille: "Erreur plaque", articleLoi: "Art. 429 CPP" }, lettreGeneree: "À l'attention de l'Officier du Ministère Public,\nJe soussigné TEST CLIENT conteste l'avis n° PV-SIGN-002 du 2026-05-20 concernant le véhicule XY-999-ZZ.\nFondement : Erreur plaque — Art. 429 CPP\nLieu : Rue de Rivoli Paris" },
-        "cmtk0ar830009hcugg4ip17ca": { type: "AMENDE", statut: "PRET", pvTexte: "CONTRAVENTION N° PV-PRET-003 Date 10/05/2026 Plaque CD-456-EF Travaux présents", extractedData: { plaque: "CD-456-EF", num_pv: "PV-PRET-003", date: "2026-05-10", lieu: "A10 - Orléans", travaux_présents: true, adresse: "45 Avenue des Champs 75008 PARIS" }, failleJuridique: { titreFaille: "Travaux et signalisation temporaire", articleLoi: "Art. R. 411-8 CR" }, lettreGeneree: "À l'attention de l'Officier,\nJe conteste l'avis n° PV-PRET-003 — travaux présents au lieu dit A10 le 2026-05-10.\nFondement : Travaux — Art. R. 411-8" },
-        "cmtk0askl000jhcugj7gkzkbs": { type: "AMENDE", statut: "ENVOYE", pvTexte: "CONTRAVENTION N° PV-ENVOYE-004 Date 01/04/2026 Plaque EF-012-IJ", extractedData: { plaque: "EF-012-IJ", num_pv: "PV-ENVOYE-004", date: "2026-04-01", adresse: "22 rue Nationale 75013 PARIS", lieu: "A6" }, failleJuridique: { titreFaille: "Prescription 1 an", articleLoi: "Art. 133-3 CPP" }, lettreGeneree: "À l'attention de l'Officier,\nJe conteste l'avis n° PV-ENVOYE-004 du 2026-04-01.\nFondement : Prescription — Art. 133-3 CPP" },
-        "cmtk0aub2000uhcuglwnrhfxz": { type: "SUSPENSION", statut: "EN_ANALYSE", pvTexte: "DECISION DE SUSPENSION N° DEC-ANALYSE-005 Préfecture de Paris Durée 6 mois Motif alcoolémie", extractedData: { num_pv: "DEC-ANALYSE-005", date: "2026-07-01", prefecture: "Préfecture de Paris", duree: "6 mois", motif: "alcoolémie", adresse: "12 RUE DE LA PAIX 75001 PARIS" }, failleJuridique: null, lettreGeneree: null },
-        "cmtk0aunj000whcugh58j35e7": { type: "SUSPENSION", statut: "A_VERIFIER", pvTexte: "DECISION SUSPENSION N° DEC-SIGN-006 Préfecture des Bouches-du-Rhône Vitesse 180km/h", extractedData: { num_pv: "DEC-SIGN-006", date: "2026-06-01", prefecture: "Préfecture des Bouches-du-Rhône", duree: "4 mois", motif: "vitesse", lieu: "A7 - Marseille" }, failleJuridique: { titreFaille: "Suspension sans contradictoire", articleLoi: "Art. L121-1 CRPA" }, lettreGeneree: "À l'attention de Monsieur le Préfet,\nJe conteste la décision DEC-SIGN-006 du 2026-06-01.\nFondement : Suspension sans contradictoire — Art. L121-1 CRPA" },
+        "pv-analyse-001": { 
+          type: "AMENDE", statut: "EN_ANALYSE", 
+          pvTexte: "CONTRAVENTION N° PV-ANALYSE-001\nVitesse 96km/h limitée 70 le 10/07/2026 à 15:00\nLieu: A6 km 42\nRadar MESTA 210C n° 777\nPlaque AB-123-CD\nMontant 135€\nAdresse 12 RUE DE LA PAIX 75001 PARIS", 
+          extractedData: { plaque: "AB-123-CD", num_pv: "PV-ANALYSE-001", date: "2026-07-10", heure: "15h00", lieu: "A6 km 42", adresse: "12 RUE DE LA PAIX 75001 PARIS", montant: "135,00 €", radarId: "777" }, 
+          failleJuridique: null, 
+          lettreGeneree: null 
+        },
+        "pv-sign-002": { 
+          type: "AMENDE", statut: "A_VERIFIER", 
+          pvTexte: "CONTRAVENTION N° PV-SIGN-002\nPlaque XY-999-ZZ\nDate: 20/05/2026 à 10:15\nLieu: Rue de Rivoli, Paris 1er\nMontant: 90€", 
+          extractedData: { plaque: "XY-999-ZZ", num_pv: "PV-SIGN-002", date: "2026-05-20", heure: "10:15", lieu: "Rue de Rivoli Paris", adresse: "8 impasse des Lilas 13001 MARSEILLE", plaqueIncorrecte: true }, 
+          failleJuridique: { titreFaille: "Erreur plaque", articleLoi: "Art. 429 CPP" }, 
+          lettreGeneree: "À l'attention de l'Officier du Ministère Public,\n\nJe soussigné Jean Dupont, titulaire du certificat d'immatriculation du véhicule portant la plaque XY-999-ZZ, conteste l'avis de contravention n° PV-SIGN-002 du 2026-05-20.\n\nLa plaque d'immatriculation XY-999-ZZ mentionnée sur l'avis de contravention ne correspond pas à mon véhicule. Il s'agit d'une erreur matérielle de la part des services verbalisateurs.\n\nConformément à l'article 429 du Code de procédure pénale, l'exonération est demandée lorsque l'avis de contravention est entaché d'une erreur portant sur l'identification du véhicule ou de son titulaire.\n\nJe demande en conséquence l'exonération de l'amende de 90 € qui m'est réclamée." 
+        },
+        "pv-pret-003": { 
+          type: "AMENDE", statut: "PRET", 
+          pvTexte: "CONTRAVENTION N° PV-PRET-003\nDate 10/05/2026\nPlaque CD-456-EF\nTravaux présents\nLieu: A10 - Orléans\nMontant: 45€", 
+          extractedData: { plaque: "CD-456-EF", num_pv: "PV-PRET-003", date: "2026-05-10", heure: "08:45", lieu: "A10 - Orléans", travaux_présents: true, adresse: "45 Avenue des Champs 75008 PARIS" }, 
+          failleJuridique: { titreFaille: "Travaux et signalisation temporaire", articleLoi: "Art. R. 411-8 CR" }, 
+          lettreGeneree: "À l'attention de l'Officier du Ministère Public,\n\nJe soussigné Jean Dupont, conteste l'avis de contravention n° PV-PRET-003 du 2026-05-10 relatif au véhicule immatriculé CD-456-EF.\n\nDes travaux avec signalisation temporaire étaient présents au lieu dit A10 - Orléans le 10 mai 2026. La signalisation n'était pas conforme aux prescriptions de l'article R. 411-8 du Code de la route, ce qui entache la régularité de la constatation.\n\nEn application de l'article R. 411-8 du Code de la route, la limitation de vitesse dans les zones de travaux n'est opposable que si la signalisation réglementaire est en place.\n\nJe demande en conséquence l'annulation de l'amende de 45 € qui m'est réclamée." 
+        },
+        "pv-envoye-004": { 
+          type: "AMENDE", statut: "ENVOYE", 
+          pvTexte: "CONTRAVENTION N° PV-ENVOYE-004\nDate 01/04/2026\nPlaque EF-012-IJ\nLieu: A6\nMontant: 135€", 
+          extractedData: { plaque: "EF-012-IJ", num_pv: "PV-ENVOYE-004", date: "2026-04-01", heure: "16:20", adresse: "22 rue Nationale 75013 PARIS", lieu: "A6" }, 
+          failleJuridique: { titreFaille: "Prescription 1 an", articleLoi: "Art. 133-3 CPP" }, 
+          lettreGeneree: "À l'attention de l'Officier du Ministère Public,\n\nJe soussigné Jean Dupont, conteste l'avis de contravention n° PV-ENVOYE-004 du 2026-04-01.\n\nL'action publique pour une contravention se prescrit par une année révolue à compter du jour où l'infraction a été commise (art. 9 CPP). Or, plus d'un an s'est écoulé entre la date de l'infraction et la notification du présent avis.\n\nL'infraction est donc prescrite. Je demande en conséquence l'annulation de l'amende de 135 € qui m'est réclamée." 
+        },
+        "pv-rejete-005": { 
+          type: "AMENDE", statut: "REJETE", 
+          pvTexte: "CONTRAVENTION N° PV-REJETE-005\nDate 15/03/2026\nPlaque GH-345-KL\nLieu: A7 - Salon-de-Provence\nMontant: 135€", 
+          extractedData: { plaque: "GH-345-KL", num_pv: "PV-REJETE-005", date: "2026-03-15", heure: "12:30", lieu: "A7 - Salon-de-Provence", montant: 135 }, 
+          failleJuridique: null, 
+          lettreGeneree: null 
+        },
+        "pv-resolu-006": { 
+          type: "AMENDE", statut: "RESOLU", 
+          pvTexte: "CONTRAVENTION N° PV-RESOLU-006\nDate 01/02/2026\nPlaque MN-678-OP\nLieu: A10 - Aire de Tours\nMontant: 135€", 
+          extractedData: { plaque: "MN-678-OP", num_pv: "PV-RESOLU-006", date: "2026-02-01", heure: "11:00", lieu: "A10 - Aire de Tours", montant: 135 }, 
+          failleJuridique: { titreFaille: "Prescription 1 an", articleLoi: "Art. 9 CPP" }, 
+          lettreGeneree: "À l'attention de l'Officier du Ministère Public,\n\nJe soussigné Jean Dupont, conteste l'avis de contravention n° PV-RESOLU-006 du 2026-02-01.\n\nL'action publique pour une contravention se prescrit par une année révolue à compter du jour où l'infraction a été commise. L'infraction est prescrite.\n\nJe demande l'annulation de l'amende de 135 €." 
+        },
+        "dec-analyse-007": { 
+          type: "SUSPENSION", statut: "EN_ANALYSE", 
+          pvTexte: "DÉCISION DE SUSPENSION N° DEC-ANALYSE-007\nPréfecture de Lyon\nDurée: 6 mois\nMotif: Alcoolémie 0,45 mg/L\nDate: 01/07/2026", 
+          extractedData: { num_pv: "DEC-ANALYSE-007", date: "2026-07-01", prefecture: "Préfecture de Lyon", duree: "6 mois", motif: "alcoolémie", adresse: "12 RUE DE LA PAIX 75001 PARIS" }, 
+          failleJuridique: null, 
+          lettreGeneree: null 
+        },
+        "dec-sign-008": { 
+          type: "SUSPENSION", statut: "A_VERIFIER", 
+          pvTexte: "DÉCISION DE SUSPENSION N° DEC-SIGN-008\nPréfecture des Bouches-du-Rhône\nDurée: 4 mois\nMotif: Vitesse 180 km/h\nDate: 15/06/2026", 
+          extractedData: { num_pv: "DEC-SIGN-008", date: "2026-06-15", prefecture: "Préfecture des Bouches-du-Rhône", duree: "4 mois", motif: "vitesse", lieu: "A7 - Marseille" }, 
+          failleJuridique: { titreFaille: "Suspension sans contradictoire", articleLoi: "Art. L121-1 CRPA" }, 
+          lettreGeneree: "À l'attention de Monsieur le Préfet des Bouches-du-Rhône,\n\nJe soussigné Jean Dupont, conteste la décision n° DEC-SIGN-008 du 2026-06-15 par laquelle vous avez prononcé la suspension de mon permis de conduire pour une durée de 4 mois.\n\nCette décision a été prise sans que j'aie été mis en mesure de présenter des observations préalables, alors qu'aucune urgence caractérisée ne justifiait de s'en dispenser. En application des articles L. 121-1 et L. 211-2 du code des relations entre le public et l'administration, une décision individuelle défavorable prise en considération de la personne doit être précédée d'une procédure contradictoire permettant à l'intéressé de présenter ses observations (Conseil d'État, 20 avril 2021, n° 438114).\n\nJe demande en conséquence le retrait de la décision de suspension prise à mon encontre." 
+        },
+        "dec-pret-009": { 
+          type: "SUSPENSION", statut: "PRET", 
+          pvTexte: "DÉCISION DE SUSPENSION N° DEC-PRET-009\nPréfecture de Paris\nDurée: 12 mois\nMotif: Stupéfiants\nDate: 01/06/2026", 
+          extractedData: { num_pv: "DEC-PRET-009", date: "2026-06-01", prefecture: "Préfecture de Paris", duree: "12 mois", motif: "stupéfiants" }, 
+          failleJuridique: { titreFaille: "Suspension sans contradictoire", articleLoi: "Art. L121-1 CRPA" }, 
+          lettreGeneree: "À l'attention de Monsieur le Préfet de Paris,\n\nJe soussigné Jean Dupont, conteste la décision n° DEC-PRET-009 du 2026-06-01 par laquelle vous avez prononcé la suspension de mon permis de conduire pour une durée de 12 mois.\n\nCette décision a été prise sans procédure contradictoire préalable, en violation des articles L. 121-1 et L. 211-2 CRPA.\n\nJe demande le retrait de cette décision." 
+        },
       };
       const mock = mockById[id];
       if (mock) {

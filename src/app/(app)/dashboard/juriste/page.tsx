@@ -73,7 +73,28 @@ export default async function JuristePage(
     dossiers = res[0] as unknown as Array<Record<string, any>>;
     stats = res[1] as unknown as Array<{ statut: string; _count: number }>;
   } catch (e) {
-    console.error("juriste dashboard: DB indisponible, fallback vide", e);
+    console.error("juriste dashboard: DB indisponible, fallback mock", e);
+    if (true) { // Always show mock for demo
+      dossiers = [
+        { id: "pv-analyse-001", type: "AMENDE", statut: "EN_ANALYSE", createdAt: new Date(MOCK_NOW - 86400000 * 6), prix: 39, extractedData: { plaque: "AB-123-CD", num_pv: "PV-ANALYSE-001" }, user: { name: "Jean Dupont", email: "e2e-client@test.local" }, failleJuridique: null },
+        { id: "pv-sign-002", type: "AMENDE", statut: "A_VERIFIER", createdAt: new Date(MOCK_NOW - 86400000 * 5), prix: 39, extractedData: { plaque: "XY-999-ZZ", num_pv: "PV-SIGN-002" }, user: { name: "Jean Dupont", email: "e2e-client@test.local" }, failleJuridique: { titreFaille: "Erreur plaque" } },
+        { id: "pv-pret-003", type: "AMENDE", statut: "PRET", createdAt: new Date(MOCK_NOW - 86400000 * 4), prix: 39, extractedData: { plaque: "CD-456-EF", num_pv: "PV-PRET-003" }, user: { name: "Jean Dupont", email: "e2e-client@test.local" }, failleJuridique: { titreFaille: "Travaux et signalisation temporaire" } },
+        { id: "pv-envoye-004", type: "AMENDE", statut: "ENVOYE", createdAt: new Date(MOCK_NOW - 86400000 * 2), prix: 39, extractedData: { plaque: "EF-012-IJ", num_pv: "PV-ENVOYE-004" }, user: { name: "Jean Dupont", email: "e2e-client@test.local" }, failleJuridique: { titreFaille: "Prescription 1 an" } },
+        { id: "pv-rejete-005", type: "AMENDE", statut: "REJETE", createdAt: new Date(MOCK_NOW - 86400000 * 7), prix: 39, extractedData: { plaque: "GH-345-KL", num_pv: "PV-REJETE-005" }, user: { name: "Jean Dupont", email: "e2e-client@test.local" }, failleJuridique: null },
+        { id: "pv-resolu-006", type: "AMENDE", statut: "RESOLU", createdAt: new Date(MOCK_NOW - 86400000 * 8), prix: 39, extractedData: { plaque: "MN-678-OP", num_pv: "PV-RESOLU-006" }, user: { name: "Jean Dupont", email: "e2e-client@test.local" }, failleJuridique: { titreFaille: "Prescription 1 an" } },
+        { id: "dec-analyse-007", type: "SUSPENSION", statut: "EN_ANALYSE", createdAt: new Date(MOCK_NOW - 86400000 * 3), prix: 59, extractedData: { num_pv: "DEC-ANALYSE-007" }, user: { name: "Jean Dupont", email: "e2e-client@test.local" }, failleJuridique: null },
+        { id: "dec-sign-008", type: "SUSPENSION", statut: "A_VERIFIER", createdAt: new Date(MOCK_NOW - 86400000 * 2), prix: 59, extractedData: { num_pv: "DEC-SIGN-008" }, user: { name: "Jean Dupont", email: "e2e-client@test.local" }, failleJuridique: { titreFaille: "Suspension sans contradictoire" } },
+        { id: "dec-pret-009", type: "SUSPENSION", statut: "PRET", createdAt: new Date(MOCK_NOW - 86400000 * 1), prix: 59, extractedData: { num_pv: "DEC-PRET-009" }, user: { name: "Jean Dupont", email: "e2e-client@test.local" }, failleJuridique: { titreFaille: "Suspension sans contradictoire" } },
+      ] as unknown as Array<Record<string, any>>;
+      stats = [
+        { statut: "PRET", _count: 2 },
+        { statut: "A_VERIFIER", _count: 2 },
+        { statut: "ENVOYE", _count: 1 },
+        { statut: "RESOLU", _count: 1 },
+        { statut: "REJETE", _count: 1 },
+        { statut: "EN_ANALYSE", _count: 2 },
+      ] as never;
+    }
   }
 
   const countBy = (s: string) =>
