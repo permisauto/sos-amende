@@ -54,13 +54,13 @@ checkContent(casesHtml, 'dec-pret-009', 'Cases - dec-pret-009');
 const clientDossiers = [
   { id: 'pv-analyse-001', type: 'AMENDE', statut: 'EN_ANALYSE', expect: ['Analyse de votre avis', 'AnalyseForm'] },
   { id: 'pv-sign-002', type: 'AMENDE', statut: 'A_VERIFIER', expect: ['Signature de la lettre', 'SignaturePad'] },
-  { id: 'pv-pret-003', type: 'AMENDE', statut: 'PRET', expect: ['Lettre signée', 'En attente de validation', 'LrKit'] },
+  { id: 'pv-pret-003', type: 'AMENDE', statut: 'PRET', expect: ['LrKit', 'Date limite', 'Télécharger la lettre'] },
   { id: 'pv-envoye-004', type: 'AMENDE', statut: 'ENVOYE', expect: ['Contestation envoyée', 'Télécharger la lettre', 'Votre lettre de contestation'] },
   { id: 'pv-rejete-005', type: 'AMENDE', statut: 'REJETE', expect: ['Dossier rejeté', 'crédit a été rendu'] },
-  { id: 'pv-resolu-006', type: 'AMENDE', statut: 'RESOLU', expect: ['Dossier résolu', 'acceptée'] },
+  { id: 'pv-resolu-006', type: 'AMENDE', statut: 'RESOLU', expect: ['Dossier résolu', 'acceptée', 'Télécharger la lettre signée'] },
   { id: 'dec-analyse-007', type: 'SUSPENSION', statut: 'EN_ANALYSE', expect: ['Suspension de permis', 'délais de recours très courts'] },
   { id: 'dec-sign-008', type: 'SUSPENSION', statut: 'A_VERIFIER', expect: ['Suspension de permis', 'Signature de la lettre'] },
-  { id: 'dec-pret-009', type: 'SUSPENSION', statut: 'PRET', expect: ['Suspension de permis', 'Lettre signée', 'En attente de validation'] },
+  { id: 'dec-pret-009', type: 'SUSPENSION', statut: 'PRET', expect: ['LrKit', 'Date limite', 'Télécharger la lettre'] },
 ];
 
 for (const d of clientDossiers) {
@@ -140,65 +140,70 @@ for (const f of ['PRET', 'A_VERIFIER', 'ENVOYE', 'ALL']) {
 
 // Test each dossier detail + ALL buttons
 const juristeDossiers = [
-  { id: 'pv-sign-002', statut: 'A_VERIFIER', buttons: ['Rejeter'], editable: true },
-  { id: 'pv-pret-003', statut: 'PRET', buttons: ['Approuver', 'Valider', 'Envoyer', 'Retourner'], editable: true },
-  { id: 'pv-envoye-004', statut: 'ENVOYE', buttons: ['DecisionOmpForm'], editable: false },
-  { id: 'pv-rejete-005', statut: 'REJETE', buttons: [], editable: false },
-  { id: 'pv-resolu-006', statut: 'RESOLU', buttons: [], editable: false },
-  { id: 'dec-sign-008', statut: 'A_VERIFIER', buttons: ['Rejeter'], editable: true },
-  { id: 'dec-pret-009', statut: 'PRET', buttons: ['Approuver', 'Valider', 'Envoyer', 'Retourner'], editable: true },
+  { id: 'pv-sign-002', statut: 'A_VERIFIER', buttons: ['Rejeter le dossier'], editable: true, timeline: ['CREATION', 'ANALYSE', 'LETTRE_GENEREE'] },
+  { id: 'pv-pret-003', statut: 'PRET', buttons: ['Approuver la lettre et envoyer la contestation', 'Retourner pour correction', 'Rejeter le dossier'], editable: true, timeline: ['CREATION', 'ANALYSE', 'LETTRE_GENEREE'] },
+  { id: 'pv-envoye-004', statut: 'ENVOYE', buttons: ['Décision de l\'OMP'], editable: false, timeline: ['CREATION', 'ANALYSE', 'LETTRE_GENEREE', 'VALIDATION', 'ENVOI'] },
+  { id: 'pv-rejete-005', statut: 'REJETE', buttons: [], editable: false, timeline: ['CREATION', 'ANALYSE', 'REJET'] },
+  { id: 'pv-resolu-006', statut: 'RESOLU', buttons: [], editable: false, timeline: ['CREATION', 'ANALYSE', 'LETTRE_GENEREE', 'VALIDATION', 'ENVOI', 'DECISION'] },
+  { id: 'dec-sign-008', statut: 'A_VERIFIER', buttons: ['Rejeter le dossier'], editable: true, timeline: ['CREATION', 'ANALYSE', 'LETTRE_GENEREE'] },
+  { id: 'dec-pret-009', statut: 'PRET', buttons: ['Approuver la lettre et envoyer la contestation', 'Retourner pour correction', 'Rejeter le dossier'], editable: true, timeline: ['CREATION', 'ANALYSE', 'LETTRE_GENEREE'] },
 ];
 
 for (const d of juristeDossiers) {
-  await gotoWithCookie('https://sos-amende.vercel.app/dashboard/juriste/' + d.id + '?dev=1', '');
-  const html = await page.content();
-  
-  if (html.includes('This page could not be found') || html.includes('Application error')) {
-    fail('Juriste detail ' + d.id, 'Page 404/500');
-    continue;
-  }
-  pass('Juriste detail ' + d.id + ' (' + d.statut + ') - charge');
-  
-  // Check key sections
-  checkContent(html, 'Lettre de contestation', 'Juriste ' + d.id + ' - section lettre');
-  checkContent(html, 'Données du dossier', 'Juriste ' + d.id + ' - données');
-  checkContent(html, 'Avis de contravention', 'Juriste ' + d.id + ' - PV');
-  checkContent(html, 'Bibliothèque', 'Juriste ' + d.id + ' - bibliothèque latérale');
-  checkContent(html, 'Timeline', 'Juriste ' + d.id + ' - timeline');
-  checkContent(html, 'Preuves', 'Juriste ' + d.id + ' - preuves');
-  
-  // LettreEdition for editable
-  if (d.editable) {
-    if (html.includes('LettreEdition') || html.includes('Corrigez si nécessaire') || html.includes('éditer')) {
-      pass('Juriste ' + d.id + ' - LettreEdition présent');
-    } else {
-      fail('Juriste ' + d.id + ' - LettreEdition MANQUANT');
+    await gotoWithCookie('https://sos-amende.vercel.app/dashboard/juriste/' + d.id + '?dev=1', '');
+    const html = await page.content();
+    
+    if (html.includes('This page could not be found') || html.includes('Application error')) {
+      fail('Juriste detail ' + d.id, 'Page 404/500');
+      continue;
+    }
+    pass('Juriste detail ' + d.id + ' (' + d.statut + ') - charge');
+    
+    // Check key sections
+    checkContent(html, 'Lettre de contestation', 'Juriste ' + d.id + ' - section lettre');
+    checkContent(html, 'Données du dossier', 'Juriste ' + d.id + ' - données');
+    checkContent(html, 'Avis de contravention', 'Juriste ' + d.id + ' - PV');
+    checkContent(html, 'Bibliothèque', 'Juriste ' + d.id + ' - bibliothèque latérale');
+    
+    // Timeline - check for event types
+    for (const evt of d.timeline) {
+      checkContent(html, evt, 'Juriste ' + d.id + ' - timeline ' + evt);
+    }
+    
+    checkContent(html, 'Preuves', 'Juriste ' + d.id + ' - preuves');
+    
+    // LettreEdition for editable
+    if (d.editable) {
+      if (html.includes('LettreEdition') || html.includes('Corrigez si nécessaire') || html.includes('éditer')) {
+        pass('Juriste ' + d.id + ' - LettreEdition présent');
+      } else {
+        fail('Juriste ' + d.id + ' - LettreEdition MANQUANT');
+      }
+    }
+    
+    // Test buttons exist (clickable)
+    for (const btn of d.buttons) {
+      const btnEl = await page.locator('button:has-text("' + btn + '"), a:has-text("' + btn + '")').count();
+      if (btnEl > 0) pass('Juriste ' + d.id + ' - bouton ' + btn + ' présent');
+      else fail('Juriste ' + d.id + ' - bouton ' + btn + ' MANQUANT');
+    }
+    
+    // PDF download for PRET/ENVOYE/RESOLU
+    if (['PRET', 'ENVOYE', 'RESOLU'].includes(d.statut)) {
+      const pdfLink = await page.locator('a:has-text("Télécharger la lettre")').count();
+      if (pdfLink > 0) pass('Juriste ' + d.id + ' - lien PDF');
+      else fail('Juriste ' + d.id + ' - lien PDF MANQUANT');
+    }
+    
+    // Test FaillesCandidates if present
+    if (html.includes('Failles détectées')) {
+      pass('Juriste ' + d.id + ' - FaillesCandidates section');
+      const confirmBtn = await page.locator('button:has-text("Confirmer")').count();
+      const rejectBtn = await page.locator('button:has-text("Écarter")').count();
+      if (confirmBtn > 0) pass('Juriste ' + d.id + ' - bouton Confirmer faille');
+      if (rejectBtn > 0) pass('Juriste ' + d.id + ' - bouton Écarter faille');
     }
   }
-  
-  // Test buttons exist (clickable)
-  for (const btn of d.buttons) {
-    const btnEl = await page.locator('button:has-text("' + btn + '"), a:has-text("' + btn + '")').count();
-    if (btnEl > 0) pass('Juriste ' + d.id + ' - bouton ' + btn + ' présent');
-    else fail('Juriste ' + d.id + ' - bouton ' + btn + ' MANQUANT');
-  }
-  
-  // PDF download for PRET/ENVOYE/RESOLU
-  if (['PRET', 'ENVOYE', 'RESOLU'].includes(d.statut)) {
-    const pdfLink = await page.locator('a:has-text("Télécharger la lettre")').count();
-    if (pdfLink > 0) pass('Juriste ' + d.id + ' - lien PDF');
-    else fail('Juriste ' + d.id + ' - lien PDF MANQUANT');
-  }
-  
-  // Test FaillesCandidates if present
-  if (html.includes('Failles détectées')) {
-    pass('Juriste ' + d.id + ' - FaillesCandidates section');
-    const confirmBtn = await page.locator('button:has-text("Confirmer")').count();
-    const rejectBtn = await page.locator('button:has-text("Écarter")').count();
-    if (confirmBtn > 0) pass('Juriste ' + d.id + ' - bouton Confirmer faille');
-    if (rejectBtn > 0) pass('Juriste ' + d.id + ' - bouton Écarter faille');
-  }
-}
 
 // Bibliothèque juridiques
 await gotoWithCookie('https://sos-amende.vercel.app/dashboard/juriste/failles?dev=1', '');

@@ -59,6 +59,18 @@ export const getCurrentUser = cache(async () => {
       const role = email.includes("juriste") ? "JURISTE" : email.includes("admin") ? "ADMIN" : "CLIENT";
       return { id: "dev-" + email, name: email.split("@")[0], email, role, stripeCustomerId: null, credits: 10 } as unknown as Awaited<ReturnType<typeof prisma.user.findUnique>>;
     }
+
+    // Fallback ultime pour pages client-only (ex: /dashboard/cases/new) en mode dev
+    // Si on est sur un path client avec dev=1 mais pas de devEmail détecté
+    try {
+      const hdrs = await headers();
+      const urlFromHdrs = hdrs.get("referer") ?? hdrs.get("x-invoke-query") ?? "";
+      const hasDevInUrl = urlFromHdrs.includes("dev=1") || hdrs.get("x-invoke-query")?.includes("dev=1");
+      const isClientPath = urlFromHdrs.includes("/dashboard/cases/new") || urlFromHdrs.includes("/deposer");
+      if (hasDevInUrl && isClientPath) {
+        return { id: "dev-e2e-client@test.local", name: "Client E2E", email: "e2e-client@test.local", role: "CLIENT", stripeCustomerId: null, credits: 10 } as unknown as Awaited<ReturnType<typeof prisma.user.findUnique>>;
+      }
+    } catch {}
   } catch {}
   return null;
 });

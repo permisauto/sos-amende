@@ -158,7 +158,7 @@ export default async function CaseDetailPage(
           extractedData: mock.extractedData,
           lettreGeneree: mock.lettreGeneree ?? null,
           failleJuridique: mock.failleJuridique,
-          courriers: mock.statut === "PRET" || mock.statut === "ENVOYE" ? [{ pdfUrl: "/uploads/demo-lettre.pdf", signatureUrl: "/uploads/demo-signature.png", preuveDepotUrl: mock.statut === "ENVOYE" ? "/uploads/demo-accuse.pdf" : null }] : [],
+          courriers: (mock.statut === "PRET" || mock.statut === "ENVOYE" || mock.statut === "RESOLU") ? [{ pdfUrl: "/uploads/demo-lettre.pdf", signatureUrl: "/uploads/demo-signature.png", preuveDepotUrl: mock.statut === "ENVOYE" ? "/uploads/demo-accuse.pdf" : null }] : [],
           preuves: [],
           evenements: [{ type: "CREATION", detail: "Dossier de démo", createdAt: new Date(), detailUrl: null }],
           lawyerMatch: null,
@@ -166,9 +166,9 @@ export default async function CaseDetailPage(
           createdAt: new Date(),
           dateLimite: new Date(Date.now() + 86400000 * 30),
           motifRejet: null,
-          decisionOmp: null,
-          decisionDetail: null,
-          valideLe: mock.statut === "PRET" || mock.statut === "ENVOYE" ? new Date() : null,
+          decisionOmp: mock.decisionOmp ?? null,
+          decisionDetail: mock.decisionDetail ?? null,
+          valideLe: mock.valideLe ?? (mock.statut === "PRET" || mock.statut === "ENVOYE" || mock.statut === "RESOLU" ? new Date() : null),
         } as unknown as Record<string, any>;
       } else {
         return (
