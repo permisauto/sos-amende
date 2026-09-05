@@ -160,11 +160,23 @@ export default async function JuristeCasePage(
         faillesRetenues: mock.failleJuridique ? [{ failleId: mock.failleJuridique.id, statut: "CONFIRMEE", faille: mock.failleJuridique }] : [],
         courriers: (mock.statut === "PRET" || mock.statut === "ENVOYE" || mock.statut === "RESOLU") ? [{ pdfUrl: "/uploads/demo-lettre.pdf", signatureUrl: "/uploads/demo-signature.png", preuveDepotUrl: mock.statut === "ENVOYE" ? "/uploads/demo-accuse.pdf" : null }] : [],
         preuves: [],
-        evenements: [
-          { type: "CREATION", detail: "Dossier créé", createdAt: new Date(MOCK_NOW_JURISTE - 86400000 * 2), detailUrl: null },
-          { type: "ANALYSE", detail: "Analyse OCR + questionnaire", createdAt: new Date(MOCK_NOW_JURISTE - 86400000 * 1), detailUrl: null },
-          { type: "LETTRE_GENEREE", detail: `Lettre générée (faille: ${mock.failleJuridique?.titreFaille ?? "—"})`, createdAt: new Date(MOCK_NOW_JURISTE), detailUrl: null },
-        ],
+        evenements: (() => {
+          const base = [
+            { type: "CREATION", detail: "Dossier créé", createdAt: new Date(MOCK_NOW_JURISTE - 86400000 * 2), detailUrl: null },
+            { type: "ANALYSE", detail: "Analyse OCR + questionnaire", createdAt: new Date(MOCK_NOW_JURISTE - 86400000 * 1), detailUrl: null },
+            { type: "LETTRE_GENEREE", detail: `Lettre générée (faille: ${mock.failleJuridique?.titreFaille ?? "—"})`, createdAt: new Date(MOCK_NOW_JURISTE), detailUrl: null },
+          ];
+          if (mock.statut === "PRET" || mock.statut === "ENVOYE" || mock.statut === "RESOLU") {
+            base.push({ type: "VALIDATION", detail: "Lettre validée par le juriste", createdAt: new Date(MOCK_NOW_JURISTE + 86400000), detailUrl: null });
+          }
+          if (mock.statut === "ENVOYE" || mock.statut === "RESOLU") {
+            base.push({ type: "ENVOI", detail: "Contestation envoyée à " + (mock.type === "AMENDE" ? "l'OMP" : "le préfet") + " (lettre + pièces jointes)", createdAt: new Date(MOCK_NOW_JURISTE + 86400000 * 2), detailUrl: null });
+          }
+          if (mock.statut === "RESOLU") {
+            base.push({ type: "DECISION", detail: "Décision OMP: ACCEPTE - Amende annulée", createdAt: new Date(MOCK_NOW_JURISTE + 86400000 * 3), detailUrl: null });
+          }
+          return base;
+        })(),
         lawyerMatch: null,
         prix: mock.type === "AMENDE" ? 39 : 59,
         createdAt: new Date(MOCK_NOW_JURISTE),

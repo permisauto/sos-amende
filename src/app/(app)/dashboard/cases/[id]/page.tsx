@@ -616,12 +616,21 @@ export default async function CaseDetailPage(
         )
       ) : item.statut === "PRET" && item.courriers.length > 0 ? (
         item.valideLe ? (
-          <LrKit
-            dossierId={item.id}
-            dateLimite={item.dateLimite}
-            type={item.type}
-            numPv={numPv}
-          />
+          <>
+            <LrKit
+              dossierId={item.id}
+              dateLimite={item.dateLimite}
+              type={item.type}
+              numPv={numPv}
+            />
+            {pdfUrl && (
+              <div className="mt-6">
+                <a href={pdfUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100">
+                  Télécharger la lettre signée (PDF)
+                </a>
+              </div>
+            )}
+          </>
         ) : (
           <div className="mt-8 rounded-2xl border border-zinc-200 bg-white p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">

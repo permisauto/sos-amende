@@ -142,7 +142,8 @@ for (const f of ['PRET', 'A_VERIFIER', 'ENVOYE', 'ALL']) {
 const juristeDossiers = [
   { id: 'pv-sign-002', statut: 'A_VERIFIER', buttons: ['Rejeter le dossier'], editable: true, timeline: ['CREATION', 'ANALYSE', 'LETTRE_GENEREE'] },
   { id: 'pv-pret-003', statut: 'PRET', buttons: ['Approuver la lettre et envoyer la contestation', 'Retourner pour correction', 'Rejeter le dossier'], editable: true, timeline: ['CREATION', 'ANALYSE', 'LETTRE_GENEREE'] },
-  { id: 'pv-envoye-004', statut: 'ENVOYE', buttons: ['Décision de l\'OMP'], editable: false, timeline: ['CREATION', 'ANALYSE', 'LETTRE_GENEREE', 'VALIDATION', 'ENVOI'] },
+  { id: 'pv-envoye-004', statut: 'ENVOYE', buttons: ['Enregistrer la décision'], editable: false, timeline: ['CREATION', 'ANALYSE', 'LETTRE_GENEREE', 'VALIDATION', 'ENVOI'] },
+  { id: 'pv-resolu-006', statut: 'RESOLU', buttons: [], editable: false, timeline: ['CREATION', 'ANALYSE', 'LETTRE_GENEREE', 'VALIDATION', 'ENVOI', 'DECISION'] },
   { id: 'pv-rejete-005', statut: 'REJETE', buttons: [], editable: false, timeline: ['CREATION', 'ANALYSE', 'REJET'] },
   { id: 'pv-resolu-006', statut: 'RESOLU', buttons: [], editable: false, timeline: ['CREATION', 'ANALYSE', 'LETTRE_GENEREE', 'VALIDATION', 'ENVOI', 'DECISION'] },
   { id: 'dec-sign-008', statut: 'A_VERIFIER', buttons: ['Rejeter le dossier'], editable: true, timeline: ['CREATION', 'ANALYSE', 'LETTRE_GENEREE'] },
