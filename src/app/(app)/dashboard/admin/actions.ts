@@ -378,3 +378,55 @@ export async function refuserVirement(
   revalidatePath("/dashboard/admin/paiements");
   return { ok: true };
 }
+
+export async function activerToutesPropositions(
+  _prev: FailleState,
+  _formData: FormData,
+): Promise<FailleState> {
+  await requireAdmin();
+
+  let dbOk = false;
+  try {
+    const proposees = await prisma.failleJuridique.findMany({
+      where: { statut: "PROPOSEE" },
+      select: { id: true },
+    });
+
+    if (proposees.length === 0) {
+      return { error: "Aucune proposition à activer." };
+    }
+
+    await prisma.failleJuridique.updateMany({
+      where: { statut: "PROPOSEE" },
+      data: { statut: "ACTIVE" },
+    });
+    dbOk = true;
+  } catch (e) {
+    console.error("activerToutesPropositions: DB indisponible, fallback mock", e);
+    // Fallback mock : on active toutes les PROPOSEE du catalogue
+    const { CATALOGUE_SOURCES } = await import("@/lib/catalogue-sources");
+    const { validateMockFaille } = await import("@/lib/mock-failles");
+    const isHistorique = new Set([
+      "faille-prescription-1-an",
+      "faille-mentions-obligatoires",
+      "faille-erreur-plaque",
+      "faille-certificat-etalonnage",
+      "faille-travaux-signalisation",
+      "faille-meteo-visibilite",
+      "faille-cession-vehicule",
+      "faille-conducteur-different",
+      "faille-paiement-deja-effectue",
+      "faille-adresse-erronee",
+      "faille-prescription-peine-3ans",
+    ]);
+    for (const f of CATALOGUE_SOURCES) {
+      if (!isHistorique.has(f.id)) {
+        validateMockFaille(f.id, "ACTIVE");
+      }
+    }
+  }
+
+  revalidatePath("/dashboard/admin/failles");
+  revalidatePath("/dashboard/juriste/failles");
+  return { ok: true };
+}

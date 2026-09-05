@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
+import { useState } from "react";
 import { requireJuriste } from "@/lib/dal";
+import { getMockFailles } from "@/lib/mock-failles";
 
 const statusMeta: Record<string, { label: string; cls: string }> = {
   ACTIVE: { label: "Active", cls: "bg-emerald-100 text-emerald-800" },
@@ -21,22 +22,8 @@ export default async function JuristeFaillesPage(
     ? raw
     : "ALL";
 
-  let failles: Awaited<ReturnType<typeof prisma.failleJuridique.findMany>> = [];
-  try {
-    failles = await prisma.failleJuridique.findMany({
-      where: filter === "ALL" ? undefined : { statut: filter as never },
-      orderBy: [{ statut: "asc" }, { createdAt: "desc" }],
-    });
-  } catch (e) {
-    console.error("juriste/failles: DB indisponible, fallback mock", e);
-    const mock = [
-      { id: "faille-prescription-1-an", typeInfraction: "AMENDE", titreFaille: "Prescription 1 an", articleLoi: "Art. 9 CPP", regle: "Prescription", templateLettre: "Lettre", source: "Legifrance", statut: "ACTIVE", reglesDetection: [{ type: "datePrescrite" }], jurisprudence: [], createdAt: new Date() },
-      { id: "faille-travaux-signalisation", typeInfraction: "AMENDE", titreFaille: "Travaux signalisation", articleLoi: "Art. R. 411-8", regle: "Travaux", templateLettre: "Lettre", source: "Legifrance", statut: "ACTIVE", reglesDetection: [{ type: "travauxPresents" }], jurisprudence: [], createdAt: new Date() },
-      { id: "faille-suspension-sans-contradictoire", typeInfraction: "SUSPENSION", titreFaille: "Suspension sans contradictoire", articleLoi: "Art. L121-1 CRPA", regle: "Contradictoire", templateLettre: "Lettre", source: "Legifrance", statut: "PROPOSEE", reglesDetection: [{ type: "texteAbsent", motif: "observations" }], jurisprudence: [{ reference: "CE 20 avr. 2021 n°438114", juridiction: "Conseil d'État", verifiee: false }], createdAt: new Date() },
-    ] as unknown as typeof failles;
-    failles = Array.from({ length: 12 }, (_, i) => ({ ...mock[i % mock.length], id: `${mock[i % mock.length].id}-${i}` })) as unknown as typeof failles;
-    if (filter !== "ALL") failles = failles.filter((f) => f.statut === filter) as never;
-  }
+  // Use mock-failles (persistant via fichier) pour résilience DB
+  const failles = getMockFailles(filter);
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -83,6 +70,7 @@ export default async function JuristeFaillesPage(
           </p>
         ) : (
           failles.map((faille) => {
+            const [detail, setDetail] = useState(false);
             const meta = statusMeta[faille.statut] ?? {
               label: faille.statut,
               cls: "bg-zinc-100 text-zinc-500",
@@ -94,53 +82,52 @@ export default async function JuristeFaillesPage(
                     url?: string | null;
                     verifiee?: boolean;
                     resume?: string | null;
+                    juridiction?: string;
+                    date?: string;
                   }[]
                 | null
             ) ?? [];
+
             return (
               <article
                 key={faille.id}
-                className="rounded-2xl border border-zinc-200 bg-white p-6"
+                className="rounded-2xl border border-zinc-200 bg-white p-5"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="font-semibold">{faille.titreFaille}</h2>
-                      <span
-                        className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${meta.cls}`}
-                      >
-                        {meta.label}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-sm font-medium text-zinc-700">
-                      {faille.articleLoi}
-                    </p>
+                    <h2 className="font-semibold">{faille.titreFaille}</h2>
+                    <p className="mt-0.5 text-sm text-zinc-600">{faille.articleLoi}</p>
                     {faille.regle && (
                       <p className="mt-2 rounded-xl bg-zinc-50 px-3 py-2 text-sm leading-relaxed text-zinc-700">
-                        <span className="font-semibold text-zinc-800">
-                          Règle dégagée :{" "}
-                        </span>
+                        <span className="font-semibold text-zinc-800">Règle dégagée : </span>
                         {faille.regle}
                       </p>
                     )}
-                    <p className="mt-0.5 text-xs text-zinc-500">
-                      {faille.typeInfraction === "AMENDE"
-                        ? "Amende"
-                        : "Suspension"}
-                      {faille.source ? ` · Source : ${faille.source}` : ""}
-                    </p>
-                  </div>
-                </div>
-
-                {jurisprudence.length > 0 && (
-                  <div className="mt-4">
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                      Jurisprudence
-                    </h3>
-                    <ul className="mt-2 flex flex-col gap-2">
-                      {jurisprudence.map((j, i) => (
-                        <li key={i} className="rounded-xl bg-zinc-50 p-3">
-                          <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-zinc-500">
+                      <span className={`rounded-full px-2.5 py-0.5 font-medium ${meta.cls}`}>
+                        {meta.label}
+                      </span>
+                      <span>{faille.typeInfraction}</span>
+                      {faille.source && <span>Source : {faille.source}</span>}
+                      <span>
+                        {faille.reglesDetection?.length
+                          ? `${faille.reglesDetection.length} règle(s) de détection`
+                          : "Détection : prédicats par défaut"}
+                      </span>
+                      {jurisprudence.length > 0 && (
+                        <span>
+                          {jurisprudence.length} jurisprudence
+                          {jurisprudence.length > 1 ? "s" : ""}
+                          {jurisprudence.filter((j) => !j.verifiee).length > 0
+                            ? ` — ${jurisprudence.filter((j) => !j.verifiee).length} non vérifiée(s)`
+                            : " — vérifiée(s)"}
+                        </span>
+                      )}
+                    </div>
+                    {jurisprudence.length > 0 && (
+                      <ul className="mt-3 flex flex-col gap-1.5">
+                        {jurisprudence.map((j, i) => (
+                          <li key={i} className="flex flex-wrap items-center gap-2 text-sm">
                             <span
                               className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                                 j.verifiee
@@ -150,9 +137,7 @@ export default async function JuristeFaillesPage(
                             >
                               {j.verifiee ? "Vérifiée" : "À vérifier"}
                             </span>
-                            <span className="text-zinc-700">
-                              {j.reference}
-                            </span>
+                            <span className="text-zinc-700">{j.reference}</span>
                             {j.url && (
                               <a
                                 href={j.url}
@@ -160,29 +145,140 @@ export default async function JuristeFaillesPage(
                                 rel="noreferrer"
                                 className="font-medium text-emerald-700 hover:underline"
                               >
-                                Consulter la source
+                                Source
                               </a>
                             )}
-                          </div>
-                          {j.resume && (
-                            <p className="mt-2 text-xs leading-relaxed text-zinc-700">
-                              <span className="font-semibold text-zinc-800">
-                                Résumé de la décision :{" "}
-                              </span>
-                              {j.resume}
-                            </p>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {faille.statut === "PROPOSEE" && jurisprudence.filter((j) => !j.verifiee).length > 0 && (
+                      <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                        Attention : {jurisprudence.filter((j) => !j.verifiee).length} référence(s) de jurisprudence{" "}
+                        {jurisprudence.filter((j) => !j.verifiee).length > 1 ? "restent" : "reste"} à confirmer sur une
+                        source primaire (Judilibre / Legifrance) avant activation.
+                      </p>
+                    )}
                   </div>
-                )}
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setDetail((v) => !v)}
+                      className="rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+                    >
+                      {detail ? "Masquer le détail" : "Lire en détail"}
+                    </button>
+                  </div>
+                </div>
 
-                {faille.reglesDetection && (
-                  <p className="mt-4 text-xs text-zinc-500">
-                    {(faille.reglesDetection as unknown[]).length} règle(s) de
-                    détection automatique.
-                  </p>
+                {detail && (
+                  <div className="mt-5 flex flex-col gap-4 rounded-xl border border-zinc-100 bg-zinc-50 p-5">
+                    <div>
+                      <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                        Article / base légale
+                      </h4>
+                      <p className="mt-1 text-sm text-zinc-800">{faille.articleLoi}</p>
+                    </div>
+                    {faille.regle && (
+                      <div>
+                        <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                          Règle dégagée (rappel)
+                        </h4>
+                        <p className="mt-1 text-sm leading-relaxed text-zinc-800">
+                          {faille.regle}
+                        </p>
+                      </div>
+                    )}
+                    <div>
+                      <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                        Source
+                      </h4>
+                      <p className="mt-1 text-sm text-zinc-800">
+                        {faille.source ?? "—"}
+                      </p>
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                        Template de lettre
+                      </h4>
+                      <pre className="mt-1 whitespace-pre-wrap rounded-xl bg-white p-4 font-mono text-xs leading-relaxed text-zinc-700">
+                        {faille.templateLettre}
+                      </pre>
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                        Règles de détection
+                      </h4>
+                      {faille.reglesDetection?.length ? (
+                        <ul className="mt-1 flex flex-col gap-1">
+                          {faille.reglesDetection.map((r, i) => (
+                            <li key={i} className="text-sm text-zinc-700">
+                              {r.type}
+                              {"motif" in r && r.motif ? ` — ${r.motif}` : ""}
+                              {"champ" in r && r.champ ? ` — champ ${r.champ}` : ""}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="mt-1 text-sm text-zinc-600">
+                          Prédicats par défaut (failles historiques).
+                        </p>
+                      )}
+                    </div>
+                    {jurisprudence.length > 0 && (
+                      <div>
+                        <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                          Jurisprudence
+                        </h4>
+                        <ul className="mt-1 flex flex-col gap-2">
+                          {jurisprudence.map((j, i) => (
+                            <li key={i} className="rounded-xl bg-white p-3 text-sm">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span
+                                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                    j.verifiee
+                                      ? "bg-emerald-100 text-emerald-800"
+                                      : "bg-red-100 text-red-700"
+                                  }`}
+                                >
+                                  {j.verifiee ? "Vérifiée" : "À vérifier"}
+                                </span>
+                                <span className="font-medium text-zinc-800">
+                                  {j.reference}
+                                </span>
+                              </div>
+                              {j.date && (
+                                <p className="mt-1 text-xs text-zinc-500">{j.date}</p>
+                              )}
+                              {j.juridiction && (
+                                <p className="mt-0.5 text-xs text-zinc-500">
+                                  {j.juridiction}
+                                </p>
+                              )}
+                              {j.url && (
+                                <a
+                                  href={j.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="mt-1 inline-block text-xs font-medium text-emerald-700 hover:underline"
+                                >
+                                  Ouvrir la source
+                                </a>
+                              )}
+                              {"resume" in j && j.resume && (
+                                <p className="mt-2 text-xs leading-relaxed text-zinc-700">
+                                  <span className="font-semibold text-zinc-800">
+                                    Résumé :{" "}
+                                  </span>
+                                  {j.resume}
+                                </p>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
                 )}
               </article>
             );

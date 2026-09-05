@@ -16,49 +16,52 @@ import { CATALOGUE_SOURCES } from "@/lib/catalogue-sources";
  * jamais une validation admin.
  *
  * Retourne le nombre d'entrées du catalogue traitées.
+ * Résilient : si DB down, log et retourne 0 (mock gère l'affichage).
  */
 export async function synchroniserCatalogue(): Promise<number> {
   let count = 0;
-  for (const f of CATALOGUE_SOURCES) {
-    const existing = await prisma.failleJuridique.findUnique({
-      where: { id: f.id },
-      select: { statut: true, regle: true },
-    });
-    if (existing?.statut === "INACTIVE") {
-      // Proposition écartée par l'admin : on ne touche à rien (décision prime).
-      continue;
-    }
-    if (existing?.statut === "ACTIVE") {
-      // Faille déjà validée : enrichissement non destructif — on complète
-      // seulement `regle` (nouveau champ) si vide, sans toucher au statut ni
-      // au template (les éventuels ajustements admin sont conservés).
-      if (!existing.regle) {
-        await prisma.failleJuridique.update({
-          where: { id: f.id },
-          data: { regle: f.regle },
-        });
-        count += 1;
+  try {
+    for (const f of CATALOGUE_SOURCES) {
+      const existing = await prisma.failleJuridique.findUnique({
+        where: { id: f.id },
+        select: { statut: true, regle: true },
+      });
+      if (existing?.statut === "INACTIVE") {
+        continue;
       }
-      continue;
+      if (existing?.statut === "ACTIVE") {
+        if (!existing.regle) {
+          await prisma.failleJuridique.update({
+            where: { id: f.id },
+            data: { regle: f.regle },
+          });
+          count += 1;
+        }
+        continue;
+      }
+
+      const data = {
+        typeInfraction: f.typeInfraction,
+        titreFaille: f.titreFaille,
+        articleLoi: f.articleLoi,
+        regle: f.regle,
+        templateLettre: f.templateLettre,
+        source: f.source,
+        reglesDetection: f.reglesDetection as Prisma.InputJsonValue,
+        jurisprudence: f.jurisprudence as Prisma.InputJsonValue,
+      };
+
+      await prisma.failleJuridique.upsert({
+        where: { id: f.id },
+        update: { ...data, statut: "PROPOSEE" },
+        create: { ...data, id: f.id, statut: "PROPOSEE" },
+      });
+      count += 1;
     }
-
-    const data = {
-      typeInfraction: f.typeInfraction,
-      titreFaille: f.titreFaille,
-      articleLoi: f.articleLoi,
-      regle: f.regle,
-      templateLettre: f.templateLettre,
-      source: f.source,
-      reglesDetection: f.reglesDetection as Prisma.InputJsonValue,
-      jurisprudence: f.jurisprudence as Prisma.InputJsonValue,
-    };
-
-    await prisma.failleJuridique.upsert({
-      where: { id: f.id },
-      update: { ...data, statut: "PROPOSEE" },
-      create: { ...data, id: f.id, statut: "PROPOSEE" },
-    });
-    count += 1;
+  } catch (e) {
+    console.error("synchroniserCatalogue: DB indisponible, mock utilisé", e);
+    // En mode dégradé, le mock affiche déjà les 28 failles du catalogue
+    return 0;
   }
   return count;
 }

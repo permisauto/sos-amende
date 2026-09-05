@@ -3,6 +3,7 @@
 import { useActionState, useState, useEffect } from "react";
 import Link from "next/link";
 import {
+  activerToutesPropositions,
   basculerFaille,
   importerFaillesDepuisSources,
   modifierFaille,
@@ -67,6 +68,10 @@ export function FaillesAdmin({
     importerFaillesDepuisSources,
     undefined,
   );
+  const [activerToutesState, activerToutesPropositionsAction, activerToutesPending] = useActionState(
+    activerToutesPropositions,
+    undefined,
+  );
 
   const filters = [
     { value: "ALL", label: "Toutes" },
@@ -105,6 +110,17 @@ export function FaillesAdmin({
                 : "Synchroniser maintenant"}
             </button>
           </form>
+          {nbProposees > 0 && (
+            <form action={activerToutesPropositionsAction}>
+              <button
+                type="submit"
+                disabled={activerToutesPending}
+                className="rounded-full bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {activerToutesPending ? "Activation…" : `Activer les ${nbProposees} propositions`}
+              </button>
+            </form>
+          )}
         </div>
         {sourcesState?.error && (
           <p className="mt-3 rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700">
@@ -114,6 +130,16 @@ export function FaillesAdmin({
         {sourcesState?.ok && (
           <p className="mt-3 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800">
             {sourcesState.count ?? 0} proposition(s) en attente de validation.
+          </p>
+        )}
+        {activerToutesState?.error && (
+          <p className="mt-3 rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700">
+            {activerToutesState.error}
+          </p>
+        )}
+        {activerToutesState?.ok && (
+          <p className="mt-3 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800">
+            Toutes les propositions ont été activées.
           </p>
         )}
       </section>
