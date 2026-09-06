@@ -184,7 +184,7 @@ export default async function JuristeCasePage(
         motifRejet: mock.statut === "REJETE" ? "Aucune faille applicable : PV régulier, toutes mentions présentes, pas de prescription." : null,
         decisionOmp: mock.statut === "RESOLU" ? "ACCEPTE" : null,
         decisionDetail: mock.statut === "RESOLU" ? "Amende annulée - prescription acquise" : null,
-        valideLe: (mock.statut === "PRET" || mock.statut === "ENVOYE" || mock.statut === "RESOLU") ? new Date() : null,
+        valideLe: (mock.statut === "ENVOYE" || mock.statut === "RESOLU") ? new Date() : null,
         user: mockUser,
       } as unknown as Record<string, any>;
     } else {

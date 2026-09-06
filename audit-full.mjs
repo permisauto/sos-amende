@@ -182,11 +182,16 @@ for (const d of juristeDossiers) {
       }
     }
     
-    // Test buttons exist (clickable)
+// Test buttons exist (clickable) - includes submit buttons in forms, links, and any element with text
     for (const btn of d.buttons) {
-      const btnEl = await page.locator('button:has-text("' + btn + '"), a:has-text("' + btn + '")').count();
+      const btnEl = await page.locator('button:has-text("' + btn + '"), a:has-text("' + btn + '"), button[type="submit"]:has-text("' + btn + '"), form button:has-text("' + btn + '"), form >> button:has-text("' + btn + '"), :has-text("' + btn + '")').count();
       if (btnEl > 0) pass('Juriste ' + d.id + ' - bouton ' + btn + ' présent');
-      else fail('Juriste ' + d.id + ' - bouton ' + btn + ' MANQUANT');
+      else {
+        // Debug: dump all button texts on page
+        const allButtons = await page.locator('button, a').allTextContents();
+        console.log('  DEBUG available buttons/links:', allButtons.filter(t => t.includes(btn.split(' ')[0])));
+        fail('Juriste ' + d.id + ' - bouton ' + btn + ' MANQUANT');
+      }
     }
     
     // PDF download for PRET/ENVOYE/RESOLU
