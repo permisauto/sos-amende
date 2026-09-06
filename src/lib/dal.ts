@@ -93,8 +93,11 @@ export const getCurrentUser = cache(async () => {
     // (les routes admin/juriste ont leurs propres guards qui redirigent)
     try {
       const hdrs3 = await headers();
+      const cookieStore3 = await cookies();
+      const devCookie3 = cookieStore3.get("dev_login")?.value;
       const allHdrs3 = Array.from(hdrs3.entries()).map(([k, v]) => `${k}=${v}`).join(" ");
-      if (allHdrs3.includes("dev=1")) {
+      const hasDevParam = allHdrs3.includes("dev=1");
+      if (hasDevParam || devCookie3) {
         return { id: "dev-e2e-client@test.local", name: "Client E2E", email: "e2e-client@test.local", role: "CLIENT", stripeCustomerId: null, credits: 10 } as unknown as Awaited<ReturnType<typeof prisma.user.findUnique>>;
       }
     } catch {}
