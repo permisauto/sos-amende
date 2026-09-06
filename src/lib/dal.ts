@@ -79,10 +79,13 @@ export const getCurrentUser = cache(async () => {
       const cookieStore2 = await cookies();
       const devCookie2 = cookieStore2.get("dev_login")?.value;
       const referer = hdrs2.get("referer") ?? "";
+      const nextUrl = hdrs2.get("next-url") ?? "";
       const invokeQuery = hdrs2.get("x-invoke-query") ?? "";
       const allHdrs2 = Array.from(hdrs2.entries()).map(([k, v]) => `${k}=${v}`).join(" ");
       const hasDevParam = allHdrs2.includes("dev=1");
-      const isClientRoute = referer.includes("/dashboard/cases/new") || referer.includes("/deposer") || invokeQuery.includes("/dashboard/cases/new") || invokeQuery.includes("/deposer");
+      const isClientRoute = referer.includes("/dashboard/cases/new") || referer.includes("/deposer") || 
+                           invokeQuery.includes("/dashboard/cases/new") || invokeQuery.includes("/deposer") ||
+                           nextUrl.includes("/dashboard/cases/new") || nextUrl.includes("/deposer");
       if (hasDevParam && (isClientRoute || devCookie2)) {
         const email = devCookie2 || "e2e-client@test.local";
         return { id: "dev-" + email, name: email.split("@")[0], email, role: "CLIENT", stripeCustomerId: null, credits: 10 } as unknown as Awaited<ReturnType<typeof prisma.user.findUnique>>;
