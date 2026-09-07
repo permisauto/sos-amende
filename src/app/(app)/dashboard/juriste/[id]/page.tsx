@@ -421,39 +421,6 @@ export default async function JuristeCasePage(
                       examen : rejetez-le avec un motif si nécessaire.
                     </p>
                   )}
-                  {(item.statut === "PRET" && courrier?.pdfUrl && pdfUrl) ||
-                  (item.statut === "PRET" && item.lettreGeneree) ||
-                  (item.statut === "A_VERIFIER" && item.lettreGeneree) ? (
-                    <div className="mt-5 border-t border-zinc-100 pt-5 flex flex-wrap gap-3">
-                      {courrier?.pdfUrl && pdfUrl ? (
-                        <a
-                          href={pdfUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-block rounded-xl border border-emerald-200 px-5 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
-                        >
-                          Télécharger la lettre signée (PDF)
-                        </a>
-                      ) : null}
-                      {/* Fallback : génération à la volée si pas de courrier/PDF stocké */}
-                      <a
-                        href={`/api/dossier/${item.id}/lettre`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className={`inline-block rounded-xl px-5 py-2.5 text-sm font-semibold transition ${
-                          courrier?.pdfUrl && pdfUrl
-                            ? "border border-zinc-200 text-zinc-700 hover:bg-zinc-50"
-                            : "border border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-                        }`}
-                      >
-                        {courrier?.pdfUrl && pdfUrl
-                          ? "Télécharger aussi via génération (PDF)"
-                          : item.statut === "PRET"
-                            ? "Télécharger la lettre signée (PDF)"
-                            : "Télécharger la lettre (PDF)"}
-                      </a>
-                    </div>
-                  ) : null}
                   <div className="mt-6 border-t border-zinc-100 pt-6">
                     {item.statut === "PRET" ? (
                       <JuristeActions
