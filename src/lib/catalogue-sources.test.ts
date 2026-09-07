@@ -9,6 +9,12 @@ const VARIABLES_AUTORISEES = [
   "{date}",
   "{montant}",
   "{radarId}",
+  "{lieu}",
+  "{duree}",
+  "{adresse}",
+  "{prefecture}",
+  "{motif}",
+  "{conditions_meteo}",
 ];
 
 function variablesDuTemplate(template: string): string[] {
