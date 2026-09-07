@@ -28,7 +28,7 @@ const styles = StyleSheet.create({
 
 export async function generateLettrePdf(
   texte: string,
-  signatureDataUrl: string,
+  signatureDataUrl: string | null,
 ): Promise<Buffer> {
   const { renderToBuffer } = await import("@react-pdf/renderer");
   const element = (
@@ -37,8 +37,14 @@ export async function generateLettrePdf(
         <Text style={styles.body}>{texte}</Text>
         <View style={styles.signatureBlock}>
           <Text style={styles.signatureLabel}>Signature du requérant :</Text>
-          {/* eslint-disable-next-line jsx-a11y/alt-text */}
-          <Image src={signatureDataUrl} style={styles.signature} />
+          {signatureDataUrl ? (
+            // eslint-disable-next-line jsx-a11y/alt-text
+            <Image src={signatureDataUrl} style={styles.signature} />
+          ) : (
+            <Text style={{ fontSize: 9, color: "#999" }}>
+              (lettre non signée — signature apposée par le client après validation)
+            </Text>
+          )}
         </View>
       </Page>
     </Document>

@@ -284,6 +284,7 @@ export default async function JuristeCasePage(
   // @ts-ignore
   const envoiEvent = (evenements as Array<Record<string, any>>).find((e: Record<string, any>) => e.type === "ENVOI");
 
+  const isDemo = item.id.startsWith("pv-") || item.id.startsWith("dec-");
   const editable = item.statut === "A_VERIFIER" || item.statut === "PRET";
   const chip = statutChip[item.statut] ?? {
     label: statusLabels[item.statut] ?? item.statut,
@@ -368,6 +369,12 @@ export default async function JuristeCasePage(
         </div>
       ) : null}
 
+      {isDemo && (
+        <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+          Dossier de démonstration — les actions (enregistrer, approuver, rejeter) sont simulées et ne modifient pas la base.
+        </div>
+      )}
+
       {item.type === "SUSPENSION" &&
         item.statut !== "REJETE" &&
         item.statut !== "RESOLU" &&
@@ -414,18 +421,39 @@ export default async function JuristeCasePage(
                       examen : rejetez-le avec un motif si nécessaire.
                     </p>
                   )}
-                  {item.statut === "PRET" && courrier?.pdfUrl && pdfUrl && (
-                    <div className="mt-5 border-t border-zinc-100 pt-5">
+                  {(item.statut === "PRET" && courrier?.pdfUrl && pdfUrl) ||
+                  (item.statut === "PRET" && item.lettreGeneree) ||
+                  (item.statut === "A_VERIFIER" && item.lettreGeneree) ? (
+                    <div className="mt-5 border-t border-zinc-100 pt-5 flex flex-wrap gap-3">
+                      {courrier?.pdfUrl && pdfUrl ? (
+                        <a
+                          href={pdfUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-block rounded-xl border border-emerald-200 px-5 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
+                        >
+                          Télécharger la lettre signée (PDF)
+                        </a>
+                      ) : null}
+                      {/* Fallback : génération à la volée si pas de courrier/PDF stocké */}
                       <a
-                        href={pdfUrl}
+                        href={`/api/dossier/${item.id}/lettre`}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-block rounded-xl border border-emerald-200 px-5 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
+                        className={`inline-block rounded-xl px-5 py-2.5 text-sm font-semibold transition ${
+                          courrier?.pdfUrl && pdfUrl
+                            ? "border border-zinc-200 text-zinc-700 hover:bg-zinc-50"
+                            : "border border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                        }`}
                       >
-                        Télécharger la lettre signée (PDF)
+                        {courrier?.pdfUrl && pdfUrl
+                          ? "Télécharger aussi via génération (PDF)"
+                          : item.statut === "PRET"
+                            ? "Télécharger la lettre signée (PDF)"
+                            : "Télécharger la lettre (PDF)"}
                       </a>
                     </div>
-                  )}
+                  ) : null}
                   <div className="mt-6 border-t border-zinc-100 pt-6">
                     {item.statut === "PRET" ? (
                       <JuristeActions
@@ -445,16 +473,34 @@ export default async function JuristeCasePage(
                       {item.lettreGeneree}
                     </div>
                   )}
-                  {courrier?.pdfUrl && pdfUrl && (
-                    <a
-                      href={pdfUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-4 inline-block rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
-                    >
-                      Télécharger la lettre (PDF)
-                    </a>
-                  )}
+                  {(courrier?.pdfUrl && pdfUrl) || item.lettreGeneree ? (
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      {courrier?.pdfUrl && pdfUrl && (
+                        <a
+                          href={pdfUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-block rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                        >
+                          Télécharger la lettre (PDF)
+                        </a>
+                      )}
+                      <a
+                        href={`/api/dossier/${item.id}/lettre`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={`inline-block rounded-xl px-5 py-2.5 text-sm font-semibold transition ${
+                          courrier?.pdfUrl && pdfUrl
+                            ? "border border-zinc-200 text-zinc-700 hover:bg-zinc-50"
+                            : "bg-emerald-600 text-white hover:bg-emerald-700"
+                        }`}
+                      >
+                        {courrier?.pdfUrl && pdfUrl
+                          ? "Télécharger aussi via génération (PDF)"
+                          : "Télécharger la lettre (PDF)"}
+                      </a>
+                    </div>
+                  ) : null}
                 </>
               )}
             </div>

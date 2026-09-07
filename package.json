@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "seed:mock": "tsx scripts/seed-test-dossiers.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

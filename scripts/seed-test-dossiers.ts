@@ -2,6 +2,7 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, Role, DossierStatut, DossierType, FailleStatut } from "../src/generated/prisma/client";
 import { storageWrite } from "../src/lib/storage";
+import { generateLettrePdf } from "../src/lib/lettre-pdf";
 import { randomUUID } from "crypto";
 
 const prisma = new PrismaClient({
@@ -9,6 +10,19 @@ const prisma = new PrismaClient({
 });
 
 async function main() {
+  // Idempotent : purge les dossiers mock précédents du client test
+  const clientTmp = await prisma.user.findUnique({ where: { email: "e2e-client@test.local" } });
+  if (clientTmp) {
+    await prisma.dossier.deleteMany({ where: { userId: clientTmp.id, pvTexte: { contains: "P123456789" } } }).catch(() => {});
+    // Purge large : tous les dossiers de test avec numPv P* / S*
+    const old = await prisma.dossier.findMany({ where: { userId: clientTmp.id }, select: { id: true, pvTexte: true } });
+    for (const o of old) {
+      if (o.pvTexte?.includes("P123456789") || o.pvTexte?.includes("P234567890") || o.pvTexte?.includes("P345678901") || o.pvTexte?.includes("P456789012") || o.pvTexte?.includes("P567890123") || o.pvTexte?.includes("P678901234") || o.pvTexte?.includes("S123456789") || o.pvTexte?.includes("S234567890")) {
+        await prisma.dossier.delete({ where: { id: o.id } }).catch(() => {});
+      }
+    }
+  }
+
   // Get test users
   const client = await prisma.user.findUnique({ where: { email: "e2e-client@test.local" } });
   const juriste = await prisma.user.findUnique({ where: { email: "e2e-juriste@test.local" } });
@@ -234,9 +248,9 @@ async function main() {
     const d = testDossiers[i];
     const faille = failles[i % failles.length];
 
-    // Upload PV
-    const pvKey = `uploads/pv/test-${d.numPv}.png`;
-    await storageWrite(pvKey, pngBuffer);
+    // Upload PV (clé relative à public/uploads, sans préfixe uploads/)
+    const pvKey = `pv/test-${d.numPv}.png`;
+    const pvUrl = await storageWrite(pvKey, pngBuffer);
 
     // Create dossier
     const dossier = await prisma.dossier.create({
@@ -244,7 +258,7 @@ async function main() {
         userId: client.id,
         type: d.type,
         statut: d.statut,
-        pvUrl: pvKey,
+        pvUrl,
         pvTexte: `AVIS DE CONTRAVENTION\nN° ${d.numPv}\nDate: ${d.date}\nPlaque: ${d.plaque}\nLieu: ${d.lieu}\nMontant: ${d.montant} EUR`,
         extractedData: d.extractedData as any,
         failleJuridiqueId: faille.id,
@@ -288,20 +302,35 @@ async function main() {
       });
     }
 
-    // Create signature + PDF + Courrier for PRET/ENVOYE/RESOLU
+    // Create signature + PDF + Courrier for PRET/ENVOYE/RESOLU (vrai PDF)
     if (["PRET", "ENVOYE", "RESOLU"].includes(d.statut)) {
-      const sigKey = `uploads/signatures/sig-${d.numPv}.png`;
-      await storageWrite(sigKey, pngBuffer);
+      const sigKey = `signatures/sig-${d.numPv}.png`;
+      const sigUrl = await storageWrite(sigKey, pngBuffer);
 
-      const pdfKey = `uploads/lettres/lettre-${d.numPv}.pdf`;
-      await storageWrite(pdfKey, Buffer.from("%PDF-1.4 mock"));
+      // Génère un vrai PDF signé à partir de la lettre
+      const lettreForPdf =
+        faille.templateLettre
+          .replace(/\{nom\}/g, "Jean Dupont")
+          .replace(/\{plaque\}/g, d.plaque)
+          .replace(/\{num_pv\}/g, d.numPv)
+          .replace(/\{date\}/g, d.date)
+          .replace(/\{montant\}/g, `${d.montant} €`)
+          .replace(/\{radarId\}/g, d.extractedData.radarId ?? "")
+          .replace(/\{lieu\}/g, d.lieu)
+          .replace(/\{conditions_meteo\}/g, (d.questionnaire as any)?.conditions_meteo ?? "")
+          .replace(/\{duree\}/g, "6 mois")
+          .replace(/\{adresse\}/g, "123 Rue Test, 75000 Paris");
+      const sigDataUrl = `data:image/png;base64,${pngBuffer.toString("base64")}`;
+      const pdfBuffer = await generateLettrePdf(lettreForPdf, sigDataUrl);
+      const pdfKey = `pdfs/lettre-${d.numPv}-${Date.now()}.pdf`;
+      const pdfUrl = await storageWrite(pdfKey, Buffer.from(pdfBuffer));
 
       await prisma.courrier.create({
         data: {
           dossierId: dossier.id,
-          pdfUrl: pdfKey,
-          signatureUrl: sigKey,
-          preuveDepotUrl: d.statut === "ENVOYE" ? `uploads/accuses/accuse-${d.numPv}.pdf` : null,
+          pdfUrl,
+          signatureUrl: sigUrl,
+          preuveDepotUrl: d.statut === "ENVOYE" ? `accuses/accuse-${d.numPv}.pdf` : null,
         },
       });
 

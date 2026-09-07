@@ -351,7 +351,13 @@ export async function validerVirement(
   await requireAdmin();
   const id = String(formData.get("id") ?? "");
   const payment = await prisma.payment.findUnique({ where: { id } });
-  if (!payment) return { error: "Paiement introuvable." };
+  if (!payment) {
+    if (id.startsWith("pay-mock-")) {
+      revalidatePath("/dashboard/admin/paiements");
+      return { ok: true };
+    }
+    return { error: "Paiement introuvable." };
+  }
   if (payment.status !== "PENDING_VIREMENT") return { error: "Seuls les virements en attente peuvent être validés." };
 
   await prisma.$transaction([
@@ -371,7 +377,13 @@ export async function refuserVirement(
   await requireAdmin();
   const id = String(formData.get("id") ?? "");
   const payment = await prisma.payment.findUnique({ where: { id } });
-  if (!payment) return { error: "Paiement introuvable." };
+  if (!payment) {
+    if (id.startsWith("pay-mock-")) {
+      revalidatePath("/dashboard/admin/paiements");
+      return { ok: true };
+    }
+    return { error: "Paiement introuvable." };
+  }
   if (payment.status !== "PENDING_VIREMENT") return { error: "Seuls les virements en attente peuvent être refusés." };
 
   await prisma.payment.update({ where: { id }, data: { status: "REFUSED" } });

@@ -235,6 +235,7 @@ export default async function CaseDetailPage(
   // La lettre n'est révélée au client qu'après l'envoi effectif de la
   // contestation (vérifiée et validée par le juriste).
   const lettreVisible = item.statut === "ENVOYE" || item.statut === "RESOLU";
+  const isDemo = item.id.startsWith("pv-") || item.id.startsWith("dec-") || item.pvUrl === "/uploads/demo-pv.jpg";
 
   const workflow = [
     { statut: "BROUILLON", label: "Création" },
@@ -272,6 +273,12 @@ export default async function CaseDetailPage(
             ? "L'OMP examinera votre requête"
             : "Le préfet examinera votre recours"}{" "}
           — pensez à conserver votre récépissé.
+        </div>
+      )}
+
+      {isDemo && (
+        <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+          Dossier de démonstration — aperçu sans stockage. Créez un vrai dossier pour tester le flux complet (paiement virement puis signature).
         </div>
       )}
 

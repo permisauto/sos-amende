@@ -10,10 +10,27 @@ import { storageRead, storageWrite } from "@/lib/storage";
 import { generateLettrePdf } from "@/lib/lettre-pdf";
 import { soumettreDossier } from "@/lib/antai";
 import { organismeEnvoi } from "@/lib/envoi";
+import { setDemoLettre } from "@/lib/demo-lettres";
 
 export type ValidationState = { error?: string; ok?: boolean } | undefined;
 
 const DECISION_OMP = ["ACCEPTE", "REJETE"] as const;
+
+const DEMO_IDS = new Set([
+  "pv-analyse-001",
+  "pv-sign-002",
+  "pv-pret-003",
+  "pv-envoye-004",
+  "pv-rejete-005",
+  "pv-resolu-006",
+  "dec-analyse-007",
+  "dec-sign-008",
+  "dec-pret-009",
+]);
+
+function isDemoId(id: string): boolean {
+  return DEMO_IDS.has(id) || id.startsWith("pv-") || id.startsWith("dec-");
+}
 
 /**
  * Soumission de la contestation (lettre + pièces jointes) vers le portail
@@ -107,6 +124,11 @@ export async function enregistrerDecisionOmp(
 
   const dossier = await prisma.dossier.findUnique({ where: { id: dossierId } });
   if (!dossier) {
+    if (isDemoId(dossierId)) {
+      revalidatePath("/dashboard/juriste");
+      revalidatePath(`/dashboard/juriste/${dossierId}`);
+      redirect(`/dashboard/juriste/${dossierId}?decision=ok`);
+    }
     return { error: "Dossier introuvable." };
   }
   if (dossier.statut !== "ENVOYE") {
@@ -152,6 +174,11 @@ export async function validerDossier(
     include: { courriers: { orderBy: { createdAt: "asc" } } },
   });
   if (!dossier) {
+    if (isDemoId(dossierId)) {
+      revalidatePath("/dashboard/juriste");
+      revalidatePath(`/dashboard/juriste/${dossierId}`);
+      redirect(`/dashboard/juriste/${dossierId}?valide=ok&envoye=ok`);
+    }
     return { error: "Dossier introuvable." };
   }
   if (dossier.statut !== "PRET") {
@@ -203,6 +230,11 @@ export async function envoyerContestation(
   const dossierId = String(formData.get("dossierId") ?? "");
   const dossier = await prisma.dossier.findUnique({ where: { id: dossierId } });
   if (!dossier) {
+    if (isDemoId(dossierId)) {
+      revalidatePath("/dashboard/juriste");
+      revalidatePath(`/dashboard/juriste/${dossierId}`);
+      redirect(`/dashboard/juriste/${dossierId}?envoye=ok`);
+    }
     return { error: "Dossier introuvable." };
   }
   if (dossier.statut !== "PRET" || !dossier.valideLe) {
@@ -246,6 +278,13 @@ export async function modifierLettre(
     include: { courriers: { orderBy: { createdAt: "asc" } } },
   });
   if (!dossier) {
+    if (isDemoId(dossierId)) {
+      // Dossier de démonstration (fallback mock sans ligne DB) : mémorise l'édition pour que le téléchargement reflète la prévisualisation
+      setDemoLettre(dossierId, lettre);
+      revalidatePath("/dashboard/juriste");
+      revalidatePath(`/dashboard/juriste/${dossierId}`);
+      return { ok: true };
+    }
     return { error: "Dossier introuvable." };
   }
   if (dossier.statut !== "A_VERIFIER" && dossier.statut !== "PRET") {
@@ -256,21 +295,31 @@ export async function modifierLettre(
   let pdfUrl: string | null = courrier?.pdfUrl ?? null;
   if (courrier?.signatureUrl) {
     // Lettre déjà signée : on régénère le PDF avec la signature existante.
-    // Si la signature ne peut pas être relue, on refuse de modifier la lettre
-    // plutôt que de laisser un PDF périmé (nouveau texte, vieux PDF signé).
+    // Si la signature ne peut pas être relue (fichier manquant, S3 indisponible),
+    // on régénère quand même un PDF sans signature plutôt que de bloquer le juriste.
     const sig = await storageRead(courrier.signatureUrl);
-    if (!sig) {
-      return {
-        error:
-          "Impossible de relire la signature existante pour régénérer le PDF. La lettre n'a pas été modifiée.",
-      };
+    const sigDataUrl = sig ? `data:image/png;base64,${sig.toString("base64")}` : null;
+    try {
+      const pdfBuffer = await generateLettrePdf(lettre, sigDataUrl);
+      pdfUrl = await storageWrite(
+        `pdfs/lettre-${dossier.id}-${Date.now()}.pdf`,
+        pdfBuffer,
+      );
+    } catch (e) {
+      console.error("modifierLettre: génération PDF échouée", e);
+      // On sauvegarde au moins le texte même si le PDF échoue
     }
-    const sigDataUrl = `data:image/png;base64,${sig.toString("base64")}`;
-    const pdfBuffer = await generateLettrePdf(lettre, sigDataUrl);
-    pdfUrl = await storageWrite(
-      `pdfs/lettre-${dossier.id}-${Date.now()}.pdf`,
-      pdfBuffer,
-    );
+  } else if (courrier) {
+    // Lettre signée sans signature PNG (cas rare) : régénère un PDF sans signature
+    try {
+      const pdfBuffer = await generateLettrePdf(lettre, null);
+      pdfUrl = await storageWrite(
+        `pdfs/lettre-${dossier.id}-${Date.now()}.pdf`,
+        pdfBuffer,
+      );
+    } catch (e) {
+      console.error("modifierLettre: génération PDF sans signature échouée", e);
+    }
   }
 
   await prisma.$transaction([
@@ -310,6 +359,11 @@ export async function retournerDossier(
   const dossierId = String(formData.get("dossierId") ?? "");
   const dossier = await prisma.dossier.findUnique({ where: { id: dossierId } });
   if (!dossier) {
+    if (isDemoId(dossierId)) {
+      revalidatePath("/dashboard/juriste");
+      revalidatePath(`/dashboard/juriste/${dossierId}`);
+      redirect(`/dashboard/juriste/${dossierId}?retourne=ok`);
+    }
     return { error: "Dossier introuvable." };
   }
   if (dossier.statut !== "PRET") {
@@ -349,6 +403,11 @@ export async function rejeterDossier(
 
   const dossier = await prisma.dossier.findUnique({ where: { id: dossierId } });
   if (!dossier) {
+    if (isDemoId(dossierId)) {
+      revalidatePath("/dashboard/juriste");
+      revalidatePath(`/dashboard/juriste/${dossierId}`);
+      redirect(`/dashboard/juriste/${dossierId}?rejete=ok`);
+    }
     return { error: "Dossier introuvable." };
   }
   if (dossier.statut !== "PRET" && dossier.statut !== "A_VERIFIER") {
@@ -402,6 +461,7 @@ export async function confirmerFaille(
     where: { id: dossierId },
   });
   if (!dossier) {
+    if (isDemoId(dossierId)) return undefined;
     return { error: "Dossier introuvable." };
   }
   if (dossier.statut !== "A_VERIFIER" && dossier.statut !== "PRET") {
@@ -473,6 +533,7 @@ export async function rejeterFaille(
     where: { id: dossierId },
   });
   if (!dossier) {
+    if (isDemoId(dossierId)) return undefined;
     return { error: "Dossier introuvable." };
   }
 
