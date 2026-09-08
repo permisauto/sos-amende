@@ -12,8 +12,16 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const rawBase = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-const cleanBase = rawBase.replace(/^\uFEFF/, "").trim() || "http://localhost:3000";
+function getBaseUrl(): URL {
+  const raw = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  // Strip BOM, whitespace, and any non-URL prefix that Vercel CLI may have injected on Windows
+  const cleaned = raw.replace(/^\uFEFF/, "").trim().replace(/^"+|"+$/g, "").trim();
+  try {
+    return new URL(cleaned);
+  } catch {
+    return new URL("https://sos-amende.vercel.app");
+  }
+}
 
 export const metadata: Metadata = {
   title: {
@@ -22,7 +30,7 @@ export const metadata: Metadata = {
   },
   description:
     "Contestez vos amendes routières et votre suspension de permis en quelques clics : analyse des motifs, courrier de recours prêt à envoyer, suivi des délais.",
-  metadataBase: new URL(cleanBase),
+  metadataBase: getBaseUrl(),
   alternates: { canonical: "/" },
   openGraph: {
     title: "SOS Amende — Contester vos amendes",
