@@ -12,6 +12,9 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const rawBase = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+const cleanBase = rawBase.replace(/^\uFEFF/, "").trim() || "http://localhost:3000";
+
 export const metadata: Metadata = {
   title: {
     default: "SOS Amende — Contester vos amendes et défendre votre permis",
@@ -19,9 +22,7 @@ export const metadata: Metadata = {
   },
   description:
     "Contestez vos amendes routières et votre suspension de permis en quelques clics : analyse des motifs, courrier de recours prêt à envoyer, suivi des délais.",
-  metadataBase: new URL(
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
-  ),
+  metadataBase: new URL(cleanBase),
   alternates: { canonical: "/" },
   openGraph: {
     title: "SOS Amende — Contester vos amendes",
