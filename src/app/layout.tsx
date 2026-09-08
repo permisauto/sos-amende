@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 
 function getBaseUrl(): URL {
   const raw = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  // Strip BOM, whitespace, and any non-URL prefix that Vercel CLI may have injected on Windows
-  const cleaned = raw.replace(/^\uFEFF/, "").trim().replace(/^"+|"+$/g, "").trim();
+  // Strip BOM (U+FEFF) anywhere, quotes, and whitespace — Vercel CLI on Windows may inject BOM
+  const cleaned = raw.replace(/\uFEFF/g, "").replace(/^"+|"+$/g, "").trim();
   try {
     return new URL(cleaned);
   } catch {
