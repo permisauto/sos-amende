@@ -32,7 +32,7 @@ export async function GET(req: Request) {
     ADMIN: "/dashboard/admin/failles",
   };
 
-  const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://sos-amende.vercel.app";
+  const base = (process.env.NEXT_PUBLIC_APP_URL ?? "https://sos-amende.vercel.app").replace(/\uFEFF/g, "").trim();
   const rolePath = dashboards[user.role] ?? "/dashboard";
 
   // Si appel navigateur (sans Accept: application/json), on redirige directement avec cookie dev_login — marche même si DB down

@@ -13,7 +13,7 @@ const resend = cleanResendKey ? new ResendClient(cleanResendKey) : null;
 // Expéditeur des e-mails (Resend). Configurable via EMAIL_FROM : en prod, il
 // doit être un domaine vérifié sur Resend, sinon Resend refuse l'envoi (le
 // domaine sandbox onboarding@resend.dev n'expédie qu'aux adresses testées).
-const EMAIL_FROM = process.env.EMAIL_FROM ?? "SOS Amende <onboarding@resend.dev>";
+const EMAIL_FROM = (process.env.EMAIL_FROM ?? "SOS Amende <onboarding@resend.dev>").replace(/\uFEFF/g, "").trim();
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
