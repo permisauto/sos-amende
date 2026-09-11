@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/dal";
+﻿import { requireAdmin } from "@/lib/dal";
 import { PaiementsAdmin } from "./paiements-admin";
 
 export default async function AdminPaiementsPage() {
@@ -32,7 +32,7 @@ export default async function AdminPaiementsPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold">Paiements — virements en attente</h1>
-      <p className="mt-1 text-sm text-zinc-600">Validez les virements reçus (faux RIB FR76 3000... pour test) → +1 crédit + email “Paiement validé”.</p>
+      <p className="mt-1 text-sm text-zinc-600">Validez les virements reçus (RIB DIXIT LLC) → +1 crédit + email “Paiement validé”.</p>
       <div className="mt-6 grid gap-4 sm:grid-cols-3">
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
           <p className="text-sm font-medium text-amber-700">En attente</p>
@@ -43,9 +43,9 @@ export default async function AdminPaiementsPage() {
           <p className="text-3xl font-bold text-emerald-900">{paidCount}</p>
         </div>
         <div className="rounded-2xl border border-zinc-200 bg-white p-5">
-          <p className="text-sm text-zinc-500">RIB de test</p>
-          <p className="font-mono text-sm">FR76 3000 4000 0500 0012 3456 789</p>
-          <p className="text-xs text-zinc-500">BIC BNPAFRPPXXX — SOS AMENDE - TEST</p>
+          <p className="text-sm text-zinc-500">RIB</p>
+          <p className="font-mono text-sm">BE06 9058 9752 3122</p>
+          <p className="text-xs text-zinc-500">BIC TRWIBEB1XXX — DIXIT LLC</p>
         </div>
       </div>
       <div className="mt-8">

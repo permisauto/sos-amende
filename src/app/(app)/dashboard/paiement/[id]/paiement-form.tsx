@@ -46,20 +46,19 @@ export function PaiementForm({
   }
 
   const [virementConfirme, setVirementConfirme] = useState(false);
-  const RIB_IBAN = process.env.NEXT_PUBLIC_RIB_IBAN ?? "FR76 3000 4000 0500 0012 3456 789";
-  const RIB_BIC = process.env.NEXT_PUBLIC_RIB_BIC ?? "BNPAFRPPXXX";
-  const RIB_TITULAIRE = process.env.NEXT_PUBLIC_RIB_TITULAIRE ?? "SOS AMENDE - TEST";
+  const RIB_IBAN = process.env.NEXT_PUBLIC_RIB_IBAN ?? "BE06 9058 9752 3122";
+  const RIB_BIC = process.env.NEXT_PUBLIC_RIB_BIC ?? "TRWIBEB1XXX";
+  const RIB_TITULAIRE = process.env.NEXT_PUBLIC_RIB_TITULAIRE ?? "DIXIT LLC";
 
   if (virementState?.ok) {
     return (
       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
-        <h3 className="font-semibold text-emerald-900">Demande de virement enregistrée — voici le RIB de test à utiliser</h3>
-        <p className="mt-1 text-xs font-semibold text-amber-700">⚠️ RIB de test — remplacez par votre RIB définitif dès réception.</p>
+        <h3 className="font-semibold text-emerald-900">Demande de virement enregistrée — voici le RIB à utiliser</h3>
         <p className="mt-2 text-sm text-emerald-800">
           Merci {prenom} — votre demande pour {type === "SUSPENSION" ? "59 €" : "39 €"} (réf. {dossierId.slice(0, 8).toUpperCase()}) est enregistrée. Copiez le RIB ci-dessous dans votre banque :
         </p>
-        <div className="mt-4 rounded-xl bg-white p-4 text-sm border-2 border-amber-200">
-          <div className="flex items-center justify-between"><span className="font-semibold">IBAN (test)</span><button type="button" onClick={() => navigator.clipboard.writeText(RIB_IBAN.replace(/\s/g, ""))} className="text-xs text-emerald-700 hover:underline">Copier</button></div>
+        <div className="mt-4 rounded-xl bg-white p-4 text-sm border-2 border-emerald-200">
+          <div className="flex items-center justify-between"><span className="font-semibold">IBAN</span><button type="button" onClick={() => navigator.clipboard.writeText(RIB_IBAN.replace(/\s/g, ""))} className="text-xs text-emerald-700 hover:underline">Copier</button></div>
           <p className="font-mono text-sm">{RIB_IBAN}</p>
           <div className="mt-2 flex items-center justify-between"><span className="font-semibold">BIC</span><button type="button" onClick={() => navigator.clipboard.writeText(RIB_BIC)} className="text-xs text-emerald-700 hover:underline">Copier</button></div>
           <p className="font-mono text-sm">{RIB_BIC}</p>
@@ -111,11 +110,10 @@ export function PaiementForm({
       </div>
 
       <div className="rounded-2xl border-2 border-emerald-600 bg-white p-6">
-        <h4 className="font-semibold text-emerald-700">Payer par virement bancaire — RIB de test</h4>
-        <p className="mt-1 text-xs font-semibold text-amber-700">⚠️ RIB de test pour tester la procédure — à remplacer par votre RIB définitif.</p>
+        <h4 className="font-semibold text-emerald-700">Payer par virement bancaire</h4>
         <p className="mt-1 text-sm text-zinc-600">Copiez le RIB ci-dessous dans votre banque. Montant à virer : {type === "SUSPENSION" ? "59 €" : "39 €"}.</p>
-        <div className="mt-3 rounded-xl bg-zinc-50 p-3 text-sm border border-amber-200">
-          <div className="flex items-center justify-between"><span className="font-semibold">IBAN (test)</span><button type="button" onClick={() => navigator.clipboard.writeText(RIB_IBAN.replace(/\s/g, ""))} className="text-xs text-emerald-700 hover:underline">Copier</button></div>
+        <div className="mt-3 rounded-xl bg-zinc-50 p-3 text-sm border border-emerald-200">
+          <div className="flex items-center justify-between"><span className="font-semibold">IBAN</span><button type="button" onClick={() => navigator.clipboard.writeText(RIB_IBAN.replace(/\s/g, ""))} className="text-xs text-emerald-700 hover:underline">Copier</button></div>
           <p className="font-mono">{RIB_IBAN}</p>
           <p className="mt-1 flex items-center gap-2"><span className="font-semibold">BIC</span> {RIB_BIC} <button type="button" onClick={() => navigator.clipboard.writeText(RIB_BIC)} className="text-xs text-emerald-700 hover:underline">Copier</button></p>
           <p className="mt-1"><span className="font-semibold">Titulaire :</span> {RIB_TITULAIRE}</p>

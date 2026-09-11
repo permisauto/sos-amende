@@ -49,9 +49,9 @@ export async function payerParVirement(_prev: VirementState, formData: FormData)
     if (key) {
       const resend = new Resend(key);
       const from = process.env.EMAIL_FROM ?? "SOS Amende <onboarding@resend.dev>";
-      const iban = process.env.NEXT_PUBLIC_RIB_IBAN ?? process.env.RIB_IBAN ?? "FR76 3000 4000 0500 0012 3456 789";
-      const bic = process.env.NEXT_PUBLIC_RIB_BIC ?? process.env.RIB_BIC ?? "BNPAFRPPXXX";
-      const titulaire = process.env.NEXT_PUBLIC_RIB_TITULAIRE ?? process.env.RIB_TITULAIRE ?? "SOS AMENDE - TEST";
+      const iban = process.env.NEXT_PUBLIC_RIB_IBAN ?? process.env.RIB_IBAN ?? "BE06 9058 9752 3122";
+      const bic = process.env.NEXT_PUBLIC_RIB_BIC ?? process.env.RIB_BIC ?? "TRWIBEB1XXX";
+      const titulaire = process.env.NEXT_PUBLIC_RIB_TITULAIRE ?? process.env.RIB_TITULAIRE ?? "DIXIT LLC";
       await resend.emails.send({
         from,
         to: email,
