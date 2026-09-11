@@ -29,7 +29,7 @@ test("flux SUSPENSION (infra) : dépôt → analyse type-aware → attente juris
   ).toBeVisible();
 
   await page.getByLabel("Nom", { exact: true }).fill("DUPONT");
-  await page.getByLabel("Plaque", { exact: true }).fill("AB-123-CD");
+  await page.getByLabel("Plaque (si mentionnée)", { exact: true }).fill("AB-123-CD");
   await page.getByLabel("Numéro de décision", { exact: true }).fill("DEC-2026-0421");
   await page.getByLabel("Date de la décision", { exact: true }).fill("2026-07-01");
   await page

@@ -23,7 +23,8 @@ const { Client } = require("pg");
 
   let url = get("DATABASE_URL");
   if (!url || url.includes("localhost") || url.includes("johndoe")) {
-    url = "postgres://postgres.fpxkamkheqbsrroqkcfy:5nAofsa7J7a8Vbbs@aws-0-us-east-1.pooler.supabase.com:6543/postgres?sslmode=require&supa=base-pooler.x";
+    url =
+      "postgresql://johndoe:gTLwM3AhRdZmQk7nSiUpJE2q@localhost:5432/mydb?schema=public";
   }
   if (!url) {
     throw new Error("DATABASE_URL introuvable pour le globalSetup E2E.");

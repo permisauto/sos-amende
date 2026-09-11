@@ -19,7 +19,7 @@ export default defineConfig({
   webServer: {
     command: "npm run build && npm run start -- -p 3200",
     url: "http://localhost:3200",
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 180_000,
     env: {
       NEXT_PUBLIC_APP_URL: "http://localhost:3200",
@@ -28,9 +28,17 @@ export default defineConfig({
       ANTAI_MOCK: "1",
       ANTAI_MOCK_TOKEN: "dev-antai-mock",
       AUTH_DEV_FILE: "1",
-      DATABASE_URL:
-        "postgres://postgres.fpxkamkheqbsrroqkcfy:5nAofsa7J7a8Vbbs@aws-0-us-east-1.pooler.supabase.com:6543/postgres?sslmode=require&supa=base-pooler.x",
       NODE_TLS_REJECT_UNAUTHORIZED: "0",
+      // .env.local (généré par Vercel CLI) contient des placeholders
+      // "[SENSITIVE]" qui écrasent .env. On force les vraies valeurs locales
+      // ici pour que le webServer E2E utilise la base locale et le magic-link
+      // fichier (jamais un envoi Resend réel ni une base distante).
+      DATABASE_URL:
+        "postgresql://johndoe:gTLwM3AhRdZmQk7nSiUpJE2q@localhost:5432/mydb?schema=public",
+      AUTH_SECRET:
+        "c4c20937e922991530156f61e810e13aedd4e7f874299859",
+      AUTH_RESEND_KEY: "",
+      EMAIL_FROM: "SOS Amende <onboarding@resend.dev>",
     },
   },
 });
