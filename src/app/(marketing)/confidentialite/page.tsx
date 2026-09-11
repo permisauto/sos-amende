@@ -7,13 +7,14 @@ export const metadata: Metadata = {
 
 export default function ConfidentialitePage() {
   return (
-    <LegalPage title="Politique de confidentialité" updatedAt="13 août 2026">
+    <LegalPage title="Politique de confidentialité" updatedAt="11 septembre 2026">
       <h2 className="text-lg font-semibold text-zinc-900">1. Responsable de traitement</h2>
       <p>
-        SOS Amende agit en qualité de responsable de traitement des données
-        personnelles collectées dans le cadre du Service, conformément au
-        Règlement (UE) 2016/679 (« RGPD ») et à la loi Informatique et
-        Libertés.
+        SOS Amende est un service édité par DIXIT LLC (30 N Gould St, Ste R,
+        Sheridan, WY 82801, États-Unis), qui agit en qualité de responsable de
+        traitement des données personnelles collectées dans le cadre du
+        Service, conformément au Règlement (UE) 2016/679 (« RGPD ») et à la loi
+        Informatique et Libertés.
       </p>
 
       <h2 className="text-lg font-semibold text-zinc-900">2. Données collectées</h2>
@@ -51,8 +52,8 @@ export default function ConfidentialitePage() {
 
       <h2 className="text-lg font-semibold text-zinc-900">6. Sous-traitants</h2>
       <p>
-        Certaines données sont traitées par des sous-traitants (hébergement,
-        paiement, envoi d'e-mails) situés dans l'Union européenne ou
+        Certaines données sont traitées par des sous-traitants (hébergement via
+        HOSTINGER, paiement, envoi d'e-mails) situés dans l'Union européenne ou
         bénéficiant des garanties prévues par le RGPD.
       </p>
     </LegalPage>

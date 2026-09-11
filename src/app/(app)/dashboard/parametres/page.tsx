@@ -9,8 +9,8 @@ export default async function ParametresPage() {
     <div className="mx-auto max-w-2xl">
       <h1 className="text-2xl font-bold">Paramètres</h1>
       <p className="mt-1 text-sm text-zinc-600">
-        Vos données sont hébergées dans l&apos;Union européenne. Vous disposez
-        de droits d&apos;accès, de portabilité et d&apos;effacement (RGPD).
+        Vos données sont traitées conformément au RGPD. Vous disposez
+        de droits d&apos;accès, de portabilité et d&apos;effacement.
       </p>
 
       <div className="mt-6 rounded-2xl border border-zinc-200 bg-white p-6">

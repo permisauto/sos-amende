@@ -7,22 +7,22 @@ export const metadata: Metadata = {
 
 export default function MentionsLegalesPage() {
   return (
-    <LegalPage title="Mentions légales" updatedAt="13 août 2026">
+    <LegalPage title="Mentions légales" updatedAt="11 septembre 2026">
       <h2 className="text-lg font-semibold text-zinc-900">Éditeur du service</h2>
       <p>
-        SOS Amende est un service édité par la société [Raison sociale à
-        compléter], immatriculée au RCS sous le numéro [SIREN à compléter],
-        dont le siège social est situé [Adresse à compléter].
+        SOS Amende est un service édité par la société DIXIT LLC, société à
+        responsabilité limitée immatriculée dans l'État du Wyoming (États-Unis),
+        dont le siège social est situé 30 N Gould St, Ste R, Sheridan,
+        WY 82801, États-Unis.
       </p>
       <p>
-        Directeur de la publication : [Nom à compléter].
         Contact : contact@sosamende.fr
       </p>
 
       <h2 className="text-lg font-semibold text-zinc-900">Hébergement</h2>
       <p>
-        Le Service est hébergé par [Hébergeur à compléter], dont le siège est
-        situé [Adresse à compléter], dans l'Union européenne.
+        Le Service est hébergé par HOSTINGER, dont le siège est situé
+        [Adresse de l'hébergeur à compléter].
       </p>
 
       <h2 className="text-lg font-semibold text-zinc-900">Propriété intellectuelle</h2>
