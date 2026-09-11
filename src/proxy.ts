@@ -25,7 +25,7 @@ export default auth((req) => {
         : nextUrl.pathname.includes("/juriste")
           ? "e2e-juriste@test.local"
           : "e2e-client@test.local";
-      res.cookies.set("dev_login", devEmail, { httpOnly: false, maxAge: 3600, path: "/" });
+      res.cookies.set("dev_login", devEmail, { httpOnly: true, secure: process.env.NODE_ENV === "production", maxAge: 3600, path: "/" });
     }
     return res;
   }

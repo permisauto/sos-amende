@@ -45,17 +45,15 @@ test("RGPD : export des données (portabilité) puis effacement du compte", asyn
   expect(json.dossiers.length).toBeGreaterThan(0);
 
   // Effacement (RGPD art. 17) : suppression du compte jetable.
-  await page
-    .getByRole("button", { name: "Supprimer définitivement mon compte" })
-    .click();
-  await expect(
-    page.getByText("Veuillez cocher la confirmation de suppression."),
-  ).toBeVisible();
+  const btn = page.getByRole("button", {
+    name: "Supprimer définitivement mon compte",
+  });
+  // Le bouton est désactivé tant que la confirmation n'est pas cochée.
+  await expect(btn).toBeDisabled();
 
   await page.getByRole("checkbox").check();
-  await page
-    .getByRole("button", { name: "Supprimer définitivement mon compte" })
-    .click();
+  await expect(btn).toBeEnabled();
+  await btn.click();
   await expect(page).toHaveURL(/\/login\?compte-supprime=1/);
   await expect(
     page.getByText("Votre compte et vos données ont été supprimés."),

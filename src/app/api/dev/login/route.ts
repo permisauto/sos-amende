@@ -30,14 +30,14 @@ export async function GET(req: Request) {
     ADMIN: "/dashboard/admin/failles",
   };
 
-  const base = (process.env.NEXT_PUBLIC_APP_URL ?? "https://sos-amende.vercel.app").replace(/\uFEFF/g, "").trim();
+  const base = (process.env.NEXT_PUBLIC_APP_URL ?? "https://recours-permis-pv.com").replace(/\uFEFF/g, "").trim();
   const rolePath = dashboards[user.role] ?? "/dashboard";
 
   // Si appel navigateur (sans Accept: application/json), on redirige directement avec cookie dev_login — marche même si DB down
   const wantsJson = req.headers.get("accept")?.includes("application/json");
   if (!wantsJson) {
     const res = NextResponse.redirect(new URL(`${rolePath}?dev=1`, base));
-    res.cookies.set("dev_login", email, { httpOnly: false, maxAge: 3600, path: "/" });
+    res.cookies.set("dev_login", email, { httpOnly: true, maxAge: 3600, path: "/" });
     return res;
   }
 
@@ -49,12 +49,12 @@ export async function GET(req: Request) {
     await prisma.verificationToken.create({ data: { identifier: email, token, expires } });
     const url = `${base}/api/auth/callback/resend?callbackUrl=${encodeURIComponent(rolePath)}&token=${token}&email=${encodeURIComponent(email)}`;
     const res = NextResponse.json({ ok: true, email, role: user.role, dashboard: rolePath, magicLink: url, devLink: `${base}${rolePath}?dev=1`, note: "Lien à usage unique, 1h. Cliquez une fois. Fallback dev=1 si besoin." });
-    res.cookies.set("dev_login", email, { httpOnly: false, maxAge: 3600, path: "/" });
+    res.cookies.set("dev_login", email, { httpOnly: true, maxAge: 3600, path: "/" });
     return res;
   } catch (e) {
     console.error("dev login: create token fail, fallback direct", e);
     const res = NextResponse.json({ ok: true, email, role: user.role, dashboard: rolePath, magicLink: `${base}${rolePath}?dev=1`, devLink: `${base}${rolePath}?dev=1`, note: "Mode dégradé — accès direct (DB indisponible)" });
-    res.cookies.set("dev_login", email, { httpOnly: false, maxAge: 3600, path: "/" });
+    res.cookies.set("dev_login", email, { httpOnly: true, maxAge: 3600, path: "/" });
     return res;
   }
 }

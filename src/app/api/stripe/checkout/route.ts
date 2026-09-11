@@ -49,7 +49,17 @@ export async function POST(request: Request) {
 
   // Mode démo/Dev : Stripe réel non requis — redirige vers le portail de
   // paiement mock local (/mock-stripe), qui déclenche le webhook simulé.
+  // Garde-fou : STRIPE_MOCK=1 en prod réelle est un accident de config
+  // (seul opt-in toléré : AUTH_DEV_FILE=1 réservé aux E2E).
   if (process.env.STRIPE_MOCK === "1") {
+    const isReelleProd =
+      process.env.NODE_ENV === "production" && process.env.AUTH_DEV_FILE !== "1";
+    if (isReelleProd) {
+      return NextResponse.json(
+        { error: "Mock Stripe interdit en production." },
+        { status: 403 },
+      );
+    }
     const params = new URLSearchParams({ type });
     if (user?.email) params.set("email", user.email);
     if (contact?.email) params.set("email", contact.email);

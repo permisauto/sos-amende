@@ -30,6 +30,15 @@ export async function POST(request: Request) {
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
+    // Garde-fou : on ne crédite que nos montants (39 € / 59 €). Une session
+    // d'un autre produit ou avec un montant inattendu ne crédite pas.
+    const amount = session.amount_total ?? 0;
+    if (amount !== 3900 && amount !== 5900) {
+      console.error(
+        `webhook: montant inattendu ${amount} (session ${session.id}) — crédit refusé`,
+      );
+      return NextResponse.json({ received: true, error: "montant inattendu" });
+    }
     const result = await traiterPaiement(session as SessionPaiement);
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: 400 });

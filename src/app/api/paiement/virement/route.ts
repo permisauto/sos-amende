@@ -58,7 +58,7 @@ export async function POST(req: Request) {
         from,
         to: email,
         subject: "SOS Amende — votre compte est créé, virement en attente",
-        html: `<p>Bonjour ${prenom},</p><p>Votre compte SOS Amende (${email}) est créé. Votre dossier ${type} est en attente de virement ${type === "SUSPENSION" ? "59" : "39"} €.</p><p><strong>RIB :</strong> ${iban} / BIC ${bic} / Titulaire ${titulaire}</p><p><strong>Référence obligatoire :</strong> ${ref} — ${prenom} ${nom}</p><p>Dès que le virement est effectué, envoyez la référence + capture par email à contact@sos-amende.fr ou WhatsApp ${whatsapp}. Un juriste validera sous 24h et débloquera votre lettre. Accédez à votre espace : ${(process.env.NEXT_PUBLIC_APP_URL ?? "https://sos-amende.vercel.app")}/dashboard?dev=1</p>`,
+        html: `<p>Bonjour ${prenom},</p><p>Votre compte SOS Amende (${email}) est créé. Votre dossier ${type} est en attente de virement ${type === "SUSPENSION" ? "59" : "39"} €.</p><p><strong>RIB :</strong> ${iban} / BIC ${bic} / Titulaire ${titulaire}</p><p><strong>Référence obligatoire :</strong> ${ref} — ${prenom} ${nom}</p><p>Dès que le virement est effectué, envoyez la référence + capture par email à contact@recours-permis-pv.com ou WhatsApp ${whatsapp}. Un juriste validera sous 24h et débloquera votre lettre. Accédez à votre espace : ${(process.env.NEXT_PUBLIC_APP_URL ?? "https://recours-permis-pv.com")}/dashboard</p>`,
       });
     } else {
       console.log(`[DEV] Email confirmation pour ${email} (sans clé Resend) — ref ${ref}`);

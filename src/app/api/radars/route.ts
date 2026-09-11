@@ -1,19 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/dal";
+import { apiErrorMessage } from "@/lib/api-helpers";
 
+async function estAdmin(): Promise<boolean> {
+  const user = await getCurrentUser();
+  return user?.role === "ADMIN";
+}
+
+/**
+ * Lecture de toutes les calibrations radar (admin uniquement).
+ */
 export async function GET() {
+  if (!(await estAdmin())) {
+    return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+  }
   try {
     const calibrations = await prisma.radarCalibration.findMany({
       orderBy: { dateExpiration: "desc" },
     });
     return NextResponse.json(calibrations);
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Erreur inconnue";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: apiErrorMessage(err) }, { status: 500 });
   }
 }
 
+/**
+ * Upsert d'une calibration radar (admin uniquement).
+ */
 export async function POST(request: NextRequest) {
+  if (!(await estAdmin())) {
+    return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+  }
   try {
     const body = (await request.json()) as {
       radarId?: string;
@@ -47,7 +65,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(calibration);
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Erreur inconnue";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: apiErrorMessage(err) }, { status: 500 });
   }
 }

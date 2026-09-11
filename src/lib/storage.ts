@@ -17,6 +17,28 @@ export function isStorageS3(): boolean {
   return process.env.STORAGE_DRIVER === "s3";
 }
 
+/**
+ * Production réelle = NODE_ENV production SANS l'opt-in E2E.
+ * (Les E2E tournent en build prod avec AUTH_DEV_FILE=1.)
+ */
+function estProdReelle(): boolean {
+  return process.env.NODE_ENV === "production" && process.env.AUTH_DEV_FILE !== "1";
+}
+
+/**
+ * Garde-fou RGPD/accès : en production réelle, le driver "local" est interdit —
+ * les fichiers seraient servis publiquement via `public/uploads/` par URL.
+ * Ne pas passer en S3 est un accident de config : on échoue vite (fast-fail)
+ * plutôt que de servir les pièces d'un dossier en accès public.
+ */
+function exigerS3EnProd(): void {
+  if (estProdReelle() && !isStorageS3()) {
+    throw new Error(
+      "STORAGE_DRIVER=local interdit en production réelle : les pièces seraient publiques. Configurer STORAGE_DRIVER=s3 (opt-in E2E AUTH_DEV_FILE=1 uniquement).",
+    );
+  }
+}
+
 const UPLOADS_PREFIX = "/uploads/";
 
 /** Résout une URL de fichier : telle quelle en local, signée en S3. */
@@ -27,7 +49,10 @@ export async function storageUrl(raw: string | null | undefined): Promise<string
   // URL externe (ex. preuve de certificat saisie par l'admin) → passthrough.
   if (/^https?:\/\//i.test(raw)) return raw;
 
-  if (!isStorageS3()) return raw;
+  if (!isStorageS3()) {
+    exigerS3EnProd();
+    return raw;
+  }
 
   const key = raw.slice(UPLOADS_PREFIX.length);
   return presignGet(key);
@@ -38,6 +63,7 @@ export async function storageUrl(raw: string | null | undefined): Promise<string
  * En mode S3, `key` correspond au chemin objet (ex. `pv/2026-...png`).
  */
 export async function storageWrite(key: string, buffer: Buffer): Promise<string> {
+  exigerS3EnProd();
   if (isStorageS3()) {
     const { PutObjectCommand } = await import("@aws-sdk/client-s3");
     const client = await getS3Client();
@@ -59,6 +85,7 @@ export async function storageWrite(key: string, buffer: Buffer): Promise<string>
 export async function storageRead(raw: string | null | undefined): Promise<Buffer | null> {
   if (!raw || !raw.startsWith(UPLOADS_PREFIX)) return null;
 
+  exigerS3EnProd();
   const key = raw.slice(UPLOADS_PREFIX.length);
   if (isStorageS3()) {
     const { GetObjectCommand } = await import("@aws-sdk/client-s3");
@@ -91,6 +118,7 @@ export async function storageRead(raw: string | null | undefined): Promise<Buffe
 export async function storageDelete(raw: string | null | undefined): Promise<void> {
   if (!raw || !raw.startsWith(UPLOADS_PREFIX)) return;
 
+  exigerS3EnProd();
   const key = raw.slice(UPLOADS_PREFIX.length);
   if (isStorageS3()) {
     const { DeleteObjectCommand } = await import("@aws-sdk/client-s3");

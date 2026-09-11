@@ -16,13 +16,16 @@ export default function MentionsLegalesPage() {
         WY 82801, États-Unis.
       </p>
       <p>
-        Contact : contact@sosamende.fr
+        Contact : contact@recours-permis-pv.com
+      </p>
+      <p>
+        Délégué à la protection des données : dpo@recours-permis-pv.com
       </p>
 
       <h2 className="text-lg font-semibold text-zinc-900">Hébergement</h2>
       <p>
-        Le Service est hébergé par HOSTINGER, dont le siège est situé
-        [Adresse de l'hébergeur à compléter].
+        Le Service est hébergé par Hostinger, UAB, société de droit lituanien
+        dont le siège est situé Švitrigailos g. 34, LT-03230 Vilnius, Lituanie.
       </p>
 
       <h2 className="text-lg font-semibold text-zinc-900">Propriété intellectuelle</h2>

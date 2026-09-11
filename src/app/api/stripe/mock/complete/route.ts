@@ -22,6 +22,17 @@ export async function POST(request: Request) {
       { status: 404 },
     );
   }
+  // Garde-fou : le mock ne doit JAMAIS être actif en production réelle (crédit
+  // gratuit sans vrai paiement Stripe). STRIPE_MOCK=1 y est un accident de
+  // config. Seul opt-in toléré : AUTH_DEV_FILE=1 (réservé aux E2E en build prod).
+  const isReelleProd =
+    process.env.NODE_ENV === "production" && process.env.AUTH_DEV_FILE !== "1";
+  if (isReelleProd) {
+    return NextResponse.json(
+      { error: "Mock Stripe interdit en production." },
+      { status: 403 },
+    );
+  }
 
   const parsed = bodySchema.safeParse(await request.json());
   if (!parsed.success) {

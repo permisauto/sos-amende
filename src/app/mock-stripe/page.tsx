@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { MockStripeForm } from "./mock-stripe-form";
 
 const NAMES: Record<string, { label: string; montant: number }> = {
@@ -9,6 +10,12 @@ const NAMES: Record<string, { label: string; montant: number }> = {
 export default async function MockStripePage(
   props: PageProps<"/mock-stripe">,
 ) {
+  // Garde-fou : portail mock réservé au dev/E2E — 404 en production réelle.
+  // (les E2E tournent en build prod avec l'opt-in explicite AUTH_DEV_FILE=1).
+  const isReelleProd =
+    process.env.NODE_ENV === "production" && process.env.AUTH_DEV_FILE !== "1";
+  if (isReelleProd) notFound();
+
   const params = await props.searchParams;
   const type = params.type === "SUSPENSION" ? "SUSPENSION" : "AMENDE";
   const email = typeof params.email === "string" ? params.email : "";

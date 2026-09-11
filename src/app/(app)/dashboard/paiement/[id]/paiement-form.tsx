@@ -71,12 +71,12 @@ export function PaiementForm({
             <button type="button" onClick={() => setVirementConfirme(true)} className="mt-4 w-full rounded-full bg-zinc-900 px-6 py-3 font-semibold text-white hover:bg-black">
               J'ai effectué le virement
             </button>
-            <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">Dès que le virement est effectué, envoyez la référence <span className="font-mono font-semibold">{dossierId.slice(0, 8).toUpperCase()}</span> + preuve (capture d'écran) par email à <span className="font-semibold">contact@sos-amende.fr</span> ou WhatsApp <span className="font-semibold">+33 6 12 34 56 78</span>. Un juriste validera sous 24h ouvrées.</p>
+            <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">Dès que le virement est effectué, envoyez la référence <span className="font-mono font-semibold">{dossierId.slice(0, 8).toUpperCase()}</span> + preuve (capture d'écran) par email à <span className="font-semibold">contact@recours-permis-pv.com</span> ou WhatsApp <span className="font-semibold">+33 6 12 34 56 78</span>. Un juriste validera sous 24h ouvrées.</p>
           </>
         ) : (
           <div className="mt-4 rounded-xl bg-white p-4 text-sm text-emerald-800">
             <p className="font-semibold">✓ Merci — virement signalé</p>
-            <p className="mt-1">Parfait. Envoyez maintenant la référence <span className="font-mono font-semibold">{dossierId.slice(0, 8).toUpperCase()}</span> + capture du virement par email <span className="font-semibold">contact@sos-amende.fr</span> ou WhatsApp <span className="font-semibold">+33 6 12 34 56 78</span>. Dès réception, un juriste validera votre paiement et débloquera la lettre. Vous serez notifié.</p>
+            <p className="mt-1">Parfait. Envoyez maintenant la référence <span className="font-mono font-semibold">{dossierId.slice(0, 8).toUpperCase()}</span> + capture du virement par email <span className="font-semibold">contact@recours-permis-pv.com</span> ou WhatsApp <span className="font-semibold">+33 6 12 34 56 78</span>. Dès réception, un juriste validera votre paiement et débloquera la lettre. Vous serez notifié.</p>
           </div>
         )}
         <p className="mt-3 text-xs text-emerald-700">Un juriste validera votre paiement et débloquera la lettre (sous 24h ouvrées). Vous serez notifié par email/WhatsApp.</p>
@@ -118,7 +118,7 @@ export function PaiementForm({
           <p className="mt-1 flex items-center gap-2"><span className="font-semibold">BIC</span> {RIB_BIC} <button type="button" onClick={() => navigator.clipboard.writeText(RIB_BIC)} className="text-xs text-emerald-700 hover:underline">Copier</button></p>
           <p className="mt-1"><span className="font-semibold">Titulaire :</span> {RIB_TITULAIRE}</p>
           <p className="mt-1 font-mono bg-amber-50 px-1 rounded">Référence obligatoire : {dossierId.slice(0, 8).toUpperCase()} — {prenom || "Prénom"} {nom || "Nom"}</p>
-          <p className="mt-2 text-xs text-zinc-500">Dès que le virement est effectué, envoyez la référence par email <span className="font-semibold">contact@sos-amende.fr</span> ou WhatsApp <span className="font-semibold">+33 6 12 34 56 78</span> avec capture d'écran.</p>
+          <p className="mt-2 text-xs text-zinc-500">Dès que le virement est effectué, envoyez la référence par email <span className="font-semibold">contact@recours-permis-pv.com</span> ou WhatsApp <span className="font-semibold">+33 6 12 34 56 78</span> avec capture d'écran.</p>
         </div>
         <p className="mt-3 text-2xl font-bold">{type === "SUSPENSION" ? "59 €" : "39 €"}</p>
         <form action={virementAction} className="mt-4">
