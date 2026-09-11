@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-// Accès provisoire simple pour vérification dashboards (dev uniquement)
+// Accès provisoire simple pour vérification dashboards (dev/E2E uniquement)
 // GET /api/dev/login?email=e2e-juriste@test.local -> redirige vers dashboard avec session
+// En production, cette route est entièrement désactivée (faille de sécurité).
 export async function GET(req: Request) {
-  const { searchParams: sp } = new URL(req.url);
-  const emailCheck = sp.get("email") ?? "";
-  const allowed = ["e2e-client@test.local", "e2e-juriste@test.local", "e2e-admin@test.local", "juriste.provisoire@sos-amende.fr", "admin.provisoire@sos-amende.fr"];
-  if (process.env.NODE_ENV === "production" && process.env.ALLOW_DEV_LOGIN !== "1" && !allowed.includes(emailCheck)) {
-    return NextResponse.json({ error: "Dev login désactivé en prod" }, { status: 403 });
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ error: "Dev login désactivé en production" }, { status: 403 });
   }
   const { searchParams } = new URL(req.url);
   const email = searchParams.get("email");

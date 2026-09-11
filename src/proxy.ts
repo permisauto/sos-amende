@@ -8,8 +8,13 @@ export default auth((req) => {
   const { nextUrl } = req;
   const isLoggedIn = !!req.auth?.user;
   const isOnDashboard = nextUrl.pathname.startsWith("/dashboard");
-  const hasDevParam = nextUrl.searchParams.get("dev") === "1";
-  const hasDevCookie = !!req.cookies.get("dev_login")?.value;
+  // Bypass dev RÉSERVÉ aux environnements non-prod (dev/E2E) : déploie une
+  // identité locale selon la route (/admin → ADMIN). En production, le param
+  // `?dev=1` et le cookie `dev_login` sont ignorés — accès uniquement par le
+  // magic-link Resend réel.
+  const isDevEnv = process.env.NODE_ENV !== "production";
+  const hasDevParam = isDevEnv && nextUrl.searchParams.get("dev") === "1";
+  const hasDevCookie = isDevEnv && !!req.cookies.get("dev_login")?.value;
   const isDevBypass = hasDevParam || hasDevCookie;
 
   if (isDevBypass && isOnDashboard) {

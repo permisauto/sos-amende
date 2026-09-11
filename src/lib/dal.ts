@@ -18,6 +18,8 @@ export const getCurrentUser = cache(async () => {
     } catch {}
   }
   // Bypass dev pour vérification dashboards sans DB/auth ( ?dev=1 ou cookie dev_login ) — direct link sans cookie
+  // En production, ce bloc est entièrement désactivé (faille de sécurité).
+  if (process.env.NODE_ENV !== "production") {
   try {
     const hdrs = await headers();
     const cookieStore = await cookies();
@@ -105,6 +107,7 @@ export const getCurrentUser = cache(async () => {
       }
     } catch {}
   } catch {}
+  } // fin bypass dev non-prod
   return null;
 });
 
