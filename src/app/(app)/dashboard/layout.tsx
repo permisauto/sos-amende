@@ -60,6 +60,9 @@ export default async function DashboardLayout({
                   <Link href="/dashboard/admin/paiements" className="hover:text-zinc-900">
                     Paiements
                   </Link>
+                  <Link href="/dashboard/admin/comptes" className="hover:text-zinc-900">
+                    Comptes
+                  </Link>
                 </>
               )}
             </nav>

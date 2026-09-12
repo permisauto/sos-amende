@@ -18,6 +18,23 @@ const EMAIL_FROM = (process.env.EMAIL_FROM ?? "SOS Amende <onboarding@resend.dev
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
   adapter: PrismaAdapter(prisma),
+  events: {
+    async signIn({ user }) {
+      // Bootstrap du super admin : si SUPER_ADMIN_EMAIL est défini et que
+      // l'email du compte correspond, on élève ce compte en ADMIN dès sa
+      // première connexion (magic-link). Rendu côté serveur uniquement
+      // (le middleware edge ne charge pas ce module).
+      const superAdmin = process.env.SUPER_ADMIN_EMAIL?.replace(/^\uFEFF/, "").trim().toLowerCase();
+      if (superAdmin && user.email && user.email.toLowerCase() === superAdmin) {
+        try {
+          await prisma.user.update({
+            where: { email: user.email },
+            data: { role: "ADMIN" },
+          });
+        } catch {}
+      }
+    },
+  },
   providers: [
     Resend({
       from: EMAIL_FROM,

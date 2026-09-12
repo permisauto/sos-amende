@@ -249,13 +249,16 @@ model LawyerMatch {
 // ---------------------------------------------------------------------------
 
 model Payment {
-  id              String   @id @default(cuid())
-  userId          String
-  stripePaymentId String?  @unique
-  amount          Decimal  @db.Decimal(10, 2)
-  currency        String   @default("EUR")
-  status          String
-  kind            String   @default("AMENDE") // AMENDE | SUSPENSION
+  id               String    @id @default(cuid())
+  userId           String
+  stripePaymentId  String?   @unique
+  amount           Decimal   @db.Decimal(10, 2)
+  currency         String    @default("EUR")
+  status           String
+  kind             String    @default("AMENDE") // AMENDE | SUSPENSION
+  preuveUrl        String? // /uploads/... — preuve du virement téléversée par le client
+  preuveNom        String? // nom du fichier d'origine
+  preuveUploadedAt DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

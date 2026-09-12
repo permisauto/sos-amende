@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { payerParVirement } from "./actions";
+import { PreuveVirementUpload } from "@/components/preuve-virement-upload";
 
 export function PaiementForm({
   dossierId,
@@ -71,12 +72,16 @@ export function PaiementForm({
             <button type="button" onClick={() => setVirementConfirme(true)} className="mt-4 w-full rounded-full bg-zinc-900 px-6 py-3 font-semibold text-white hover:bg-black">
               J'ai effectué le virement
             </button>
-            <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">Dès que le virement est effectué, envoyez la référence <span className="font-mono font-semibold">{dossierId.slice(0, 8).toUpperCase()}</span> + preuve (capture d'écran) par email à <span className="font-semibold">contact@recours-permis-pv.com</span> ou WhatsApp <span className="font-semibold">+33 6 12 34 56 78</span>. Un juriste validera sous 24h ouvrées.</p>
+            <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">Dès que le virement est effectué, téléversez la preuve (capture d'écran ou PDF) ci-dessous. Un juriste validera votre paiement sous 24 h ouvrées.</p>
           </>
         ) : (
-          <div className="mt-4 rounded-xl bg-white p-4 text-sm text-emerald-800">
-            <p className="font-semibold">✓ Merci — virement signalé</p>
-            <p className="mt-1">Parfait. Envoyez maintenant la référence <span className="font-mono font-semibold">{dossierId.slice(0, 8).toUpperCase()}</span> + capture du virement par email <span className="font-semibold">contact@recours-permis-pv.com</span> ou WhatsApp <span className="font-semibold">+33 6 12 34 56 78</span>. Dès réception, un juriste validera votre paiement et débloquera la lettre. Vous serez notifié.</p>
+          <div className="mt-4">
+            <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800">✓ Merci — virement signalé. Téléversez votre preuve de virement pour accélérer la validation.</p>
+            {virementState?.paymentId ? (
+              <PreuveVirementUpload paymentId={virementState.paymentId} />
+            ) : (
+              <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">La preuve ne peut pas être téléversée pour le moment — envoyez-la par email à contact@recours-permis-pv.com.</p>
+            )}
           </div>
         )}
         <p className="mt-3 text-xs text-emerald-700">Un juriste validera votre paiement et débloquera la lettre (sous 24h ouvrées). Vous serez notifié par email/WhatsApp.</p>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { PreuveVirementUpload } from "@/components/preuve-virement-upload";
 
 export function PaiementPublicClient({ initialType }: { initialType: "AMENDE" | "SUSPENSION" }) {
   const [type, setType] = useState(initialType);
@@ -10,6 +11,7 @@ export function PaiementPublicClient({ initialType }: { initialType: "AMENDE" | 
   const [whatsapp, setWhatsapp] = useState("");
   const [pending, setPending] = useState<"stripe" | "virement" | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [paymentId, setPaymentId] = useState<string | null>(null);
 
   useEffect(() => {
     const raw = sessionStorage.getItem("deposer_data");
@@ -38,6 +40,7 @@ export function PaiementPublicClient({ initialType }: { initialType: "AMENDE" | 
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Erreur");
+      setPaymentId(data.paymentId ?? null);
       setMessage(`Virement enregistré — Réf ${data.ref ?? ""}. Copiez le RIB ci-dessous et effectuez le virement.`);
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Erreur");
@@ -105,7 +108,14 @@ export function PaiementPublicClient({ initialType }: { initialType: "AMENDE" | 
           </button>
         )}
         {virementDone && (
-          <p className="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800">✓ Merci — virement signalé. Dès réception (24h ouvrées), un juriste validera et débloquera votre dossier. Vous serez notifié par email/WhatsApp.</p>
+          <>
+            <p className="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800">✓ Merci — virement signalé. Téléversez ci-dessous la preuve de votre virement. Dès réception, un juriste validera et débloquera votre dossier. Vous serez notifié par email.</p>
+            {paymentId ? (
+              <PreuveVirementUpload paymentId={paymentId} />
+            ) : (
+              <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">Preuve non disponible : retrouvez-la dans votre espace dès votre première connexion.</p>
+            )}
+          </>
         )}
         <p className="mt-3 text-center text-xs text-zinc-400">Paiement par carte (Stripe) — bientôt disponible.</p>
       </div>

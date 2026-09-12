@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { validerVirement, refuserVirement } from "../actions";
 
-type Paiement = { id: string; userId: string; amount: unknown; kind: string; status: string; createdAt: Date; user: { email: string; name: string | null } };
+type Paiement = { id: string; userId: string; amount: unknown; kind: string; status: string; createdAt: Date; preuveUrl?: string | null; preuveNom?: string | null; preuveUploadedAt?: Date | null; user: { email: string; name: string | null } };
 
 export function PaiementsAdmin({ paiements }: { paiements: Paiement[] }) {
   const [valState, valAction, valPending] = useActionState(validerVirement, undefined);
@@ -23,7 +23,7 @@ export function PaiementsAdmin({ paiements }: { paiements: Paiement[] }) {
             <div>
               <p className="font-medium">{p.user.name ?? p.user.email} — {p.user.email}</p>
               <p className="text-sm text-zinc-600">{p.kind} — {String(p.amount)} € — {new Date(p.createdAt).toLocaleString("fr-FR")}</p>
-              <p className="font-mono text-xs text-zinc-500">ID: {p.id.slice(0, 8)} — Réf à vérifier par email/WhatsApp</p>
+              <p className="font-mono text-xs text-zinc-500">ID: {p.id.slice(0, 8)}</p>
             </div>
             <div className="flex gap-2">
               <form action={valAction}>
@@ -40,6 +40,19 @@ export function PaiementsAdmin({ paiements }: { paiements: Paiement[] }) {
               </form>
             </div>
           </div>
+          {p.preuveUrl ? (
+            <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+              <p className="flex items-center gap-2 text-xs font-semibold text-emerald-800">
+                <span>✓ Preuve de virement reçue</span>
+                {p.preuveUploadedAt && <span className="font-normal text-emerald-700">— {new Date(p.preuveUploadedAt).toLocaleString("fr-FR")}</span>}
+              </p>
+              <a href={p.preuveUrl} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-sm font-medium text-emerald-700 underline">
+                {p.preuveNom ?? "Voir la preuve"}
+              </a>
+            </div>
+          ) : (
+            <p className="mt-3 rounded-xl bg-zinc-50 px-3 py-2 text-xs text-zinc-500">Pas encore de preuve de virement téléversée.</p>
+          )}
         </div>
       ))}
     </div>

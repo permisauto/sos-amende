@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/dal";
 import { Resend } from "resend";
 
-export type VirementState = { ok?: boolean; error?: string } | undefined;
+export type VirementState = { ok?: boolean; error?: string; paymentId?: string } | undefined;
 
 export async function payerParVirement(_prev: VirementState, formData: FormData): Promise<VirementState> {
   const user = await requireUser();
@@ -23,12 +23,7 @@ export async function payerParVirement(_prev: VirementState, formData: FormData)
 
   // Sauvegarde contact dans extractedData et User
   const data = (dossier.extractedData as Record<string, unknown> | null) ?? {};
-  await prisma.$transaction([
-    prisma.dossier.update({
-      where: { id: dossier.id },
-      data: { extractedData: { ...data, contactNom: nom, contactPrenom: prenom, contactEmail: email, contactWhatsapp: whatsapp } as object },
-    }),
-    prisma.user.update({ where: { id: user.id }, data: { name: `${prenom} ${nom}` } }),
+  const [payment] = await prisma.$transaction([
     prisma.payment.create({
       data: {
         userId: user.id,
@@ -38,6 +33,11 @@ export async function payerParVirement(_prev: VirementState, formData: FormData)
         kind: dossier.type,
       },
     }),
+    prisma.dossier.update({
+      where: { id: dossier.id },
+      data: { extractedData: { ...data, contactNom: nom, contactPrenom: prenom, contactEmail: email, contactWhatsapp: whatsapp } as object },
+    }),
+    prisma.user.update({ where: { id: user.id }, data: { name: `${prenom} ${nom}` } }),
     prisma.dossierEvent.create({ data: { dossierId: dossier.id, type: "EN_ATTENTE", detail: `Virement demandé — ${prenom} ${nom} / ${whatsapp}` } }),
   ]);
 
@@ -63,5 +63,5 @@ export async function payerParVirement(_prev: VirementState, formData: FormData)
     console.error("virement email fail", e);
   }
 
-  return { ok: true };
+  return { ok: true, paymentId: payment.id };
 }

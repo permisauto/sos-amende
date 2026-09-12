@@ -365,6 +365,12 @@ export async function validerVirement(
     prisma.user.update({ where: { id: payment.userId }, data: { credits: { increment: 1 } } }),
   ]);
 
+  const user = await prisma.user.findUnique({ where: { id: payment.userId } });
+  if (user) {
+    const { notifierPaiementValide } = await import("@/lib/notifications");
+    await notifierPaiementValide(user.email, user.name);
+  }
+
   revalidatePath("/dashboard/admin/paiements");
   revalidatePath("/dashboard");
   return { ok: true };

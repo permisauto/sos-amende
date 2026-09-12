@@ -4,7 +4,73 @@ import { prisma } from "@/lib/prisma";
 const cleanKey = process.env.AUTH_RESEND_KEY?.replace(/^\uFEFF/, "").trim();
 const resend = cleanKey ? new Resend(cleanKey) : null;
 
+const EMAIL_FROM = (process.env.EMAIL_FROM ?? "SOS Amende <onboarding@resend.dev>")
+  .replace(/\uFEFF/g, "")
+  .trim();
+
 const ACCUEIL = `<p>Connectez-vous à votre espace SOS Amende pour suivre votre dossier.</p>`;
+
+const ROLES_LABEL: Record<string, string> = {
+  CLIENT: "client",
+  JURISTE: "juriste",
+  ADMIN: "administrateur",
+};
+
+/**
+ * E-mail de bienvenue / notification à la création d'un compte (client,
+ * juriste ou admin). Défensif : sans AUTH_RESEND_KEY, aucun envoi.
+ */
+export async function notifierCompteCree(
+  email: string,
+  role: string = "CLIENT",
+  name?: string | null,
+): Promise<boolean> {
+  if (!resend) return false;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://recours-permis-pv.com";
+  const prenom = (name ?? email).split(" ")[0];
+  const label = ROLES_LABEL[role] ?? "membre";
+  try {
+    await resend.emails.send({
+      from: EMAIL_FROM,
+      to: email,
+      subject: role === "ADMIN" ? "SOS Amende — votre compte administrateur est prêt" : role === "JURISTE" ? "SOS Amende — votre compte juriste est prêt" : "Bienvenue sur SOS Amende",
+      html: `
+        <p>Bonjour ${prenom},</p>
+        <p>Votre compte ${label} SOS Amende (${email}) a été créé.</p>
+        <p>Pour vous connecter, cliquez sur le lien ci-dessous puis saisissez votre adresse
+        e-mail : un lien de connexion sécurisé vous sera envoyé.</p>
+        <p><a href="${appUrl}/login">${appUrl}/login</a></p>
+        ${role === "JURISTE" || role === "ADMIN" ? `<p>Votre espace : ${appUrl}/dashboard</p>` : ACCUEIL}`,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Notifie le client qu'un virement a été validé (crédit débloqué).
+ */
+export async function notifierPaiementValide(email: string, name?: string | null): Promise<boolean> {
+  if (!resend) return false;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://recours-permis-pv.com";
+  const prenom = (name ?? email).split(" ")[0];
+  try {
+    await resend.emails.send({
+      from: EMAIL_FROM,
+      to: email,
+      subject: "SOS Amende — paiement validé",
+      html: `
+        <p>Bonjour ${prenom},</p>
+        <p>Votre virement a été validé : votre crédit est débloqué et vous pouvez
+        poursuivre votre dossier.</p>
+        <p><a href="${appUrl}/dashboard">Accéder à mon espace</a></p>`,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Notifie le client d'un changement de statut de son dossier (défensif :

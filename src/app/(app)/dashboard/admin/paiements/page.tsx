@@ -1,4 +1,5 @@
 ﻿import { requireAdmin } from "@/lib/dal";
+import { storageUrl } from "@/lib/storage";
 import { PaiementsAdmin } from "./paiements-admin";
 
 export default async function AdminPaiementsPage() {
@@ -8,12 +9,15 @@ export default async function AdminPaiementsPage() {
   try {
     // Try DB first
     const { prisma } = await import("@/lib/prisma");
-    paiements = (await prisma.payment.findMany({
+    const found = await prisma.payment.findMany({
       where: { status: "PENDING_VIREMENT" },
       orderBy: { createdAt: "desc" },
       take: 50,
       include: { user: { select: { email: true, name: true } } },
-    })) as unknown as Array<Record<string, unknown>>;
+    });
+    paiements = await Promise.all(
+      found.map(async (p) => ({ ...p, preuveUrl: await storageUrl(p.preuveUrl) })),
+    ) as unknown as Array<Record<string, unknown>>;
   } catch (e) {
     console.error("admin paiements: DB indisponible, fallback mock", e);
   }
