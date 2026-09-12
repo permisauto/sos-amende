@@ -34,6 +34,18 @@ interface FaillesListProps {
 }
 
 export function FaillesList({ failles, filter }: FaillesListProps) {
+  const [disclosed, setDisclosed] = useState<ReadonlySet<string>>(new Set());
+  const toggleDisclosed = (id: string) =>
+    setDisclosed((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+
   return (
     <div className="mx-auto max-w-5xl">
       <Link
@@ -79,7 +91,7 @@ export function FaillesList({ failles, filter }: FaillesListProps) {
           </p>
         ) : (
           failles.map((faille) => {
-            const [detail, setDetail] = useState(false);
+            const detail = disclosed.has(faille.id);
             const meta = statusMeta[faille.statut] ?? {
               label: faille.statut,
               cls: "bg-zinc-100 text-zinc-500",
@@ -161,7 +173,7 @@ export function FaillesList({ failles, filter }: FaillesListProps) {
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={() => setDetail((v) => !v)}
+                      onClick={() => toggleDisclosed(faille.id)}
                       className="rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
                     >
                       {detail ? "Masquer le détail" : "Lire en détail"}

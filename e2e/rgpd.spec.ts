@@ -7,15 +7,21 @@ test("RGPD : export des données (portabilité) puis effacement du compte", asyn
 }) => {
   test.slow();
 
-  // Compte jetable (créé par le webhook mock, paiement d'abord) pour ne jamais
-  // toucher aux comptes partagés par les autres tests.
+  // Compte jetable (créé via la route virement, paiement d'abord) pour ne
+  // jamais toucher aux comptes partagés par les autres tests.
   const email = `e2e-rgpd-${Date.now()}@test.local`;
 
-  await page.goto(`/mock-stripe?type=AMENDE&email=${email}`);
-  await page.getByRole("button", { name: /Payer 39 €/ }).click();
-  await expect(
-    page.getByText("Paiement validé (démo)", { exact: false }),
-  ).toBeVisible();
+  // Inscription inversée : la route publique de virement crée le compte.
+  const res = await page.request.post("/api/paiement/virement", {
+    data: {
+      type: "AMENDE",
+      nom: "DUPONT",
+      prenom: "Jean",
+      email,
+      whatsapp: "+33612345678",
+    },
+  });
+  expect(res.ok()).toBeTruthy();
 
   await loginAs(page, email);
 

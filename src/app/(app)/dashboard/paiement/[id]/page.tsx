@@ -36,7 +36,7 @@ export default async function PaiementPage(props: PageProps<"/dashboard/paiement
       <div className="mt-6">
         <PaiementForm dossierId={dossier.id} type={dossier.type} defaultEmail={user.email ?? ""} defaultName={user.name ?? ""} />
       </div>
-      <p className="mt-6 text-center text-xs text-zinc-500">Paiement sécurisé. Virement : RIB affiché après formulaire, validation sous 24h. Stripe : crédit instantané.</p>
+      <p className="mt-6 text-center text-xs text-zinc-500">Paiement sécurisé par virement bancaire. RIB affiché après formulaire, validation sous 24 h ouvrées.</p>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState, useEffect } from "react";
+import { useActionState, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   activerToutesPropositions,
@@ -24,6 +24,8 @@ export type FailleDto = {
   reglesDetection: RegleDetection[] | null;
   jurisprudence: JurisprudenceRef[] | null;
 };
+
+type StatutFaille = "ACTIVE" | "INACTIVE" | "PROPOSEE";
 
 const inputCls =
   "rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100";
@@ -64,6 +66,9 @@ export function FaillesAdmin({
   failles: FailleDto[];
   filter: string;
 }) {
+  const [localValidated, setLocalValidated] = useState<
+    Record<string, StatutFaille>
+  >({});
   const [sourcesState, sourcesAction, sourcesPending] = useActionState(
     importerFaillesDepuisSources,
     undefined,
@@ -73,6 +78,10 @@ export function FaillesAdmin({
     undefined,
   );
 
+  const applyStatut = useCallback((id: string, statut: StatutFaille) => {
+    setLocalValidated((prev) => ({ ...prev, [id]: statut }));
+  }, []);
+
   const filters = [
     { value: "ALL", label: "Toutes" },
     { value: "ACTIVE", label: "Actives" },
@@ -80,6 +89,7 @@ export function FaillesAdmin({
     { value: "INACTIVE", label: "Inactives" },
   ];
   const nbProposees = failles.filter((f) => f.statut === "PROPOSEE").length;
+  const activateAllDone = activerToutesState?.ok === true;
 
   return (
     <div className="flex flex-col gap-8">
@@ -175,7 +185,13 @@ export function FaillesAdmin({
             </p>
           ) : (
             failles.map((faille) => (
-              <FailleRow key={faille.id} faille={faille} />
+              <FailleRow
+                key={faille.id}
+                faille={faille}
+                statutLocal={localValidated[faille.id]}
+                onStatutLocal={applyStatut}
+                forceActive={activateAllDone}
+              />
             ))
           )}
         </div>
@@ -338,7 +354,17 @@ function FailleFields({ initial }: { initial?: FailleDto }) {
   );
 }
 
-function FailleRow({ faille }: { faille: FailleDto }) {
+function FailleRow({
+  faille,
+  statutLocal,
+  onStatutLocal,
+  forceActive,
+}: {
+  faille: FailleDto;
+  statutLocal?: StatutFaille;
+  onStatutLocal: (id: string, statut: StatutFaille) => void;
+  forceActive?: boolean;
+}) {
   const [editing, setEditing] = useState(false);
   const [detail, setDetail] = useState(false);
   const [toggleState, toggleAction, togglePending] = useActionState(
@@ -354,16 +380,21 @@ function FailleRow({ faille }: { faille: FailleDto }) {
     undefined,
   );
 
-  // Client-side validated state (persists across page reloads in demo mode)
-  const [localValidated, setLocalValidated] = useState<Record<string, "ACTIVE" | "INACTIVE">>({});
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem("sos-amende-validated-failles");
-      if (stored) setLocalValidated(JSON.parse(stored));
-    } catch {}
-  }, []);
+    if (toggleState?.ok && toggleState.statut) {
+      onStatutLocal(faille.id, toggleState.statut);
+    }
+  }, [toggleState, faille.id, onStatutLocal]);
 
-  const effectiveStatut = (localValidated[faille.id] ?? faille.statut) as "ACTIVE" | "INACTIVE" | "PROPOSEE";
+  useEffect(() => {
+    if (propState?.ok && propState.statut) {
+      onStatutLocal(faille.id, propState.statut);
+    }
+  }, [propState, faille.id, onStatutLocal]);
+
+  const activeAll =
+    forceActive === true && (faille.statut as StatutFaille) === "PROPOSEE";
+  const effectiveStatut: StatutFaille = statutLocal ?? (activeAll ? "ACTIVE" : (faille.statut as StatutFaille));
   const meta = statusMeta[effectiveStatut] ?? {
     label: effectiveStatut,
     cls: "bg-zinc-100 text-zinc-500",
@@ -502,27 +533,9 @@ function FailleRow({ faille }: { faille: FailleDto }) {
         </p>
       )}
       {toggleState?.ok && (
-        <>
-          <p className="mt-3 rounded-xl bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
-            Statut mis à jour.
-          </p>
-          <script
-            dangerouslySetInnerHTML={{
-              __html: `
-                (function() {
-                  try {
-                    const stored = localStorage.getItem("sos-amende-validated-failles");
-                    const data = stored ? JSON.parse(stored) : {};
-                    const newStatut = "${faille.statut}" === "ACTIVE" ? "INACTIVE" : "ACTIVE";
-                    data["${faille.id}"] = newStatut;
-                    localStorage.setItem("sos-amende-validated-failles", JSON.stringify(data));
-                    window.location.reload();
-                  } catch(e) { console.error(e); }
-                })();
-              `,
-            }}
-          />
-        </>
+        <p className="mt-3 rounded-xl bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
+          Statut mis à jour.
+        </p>
       )}
       {propState?.error && (
         <p className="mt-3 rounded-xl bg-red-50 px-4 py-2 text-sm text-red-700">
@@ -530,26 +543,9 @@ function FailleRow({ faille }: { faille: FailleDto }) {
         </p>
       )}
       {propState?.ok && (
-        <>
-          <p className="mt-3 rounded-xl bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
-            Faille mise à jour.
-          </p>
-          <script
-            dangerouslySetInnerHTML={{
-              __html: `
-                (function() {
-                  try {
-                    const stored = localStorage.getItem("sos-amende-validated-failles");
-                    const data = stored ? JSON.parse(stored) : {};
-                    data["${faille.id}"] = "${faille.statut === "PROPOSEE" ? "ACTIVE" : "INACTIVE"}";
-                    localStorage.setItem("sos-amende-validated-failles", JSON.stringify(data));
-                    window.location.reload();
-                  } catch(e) { console.error(e); }
-                })();
-              `,
-            }}
-          />
-        </>
+        <p className="mt-3 rounded-xl bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
+          Faille mise à jour.
+        </p>
       )}
 
       {detail && (

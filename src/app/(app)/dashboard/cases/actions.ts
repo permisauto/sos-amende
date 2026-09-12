@@ -306,7 +306,7 @@ export async function signerDossier(
     data: { credits: { decrement: 1 } },
   });
   if (debit.count === 0) {
-    return { error: "Paiement requis : finalisez votre paiement (Stripe ou virement) avant de signer." };
+    return { error: "Paiement requis : finalisez votre paiement (virement bancaire) avant de signer." };
   }
 
   const png = Buffer.from(signature.split(",")[1], "base64");

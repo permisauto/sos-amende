@@ -23,7 +23,7 @@ export default async function NewCasePage(props: PageProps<"/dashboard/cases/new
       </Link>
       <h1 className="mt-2 text-2xl font-bold">Nouveau dossier</h1>
       <p className="mt-2 text-sm text-zinc-600">
-        Téléversez votre PV ou lettre de suspension — <span className="font-semibold">analyse gratuite</span>. Le scan, le scoring et la détection de faille sont offerts. Vous ne payez (39&nbsp;€ / amende, 59&nbsp;€ / suspension, virement ou Stripe) que si une faille est validée et que vous souhaitez lancer la contestation.
+        Téléversez votre PV ou lettre de suspension — <span className="font-semibold">analyse gratuite</span>. Le scan, le scoring et la détection de faille sont offerts. Vous ne payez (39&nbsp;€ / amende, 59&nbsp;€ / suspension, par virement bancaire) que si une faille est validée et que vous souhaitez lancer la contestation.
       </p>
       {typeParam && (
         <p className="mt-2 text-xs text-emerald-700">Type pré-sélectionné : {typeParam === "AMENDE" ? "Amende" : "Suspension de permis"}</p>

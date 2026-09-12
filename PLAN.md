@@ -46,7 +46,7 @@ Frontend        → Next.js 15 (App Router, RSC) + Tailwind + shadcn/ui
 Backend         → API routes / Server Actions (mêmes repo)
 Base de données → Postgres (Supabase ou Neon) + Prisma
 Auth            → Auth.js (email + magic link)
-Paiement        → Stripe (abonnements + paiement à l'acte)
+Paiement        → Virement bancaire V1 (paiement à l'acte, inscription inversée) ; Stripe (carte) en v2
 Stockage        → S3-compatible (photos avis, PDF) — presigned URLs
 OCR             → Cloud OCR (Google Vision / Azure) en worker + relecture humaine
 PDF             → react-pdf / pdf-lib (requêtes en exonération, recours)
@@ -78,7 +78,7 @@ Choix clés :
 ## 6. Roadmap / phases
 
 **Phase 0 — Fondations (sem. 1-2)**
-Repo Next.js + Prisma + Postgres, Auth, dashboard vide, Stripe abonnement, layout RGPD (CGV, mentions, consentement).
+Repo Next.js + Prisma + Postgres, Auth, dashboard, paiement à l'acte (virement V1), layout RGPD (CGV, mentions, consentement).
 
 **Phase 1 — Flux Amende (sem. 3-5)** *(MVP prioritaire, 80% du volume)*
 Upload + OCR + vérification, moteur de motifs (5 fondements de base : paiement, cession, vol/usurpation, erreur matérielle, amnistie), génération requête en exonération PDF, envoi LRAR simulé, suivi + rappels 45 j.
@@ -86,8 +86,8 @@ Upload + OCR + vérification, moteur de motifs (5 fondements de base : paiement,
 **Phase 2 — Flux Permis (sem. 6-8)**
 Intake rétention, recours gracieux préfet, détection urgence → référé, parcours commission médicale, suivi.
 
-**Phase 3 — Paie à l'acte + avocats partenaires (sem. 9-10)**
-Stripe paiement à l'acte, module mise en relation avocat, transfert dossier.
+**Phase 3 — Mise en prod paie (sem. 9-10)**
+Envoi automatique ANTAI/Télérecours, module mise en relation avocat, transfert dossier.
 
 **Phase 4 — Durcissement (sem. 11-12)**
 Tests de non-régression juridique (les motifs = le produit, il faut des fixtures), Sentry, sauvegardes, audit RGPD, beta.

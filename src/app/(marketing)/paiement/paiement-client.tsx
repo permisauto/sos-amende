@@ -1,27 +1,26 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { PreuveVirementUpload } from "@/components/preuve-virement-upload";
 
 export function PaiementPublicClient({ initialType }: { initialType: "AMENDE" | "SUSPENSION" }) {
-  const [type, setType] = useState(initialType);
+  const [type, setType] = useState<"AMENDE" | "SUSPENSION">(() => {
+    try {
+      const raw = sessionStorage.getItem("deposer_data");
+      if (raw) {
+        const parsed = JSON.parse(raw) as { type?: string };
+        if (parsed.type === "SUSPENSION" || parsed.type === "AMENDE") return parsed.type;
+      }
+    } catch {}
+    return initialType;
+  });
   const [nom, setNom] = useState("");
   const [prenom, setPrenom] = useState("");
   const [email, setEmail] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
-  const [pending, setPending] = useState<"stripe" | "virement" | null>(null);
+  const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [paymentId, setPaymentId] = useState<string | null>(null);
-
-  useEffect(() => {
-    const raw = sessionStorage.getItem("deposer_data");
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw) as { type?: string };
-        if (parsed.type === "SUSPENSION" || parsed.type === "AMENDE") setType(parsed.type);
-      } catch {}
-    }
-  }, []);
 
   const RIB_IBAN = process.env.NEXT_PUBLIC_RIB_IBAN ?? "BE06 9058 9752 3122";
   const RIB_BIC = process.env.NEXT_PUBLIC_RIB_BIC ?? "TRWIBEB1XXX";
@@ -30,7 +29,7 @@ export function PaiementPublicClient({ initialType }: { initialType: "AMENDE" | 
 
   async function handleVirement() {
     if (!nom || !prenom || !email || !whatsapp) return setMessage("Nom, prénom, email et WhatsApp requis.");
-    setPending("virement");
+    setPending(true);
     setMessage(null);
     try {
       const res = await fetch("/api/paiement/virement", {
@@ -45,26 +44,7 @@ export function PaiementPublicClient({ initialType }: { initialType: "AMENDE" | 
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Erreur");
     } finally {
-      setPending(null);
-    }
-  }
-
-  async function handleStripe() {
-    if (!nom || !prenom || !email || !whatsapp) return setMessage("Nom, prénom, email et WhatsApp requis.");
-    setPending("stripe");
-    setMessage(null);
-    try {
-      const res = await fetch("/api/stripe/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type, contact: { nom, prenom, email, whatsapp } }),
-      });
-      const data = (await res.json()) as { url?: string; error?: string };
-      if (!res.ok || !data.url) throw new Error(data.error ?? "Paiement indisponible");
-      window.location.href = data.url;
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Erreur");
-      setPending(null);
+      setPending(false);
     }
   }
 
@@ -99,8 +79,8 @@ export function PaiementPublicClient({ initialType }: { initialType: "AMENDE" | 
           <p className="mt-1 text-xs text-zinc-500">Montant : {type === "SUSPENSION" ? "59,00 €" : "39,00 €"}</p>
         </div>
         <p className="mt-3 text-2xl font-bold">{type === "SUSPENSION" ? "59 €" : "39 €"}</p>
-        <button onClick={handleVirement} disabled={pending !== null} className="mt-4 w-full rounded-full bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
-          {pending === "virement" ? "Enregistrement…" : "Valider et recevoir le RIB"}
+        <button onClick={handleVirement} disabled={pending} className="mt-4 w-full rounded-full bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+          {pending ? "Enregistrement…" : "Valider et recevoir le RIB"}
         </button>
         {message && !virementDone && (
           <button type="button" onClick={() => setVirementDone(true)} className="mt-3 w-full rounded-full bg-zinc-900 px-6 py-3 font-semibold text-white hover:bg-black">
@@ -117,7 +97,6 @@ export function PaiementPublicClient({ initialType }: { initialType: "AMENDE" | 
             )}
           </>
         )}
-        <p className="mt-3 text-center text-xs text-zinc-400">Paiement par carte (Stripe) — bientôt disponible.</p>
       </div>
     </div>
   );

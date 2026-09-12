@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Suspense } from "react";
-import { PricingBanners } from "@/components/pricing-banners";
 
 export const metadata: Metadata = {
   title: "Tarifs",
@@ -10,9 +8,6 @@ export const metadata: Metadata = {
 export default function PricingPage() {
   return (
     <div className="mx-auto max-w-6xl px-6 py-20">
-      <Suspense>
-        <PricingBanners />
-      </Suspense>
       <div className="text-center">
         <h1 className="text-4xl font-bold">Des tarifs simples, sans surprise</h1>
         <p className="mx-auto mt-4 max-w-xl text-zinc-600">

@@ -91,9 +91,10 @@ export default function CgvPage() {
         par courrier électronique, à l'adresse indiquée par le Client.
       </p>
       <p>
-        Le paiement s'effectue par carte bancaire (Stripe) ou par virement
-        bancaire. Les informations bancaires du Client ne sont pas conservées par
-        SOS Amende : elles sont traitées par le prestataire de paiement.
+        Le paiement s'effectue par virement bancaire. Les coordonnées du compte
+        bénéficiaire (RIB) sont communiquées au Client au moment de la
+        finalisation du dossier ; le Client effectue lui-même le virement depuis
+        son établissement bancaire.
       </p>
       <p>
         Le crédit acheté est porté au compte du Client et consommé à l'ouverture

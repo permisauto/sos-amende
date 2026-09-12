@@ -75,7 +75,6 @@ export default function ConfidentialitePage() {
       </p>
       <ul className="list-disc space-y-1 pl-5">
         <li>Hébergement du service : Hostinger ;</li>
-        <li>Paiement par carte : Stripe ;</li>
         <li>Envoi des e-mails (liens de connexion, notifications) : Resend ;</li>
         <li>Fichiers des pièces (PV, signatures, PDF) : stockage sécurisé local ou S3-compatible.</li>
       </ul>

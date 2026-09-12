@@ -16,35 +16,11 @@ export function PaiementForm({
   defaultName: string;
 }) {
   const [virementState, virementAction, virementPending] = useActionState(payerParVirement, undefined);
-  const [stripePending, setStripePending] = useState(false);
-  const [stripeError, setStripeError] = useState<string | null>(null);
 
   const [nom, setNom] = useState(defaultName.split(" ").slice(1).join(" ") || "");
   const [prenom, setPrenom] = useState(defaultName.split(" ")[0] || "");
   const [email, setEmail] = useState(defaultEmail);
   const [whatsapp, setWhatsapp] = useState("");
-
-  async function handleStripe() {
-    if (!nom || !prenom || !email || !whatsapp) {
-      setStripeError("Renseigne nom, prénom, email et WhatsApp avant de payer.");
-      return;
-    }
-    setStripePending(true);
-    setStripeError(null);
-    try {
-      const res = await fetch("/api/stripe/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type, dossierId, contact: { nom, prenom, email, whatsapp } }),
-      });
-      const data = (await res.json()) as { url?: string; error?: string };
-      if (!res.ok || !data.url) throw new Error(data.error ?? "Paiement indisponible");
-      window.location.href = data.url;
-    } catch (e) {
-      setStripeError(e instanceof Error ? e.message : "Erreur");
-      setStripePending(false);
-    }
-  }
 
   const [virementConfirme, setVirementConfirme] = useState(false);
   const RIB_IBAN = process.env.NEXT_PUBLIC_RIB_IBAN ?? "BE06 9058 9752 3122";
@@ -137,7 +113,7 @@ export function PaiementForm({
           </button>
           {virementState?.error && <p className="mt-2 text-xs text-red-600">{virementState.error}</p>}
         </form>
-        <p className="mt-3 text-center text-xs text-zinc-400">Paiement par carte (Stripe) — bientôt disponible.</p>
+        <p className="mt-3 text-center text-xs text-zinc-400">Le virement est validé par un juriste sous 24 h ouvrées.</p>
       </div>
     </div>
   );

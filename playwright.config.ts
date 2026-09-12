@@ -24,7 +24,6 @@ export default defineConfig({
     env: {
       NEXT_PUBLIC_APP_URL: "http://localhost:3200",
       OCR_PROVIDER: "mock",
-      STRIPE_MOCK: "1",
       ANTAI_MOCK: "1",
       ANTAI_MOCK_TOKEN: "dev-antai-mock",
       AUTH_DEV_FILE: "1",

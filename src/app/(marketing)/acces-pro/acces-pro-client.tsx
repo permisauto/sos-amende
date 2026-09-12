@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 const ACCES = [
   { role: "JURISTE", label: "Juriste", email: "e2e-juriste@test.local", desc: "File d'attente, validation, kit LRAR", href: "/dashboard/juriste?dev=1" },
@@ -11,6 +13,7 @@ const ACCES = [
 export function AccesProClient() {
   const [loading, setLoading] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const router = useRouter();
 
   async function handleAccess(email: string, dashboard: string) {
     setLoading(email);
@@ -19,7 +22,7 @@ export function AccesProClient() {
       // Pose le cookie dev_login via l'API (même si DB down, elle pose le cookie en fallback)
       await fetch(`/api/dev/login?email=${encodeURIComponent(email)}`, { headers: { Accept: "application/json" } });
       // Redirige avec ?dev=1 qui bypass l'auth côté proxy/dal même sans DB
-      window.location.href = `${dashboard}?dev=1`;
+      router.push(`${dashboard}?dev=1`);
     } catch {
       setMsg("Erreur — réessayez ou utilisez l'accès direct ci-dessous.");
       setLoading(null);
@@ -44,9 +47,9 @@ export function AccesProClient() {
       <div className="rounded-xl bg-zinc-50 px-4 py-3 text-xs text-zinc-500">
         <p className="font-semibold">Accès direct sans email :</p>
         <ul className="mt-1 list-disc pl-4">
-          <li><a href="/dashboard?dev=1" className="text-emerald-700 hover:underline">Client — /dashboard?dev=1</a></li>
-          <li><a href="/dashboard/juriste?dev=1" className="text-emerald-700 hover:underline">Juriste — /dashboard/juriste?dev=1</a></li>
-          <li><a href="/dashboard/admin/failles?dev=1" className="text-emerald-700 hover:underline">Admin — /dashboard/admin/failles?dev=1</a></li>
+          <li><Link href="/dashboard?dev=1" className="text-emerald-700 hover:underline">Client — /dashboard?dev=1</Link></li>
+          <li><Link href="/dashboard/juriste?dev=1" className="text-emerald-700 hover:underline">Juriste — /dashboard/juriste?dev=1</Link></li>
+          <li><Link href="/dashboard/admin/failles?dev=1" className="text-emerald-700 hover:underline">Admin — /dashboard/admin/failles?dev=1</Link></li>
         </ul>
       </div>
     </div>

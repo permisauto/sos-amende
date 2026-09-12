@@ -8,6 +8,18 @@ export default auth((req) => {
   const { nextUrl } = req;
   const isLoggedIn = !!req.auth?.user;
   const isOnDashboard = nextUrl.pathname.startsWith("/dashboard");
+
+  // Pages réservées dev/E2E : masquées en production.
+  // `/mock-antai` reste joignable quand le mock ANTAI est explicitement
+  // activé (`ANTAI_MOCK=1`, réservé aux E2E local) — jamais sur Vercel.
+  const isMockAntai = nextUrl.pathname.startsWith("/mock-antai");
+  const isAccesPro = nextUrl.pathname.startsWith("/acces-pro");
+  const mockAntaiAllowed =
+    process.env.NODE_ENV !== "production" || process.env.ANTAI_MOCK === "1";
+  if ((isMockAntai && !mockAntaiAllowed) || (isAccesPro && process.env.NODE_ENV === "production")) {
+    return NextResponse.redirect(new URL("/", nextUrl));
+  }
+
   // Bypass dev RÉSERVÉ aux environnements non-prod (dev/E2E) : déploie une
   // identité locale selon la route (/admin → ADMIN). En production, le param
   // `?dev=1` et le cookie `dev_login` sont ignorés — accès uniquement par le

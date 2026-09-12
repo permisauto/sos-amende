@@ -1,9 +1,8 @@
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient, Role, DossierStatut, DossierType, FailleStatut } from "../src/generated/prisma/client";
+import { PrismaClient, Prisma, DossierStatut, DossierType } from "../src/generated/prisma/client";
 import { storageWrite } from "../src/lib/storage";
 import { generateLettrePdf } from "../src/lib/lettre-pdf";
-import { randomUUID } from "crypto";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -260,7 +259,7 @@ async function main() {
         statut: d.statut,
         pvUrl,
         pvTexte: `AVIS DE CONTRAVENTION\nN° ${d.numPv}\nDate: ${d.date}\nPlaque: ${d.plaque}\nLieu: ${d.lieu}\nMontant: ${d.montant} EUR`,
-        extractedData: d.extractedData as any,
+        extractedData: d.extractedData as Prisma.InputJsonValue,
         failleJuridiqueId: faille.id,
         dateLimite: d.dateLimite,
         valideLe: d.valideLe,
@@ -292,7 +291,7 @@ async function main() {
         .replace(/\{montant\}/g, `${d.montant} €`)
         .replace(/\{radarId\}/g, d.extractedData.radarId ?? "")
         .replace(/\{lieu\}/g, d.lieu)
-        .replace(/\{conditions_meteo\}/g, (d.questionnaire as any)?.conditions_meteo ?? "")
+        .replace(/\{conditions_meteo\}/g, (d.questionnaire as Record<string, string> | undefined)?.conditions_meteo ?? "")
         .replace(/\{duree\}/g, "6 mois")
         .replace(/\{adresse\}/g, "123 Rue Test, 75000 Paris");
 
@@ -317,7 +316,7 @@ async function main() {
           .replace(/\{montant\}/g, `${d.montant} €`)
           .replace(/\{radarId\}/g, d.extractedData.radarId ?? "")
           .replace(/\{lieu\}/g, d.lieu)
-          .replace(/\{conditions_meteo\}/g, (d.questionnaire as any)?.conditions_meteo ?? "")
+          .replace(/\{conditions_meteo\}/g, (d.questionnaire as Record<string, string> | undefined)?.conditions_meteo ?? "")
           .replace(/\{duree\}/g, "6 mois")
           .replace(/\{adresse\}/g, "123 Rue Test, 75000 Paris");
       const sigDataUrl = `data:image/png;base64,${pngBuffer.toString("base64")}`;

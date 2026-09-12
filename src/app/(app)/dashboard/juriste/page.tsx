@@ -55,7 +55,15 @@ export default async function JuristePage(
         ? (raw as Statut)
         : "PRET";
 
-  let dossiers: Array<Record<string, any>> = [];
+  let dossiers: Array<{
+    id: string;
+    type: "AMENDE" | "SUSPENSION";
+    statut: string;
+    extractedData: unknown;
+    createdAt: Date;
+    user: { name: string | null; email: string | null };
+    failleJuridique: { titreFaille: string } | null;
+  }> = [];
   let stats: Array<{ statut: string; _count: number }> = [];
   try {
     const res = await Promise.all([
@@ -70,8 +78,8 @@ export default async function JuristePage(
       }),
       prisma.dossier.groupBy({ by: ["statut"], _count: true }),
     ]);
-    dossiers = res[0] as unknown as Array<Record<string, any>>;
-    stats = res[1] as unknown as Array<{ statut: string; _count: number }>;
+    dossiers = res[0];
+    stats = res[1] as Array<{ statut: string; _count: number }>;
   } catch (e) {
     console.error("juriste dashboard: DB indisponible", e);
   }

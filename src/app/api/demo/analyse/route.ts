@@ -219,9 +219,9 @@ export async function POST(req: Request) {
     // - Météo / travaux via questionnaire (et via API OpenWeather si adresse+date)
     const t0 = Date.now();
     let dateExpirationEtalonnage: Date | null = null;
-    let radarPreuve: { checked: boolean; found: boolean; expired: boolean | null; preuveUrl: string | null } = { checked: false, found: false, expired: null, preuveUrl: null };
-    let meteoPreuve: { checked: boolean; value: string | null; source: string | null } = { checked: false, value: (data as Record<string, unknown>).conditions_meteo as string | null ?? null, source: null };
-    let travauxPreuve: { checked: boolean; value: boolean | null } = { checked: false, value: (data as Record<string, unknown>).travaux_présents as boolean | null ?? null };
+    const radarPreuve: { checked: boolean; found: boolean; expired: boolean | null; preuveUrl: string | null } = { checked: false, found: false, expired: null, preuveUrl: null };
+    const meteoPreuve: { checked: boolean; value: string | null; source: string | null } = { checked: false, value: (data as Record<string, unknown>).conditions_meteo as string | null ?? null, source: null };
+    const travauxPreuve: { checked: boolean; value: boolean | null } = { checked: false, value: (data as Record<string, unknown>).travaux_présents as boolean | null ?? null };
 
     const radarId = (data as Record<string, unknown>).radarId as string | undefined;
     // Parallélise failles déjà chargées + radar; meteo/travaux sont déjà dans data (questionnaire) pour être ultra-fluide

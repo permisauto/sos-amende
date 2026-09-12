@@ -11,7 +11,7 @@ import { synchroniserCatalogue } from "@/lib/auto-alimentation";
 import { validateMockFaille } from "@/lib/mock-failles";
 
 export type FailleState =
-  | { error?: string; ok?: boolean; count?: number }
+  | { error?: string; ok?: boolean; count?: number; statut?: "ACTIVE" | "INACTIVE" }
   | undefined;
 
 const regleSchema = z.discriminatedUnion("type", [
@@ -162,7 +162,7 @@ export async function basculerFaille(
   });
 
   revalidatePath("/dashboard/admin/failles");
-  return { ok: true };
+  return { ok: true, statut: faille.statut === "ACTIVE" ? "INACTIVE" : "ACTIVE" };
 }
 
 /**
@@ -201,7 +201,6 @@ export async function validerPropositionFaille(
   const action = PROPOSEE_ACTIONS.find((a) => a === formData.get("action"));
   if (!action) return { error: "Action invalide." };
 
-  let dbOk = false;
   try {
     const faille = await prisma.failleJuridique.findUnique({ where: { id } });
     if (!faille) return { error: "Faille introuvable." };
@@ -213,7 +212,6 @@ export async function validerPropositionFaille(
       where: { id },
       data: { statut: action },
     });
-    dbOk = true;
   } catch (e) {
     console.error("validerPropositionFaille: DB indisponible, fallback mock", e);
     // Fallback mock si DB down : on simule la validation pour la démo
@@ -223,7 +221,7 @@ export async function validerPropositionFaille(
 
   revalidatePath("/dashboard/admin/failles");
   revalidatePath("/dashboard/juriste/failles");
-  return { ok: true };
+  return { ok: true, statut: action };
 }
 
 const importItemSchema = z.object({
@@ -403,7 +401,6 @@ export async function activerToutesPropositions(
 ): Promise<FailleState> {
   await requireAdmin();
 
-  let dbOk = false;
   try {
     const proposees = await prisma.failleJuridique.findMany({
       where: { statut: "PROPOSEE" },
@@ -418,7 +415,6 @@ export async function activerToutesPropositions(
       where: { statut: "PROPOSEE" },
       data: { statut: "ACTIVE" },
     });
-    dbOk = true;
   } catch (e) {
     console.error("activerToutesPropositions: DB indisponible, fallback mock", e);
     // Fallback mock : on active toutes les PROPOSEE du catalogue

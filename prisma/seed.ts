@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient, Role } from "../src/generated/prisma/client";
+import { PrismaClient, Role, Prisma } from "../src/generated/prisma/client";
 import { CATALOGUE_SOURCES } from "../src/lib/catalogue-sources";
 
 const prisma = new PrismaClient({
@@ -100,7 +100,7 @@ async function main() {
         articleLoi: faille.articleLoi,
         source: faille.source,
         regle: faille.regle,
-        reglesDetection: faille.reglesDetection as any,
+        reglesDetection: faille.reglesDetection,
         templateLettre: faille.templateLettre,
         statut: "ACTIVE",
       },
@@ -126,8 +126,8 @@ async function main() {
         articleLoi: faille.articleLoi,
         source: faille.source,
         regle: faille.regle,
-        reglesDetection: faille.reglesDetection as any,
-        jurisprudence: faille.jurisprudence as any,
+        reglesDetection: faille.reglesDetection as Prisma.InputJsonValue,
+        jurisprudence: faille.jurisprudence as Prisma.InputJsonValue,
         templateLettre: faille.templateLettre,
         statut: estHistorique ? "ACTIVE" : "PROPOSEE",
       },
@@ -138,8 +138,8 @@ async function main() {
         articleLoi: faille.articleLoi,
         source: faille.source,
         regle: faille.regle,
-        reglesDetection: faille.reglesDetection as any,
-        jurisprudence: faille.jurisprudence as any,
+        reglesDetection: faille.reglesDetection as Prisma.InputJsonValue,
+        jurisprudence: faille.jurisprudence as Prisma.InputJsonValue,
         templateLettre: faille.templateLettre,
         statut: estHistorique ? "ACTIVE" : "PROPOSEE",
       },

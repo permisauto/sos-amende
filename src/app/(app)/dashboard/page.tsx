@@ -5,9 +5,6 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/dal";
 import { joursRestants } from "@/lib/moteur";
-import { Suspense } from "react";
-import { PayerCta } from "@/components/payer-cta";
-import { DashboardCheckoutBanner } from "@/components/dashboard-checkout-banner";
 
 const MOCK_NOW = new Date("2026-07-15T12:00:00Z").getTime();
 
@@ -73,9 +70,6 @@ export default async function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <Suspense>
-        <DashboardCheckoutBanner />
-      </Suspense>
       {/* Hero */}
       <section className="rounded-3xl bg-gradient-to-br from-emerald-600 via-emerald-600 to-teal-700 px-8 py-10 text-white shadow-sm">
         <p className="text-sm font-medium text-emerald-100">
@@ -90,7 +84,7 @@ export default async function DashboardPage() {
           vous signez, nous la vérifions — vous l&apos;envoyez.
         </p>
         <p className="mt-3 max-w-xl text-xs text-emerald-100/90">
-          Analyse gratuite : déposez votre PV, scan + scoring offerts. Vous ne payez (39&nbsp;€ / 59&nbsp;€, Stripe ou virement) que si une faille est validée.
+          Analyse gratuite : déposez votre PV, scan + scoring offerts. Vous ne payez (39&nbsp;€ / 59&nbsp;€, par virement bancaire) que si une faille est validée.
         </p>
 
         <div className="mt-6 flex flex-wrap gap-3">

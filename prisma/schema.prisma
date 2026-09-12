@@ -245,7 +245,7 @@ model LawyerMatch {
 }
 
 // ---------------------------------------------------------------------------
-// Paiements Stripe (inscription inversée, remboursements sect. 9)
+// Paiements par virement bancaire (inscription inversée, remboursements sect. 9)
 // ---------------------------------------------------------------------------
 
 model Payment {

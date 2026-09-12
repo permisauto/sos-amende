@@ -7,7 +7,7 @@
 - Next.js 16 (App Router, Server Actions) + React 19 + Tailwind CSS v4
 - Prisma 7 (driver-adapter) + PostgreSQL
 - Auth.js v5 (magic-link, Resend) — aucun mot de passe
-- Stripe (paiement à l'acte, inscription inversée) — portail mock en dev (`STRIPE_MOCK=1`)
+- Paiement : virement bancaire uniquement (paiement à l'acte, inscription inversée) — preuve téléversée, validée manuellement par l'admin
 - OCR : Tesseract.js (local) / Mistral OCR / Google Vision — relecture humaine obligatoire
 - Stockage : local (`public/uploads/`) en dev, S3-compatible UE en prod
 - Tests : Vitest (moteur juridique) + Playwright (E2E, port 3200)
