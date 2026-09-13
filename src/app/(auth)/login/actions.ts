@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { headers } from "next/headers";
 import { AuthError } from "next-auth";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { signIn } from "@/auth";
 import { consommerCreneau } from "@/lib/rate-limit";
@@ -12,9 +13,19 @@ const loginSchema = z.object({
   email: z.email("Adresse e-mail invalide.").trim(),
 });
 
+const loginPasswordSchema = z.object({
+  email: z.email("Adresse e-mail invalide.").trim(),
+  password: z
+    .string()
+    .min(8, "Le mot de passe doit contenir au moins 8 caractères."),
+});
+
 export type LoginState = {
   error?: string;
 };
+
+/** Résultat de la connexion par mot de passe (comptes internes). */
+export type LoginPasswordState = { error?: string };
 
 // Anti-abus des magic-links : au plus 5 liens par e-mail, 15 par IP, par
 // fenêtre de 15 minutes (coût = envoi e-mail/écriture de fichier).
@@ -26,6 +37,53 @@ async function ipClient(): Promise<string> {
   const h = await headers();
   const fwd = h.get("x-forwarded-for");
   return (fwd?.split(",")[0]?.trim() ?? "inconnue").slice(0, 64);
+}
+
+export async function loginWithPassword(
+  _prev: LoginPasswordState,
+  formData: FormData,
+): Promise<LoginPasswordState> {
+  const parsed = loginPasswordSchema.safeParse({
+    email: formData.get("email"),
+    password: formData.get("password"),
+  });
+  if (!parsed.success) {
+    return { error: "Veuillez saisir une adresse e-mail et votre mot de passe." };
+  }
+
+  // Même fenêtre de garde que les magic-links (coût = appel authorize/scrypt).
+  if (process.env.AUTH_RESEND_KEY) {
+    const { email } = parsed.data;
+    const creneauParams = { max: MAX_EMAIL, fenetreMs: FENETRE_MS } as const;
+    const emailOk = consommerCreneau(
+      `password:${email.toLowerCase()}`,
+      creneauParams.max,
+      creneauParams.fenetreMs,
+    );
+    const ipOk =
+      consommerCreneau(`password:ip:${await ipClient()}`, MAX_IP, FENETRE_MS) > 0;
+    if (emailOk === 0 || !ipOk) {
+      return {
+        error: "Trop de tentatives. Attendez quelques minutes avant de réessayer.",
+      };
+    }
+  }
+
+  try {
+    await signIn("credentials", {
+      email: parsed.data.email,
+      password: parsed.data.password,
+      redirect: false,
+    });
+    // Succès (pas d'erreur AuthError) : on bascule immédiatement sur le
+    // tableau de bord. NEXT_REDIRECT est géré par le rendu serveur.
+    redirect("/dashboard");
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return { error: "Identifiants incorrects." };
+    }
+    throw error;
+  }
 }
 
 export async function loginWithEmail(

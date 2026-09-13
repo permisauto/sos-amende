@@ -25,6 +25,10 @@ export function ComptesAdmin({ comptes }: { comptes: Compte[] }) {
             <span className="text-sm font-medium">E-mail *</span>
             <input name="email" type="email" required placeholder="juriste@domaine.fr" className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm" />
           </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium">Mot de passe *</span>
+            <input name="motDePasse" type="password" required minLength={8} autoComplete="new-password" placeholder="8 caractères minimum" className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm" />
+          </label>
           <button disabled={pending} className="self-end rounded-full bg-emerald-600 px-6 py-2.5 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
             {pending ? "Création…" : "Créer le compte"}
           </button>

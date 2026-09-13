@@ -1,11 +1,13 @@
 import NextAuth from "next-auth";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import Resend from "next-auth/providers/resend";
+import Credentials from "next-auth/providers/credentials";
 import { Resend as ResendClient } from "resend";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { prisma } from "@/lib/prisma";
 import { authConfig } from "@/auth.config";
+import { verifyPassword } from "@/lib/password";
 
 const cleanResendKey = process.env.AUTH_RESEND_KEY?.replace(/^\uFEFF/, "").trim();
 const resend = cleanResendKey ? new ResendClient(cleanResendKey) : null;
@@ -36,6 +38,32 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
   providers: [
+    // Connexion e-mail + mot de passe (comptes internes juristes/administrateurs
+    // provisionnés par le super admin). authorize vérifie passwordHash dans la
+    // base (scrypt). Rôle injecté dans le jeton par le callback jwt.
+    Credentials({
+      name: "Mot de passe",
+      credentials: { email: {}, password: {} },
+      async authorize(credentials) {
+        if (!credentials) return null;
+        const email = String(credentials.email ?? "")
+          .trim()
+          .toLowerCase();
+        const password = String(credentials.password ?? "");
+        if (!email || !password) return null;
+
+        const user = await prisma.user.findUnique({ where: { email } });
+        if (!user?.passwordHash || !verifyPassword(password, user.passwordHash)) {
+          return null;
+        }
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+        };
+      },
+    }),
     Resend({
       from: EMAIL_FROM,
       apiKey: cleanResendKey,
