@@ -206,7 +206,7 @@ export default async function DashboardPage() {
         <ol className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[
             ["1", "Téléversez votre PV", "Photo ou scan de votre avis de contravention ou décision de suspension."],
-            ["2", "Nous analysons", "OCR + moteur juridique : détection automatique de la faille et génération de la lettre."],
+            ["2", "Nous analysons", "Numérisation + moteur juridique : détection automatique de la faille et génération de la lettre."],
             ["3", "Vous signez", "Signature électronique dans votre espace, la lettre est préparée et vérifiée par un juriste."],
             ["4", "Vous envoyez", "Kit d'envoi complet (LRAR ou téléservice) et suivi jusqu'à la décision."],
           ].map(([n, t, d]) => (

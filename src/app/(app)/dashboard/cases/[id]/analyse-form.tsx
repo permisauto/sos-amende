@@ -55,7 +55,7 @@ export function AnalyseForm({
         {hasPrefill ? (
           <>
             Les champs ont été <strong>pré-remplis par lecture automatique
-            (OCR)</strong> {titreAnalyse(type)}. Vérifiez-les avant de
+            </strong> {titreAnalyse(type)}. Vérifiez-les avant de
             valider : ils sont ensuite relus par un juriste (vérification
             humaine obligatoire).
           </>

@@ -151,19 +151,19 @@ export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPEN
             ) : (
               <>
                 <p className="text-sm font-medium text-zinc-700">Appuyez pour scanner avec votre smartphone</p>
-                <p className="text-xs text-zinc-500">Photo ou PDF — JPEG/PNG/WebP/PDF, 8 Mo max. L'OCR capte les infos dès l'upload.</p>
+                <p className="text-xs text-zinc-500">Photo ou PDF — JPEG/PNG/WebP/PDF, 8 Mo max. La numérisation sécurisée capte les infos dès l'upload.</p>
               </>
             )}
             {autoFilling && (
               <span className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white">
-                <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" /> OCR en cours — pré-remplissage…
+                <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" /> Numérisation en cours — pré-remplissage…
               </span>
             )}
           </div>
         </div>
 
         <div className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          L'OCR extrait les données dès le téléversement et lance le scan. Vérifiez les champs pré-remplis ci-dessous, corrigez si besoin, puis validez.
+          La numérisation sécurisée extrait les données dès le téléversement et lance le scan. Vérifiez les champs pré-remplis ci-dessous, corrigez si besoin, puis validez.
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -244,7 +244,7 @@ export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPEN
         </div>
 
         <button onClick={handleScan} disabled={loading || autoFilling} className="mt-6 w-full rounded-full bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
-          {loading ? "Scan en cours…" : autoFilling ? "OCR en cours…" : hasResult ? "Re-vérifier et relancer le scoring complet" : "Vérifier et valider — lancer le scoring complet"}
+          {loading ? "Numérisation en cours…" : autoFilling ? "Numérisation en cours…" : hasResult ? "Re-vérifier et relancer le scoring complet" : "Vérifier et valider — lancer le scoring complet"}
         </button>
         <p className="mt-2 text-center text-xs text-zinc-500">Le scan s'est lancé automatiquement à l'upload. Répondez aux questions complémentaires pour un scan dynamique et complet, puis re-validez. Aucun email demandé — analyse gratuite.</p>
       </div>
@@ -284,7 +284,7 @@ export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPEN
                   <li className="flex items-center gap-2">{reponse?.preuves?.radar.checked ? (reponse.preuves.radar.found ? <span className="text-emerald-600">✓</span> : <span className="text-amber-600">○</span>) : <span className="text-zinc-300">○</span>} Radar {reponse?.preuves?.radar.found ? (reponse.preuves.radar.expired ? "étalonnage expiré — preuve trouvée" : "étalonnage OK") : infos.lieu ? "vérifié — aucun radar correspondant" : "non vérifié (renseignez N° radar/lieu)"} </li>
                   <li className="flex items-center gap-2">{reponse?.preuves?.meteo.checked ? (reponse.preuves.meteo.value ? <span className="text-emerald-600">✓</span> : <span className="text-zinc-300">○</span>) : <span className="text-zinc-300">○</span>} Météo {reponse?.preuves?.meteo.value ? `${reponse.preuves.meteo.value} (${reponse.preuves.meteo.source})` : "non signalée — cochez si pluie/brouillard"}</li>
                   <li className="flex items-center gap-2">{reponse?.preuves?.travaux.checked ? (reponse.preuves.travaux.value ? <span className="text-emerald-600">✓</span> : <span className="text-zinc-300">○</span>) : <span className="text-zinc-300">○</span>} Travaux {reponse?.preuves?.travaux.value ? "signalés — vérifiés" : "non signalés"}</li>
-                  <li className="flex items-center gap-2">{reponse?.texte ? <span className="text-emerald-600">✓</span> : <span className="text-zinc-300">○</span>} Texte OCR {reponse?.texte ? `capté (${reponse.texte.length} car.)` : "—"}</li>
+                  <li className="flex items-center gap-2">{reponse?.texte ? <span className="text-emerald-600">✓</span> : <span className="text-zinc-300">○</span>} Texte numérisé {reponse?.texte ? `capté (${reponse.texte.length} car.)` : "—"}</li>
                 </ul>
                 <p className="mt-2 text-[11px] text-zinc-500">Vérification croisée : chaque faille est confrontée à sa preuve (ex: étalonnage → certificat radar, météo → bulletin). {reponse?.preuves?.dureeMs ? `Scan ${reponse.preuves.dureeMs}ms.` : ""}</p>
               </div>

@@ -42,14 +42,14 @@ type ValidationLettre = "floutee" | "verification" | "validee";
 
 const SCAN_STEPS_AMENDE = [
   "Téléversement simulé de l'avis de contravention…",
-  "Lecture automatique (OCR) du document…",
+  "Numérisation sécurisée en cours…",
   "Extraction des données (plaque, date, montant)…",
   "Identification des failles juridiques…",
 ];
 
 const SCAN_STEPS_SUSPENSION = [
   "Téléversement simulé de la décision de suspension…",
-  "Lecture automatique (OCR) du document…",
+  "Numérisation sécurisée en cours…",
   "Extraction des données (plaque, date, décision)…",
   "Identification des failles juridiques…",
 ];
@@ -160,7 +160,7 @@ export function DemoScan() {
         </span>
       </div>
       <p className="mt-1 text-sm text-zinc-600">
-        La démo simule le téléversement de {LIBELLES[type]}, le scan (OCR),
+        La démo simule le téléversement de {LIBELLES[type]}, la numérisation sécurisée,
         l&apos;identification des failles, le score de réussite estimé puis la
         génération de la lettre de recours — rien n&apos;est stocké, aucun
         fichier n&apos;est requis.
@@ -188,7 +188,7 @@ export function DemoScan() {
           disabled={phase === "scanning"}
           className="mt-5 rounded-full bg-emerald-600 px-6 py-3 font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
         >
-          {phase === "scanning" ? "Scan en cours…" : "Lancer la démo"}
+          {phase === "scanning" ? "Numérisation en cours…" : "Lancer la démo"}
         </button>
       </div>
 
