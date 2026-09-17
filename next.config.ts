@@ -32,6 +32,19 @@ const nextConfig: NextConfig = {
   // bundle et le chemin 'tesseract.js/src/worker-script/node/index.js' casse
   // au déploiement (Vercel) : « Cannot find module .../worker-script/... ».
   serverExternalPackages: ["tesseract.js"],
+  // Vercel trace la fonction et n'embarque que les fichiers atteignables par
+  // analyse statique : le worker-script de tesseract.js est chargé via un
+  // chemin dynamique (path.join(__dirname, ...)) donc invisible au traceur —
+  // il faut le forcer dans l'output, sinon « Cannot find module
+  // .../worker-script/node/index.js » en production.
+  outputFileTracingIncludes: {
+    "/*": [
+      "./node_modules/tesseract.js/src/worker-script/**/*",
+      "./node_modules/tesseract.js/src/worker/**/*",
+      "./node_modules/tesseract.js-core/**/*",
+      "./node_modules/tesseract.js/src/worker-script/node/index.js",
+    ],
+  },
   async headers() {
     return [
       {
