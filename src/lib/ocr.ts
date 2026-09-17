@@ -109,7 +109,13 @@ async function mistralOcr(buffer: Buffer): Promise<OcrResult | null> {
 async function tesseractOcr(buffer: Buffer): Promise<OcrResult | null> {
   try {
     const { createWorker } = await import("tesseract.js");
-    const worker = await createWorker("fra");
+    // Vercel : le cwd est en lecture seule, seule /tmp est écrivable. Le
+    // traineddata (fra) est téléchargé au runtime depuis le CDN jsDelivr puis
+    // caché dans cachePath — obligatoire en production serverless.
+    const cachePath = process.env.NODE_ENV === "production" ? "/tmp" : undefined;
+    const worker = await createWorker("fra", undefined, {
+      ...(cachePath ? { cachePath } : {}),
+    });
     try {
       const { data } = await worker.recognize(buffer);
       const texte = data.text?.trim();

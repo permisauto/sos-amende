@@ -27,6 +27,11 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // tesseract.js charge un worker-script via worker_threads à l'exécution :
+  // il doit rester un paquet externe (require() natif), sinon Next.js le
+  // bundle et le chemin 'tesseract.js/src/worker-script/node/index.js' casse
+  // au déploiement (Vercel) : « Cannot find module .../worker-script/... ».
+  serverExternalPackages: ["tesseract.js"],
   async headers() {
     return [
       {
