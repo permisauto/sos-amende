@@ -152,7 +152,11 @@ async function geminiUploadFile(buffer: Buffer, mime: string): Promise<string | 
   // Étape 2 — upload + finalize : pousse les octets du fichier.
   const upload = await fetch(uploadUrl, {
     method: "PUT",
-    headers: { "X-Goog-Upload-Command": "upload, finalize", "Content-Length": String(buffer.byteLength) },
+    headers: {
+      "X-Goog-Upload-Command": "upload, finalize",
+      "X-Goog-Upload-Offset": "0",
+      "Content-Length": String(buffer.byteLength),
+    },
     body: Buffer.from(buffer),
   });
   if (!upload.ok) {
