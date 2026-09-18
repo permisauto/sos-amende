@@ -66,7 +66,10 @@ async function geminiFlashOcr(buffer: Buffer): Promise<OcrResult | null> {
     let parts: unknown[];
     if (mime === "application/pdf") {
       const fileUri = await geminiUploadFile(buffer, mime);
-      if (!fileUri) return null;
+      if (!fileUri) {
+        console.error("[ocr:gemini] échec téléversement PDF (Files API)");
+        return null;
+      }
       parts = [
         { file_data: { file_uri: fileUri, mime_type: mime } },
         { text: PROMPT_EXTRACTION },
@@ -90,7 +93,10 @@ async function geminiFlashOcr(buffer: Buffer): Promise<OcrResult | null> {
         body: JSON.stringify({ contents: [{ parts }] }),
       },
     );
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.error("[ocr:gemini] generateContent HTTP", res.status, await res.text());
+      return null;
+    }
 
     const body = (await res.json()) as {
       candidates?: { content?: { parts?: { text?: string }[] } }[];
@@ -99,9 +105,13 @@ async function geminiFlashOcr(buffer: Buffer): Promise<OcrResult | null> {
       .map((p) => p.text ?? "")
       .join("\n")
       .trim();
-    if (!texte) return null;
+    if (!texte) {
+      console.error("[ocr:gemini] réponse sans texte", JSON.stringify(body).slice(0, 300));
+      return null;
+    }
     return { texte };
-  } catch {
+  } catch (err) {
+    console.error("[ocr:gemini] échec :", err instanceof Error ? `${err.name}: ${err.message}` : String(err));
     return null;
   }
 }
@@ -129,9 +139,15 @@ async function geminiUploadFile(buffer: Buffer, mime: string): Promise<string | 
       file: { display_name: `pv-${Date.now()}.pdf`, mime_type: mime },
     }),
   });
-  if (!start.ok) return null;
+  if (!start.ok) {
+    console.error("[ocr:gemini] upload start HTTP", start.status, await start.text());
+    return null;
+  }
   const uploadUrl = start.headers.get("x-goog-upload-url");
-  if (!uploadUrl) return null;
+  if (!uploadUrl) {
+    console.error("[ocr:gemini] upload start sans x-goog-upload-url");
+    return null;
+  }
 
   // Étape 2 — upload + finalize : pousse les octets du fichier.
   const upload = await fetch(uploadUrl, {
@@ -139,9 +155,16 @@ async function geminiUploadFile(buffer: Buffer, mime: string): Promise<string | 
     headers: { "X-Goog-Upload-Command": "upload, finalize", "Content-Length": String(buffer.byteLength) },
     body: Buffer.from(buffer),
   });
-  if (!upload.ok) return null;
+  if (!upload.ok) {
+    console.error("[ocr:gemini] upload push HTTP", upload.status, await upload.text());
+    return null;
+  }
   const meta = (await upload.json()) as { file?: { uri?: string } };
-  return meta.file?.uri ?? null;
+  if (!meta.file?.uri) {
+    console.error("[ocr:gemini] upload push sans file.uri", JSON.stringify(meta).slice(0, 300));
+    return null;
+  }
+  return meta.file.uri;
 }
 
 async function googleVisionOcr(buffer: Buffer): Promise<OcrResult | null> {
