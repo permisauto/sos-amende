@@ -3,6 +3,9 @@ import type { ExtractedData } from "@/lib/moteur";
 export type OcrResult = {
   texte: string;
   confiance?: number;
+  /** Champs structurés éventuels (Gemini les extrait nativement) — sinon,
+   * normaliserPv(texte) s'applique en secours. */
+  extrait?: Partial<ExtractedData>;
 };
 
 export type OcrProvider = "google-vision" | "mistral-ocr" | "gemini-flash" | "tesseract" | "mock" | "aucun";
@@ -53,9 +56,12 @@ function detecterMime(buffer: Buffer): string {
 /**
  * OCR Google Gemini Flash (generativelanguage.googleapis.com) — niveau
  * gratuit généreux via AI Studio, OCR ultra-rapide, aucune donnée stockée
- * par l'app. Modèle par défaut gemini-2.5-flash (surchargé par GEMINI_MODEL).
+ * par l'app. Modèle par défaut gemini-3.6-flash (surchargé par GEMINI_MODEL).
  * Images (jpeg/png/webp) : envoyées en inline_data. PDF : téléversé via la
  * Gemini Files API (limite 20 Mo) puis lu via file_data avant suppression.
+ * Demande à Gemini un JSON : le texte brut (conservé tel quel) PLUS les
+ * champs structurés (numéro PV, plaque, dates…), pré-remplissage bien plus
+ * fiable que les regex de normaliserPv — la saisie humaine reste obligatoire.
  */
 async function geminiFlashOcr(buffer: Buffer): Promise<OcrResult | null> {
   try {
@@ -72,12 +78,12 @@ async function geminiFlashOcr(buffer: Buffer): Promise<OcrResult | null> {
       }
       parts = [
         { file_data: { file_uri: fileUri, mime_type: mime } },
-        { text: PROMPT_EXTRACTION },
+        { text: PROMPT_EXTRACTION_JSON },
       ];
     } else {
       parts = [
         { inline_data: { mime_type: mime, data: buffer.toString("base64") } },
-        { text: PROMPT_EXTRACTION },
+        { text: PROMPT_EXTRACTION_JSON },
       ];
     }
 
@@ -90,7 +96,10 @@ async function geminiFlashOcr(buffer: Buffer): Promise<OcrResult | null> {
           "x-goog-api-key": process.env.GEMINI_API_KEY ?? "",
         },
         cache: "no-store",
-        body: JSON.stringify({ contents: [{ parts }] }),
+        body: JSON.stringify({
+          contents: [{ parts }],
+          generationConfig: { response_mime_type: "application/json" },
+        }),
       },
     );
     if (!res.ok) {
@@ -101,23 +110,82 @@ async function geminiFlashOcr(buffer: Buffer): Promise<OcrResult | null> {
     const body = (await res.json()) as {
       candidates?: { content?: { parts?: { text?: string }[] } }[];
     };
-    const texte = (body.candidates?.[0]?.content?.parts ?? [])
+    const brut = (body.candidates?.[0]?.content?.parts ?? [])
       .map((p) => p.text ?? "")
-      .join("\n")
+      .join("")
       .trim();
-    if (!texte) {
+    if (!brut) {
       console.error("[ocr:gemini] réponse sans texte", JSON.stringify(body).slice(0, 300));
       return null;
     }
-    return { texte };
+
+    const parse = parseJsonBorne(brut);
+    if (!parse) {
+      console.error("[ocr:gemini] JSON illisible", brut.slice(0, 300));
+      return null;
+    }
+    const texte = typeof parse.texte === "string" && parse.texte.trim() ? parse.texte.trim() : brut;
+    const extrait: Partial<ExtractedData> = {};
+    for (const champ of [
+      "nom",
+      "plaque",
+      "num_pv",
+      "date",
+      "heure",
+      "montant",
+      "typeRadar",
+      "radarId",
+      "adresse",
+      "lieu",
+    ] as const) {
+      const v = parse[champ];
+      if (typeof v === "string" && v.trim()) extrait[champ] = v.trim().slice(0, 140);
+    }
+    if (parse["numTelePaiement"]) {
+      const t = String(parse["numTelePaiement"]).trim().slice(0, 20);
+      if (t) extrait.numTelePaiement = t;
+    }
+    if (typeof parse["cle"] === "string" && parse["cle"].trim()) {
+      extrait.cle = parse["cle"].trim().slice(0, 4);
+    }
+    return { texte, extrait: Object.keys(extrait).length ? extrait : undefined };
   } catch (err) {
     console.error("[ocr:gemini] échec :", err instanceof Error ? `${err.name}: ${err.message}` : String(err));
     return null;
   }
 }
 
-const PROMPT_EXTRACTION =
-  "Extrais TOUT le texte visible de cet avis de contravention, lettre par lettre, sans reformuler ni résumer. Retourne uniquement le texte brut, en conservant les numéros, dates, montants et plaques exactement comme imprimés.";
+/** Extraction d'objets JSON, tolérante au format (blocs ```json, fioritures). */
+function parseJsonBorne(brut: string): Record<string, unknown> | null {
+  try {
+    return JSON.parse(brut);
+  } catch {
+    const bloc = brut.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
+    if (bloc) {
+      try {
+        return JSON.parse(bloc.trim());
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+}
+
+const PROMPT_EXTRACTION_JSON = `Lis cet avis de contravention (ou cette décision de suspension) et réponds UNIQUEMENT par un objet JSON valide, sans commentaire, avec EXACTEMENT ces clés (chaque valeur : la donnée telle qu'imprimée, ou "" si absente) :
+- "texte" : le texte brute intégral du document, lettre par lettre, sans reformuler ni résumer
+- "nom" : nom du titulaire (ex : MARTIN Jean)
+- "plaque" : immatriculation exacte (ex : AA-123-BB)
+- "num_pv" : numéro de l'avis complet (ex : 37592048152634)
+- "date" : date de l'avis/infraction au format AAAA-MM-JJ
+- "heure" : heure au format HHhMM
+- "montant" : montant de l'amende en euros avec 2 décimales (ex : "135,00 €")
+- "typeRadar" : modèle de l'appareil (ex : RADAR MESTA 210C)
+- "radarId" : numéro d'identification du radar (ex : 1248)
+- "lieu" : lieu de l'infraction (ex : Avenue de la République - METZ)
+- "adresse" : adresse du titulaire (rue + code postal + ville)
+- "numTelePaiement" : numéro de télépaiement complet s'il figure
+- "cle" : clé de télépaiement (1 chiffre) si elle figure`;
 
 /**
  * Téléverse un fichier (PDF) sur la Gemini Files API et renvoie son URI.

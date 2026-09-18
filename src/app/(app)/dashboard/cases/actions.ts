@@ -59,7 +59,14 @@ export async function createDossier(
   const prefill: Record<string, string> = {};
   const ocr = await extrairePv(buffer);
   if (ocr) {
-    Object.assign(prefill, normaliserPv(ocr.texte));
+    // Gemini renvoie des champs structurés (plus fiables que les regex) ;
+    // sinon on applique normaliserPv sur le texte brut (providers classiques).
+    const struct = ocr.extrait;
+    if (struct && Object.keys(struct).length > 0) {
+      Object.assign(prefill, struct);
+    } else {
+      Object.assign(prefill, normaliserPv(ocr.texte));
+    }
   }
 
   const prix = parsedType.data === "AMENDE" ? 39 : 59;
