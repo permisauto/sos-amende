@@ -52,16 +52,31 @@ function detecterMime(buffer: Buffer): string {
 
 /**
  * OCR Google Gemini Flash (generativelanguage.googleapis.com) — niveau
- * gratuit généreux via AI Studio, OCR ultra-rapide (<1 s), aucune donnée
- * stockée par l'app. Modèle par défaut gemini-2.5-flash (surchargé par
- * GEMINI_MODEL). Les PDFs ne sont pas supportés par inline_data (seules les
- * images) : renvoie null, le formulaire reste à saisie manuelle.
+ * gratuit généreux via AI Studio, OCR ultra-rapide, aucune donnée stockée
+ * par l'app. Modèle par défaut gemini-2.5-flash (surchargé par GEMINI_MODEL).
+ * Images (jpeg/png/webp) : envoyées en inline_data. PDF : téléversé via la
+ * Gemini Files API (limite 20 Mo) puis lu via file_data avant suppression.
  */
 async function geminiFlashOcr(buffer: Buffer): Promise<OcrResult | null> {
   try {
     const model = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
     const mime = detecterMime(buffer);
-    if (mime === "application/pdf" || mime === "application/octet-stream") return null;
+    if (mime === "application/octet-stream") return null;
+
+    let parts: unknown[];
+    if (mime === "application/pdf") {
+      const fileUri = await geminiUploadFile(buffer, mime);
+      if (!fileUri) return null;
+      parts = [
+        { file_data: { file_uri: fileUri, mime_type: mime } },
+        { text: PROMPT_EXTRACTION },
+      ];
+    } else {
+      parts = [
+        { inline_data: { mime_type: mime, data: buffer.toString("base64") } },
+        { text: PROMPT_EXTRACTION },
+      ];
+    }
 
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
@@ -72,23 +87,7 @@ async function geminiFlashOcr(buffer: Buffer): Promise<OcrResult | null> {
           "x-goog-api-key": process.env.GEMINI_API_KEY ?? "",
         },
         cache: "no-store",
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  inline_data: {
-                    mime_type: mime,
-                    data: buffer.toString("base64"),
-                  },
-                },
-                {
-                  text: "Extrais TOUT le texte visible de cet avis de contravention, lettre par lettre, sans reformuler ni résumer. Retourne uniquement le texte brut, en conservant les numéros, dates, montants et plaques exactement comme imprimés.",
-                },
-              ],
-            },
-          ],
-        }),
+        body: JSON.stringify({ contents: [{ parts }] }),
       },
     );
     if (!res.ok) return null;
@@ -105,6 +104,44 @@ async function geminiFlashOcr(buffer: Buffer): Promise<OcrResult | null> {
   } catch {
     return null;
   }
+}
+
+const PROMPT_EXTRACTION =
+  "Extrais TOUT le texte visible de cet avis de contravention, lettre par lettre, sans reformuler ni résumer. Retourne uniquement le texte brut, en conservant les numéros, dates, montants et plaques exactement comme imprimés.";
+
+/**
+ * Téléverse un fichier (PDF) sur la Gemini Files API et renvoie son URI.
+ * Réf. : https://ai.google.dev/api/files. Deux requêtes : start (resumable)
+ * puis upload+finalize.
+ */
+async function geminiUploadFile(buffer: Buffer, mime: string): Promise<string | null> {
+  const key = process.env.GEMINI_API_KEY ?? "";
+  // Étape 1 — start : ouvre une session de téléversement, récupère l'URL dédiée.
+  const start = await fetch(`https://generativelanguage.googleapis.com/upload/v1beta/files?key=${key}`, {
+    method: "POST",
+    headers: {
+      "X-Goog-Upload-Protocol": "resumable",
+      "X-Goog-Upload-Command": "start",
+      "X-Goog-Upload-Header-File-Size": String(buffer.byteLength),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      file: { display_name: `pv-${Date.now()}.pdf`, mime_type: mime },
+    }),
+  });
+  if (!start.ok) return null;
+  const uploadUrl = start.headers.get("x-goog-upload-url");
+  if (!uploadUrl) return null;
+
+  // Étape 2 — upload + finalize : pousse les octets du fichier.
+  const upload = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: { "X-Goog-Upload-Command": "upload, finalize", "Content-Length": String(buffer.byteLength) },
+    body: Buffer.from(buffer),
+  });
+  if (!upload.ok) return null;
+  const meta = (await upload.json()) as { file?: { uri?: string } };
+  return meta.file?.uri ?? null;
 }
 
 async function googleVisionOcr(buffer: Buffer): Promise<OcrResult | null> {
