@@ -18,6 +18,7 @@ export async function GET() {
       if (raw === "mock") return "mock";
       if (raw === "mistral-ocr") return process.env.MISTRAL_API_KEY ? "mistral-ocr" : "aucun";
       if (raw === "google-vision") return process.env.GOOGLE_VISION_KEY ? "google-vision" : "aucun";
+      if (raw === "gemini-flash") return process.env.GEMINI_API_KEY ? "gemini-flash" : "aucun";
       if (raw === "") return "aucun";
       return "inconnu";
     })(),

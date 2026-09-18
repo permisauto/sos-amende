@@ -5,7 +5,7 @@ export type OcrResult = {
   confiance?: number;
 };
 
-export type OcrProvider = "google-vision" | "mistral-ocr" | "tesseract" | "mock" | "aucun";
+export type OcrProvider = "google-vision" | "mistral-ocr" | "gemini-flash" | "tesseract" | "mock" | "aucun";
 
 export function getOcrProvider(): OcrProvider {
   const raw = (process.env.OCR_PROVIDER ?? "").toLowerCase();
@@ -15,6 +15,11 @@ export function getOcrProvider(): OcrProvider {
   if (raw === "mistral-ocr") {
     // Mistral AI (hébergement UE) — alternative RGPD à Google Vision.
     return process.env.MISTRAL_API_KEY ? "mistral-ocr" : "aucun";
+  }
+  if (raw === "gemini-flash") {
+    // Google Gemini Flash — niveau gratuit généreux (AI Studio), OCR d'image
+    // (jpeg/png/webp) très rapide. Nécessite une clé API Google AI.
+    return process.env.GEMINI_API_KEY ? "gemini-flash" : "aucun";
   }
   if (raw === "tesseract") return "tesseract";
   if (raw === "mock") return "mock";
@@ -30,9 +35,76 @@ export async function extrairePv(buffer: Buffer): Promise<OcrResult | null> {
   const provider = getOcrProvider();
   if (provider === "google-vision") return googleVisionOcr(buffer);
   if (provider === "mistral-ocr") return mistralOcr(buffer);
+  if (provider === "gemini-flash") return geminiFlashOcr(buffer);
   if (provider === "tesseract") return tesseractOcr(buffer);
   if (provider === "mock") return mockOcr();
   return null;
+}
+
+/** Détection du MIME par magie-bytes (Gemini exige le bon type inline_data). */
+function detecterMime(buffer: Buffer): string {
+  if (buffer[0] === 0xff && buffer[1] === 0xd8) return "image/jpeg";
+  if (buffer[0] === 0x89 && buffer[1] === 0x50) return "image/png";
+  if (buffer.toString("ascii", 0, 4) === "RIFF" && buffer.toString("ascii", 8, 12) === "WEBP") return "image/webp";
+  if (buffer.toString("ascii", 0, 5) === "%PDF-") return "application/pdf";
+  return "application/octet-stream";
+}
+
+/**
+ * OCR Google Gemini Flash (generativelanguage.googleapis.com) — niveau
+ * gratuit généreux via AI Studio, OCR ultra-rapide (<1 s), aucune donnée
+ * stockée par l'app. Modèle par défaut gemini-2.5-flash (surchargé par
+ * GEMINI_MODEL). Les PDFs ne sont pas supportés par inline_data (seules les
+ * images) : renvoie null, le formulaire reste à saisie manuelle.
+ */
+async function geminiFlashOcr(buffer: Buffer): Promise<OcrResult | null> {
+  try {
+    const model = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
+    const mime = detecterMime(buffer);
+    if (mime === "application/pdf" || mime === "application/octet-stream") return null;
+
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": process.env.GEMINI_API_KEY ?? "",
+        },
+        cache: "no-store",
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  inline_data: {
+                    mime_type: mime,
+                    data: buffer.toString("base64"),
+                  },
+                },
+                {
+                  text: "Extrais TOUT le texte visible de cet avis de contravention, lettre par lettre, sans reformuler ni résumer. Retourne uniquement le texte brut, en conservant les numéros, dates, montants et plaques exactement comme imprimés.",
+                },
+              ],
+            },
+          ],
+        }),
+      },
+    );
+    if (!res.ok) return null;
+
+    const body = (await res.json()) as {
+      candidates?: { content?: { parts?: { text?: string }[] } }[];
+    };
+    const texte = (body.candidates?.[0]?.content?.parts ?? [])
+      .map((p) => p.text ?? "")
+      .join("\n")
+      .trim();
+    if (!texte) return null;
+    return { texte };
+  } catch {
+    return null;
+  }
 }
 
 async function googleVisionOcr(buffer: Buffer): Promise<OcrResult | null> {
