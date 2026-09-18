@@ -124,7 +124,10 @@ async function tesseractOcr(buffer: Buffer): Promise<OcrResult | null> {
     } finally {
       await worker.terminate();
     }
-  } catch {
+  } catch (err) {
+    // Journalisé pour diagnostic (Vercel) : sans ce log, l'échec OCR est
+    // totalement invisible (le flux continue, champs simplement non pré-remplis).
+    console.error("[ocr:tesseract] échec :", err);
     return null;
   }
 }
