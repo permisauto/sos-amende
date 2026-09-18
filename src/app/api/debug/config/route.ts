@@ -12,6 +12,9 @@ export async function GET() {
 
   const ocr_snapshot = {
     raw: process.env.OCR_PROVIDER ?? "(vide)",
+    gemini_key_set: Boolean(process.env.GEMINI_API_KEY),
+    mistral_key_set: Boolean(process.env.MISTRAL_API_KEY),
+    vision_key_set: Boolean(process.env.GOOGLE_VISION_KEY),
     provider: (() => {
       const raw = (process.env.OCR_PROVIDER ?? "").toLowerCase();
       if (raw === "tesseract") return "tesseract";
