@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 
+/** Jamais de cache : cette route lit les variables ENVIRONNEMENT au moment de
+ * la requête (les GET App Router sont sinon prégénérées au build). */
+export const dynamic = "force-dynamic";
+
 /**
  * OUTIL DE DIAGNOSTIC CONFIG — ne révèle AUCUNE valeur secrète, uniquement
  * des booléens/mode. Répond 404 hors production réelle pour limiter l'usure.
@@ -36,10 +40,14 @@ export async function GET() {
     region_set: Boolean(process.env.STORAGE_REGION),
   };
 
-  return NextResponse.json({
-    env: process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "dev",
-    vercel: process.env.VERCEL_URL ?? null,
-    ocr: ocr_snapshot,
-    storage: storage_snapshot,
-  });
+  return NextResponse.json(
+    {
+      env: process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "dev",
+      vercel: process.env.VERCEL_URL ?? null,
+      horodatage: new Date().toISOString(),
+      ocr: ocr_snapshot,
+      storage: storage_snapshot,
+    },
+    { headers: { "Cache-Control": "no-store, max-age=0" } },
+  );
 }
