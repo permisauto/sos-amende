@@ -39,10 +39,8 @@ const nextConfig: NextConfig = {
   // .../worker-script/node/index.js » en production.
   outputFileTracingIncludes: {
     "/*": [
-      "./node_modules/tesseract.js/src/worker-script/**/*",
-      "./node_modules/tesseract.js/src/worker/**/*",
+      "./node_modules/tesseract.js/**/*",
       "./node_modules/tesseract.js-core/**/*",
-      "./node_modules/tesseract.js/src/worker-script/node/index.js",
     ],
   },
   async headers() {
