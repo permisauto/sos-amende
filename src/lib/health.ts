@@ -141,16 +141,17 @@ async function checkGroq(): Promise<HealthCheckResult> {
 
 async function checkResend(): Promise<HealthCheckResult> {
   const start = Date.now();
+  const key = process.env.AUTH_RESEND_KEY?.replace(/^\uFEFF/, "").trim();
 
-  if (!process.env.RESEND_API_KEY) {
+  if (!key) {
     return {
       name: "resend",
       status: "unhealthy",
-      error: "RESEND_API_KEY manquante",
+      error: "AUTH_RESEND_KEY manquante",
     };
   }
 
-  if (!process.env.RESEND_API_KEY?.startsWith("re_")) {
+  if (!key.startsWith("re_")) {
     return {
       name: "resend",
       status: "degraded",
@@ -161,7 +162,7 @@ async function checkResend(): Promise<HealthCheckResult> {
 
   try {
     const { Resend } = await import("resend");
-    const resend = new Resend(process.env.RESEND_API_KEY!);
+    const resend = new Resend(key);
     const start = Date.now();
 
     // Test minimal : liste des domaines (léger)
@@ -201,14 +202,14 @@ async function checkDataGouv(): Promise<HealthCheckResult> {
   const start = Date.now();
 
   try {
-    const url = "https://data.gouv.fr/api/1/datasets/cinemometres-homologues/records?rows=1";
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
+    const controlleur = new AbortController();
+    const timeout = setTimeout(() => controlleur.abort(), 5000);
 
     const res = await fetch(
       "https://data.gouv.fr/api/1/datasets/cinemometres-homologues/records?rows=1",
-      { signal: new AbortSignal() } // AbortController non serialisable, on utilise timeout manuel
+      { signal: controlleur.signal }
     );
+    clearTimeout(timeout);
 
     const latencyMs = Date.now() - start;
 
@@ -242,14 +243,14 @@ async function checkOpenMeteo(): Promise<HealthCheckResult> {
   const start = Date.now();
 
   try {
-    const url = "https://archive-api.open-meteo.com/v1/archive?latitude=48.85&longitude=2.35&start_date=2024-01-01&end_date=2024-01-01&daily=weathercode&timezone=Europe/Paris";
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
+    const controlleur = new AbortController();
+    const timeout = setTimeout(() => controlleur.abort(), 5000);
 
     const res = await fetch(
       "https://archive-api.open-meteo.com/v1/archive?latitude=48.85&longitude=2.35&start_date=2024-01-01&end_date=2024-01-01&daily=weathercode&timezone=Europe/Paris",
-      { signal: AbortSignal.timeout(5000) }
+      { signal: controlleur.signal }
     );
+    clearTimeout(timeout);
 
     const latencyMs = Date.now() - start;
 
