@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useEffect, useState, useActionState } from "react";
 import { analyserDossier } from "../actions";
 import {
   dateRefLibelle,
@@ -30,7 +30,29 @@ export type AnalysePrefill = {
   vehiculeCede?: boolean;
   vehiculeVole?: boolean;
   conducteurDifferent?: boolean;
+  adresseIncorrecte?: boolean;
+  travaux_présents?: boolean;
+  conditions_meteo?: string;
 };
+
+type QuestionDyn = {
+  id: string;
+  champ: string;
+  label: string;
+  type: "boolean";
+  articleLoi: string;
+  regle: string | null;
+  failleId: string;
+};
+
+/** Champs déjà couverts par le bloc statique — on n'affiche pas deux fois. */
+const STATIQUES = new Set([
+  "plaqueIncorrecte",
+  "paiementDejaFait",
+  "vehiculeCede",
+  "vehiculeVole",
+  "conducteurDifferent",
+]);
 
 export function AnalyseForm({
   dossierId,
@@ -46,6 +68,36 @@ export function AnalyseForm({
     undefined,
   );
   const hasPrefill = !!prefill && Object.keys(prefill).length > 0;
+
+  // Questionnaire dynamique : généré par /api/questionnaire depuis les failles
+  // ACTIVE (chaque faille validée par l'admin enrichit automatiquement la liste).
+  const [questionsDyn, setQuestionsDyn] = useState<QuestionDyn[] | null>(null);
+  useEffect(() => {
+    let actif = true;
+    fetch(`/api/questionnaire?type=${type}`)
+      .then((r) => r.json())
+      .then((j) => {
+        if (actif && Array.isArray(j.questions)) {
+          const filtrees = (j.questions as QuestionDyn[]).filter(
+            (q) =>
+              q.type === "boolean" &&
+              !STATIQUES.has(q.champ) &&
+              q.champ !== "champAbsent",
+          );
+          setQuestionsDyn(filtrees.length > 0 ? filtrees : null);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      actif = false;
+    };
+  }, [type]);
+
+  const prefillDyn = (champ: string): boolean => {
+    if (!prefill) return false;
+    const v = (prefill as Record<string, unknown>)[champ];
+    return v === true || v === "true" || v === "Pluie";
+  };
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
@@ -269,6 +321,39 @@ export function AnalyseForm({
             juriste examinera les motifs de la décision à partir des
             informations saisies.
           </p>
+        )}
+
+        {questionsDyn && questionsDyn.length > 0 && (
+          <div className="mt-3 flex flex-col gap-2.5 border-t border-zinc-100 pt-3">
+            <p className="text-xs font-medium text-zinc-500">
+              Questions complémentaires (générées depuis la bibliothèque
+              active) — affinent la détection
+            </p>
+            {questionsDyn.map((q) => (
+              <label
+                key={q.id}
+                className="flex items-start gap-2 text-sm text-zinc-700"
+                title={`${q.articleLoi}${q.regle ? ` — ${q.regle}` : ""}`}
+              >
+                <input
+                  type="checkbox"
+                  name={q.champ}
+                  defaultChecked={prefillDyn(q.champ)}
+                  className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500"
+                />
+                <span>
+                  {q.label}
+                  <span className="ml-1 text-xs text-zinc-400">
+                    · {q.articleLoi}
+                  </span>
+                </span>
+              </label>
+            ))}
+            <p className="text-[11px] text-zinc-400">
+              Chaque faille validée par l&apos;admin enrichit automatiquement
+              cette liste.
+            </p>
+          </div>
         )}
       </div>
 

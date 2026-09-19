@@ -26,9 +26,11 @@ const statutCls: Record<string, string> = {
 export function FaillesCandidates({
   dossierId,
   candidats,
+  lectureSeule = false,
 }: {
   dossierId: string;
   candidats: CandidatDto[];
+  lectureSeule?: boolean;
 }) {
   if (candidats.length === 0) {
     return (
@@ -43,7 +45,12 @@ export function FaillesCandidates({
   return (
     <div className="mt-3 flex flex-col gap-2">
       {candidats.map((c) => (
-        <CandidatRow key={c.failleId} dossierId={dossierId} candidat={c} />
+        <CandidatRow
+          key={c.failleId}
+          dossierId={dossierId}
+          candidat={c}
+          lectureSeule={lectureSeule}
+        />
       ))}
     </div>
   );
@@ -52,9 +59,11 @@ export function FaillesCandidates({
 function CandidatRow({
   dossierId,
   candidat,
+  lectureSeule = false,
 }: {
   dossierId: string;
   candidat: CandidatDto;
+  lectureSeule?: boolean;
 }) {
   const [confState, confAction, confPending] = useActionState(
     confirmerFaille,
@@ -83,7 +92,7 @@ function CandidatRow({
           >
             {statutLabels[candidat.statut] ?? candidat.statut}
           </span>
-          {candidat.statut !== "CONFIRMEE" && (
+          {!lectureSeule && candidat.statut !== "CONFIRMEE" && (
             <form action={confAction}>
               <input type="hidden" name="dossierId" value={dossierId} />
               <input type="hidden" name="failleId" value={candidat.failleId} />
@@ -96,7 +105,7 @@ function CandidatRow({
               </button>
             </form>
           )}
-          {candidat.statut !== "REJETEE" && (
+          {!lectureSeule && candidat.statut !== "REJETEE" && (
             <form action={rejAction}>
               <input type="hidden" name="dossierId" value={dossierId} />
               <input type="hidden" name="failleId" value={candidat.failleId} />

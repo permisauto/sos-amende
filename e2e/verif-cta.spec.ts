@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { loginAs } from "./helpers";
+import { analyserDossier, createDossier, loginAs } from "./helpers";
 
 // Suite de vérification exhaustive des boutons / CTA / liens.
 // Chaque test clique un bouton OU vérifie la présence d'un lien et son href.
@@ -226,28 +226,35 @@ test.describe("Admin — base & radars", () => {
 test.describe("Téléchargements (fichiers)", () => {
   test("le PDF d'une lettre signée se télécharge réellement sur le détail juriste", async ({
     page,
+    browser,
   }) => {
-    await loginAs(page, "e2e-juriste@test.local");
+    // Le seed ne crée aucun dossier : ce test est autonome, il fabrique un
+    // dossier analysé (A_VERIFIER avec lettre) puis consulte le détail juriste.
+    await loginAs(page, "e2e-client@test.local");
+    const dossierId = await createDossier(page);
+    await analyserDossier(page);
 
-    // Le dossier PRET du seed est P345678901 → on cherche le lien dans la file PRET
-    await page.goto("/dashboard/juriste?f=PRET");
-    const row = page.getByRole("link", { name: /Client E2E/ }).first();
-    await row.click();
-    await page.waitForURL(/\/dashboard\/juriste\/[^/]+$/);
+    const ctx = await browser.newContext();
+    const jpage = await ctx.newPage();
+    await loginAs(jpage, "e2e-juriste@test.local");
+    await jpage.goto(`/dashboard/juriste/${dossierId}`);
 
     // Sur le détail, le bouton "Télécharger la lettre affichée (PDF)" est un button POST → download
-    const btn = page.getByRole("button", { name: /Télécharger la lettre/ }).first();
+    const btn = jpage
+      .getByRole("button", { name: /Télécharger la lettre/ })
+      .first();
     await expect(btn).toBeVisible({ timeout: 10_000 });
 
     // Le clic déclenche un téléchargement
     const [download] = await Promise.all([
-      page.waitForEvent("download", { timeout: 10_000 }).catch(() => null),
+      jpage.waitForEvent("download", { timeout: 10_000 }).catch(() => null),
       btn.click(),
     ]);
     if (download) {
       const suggestedName = download.suggestedFilename();
       expect(suggestedName).toMatch(/\.pdf$/i);
     }
+    await ctx.close();
   });
 
   test("l'export RGPD JSON se télécharge", async ({ page }) => {

@@ -1,4 +1,5 @@
 import { requireAdmin } from "@/lib/dal";
+import { prisma } from "@/lib/prisma";
 import { synchroniserCatalogue } from "@/lib/auto-alimentation";
 import type { RegleDetection } from "@/lib/moteur";
 import type { JurisprudenceRef } from "@/lib/catalogue-sources";
@@ -9,23 +10,61 @@ export default async function AdminFaillesPage(
   props: PageProps<"/dashboard/admin/failles">,
 ) {
   await requireAdmin();
-  try {
-    await synchroniserCatalogue();
-  } catch (e) {
+  await synchroniserCatalogue().catch((e) => {
     console.error("admin failles: synchroniserCatalogue fail (DB down)", e);
-  }
+  });
   const { f } = await props.searchParams;
   const raw = typeof f === "string" ? f.toUpperCase() : "ALL";
   const filter = ["ACTIVE", "INACTIVE", "PROPOSEE", "ALL"].includes(raw)
     ? raw
     : "ALL";
 
-  // DB down -> mock persistant
-  const failles = getMockFailles(filter);
-  const suspensionActive = getSuspensionActiveCount();
-  const stats = getMockStats();
+  let failles: Awaited<ReturnType<typeof getMockFailles>>;
+  let stats: Array<{ statut: string; _count: number }>;
+  let aSuspensionActive = false;
 
-  const aSuspensionActive = suspensionActive > 0;
+  try {
+    const [rows, grouped] = await Promise.all([
+      prisma.failleJuridique.findMany({
+        orderBy: [{ statut: "asc" }, { createdAt: "desc" }],
+      }),
+      prisma.failleJuridique.groupBy({
+        by: ["statut"],
+        _count: { _all: true },
+      }),
+    ]);
+    failles = rows.map((r) => ({
+      id: r.id,
+      typeInfraction: r.typeInfraction as "AMENDE" | "SUSPENSION",
+      titreFaille: r.titreFaille,
+      articleLoi: r.articleLoi,
+      regle: r.regle,
+      templateLettre: r.templateLettre,
+      source: r.source,
+      statut: r.statut,
+      reglesDetection: r.reglesDetection as RegleDetection[] | null,
+      jurisprudence: r.jurisprudence as JurisprudenceRef[] | null,
+      createdAt: r.createdAt,
+    }));
+    stats = ["ACTIVE", "PROPOSEE", "INACTIVE"].map((s) => ({
+      statut: s,
+      _count:
+        grouped.find((g) => g.statut === s)?._count._all ?? 0,
+    }));
+    aSuspensionActive = rows.some(
+      (r) => r.typeInfraction === "SUSPENSION" && r.statut === "ACTIVE",
+    );
+  } catch (e) {
+    console.error("admin failles: DB indisponible, fallback mock", e);
+    failles = getMockFailles(filter);
+    stats = getMockStats();
+    aSuspensionActive = getSuspensionActiveCount() > 0;
+  }
+
+  if (filter !== "ALL") {
+    failles = failles.filter((f) => f.statut === filter);
+  }
+
   const nbActives = stats.find((x) => x.statut === "ACTIVE")?._count ?? 0;
   const nbProposees = stats.find((x) => x.statut === "PROPOSEE")?._count ?? 0;
   const nbInactives = stats.find((x) => x.statut === "INACTIVE")?._count ?? 0;

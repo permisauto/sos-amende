@@ -2,6 +2,15 @@ import { expect, test, type Browser } from "@playwright/test";
 import { analyserDossier, createDossier, loginAs } from "./helpers";
 
 async function signerLettre(page: import("@playwright/test").Page) {
+  // Si une signature a déjà été réutilisée (P2 : case « Réutiliser ma
+  // signature enregistrée »), on la décoche pour retrouver le canvas de
+  // signature — le test trace toujours une nouvelle signature.
+  const caseReutiliser = page.getByRole("checkbox", {
+    name: /Réutiliser ma signature enregistrée/,
+  });
+  if (await caseReutiliser.isVisible().catch(() => false)) {
+    await caseReutiliser.uncheck();
+  }
   const canvas = page.locator("canvas").first();
   await canvas.scrollIntoViewIfNeeded();
   const box = (await canvas.boundingBox())!;

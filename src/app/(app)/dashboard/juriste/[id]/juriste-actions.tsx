@@ -14,11 +14,13 @@ export function JuristeActions({
   mode = "full",
   validee = false,
   organisme = "ANTAI",
+  lectureSeule = false,
 }: {
   dossierId: string;
   mode?: "full" | "rejet";
   validee?: boolean;
   organisme?: string;
+  lectureSeule?: boolean;
 }) {
   const [valideState, valideAction, validePending] = useActionState(
     validerDossier,
@@ -35,6 +37,13 @@ export function JuristeActions({
 
   return (
     <div className="flex flex-col gap-4">
+      {lectureSeule ? (
+        <p className="rounded-xl bg-zinc-50 px-4 py-3 text-sm text-zinc-600">
+          Lecture seule (administrateur) : le traitement du dossier
+          (validation, rejet, envoi) est réservé aux juristes.
+        </p>
+      ) : (
+        <>
       {mode === "full" &&
         (validee ? (
           <>
@@ -113,6 +122,8 @@ export function JuristeActions({
           </p>
         )}
       </form>
+      </>
+      )}
     </div>
   );
 }

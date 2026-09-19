@@ -5,18 +5,19 @@ import { requireUser } from "@/lib/dal";
  * Portabilité des données (RGPD, art. 20) : export JSON des données
  * personnelles de l'utilisateur connecté (profil, dossiers, paiements,
  * mises en relation avocat, rappels). Champs internes exclus : passwordHash,
- * jetons next-auth, stripeCustomerId.
+ * jetons next-auth.
  */
 export async function GET() {
   const user = await requireUser();
 
-  const [dossiers, payments, matches, rappels] = await Promise.all([
+  const [dossiers, payments, matches, rappels, messages] = await Promise.all([
     prisma.dossier.findMany({
       where: { userId: user.id },
       include: {
         courriers: { orderBy: { createdAt: "asc" } },
         preuves: { orderBy: { createdAt: "asc" } },
         evenements: { orderBy: { createdAt: "asc" } },
+        messages: true,
         failleJuridique: { select: { titreFaille: true, articleLoi: true } },
         faillesRetenues: { include: { faille: { select: { titreFaille: true, articleLoi: true } } } },
         lawyerMatch: {
@@ -44,6 +45,11 @@ export async function GET() {
     prisma.rappel.findMany({
       where: { dossier: { userId: user.id } },
       orderBy: { sentAt: "asc" },
+    }),
+    prisma.message.findMany({
+      where: { auteurId: user.id },
+      select: { id: true, dossierId: true, contenu: true, lu: true, createdAt: true },
+      orderBy: { createdAt: "asc" },
     }),
   ]);
 
@@ -118,6 +124,12 @@ export async function GET() {
       dossierId: r.dossierId,
       type: r.type,
       sentAt: r.sentAt,
+    })),
+    messages: messages.map((m) => ({
+      dossierId: m.dossierId,
+      contenu: m.contenu,
+      lu: m.lu,
+      createdAt: m.createdAt,
     })),
   };
 

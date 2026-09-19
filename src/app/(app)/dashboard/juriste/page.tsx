@@ -45,7 +45,7 @@ const statutBadge: Record<string, string> = {
 export default async function JuristePage(
   props: PageProps<"/dashboard/juriste">,
 ) {
-  await requireJuriste();
+  const juriste = await requireJuriste();
   const { f } = await props.searchParams;
   const raw = typeof f === "string" ? f.toUpperCase() : "PRET";
   const statut: Statut | "ALL" =
@@ -65,6 +65,7 @@ export default async function JuristePage(
     failleJuridique: { titreFaille: string } | null;
   }> = [];
   let stats: Array<{ statut: string; _count: number }> = [];
+  let nonLus = new Map<string, number>();
   try {
     const res = await Promise.all([
       prisma.dossier.findMany({
@@ -77,9 +78,15 @@ export default async function JuristePage(
         },
       }),
       prisma.dossier.groupBy({ by: ["statut"], _count: true }),
+      prisma.message.groupBy({
+        by: ["dossierId"],
+        where: { lu: false, auteurId: { not: juriste.id } },
+        _count: { _all: true },
+      }),
     ]);
     dossiers = res[0];
     stats = res[1] as Array<{ statut: string; _count: number }>;
+    nonLus = new Map(res[2].map((g) => [g.dossierId, g._count._all]));
   } catch (e) {
     console.error("juriste dashboard: DB indisponible", e);
   }
@@ -189,6 +196,14 @@ export default async function JuristePage(
                         {item.user.name ?? item.user.email}
                       </Link>
                       <p className="text-xs text-zinc-500">{item.user.email}</p>
+                      {(nonLus.get(item.id) ?? 0) > 0 && (
+                        <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                          <span className="h-1.5 w-1.5 rounded-full bg-amber-600" />
+                          {(nonLus.get(item.id) ?? 0) > 1
+                            ? `${nonLus.get(item.id)} nouveaux`
+                            : "Nouveau"}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-zinc-600">
                       {data?.num_pv ?? "—"}

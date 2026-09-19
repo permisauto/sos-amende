@@ -37,6 +37,13 @@ const { Client } = require("pg");
       'UPDATE "User" SET credits = $1 WHERE email = $2',
       [50, "e2e-client@test.local"],
     );
+    // Remise à zéro de la signature du client : une fois signé, P2 réutilise la
+    // signature enregistrée (le canvas disparaît au profit de la case
+    // « réutiliser ») — chaque suite doit repartir d'un état déterministe.
+    await client.query(
+      'UPDATE "User" SET "signatureUrl" = NULL WHERE email = $1',
+      ["e2e-client@test.local"],
+    );
     // Le test suspension.spec.ts vérifie le garde-fou « aucune faille
     // SUSPENSION validée → examen par un juriste » : on remet les 3
     // propositions SUSPENSION en PROPOSEE (les validations manuelles en

@@ -22,6 +22,7 @@ export default async function CasesPage() {
   const isClient = user.role === "CLIENT";
 
   let dossiers: Awaited<ReturnType<typeof prisma.dossier.findMany>> = [];
+  let nonLus = new Map<string, number>();
   try {
     const effectiveUserId = user.id.startsWith("dev-")
       ? ((await prisma.user.findUnique({ where: { email: "e2e-client@test.local" }, select: { id: true } }))?.id ?? user.id)
@@ -31,6 +32,12 @@ export default async function CasesPage() {
       orderBy: { createdAt: "desc" },
       take: 50,
     });
+    const grouped = await prisma.message.groupBy({
+      by: ["dossierId"],
+      where: { lu: false, auteurId: { not: effectiveUserId } },
+      _count: { _all: true },
+    });
+    nonLus = new Map(grouped.map((g) => [g.dossierId, g._count._all]));
     // Fallback mock si 0 et dev
     if (dossiers.length === 0 && user.id.startsWith("dev-")) {
       const total = await prisma.dossier.count().catch(() => 0);
@@ -119,6 +126,14 @@ export default async function CasesPage() {
                     <Link href={`/dashboard/cases/${item.id}`} className="hover:text-emerald-700">
                       {item.type === "AMENDE" ? "Contestation d'amende" : "Suspension de permis"}
                     </Link>
+                    {(nonLus.get(item.id) ?? 0) > 0 && (
+                      <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-600" />
+                        {(nonLus.get(item.id) ?? 0) > 1
+                          ? `${nonLus.get(item.id)} nouveaux`
+                          : "Nouveau"}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-zinc-600">
                     {item.type === "AMENDE" ? "Amende" : "Suspension"}

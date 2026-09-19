@@ -1,9 +1,9 @@
-"use server";
+﻿"use server";
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { requireJuriste } from "@/lib/dal";
+import { requireJuristeRedacteur } from "@/lib/dal";
 import { remplirTemplate } from "@/lib/moteur";
 import { notifierStatut } from "@/lib/notifications";
 import { storageRead, storageWrite } from "@/lib/storage";
@@ -112,7 +112,7 @@ export async function enregistrerDecisionOmp(
   _prev: ValidationState,
   formData: FormData,
 ): Promise<ValidationState> {
-  await requireJuriste();
+  await requireJuristeRedacteur();
 
   const dossierId = String(formData.get("dossierId") ?? "");
   const raw = String(formData.get("decisionOmp") ?? "");
@@ -166,7 +166,7 @@ export async function validerDossier(
   _prev: ValidationState,
   formData: FormData,
 ): Promise<ValidationState> {
-  await requireJuriste();
+  await requireJuristeRedacteur();
 
   const dossierId = String(formData.get("dossierId") ?? "");
   const dossier = await prisma.dossier.findUnique({
@@ -225,7 +225,7 @@ export async function envoyerContestation(
   _prev: ValidationState,
   formData: FormData,
 ): Promise<ValidationState> {
-  await requireJuriste();
+  await requireJuristeRedacteur();
 
   const dossierId = String(formData.get("dossierId") ?? "");
   const dossier = await prisma.dossier.findUnique({ where: { id: dossierId } });
@@ -265,7 +265,7 @@ export async function modifierLettre(
   _prev: ValidationState,
   formData: FormData,
 ): Promise<ValidationState> {
-  await requireJuriste();
+  await requireJuristeRedacteur();
 
   const dossierId = String(formData.get("dossierId") ?? "");
   const lettre = String(formData.get("lettre") ?? "").trim();
@@ -354,7 +354,7 @@ export async function retournerDossier(
   _prev: ValidationState,
   formData: FormData,
 ): Promise<ValidationState> {
-  await requireJuriste();
+  await requireJuristeRedacteur();
 
   const dossierId = String(formData.get("dossierId") ?? "");
   const dossier = await prisma.dossier.findUnique({ where: { id: dossierId } });
@@ -393,7 +393,7 @@ export async function rejeterDossier(
   _prev: ValidationState,
   formData: FormData,
 ): Promise<ValidationState> {
-  await requireJuriste();
+  await requireJuristeRedacteur();
 
   const dossierId = String(formData.get("dossierId") ?? "");
   const motif = String(formData.get("motif") ?? "").trim();
@@ -452,7 +452,7 @@ export async function confirmerFaille(
   _prev: TraiterFailleState,
   formData: FormData,
 ): Promise<TraiterFailleState> {
-  await requireJuriste();
+  await requireJuristeRedacteur();
 
   const dossierId = String(formData.get("dossierId") ?? "");
   const failleId = String(formData.get("failleId") ?? "");
@@ -524,7 +524,7 @@ export async function rejeterFaille(
   _prev: TraiterFailleState,
   formData: FormData,
 ): Promise<TraiterFailleState> {
-  await requireJuriste();
+  await requireJuristeRedacteur();
 
   const dossierId = String(formData.get("dossierId") ?? "");
   const failleId = String(formData.get("failleId") ?? "");
@@ -567,7 +567,7 @@ export async function traiterDemandeAvocat(
   _prev: TraiterAvocatState,
   formData: FormData,
 ): Promise<TraiterAvocatState> {
-  await requireJuriste();
+  await requireJuristeRedacteur();
 
   const matchId = String(formData.get("matchId") ?? "");
   const action = AVOCAT_ACTIONS.find((a) => a === formData.get("action"));

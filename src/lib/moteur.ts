@@ -17,6 +17,7 @@ export type ExtractedData = {
   conditions_meteo?: string;
   travaux_présents?: boolean;
   plaqueIncorrecte?: boolean;
+  adresseIncorrecte?: boolean;
   preuveEtalonnage?: string;
   // Questionnaire ciblé (flux A, étape 2) : contexte apporté par le client,
   // exploité par le juriste lors de la validation humaine.

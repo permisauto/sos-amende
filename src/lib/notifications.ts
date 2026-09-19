@@ -73,6 +73,39 @@ export async function notifierPaiementValide(email: string, name?: string | null
 }
 
 /**
+ * Notifie le client qu'un juriste lui a adressé un message sur son dossier
+ * (demande de complément d'information ou de preuve). Défensif : no-op sans
+ * AUTH_RESEND_KEY.
+ */
+export async function notifierMessage(
+  dossier: { id: string; user: { email: string; name: string | null } },
+  contenu: string,
+): Promise<boolean> {
+  if (!resend) return false;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://recours-permis-pv.com";
+  const prenom = dossier.user.name ?? "Client";
+  try {
+    await resend.emails.send({
+      from: EMAIL_FROM,
+      to: dossier.user.email,
+      subject: "SOS Amende — nouveau message sur votre dossier",
+      html: `
+        <p>Bonjour ${prenom},</p>
+        <p>Un juriste vous a adressé un message concernant votre dossier
+        <a href="${appUrl}/dashboard/cases/${dossier.id}">n° ${dossier.id}</a>.</p>
+        <blockquote style="border-left:3px solid #ddd;padding-left:12px;margin:12px 0;color:#555">
+          ${contenu.replace(/</g, "&lt;").replace(/\n/g, "<br>")}
+        </blockquote>
+        <p>Vous pouvez répondre directement dans votre espace SOS Amende.</p>
+        <p><a href="${appUrl}/dashboard/cases/${dossier.id}">${appUrl}/dashboard/cases/${dossier.id}</a></p>`,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Notifie le client d'un changement de statut de son dossier (défensif :
  * sans AUTH_RESEND_KEY, aucun e-mail n'est envoyé et la fonction renvoie
  * false sans jamais lever d'erreur). Complète les rappels J10/J3/J0.

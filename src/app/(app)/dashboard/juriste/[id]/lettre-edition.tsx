@@ -14,10 +14,12 @@ export function LettreEdition({
   dossierId,
   lettre,
   signee,
+  lectureSeule = false,
 }: {
   dossierId: string;
   lettre: string;
   signee: boolean;
+  lectureSeule?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(
     modifierLettre,
@@ -59,36 +61,48 @@ export function LettreEdition({
   return (
     <form action={formAction} className="flex flex-col gap-3">
       <input type="hidden" name="dossierId" value={dossierId} />
-      <textarea
-        ref={textRef}
-        name="lettre"
-        required
-        rows={16}
-        aria-label="Texte de la lettre de contestation"
-        defaultValue={lettre}
-        className="rounded-xl border border-zinc-300 bg-zinc-50 px-4 py-3 text-sm leading-relaxed text-zinc-800 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-100"
-      />
-      <p className="text-xs text-zinc-500">
-        {signee
-          ? "La lettre est déjà signée par le client : votre signature restera collée en bas de la nouvelle version (PDF régénéré automatiquement)."
-          : "La lettre n'est pas encore signée : le client signera après votre relecture."}
-      </p>
+      <div className="max-h-96 overflow-y-auto rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm leading-relaxed text-zinc-800">
+        {lectureSeule ? (
+          <p className="whitespace-pre-wrap">{lettre}</p>
+        ) : (
+          <textarea
+            ref={textRef}
+            name="lettre"
+            required
+            rows={16}
+            aria-label="Texte de la lettre de contestation"
+            defaultValue={lettre}
+            className="min-w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm leading-relaxed text-zinc-800 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+          />
+        )}
+      </div>
+      {!lectureSeule && (
+        <p className="text-xs text-zinc-500">
+          {signee
+            ? "La lettre est déjà signée par le client : votre signature restera collée en bas de la nouvelle version (PDF régénéré automatiquement)."
+            : "La lettre n'est pas encore signée : le client signera après votre relecture."}
+        </p>
+      )}
       <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-full bg-emerald-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {pending ? "Enregistrement…" : "Enregistrer la lettre modifiée"}
-        </button>
-        <button
-          type="button"
-          onClick={handleDownload}
-          disabled={dlPending}
-          className="rounded-full border border-emerald-200 px-6 py-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {dlPending ? "Génération…" : "Télécharger la lettre affichée (PDF)"}
-        </button>
+        {!lectureSeule && (
+          <>
+            <button
+              type="submit"
+              disabled={pending}
+              className="rounded-full bg-emerald-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {pending ? "Enregistrement…" : "Enregistrer la lettre modifiée"}
+            </button>
+            <button
+              type="button"
+              onClick={handleDownload}
+              disabled={dlPending}
+              className="rounded-full border border-emerald-200 px-6 py-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {dlPending ? "Génération…" : "Télécharger la lettre affichée (PDF)"}
+            </button>
+          </>
+        )}
         {state?.ok && (
           <span className="rounded-xl bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800">
             Lettre enregistrée.

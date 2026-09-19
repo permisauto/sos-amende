@@ -19,6 +19,8 @@ import {
 } from "@/components/bibliotheque-juriste";
 import type { JurisprudenceRef } from "@/lib/catalogue-sources";
 import { organismeEnvoi } from "@/lib/envoi";
+import { FilMessages, type MessageDto } from "@/components/messages";
+import { marquerMessagesLus } from "../../messages/actions";
 
 const statusLabels: Record<string, string> = {
   BROUILLON: "Brouillon",
@@ -112,6 +114,14 @@ type JuristeCaseDetail = {
   decisionDetail: string | null;
   valideLe: Date | null;
   user: { name: string | null; email: string | null };
+  messages: Array<{
+    id: string;
+    contenu: string;
+    createdAt: Date;
+    lu: boolean;
+    auteurId: string;
+    auteur: { id: string; name: string | null; role: string };
+  }>;
 };
 
 type JuristeDemoMock = {
@@ -189,13 +199,15 @@ function demoJuristeDossier(id: string): JuristeCaseDetail | null {
     decisionDetail: mock.statut === "RESOLU" ? "Amende annulée - prescription acquise" : null,
     valideLe: mock.statut === "ENVOYE" || mock.statut === "RESOLU" ? new Date() : null,
     user: mockUser,
+    messages: [],
   };
 }
 
 export default async function JuristeCasePage(
   props: PageProps<"/dashboard/juriste/[id]">,
 ) {
-  await requireJuriste();
+  const juriste = await requireJuriste();
+  const lectureSeule = juriste.role !== "JURISTE";
   const params = await props.params;
   const searchParams = await props.searchParams;
 
@@ -210,6 +222,10 @@ export default async function JuristeCasePage(
         lawyerMatch: true,
         preuves: { orderBy: { createdAt: "asc" } },
         evenements: { orderBy: { createdAt: "asc" } },
+        messages: {
+          orderBy: { createdAt: "asc" },
+          include: { auteur: { select: { id: true, name: true, role: true } } },
+        },
         user: { select: { name: true, email: true } },
       },
     })) as unknown as JuristeCaseDetail | null;
@@ -238,6 +254,19 @@ export default async function JuristeCasePage(
     createdAt: p.createdAt,
     userId: p.userId,
   }));
+
+  const messagesDto: MessageDto[] = (item.messages ?? []).map((m) => ({
+    id: m.id,
+    contenu: m.contenu,
+    createdAt: m.createdAt,
+    lu: m.lu,
+    auteurId: m.auteurId,
+    auteurNom: m.auteur.name ?? m.auteur.role,
+    auteurRole: (m.auteur.role === "JURISTE" || m.auteur.role === "ADMIN" ? m.auteur.role : "CLIENT") as "CLIENT" | "JURISTE" | "ADMIN",
+  }));
+
+  // Marque comme lus les messages du client dès l'ouverture du détail.
+  await marquerMessagesLus(item.id).catch(() => {});
 
   const candidats = item.faillesRetenues.map((df) => ({
     failleId: df.failleId,
@@ -444,6 +473,7 @@ export default async function JuristeCasePage(
                       dossierId={item.id}
                       lettre={item.lettreGeneree}
                       signee={item.statut === "PRET"}
+                      lectureSeule={lectureSeule}
                     />
                   ) : (
                     <p className="rounded-xl bg-zinc-50 px-4 py-3 text-sm text-zinc-600">
@@ -458,9 +488,14 @@ export default async function JuristeCasePage(
                         dossierId={item.id}
                         validee={Boolean(item.valideLe)}
                         organisme={organismeEnvoi(item.type)}
+                        lectureSeule={lectureSeule}
                       />
                     ) : (
-                      <JuristeActions dossierId={item.id} mode="rejet" />
+                      <JuristeActions
+                        dossierId={item.id}
+                        mode="rejet"
+                        lectureSeule={lectureSeule}
+                      />
                     )}
                   </div>
                 </>
@@ -543,7 +578,14 @@ export default async function JuristeCasePage(
                   informer le client.
                 </p>
                 <div className="mt-4">
-                  <DecisionOmpForm dossierId={item.id} />
+                  {lectureSeule ? (
+                    <p className="rounded-xl bg-zinc-50 px-4 py-3 text-sm text-zinc-600">
+                      Lecture seule (administrateur) : la décision est
+                      enregistrée par un juriste.
+                    </p>
+                  ) : (
+                    <DecisionOmpForm dossierId={item.id} />
+                  )}
                 </div>
               </div>
             </section>
@@ -579,7 +621,11 @@ export default async function JuristeCasePage(
                 Failles détectées — à confirmer ou écarter
               </h2>
               <div className="mt-3">
-                <FaillesCandidates dossierId={item.id} candidats={candidats} />
+                <FaillesCandidates
+                  dossierId={item.id}
+                  candidats={candidats}
+                  lectureSeule={lectureSeule}
+                />
               </div>
             </section>
           )}
@@ -664,8 +710,16 @@ export default async function JuristeCasePage(
             currentUserId={null}
           />
 
+          <FilMessages
+            dossierId={item.id}
+            messages={messagesDto}
+            currentUserId={juriste.id}
+            currentRole={juriste.role as "CLIENT" | "JURISTE" | "ADMIN"}
+          />
+
           <AvocatTraitement
             matchId={item.lawyerMatch?.id ?? ""}
+            lectureSeule={lectureSeule}
             match={
               item.lawyerMatch
                 ? {

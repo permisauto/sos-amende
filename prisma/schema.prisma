@@ -21,8 +21,11 @@ model User {
   image            String?
   passwordHash     String? // inscription inversée : mot de passe temporaire (sect. 3)
   role             Role      @default(CLIENT) // CLIENT | JURISTE | ADMIN
-  stripeCustomerId String?   @unique
   credits          Int       @default(0)
+  // Signature du client capturée au dépôt (cases/new) et réutilisée lors de la
+  // signature de chaque dossier — le client n'a pas à retracer sa signature à
+  // chaque contestation (stockage local/S3, comme les autres pièces).
+  signatureUrl     String?
 
   accounts       Account[]
   sessions       Session[]
@@ -30,6 +33,7 @@ model User {
   dossiers       Dossier[]
   lawyerMatches  LawyerMatch[]
   payments       Payment[]
+  messages       Message[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -115,6 +119,7 @@ model Dossier {
   rappels          Rappel[]
   evenements       DossierEvent[]
   lawyerMatch      LawyerMatch?
+  messages         Message[]
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -210,6 +215,23 @@ model DossierEvent {
   @@index([dossierId, createdAt])
 }
 
+// Message échangé entre le juriste et le client sur un dossier (demande de
+// complément d'information ou de preuve, réponse du client...). Le statut du
+// dossier reste inchangé. `lu` = le message a été consulté par son
+// destinataire (notification in-app). RGPD : supprimé avec le dossier.
+model Message {
+  id        String   @id @default(cuid())
+  dossierId String
+  dossier   Dossier  @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+  auteurId  String
+  auteur    User     @relation(fields: [auteurId], references: [id], onDelete: Cascade)
+  contenu   String   @db.Text
+  lu        Boolean  @default(false) // lu par le destinataire (client si auteur juriste, juriste si auteur client)
+  createdAt DateTime @default(now())
+
+  @@index([dossierId, createdAt])
+}
+
 model RadarCalibration {
   id             String   @id @default(cuid())
   radarId        String   @unique
@@ -251,7 +273,6 @@ model LawyerMatch {
 model Payment {
   id               String    @id @default(cuid())
   userId           String
-  stripePaymentId  String?   @unique
   amount           Decimal   @db.Decimal(10, 2)
   currency         String    @default("EUR")
   status           String
@@ -263,6 +284,7 @@ model Payment {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ---------------------------------------------------------------------------
@@ -322,4 +344,5 @@ enum DossierEventType {
   REJET
   RETOUR
   PREUVE // pièce justificative ajoutée (client ou juriste)
+  MESSAGE // message échangé entre le juriste et le client (fil de discussion)
 }

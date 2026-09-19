@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useRef, useState } from "react";
+import SignatureCanvas from "react-signature-canvas";
 import { createDossier } from "../actions";
 
 export function UploadForm({ defaultType }: { defaultType?: "AMENDE" | "SUSPENSION" | null }) {
@@ -8,7 +9,9 @@ export function UploadForm({ defaultType }: { defaultType?: "AMENDE" | "SUSPENSI
   const [type, setType] = useState(defaultType ?? "AMENDE");
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [signature, setSignature] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const padRef = useRef<SignatureCanvas>(null);
 
   function acceptFile(candidate: File | undefined | null) {
     if (!candidate) return;
@@ -21,6 +24,7 @@ export function UploadForm({ defaultType }: { defaultType?: "AMENDE" | "SUSPENSI
     const fd = new FormData();
     fd.set("type", type);
     fd.set("pv", file);
+    if (signature) fd.set("signature", signature);
     formAction(fd);
   }
 
@@ -116,6 +120,45 @@ export function UploadForm({ defaultType }: { defaultType?: "AMENDE" | "SUSPENSI
           {state.error}
         </p>
       )}
+
+      <fieldset className="rounded-2xl border border-zinc-200 p-4">
+        <legend className="px-2 text-sm font-medium text-zinc-700">
+          Votre signature (réutilisée pour vos lettres)
+        </legend>
+        <p className="mb-3 text-xs text-zinc-500">
+          Elle est capturée une fois ici et sera apposée automatiquement sur
+          chaque lettre de contestation générée. Vous pourrez la modifier à
+          tout moment lors de la signature d&apos;un dossier.
+        </p>
+        <div className="rounded-xl border border-zinc-300 bg-white p-2">
+          <SignatureCanvas
+            ref={padRef}
+            onEnd={() =>
+              setSignature(
+                padRef.current?.getTrimmedCanvas().toDataURL("image/png") ??
+                  null,
+              )
+            }
+            canvasProps={{
+              className: "h-32 w-full rounded-lg cursor-crosshair",
+              height: 128,
+            }}
+            backgroundColor="white"
+          />
+        </div>
+        {signature && (
+          <button
+            type="button"
+            onClick={() => {
+              padRef.current?.clear();
+              setSignature(null);
+            }}
+            className="mt-2 rounded-full border border-zinc-300 px-4 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50"
+          >
+            Effacer ma signature
+          </button>
+        )}
+      </fieldset>
 
       <button
         type="submit"

@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/dal";
-import { storageWrite } from "@/lib/storage";
+import { storageRead, storageWrite } from "@/lib/storage";
 import {
   FAILLE_IDS,
   dateLimitePv,
@@ -31,6 +31,7 @@ export async function createDossier(
 
   const type = formData.get("type");
   const file = formData.get("pv");
+  const signature = String(formData.get("signature") ?? "");
 
   const parsedType = z.enum(["AMENDE", "SUSPENSION"]).safeParse(type);
   if (!parsedType.success) {
@@ -71,7 +72,31 @@ export async function createDossier(
 
   const prix = parsedType.data === "AMENDE" ? 39 : 59;
 
+  // Signature du client capturée au dépôt : stockée une fois sur le profil,
+  // réutilisée pour chaque lettre (plus besoin de la retracer par dossier).
+  // Best-effort : en cas d'échec, le dépôt continue sans signature enregistrée.
+  let signatureUrl: string | null = null;
+  if (signature && signature.startsWith("data:image/png;base64,")) {
+    try {
+      const png = Buffer.from(signature.split(",")[1], "base64");
+      if (png.length > 0) {
+        signatureUrl = await storageWrite(
+          `signatures/sig-${user.id}-${Date.now()}.png`,
+          png,
+        );
+      }
+    } catch (e) {
+      console.error("createDossier: enregistrement signature échoué", e);
+    }
+  }
+
   const dossier = await prisma.$transaction(async (tx) => {
+    if (signatureUrl) {
+      await tx.user.update({
+        where: { id: user.id },
+        data: { signatureUrl },
+      });
+    }
     const d = await tx.dossier.create({
       data: {
         userId: user.id,
@@ -145,6 +170,12 @@ export async function analyserDossier(
     vehiculeCede: formData.get("vehiculeCede") === "on",
     vehiculeVole: formData.get("vehiculeVole") === "on",
     conducteurDifferent: formData.get("conducteurDifferent") === "on",
+    adresseIncorrecte: formData.get("adresseIncorrecte") === "on",
+    travaux_présents: formData.get("travaux_présents") === "on",
+    conditions_meteo:
+      formData.get("conditions_meteo") === "on"
+        ? "Pluie"
+        : undefined,
   };
 
   const failles = await prisma.failleJuridique.findMany({
@@ -303,9 +334,6 @@ export async function signerDossier(
   if (!dossier.lettreGeneree) {
     return { error: "Aucune lettre à signer." };
   }
-  if (!signature.startsWith("data:image/png;base64,")) {
-    return { error: "Signature invalide." };
-  }
 
   // Paiement requis : le dépôt est gratuit, la signature débloque le crédit
   const debit = await prisma.user.updateMany({
@@ -316,13 +344,43 @@ export async function signerDossier(
     return { error: "Paiement requis : finalisez votre paiement (virement bancaire) avant de signer." };
   }
 
-  const png = Buffer.from(signature.split(",")[1], "base64");
-  const sigName = `signatures/sig-${dossier.id}-${Date.now()}.png`;
+  // Signature : celle capturée au dépôt (User.signatureUrl) est réutilisée ;
+  // une nouvelle trace écrase la précédente et devient la référence du profil.
+  const userRow = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { signatureUrl: true },
+  });
+  let signatureDataUrl: string | null = null;
+  let signatureUrl = userRow?.signatureUrl ?? null;
+  if (signature.startsWith("data:image/png;base64,")) {
+    signatureDataUrl = signature;
+    const png = Buffer.from(signature.split(",")[1], "base64");
+    if (png.length > 0) {
+      try {
+        signatureUrl = await storageWrite(
+          `signatures/sig-${user.id}-${Date.now()}.png`,
+          png,
+        );
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { signatureUrl },
+        });
+      } catch (e) {
+        console.error("signerDossier: maj signature profil échouée", e);
+      }
+    }
+  } else if (signatureUrl) {
+    const sig = await storageRead(signatureUrl);
+    if (sig) {
+      signatureDataUrl = `data:image/png;base64,${sig.toString("base64")}`;
+    }
+  }
+  if (!signatureDataUrl) {
+    return { error: "Signature invalide." };
+  }
+
+  const pdfBuffer = await generateLettrePdf(dossier.lettreGeneree, signatureDataUrl);
   const pdfName = `pdfs/lettre-${dossier.id}.pdf`;
-
-  const signatureUrl = await storageWrite(sigName, png);
-
-  const pdfBuffer = await generateLettrePdf(dossier.lettreGeneree, signature);
   const pdfUrl = await storageWrite(pdfName, pdfBuffer);
 
   await prisma.courrier.create({

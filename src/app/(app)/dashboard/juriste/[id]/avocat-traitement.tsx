@@ -15,9 +15,11 @@ export type AvocatMatchDto = {
 export function AvocatTraitement({
   matchId,
   match,
+  lectureSeule = false,
 }: {
   matchId: string;
   match: AvocatMatchDto;
+  lectureSeule?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(
     traiterDemandeAvocat,
@@ -34,8 +36,13 @@ export function AvocatTraitement({
         </p>
       )}
 
-      {match?.statut === "DEMANDE" && (
-        <>
+      {match?.statut === "DEMANDE" &&
+        (lectureSeule ? (
+          <p className="mt-2 text-sm text-zinc-500">
+            Demande en attente : le traitement est réservé aux juristes.
+          </p>
+        ) : (
+          <>
           <p className="mt-2 text-sm text-zinc-600">
             Le client demande une orientation vers un avocat partenaire.
             Affectez un partenaire (recommandé pour les rétentions de permis)
@@ -109,8 +116,8 @@ export function AvocatTraitement({
               )}
             </div>
           </form>
-        </>
-      )}
+          </>
+        ))}
 
       {match?.statut === "AFFECTE" && (
         <div className="mt-3 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">

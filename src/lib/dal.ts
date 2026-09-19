@@ -12,102 +12,41 @@ export const getCurrentUser = cache(async () => {
     try {
       const user = await prisma.user.findUnique({
         where: { id: session.user.id },
-        select: { id: true, name: true, email: true, role: true, stripeCustomerId: true, credits: true },
+        select: { id: true, name: true, email: true, role: true, credits: true },
       });
       if (user) return user;
     } catch {}
   }
-  // Bypass dev pour vérification dashboards sans DB/auth ( ?dev=1 ou cookie dev_login ) — direct link sans cookie
-  // En production, ce bloc est entièrement désactivé (faille de sécurité).
-  if (process.env.NODE_ENV !== "production") {
-  try {
-    const hdrs = await headers();
-    const cookieStore = await cookies();
-    const allHdrs = Array.from(hdrs.entries()).map(([k, v]) => `${k}=${v}`).join(" ");
-    const urlFromHdrs = hdrs.get("x-middleware-rewrite") ?? hdrs.get("next-url") ?? hdrs.get("x-url") ?? hdrs.get("referer") ?? "";
-    const devParam =
-      hdrs.get("x-invoke-query")?.includes("dev=1") ||
-      hdrs.get("referer")?.includes("dev=1") ||
-      hdrs.get("x-middleware-rewrite")?.includes("dev=1") ||
-      hdrs.get("next-url")?.includes("dev=1") ||
-      hdrs.get("x-url")?.includes("dev=1") ||
-      hdrs.get("x-matched-path")?.includes("dev=1") ||
-      urlFromHdrs.includes("dev=1") ||
-      allHdrs.includes("dev=1");
-    const devCookie = cookieStore.get("dev_login")?.value;
-    let devEmail: string | null = devCookie || null;
-    if (!devEmail && devParam) {
-      const ref = urlFromHdrs || (hdrs.get("referer") ?? hdrs.get("x-invoke-query") ?? allHdrs);
-      if (ref.includes("/admin")) devEmail = "e2e-admin@test.local";
-      else if (ref.includes("/juriste")) devEmail = "e2e-juriste@test.local";
-      else devEmail = "e2e-client@test.local";
-    }
-    // Fallback ultime : si ?dev=1 est présent dans l'URL demandée (même sans header), on force le rôle d'après le path
-    if (!devEmail) {
-      const hasDevInUrl = allHdrs.includes("dev=1") || urlFromHdrs.includes("dev=1");
-      if (hasDevInUrl) {
-        if (allHdrs.includes("/admin") || urlFromHdrs.includes("/admin")) devEmail = "e2e-admin@test.local";
-        else if (allHdrs.includes("/juriste") || urlFromHdrs.includes("/juriste")) devEmail = "e2e-juriste@test.local";
-      }
-    }
-    // Aussi via searchParams direct (fallback)
-    if (devEmail || devCookie) {
-      const email = devEmail || "e2e-client@test.local";
+  // Bypass dev STRICT — uniquement en développement ET avec cookie dev_login signé
+  // En production, ce bloc est entièrement désactivé.
+  if (process.env.NODE_ENV === "development") {
+    try {
+      const cookieStore = await cookies();
+      const devCookie = cookieStore.get("dev_login")?.value;
+      
+      // Seul un cookie dev_login signé et valide autorise le bypass
+      if (!devCookie) return null;
+      
+      const email = devCookie;
       // Mock user sans DB si nécessaire
       try {
-        const u = await prisma.user.findUnique({ where: { email }, select: { id: true, name: true, email: true, role: true, stripeCustomerId: true, credits: true } });
+        const u = await prisma.user.findUnique({ 
+          where: { email }, 
+          select: { id: true, name: true, email: true, role: true, credits: true } 
+        });
         if (u) return u;
       } catch {}
+      
       const role = email.includes("juriste") ? "JURISTE" : email.includes("admin") ? "ADMIN" : "CLIENT";
-      return { id: "dev-" + email, name: email.split("@")[0], email, role, stripeCustomerId: null, credits: 10 } as unknown as Awaited<ReturnType<typeof prisma.user.findUnique>>;
-    }
-
-    // Fallback ultime pour pages client-only (ex: /dashboard/cases/new) en mode dev
-    // Si on est sur un path client avec dev=1 mais pas de devEmail détecté
-    try {
-      const hdrs = await headers();
-      const urlFromHdrs = hdrs.get("referer") ?? hdrs.get("x-invoke-query") ?? "";
-      const hasDevInUrl = urlFromHdrs.includes("dev=1") || hdrs.get("x-invoke-query")?.includes("dev=1");
-      const isClientPath = urlFromHdrs.includes("/dashboard/cases/new") || urlFromHdrs.includes("/deposer");
-      if (hasDevInUrl && isClientPath) {
-        return { id: "dev-e2e-client@test.local", name: "Client E2E", email: "e2e-client@test.local", role: "CLIENT", stripeCustomerId: null, credits: 10 } as unknown as Awaited<ReturnType<typeof prisma.user.findUnique>>;
-      }
+      return { 
+        id: "dev-" + email, 
+        name: email.split("@")[0], 
+        email, 
+        role, 
+        credits: 10 
+      } as unknown as Awaited<ReturnType<typeof prisma.user.findUnique>>;
     } catch {}
-
-    // Fallback additionnel : détecter via le path courant (next/headers ne donne pas toujours le path)
-    // Si on arrive ici sans user, on vérifie si c'est une page client en dev
-    try {
-      const hdrs2 = await headers();
-      const cookieStore2 = await cookies();
-      const devCookie2 = cookieStore2.get("dev_login")?.value;
-      const referer = hdrs2.get("referer") ?? "";
-      const nextUrl = hdrs2.get("next-url") ?? "";
-      const invokeQuery = hdrs2.get("x-invoke-query") ?? "";
-      const allHdrs2 = Array.from(hdrs2.entries()).map(([k, v]) => `${k}=${v}`).join(" ");
-      const hasDevParam = allHdrs2.includes("dev=1");
-      const isClientRoute = referer.includes("/dashboard/cases/new") || referer.includes("/deposer") || 
-                           invokeQuery.includes("/dashboard/cases/new") || invokeQuery.includes("/deposer") ||
-                           nextUrl.includes("/dashboard/cases/new") || nextUrl.includes("/deposer");
-      if (hasDevParam && (isClientRoute || devCookie2)) {
-        const email = devCookie2 || "e2e-client@test.local";
-        return { id: "dev-" + email, name: email.split("@")[0], email, role: "CLIENT", stripeCustomerId: null, credits: 10 } as unknown as Awaited<ReturnType<typeof prisma.user.findUnique>>;
-      }
-    } catch {}
-
-    // Fallback ultime : si dev=1 quelque part et qu'on a pas de user, on assume CLIENT par défaut
-    // (les routes admin/juriste ont leurs propres guards qui redirigent)
-    try {
-      const hdrs3 = await headers();
-      const cookieStore3 = await cookies();
-      const devCookie3 = cookieStore3.get("dev_login")?.value;
-      const allHdrs3 = Array.from(hdrs3.entries()).map(([k, v]) => `${k}=${v}`).join(" ");
-      const hasDevParam = allHdrs3.includes("dev=1");
-      if (hasDevParam || devCookie3) {
-        return { id: "dev-e2e-client@test.local", name: "Client E2E", email: "e2e-client@test.local", role: "CLIENT", stripeCustomerId: null, credits: 10 } as unknown as Awaited<ReturnType<typeof prisma.user.findUnique>>;
-      }
-    } catch {}
-  } catch {}
-  } // fin bypass dev non-prod
+  }
   return null;
 });
 
@@ -127,6 +66,20 @@ export async function requireJuriste() {
   const user = await requireUser();
   if (user.role !== "JURISTE" && user.role !== "ADMIN") {
     redirect("/dashboard");
+  }
+  return user;
+}
+
+/**
+ * Accès « rédacteur » au flux de traitement (validation de lettre, envoi,
+ * rejet, décision OMP, confirmation d'une faille, édition de lettre).
+ * Réservé aux JURISTE : l'ADMIN dispose de l'accès lecture seule à l'espace
+ * juriste mais ne peut pas écrire dans le flux de traitement.
+ */
+export async function requireJuristeRedacteur() {
+  const user = await requireUser();
+  if (user.role !== "JURISTE") {
+    redirect("/dashboard/juriste");
   }
   return user;
 }

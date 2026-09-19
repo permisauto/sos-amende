@@ -3,13 +3,15 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/dal";
 import { joursRestants } from "@/lib/moteur";
-import { storageUrl } from "@/lib/storage";
+import { storageRead, storageUrl } from "@/lib/storage";
 import { AnalyseForm } from "./analyse-form";
 import { SignaturePad } from "./signature-pad";
 import { LrKit } from "./lr-kit";
 import { AvocatRequest } from "./avocat-request";
 import { Preuves, type PreuveDto } from "@/components/preuves";
 import { DossierTimeline, type TimelineEvent } from "@/components/dossier-timeline";
+import { FilMessages, type MessageDto } from "@/components/messages";
+import { marquerMessagesLus } from "../../messages/actions";
 
 const statusLabels: Record<string, string> = {
   BROUILLON: "Brouillon",
@@ -62,6 +64,14 @@ type CaseDetail = {
   decisionOmp: "ACCEPTE" | "REJETE" | null;
   decisionDetail: string | null;
   valideLe: Date | null;
+  messages: Array<{
+    id: string;
+    contenu: string;
+    createdAt: Date;
+    lu: boolean;
+    auteurId: string;
+    auteur: { id: string; name: string | null; role: string };
+  }>;
 };
 
 type DemoMock = {
@@ -114,6 +124,7 @@ function demoDossier(id: string, userId: string): CaseDetail | null {
         : [],
     preuves: [],
     evenements: [{ type: "CREATION", detail: "Dossier de démo", createdAt: new Date() }],
+    messages: [],
     lawyerMatch: null,
     prix: mock.type === "AMENDE" ? 39 : 59,
     createdAt: new Date(),
@@ -147,6 +158,10 @@ export default async function CaseDetailPage(
         lawyerMatch: true,
         preuves: { orderBy: { createdAt: "asc" } },
         evenements: { orderBy: { createdAt: "asc" } },
+        messages: {
+          orderBy: { createdAt: "asc" },
+          include: { auteur: { select: { id: true, name: true, role: true } } },
+        },
       },
     })) as unknown as CaseDetail | null;
     // Fallback : si dev et dossier non trouvé avec filtre userId, retente sans filtre
@@ -159,6 +174,10 @@ export default async function CaseDetailPage(
           lawyerMatch: true,
           preuves: { orderBy: { createdAt: "asc" } },
           evenements: { orderBy: { createdAt: "asc" } },
+          messages: {
+            orderBy: { createdAt: "asc" },
+            include: { auteur: { select: { id: true, name: true, role: true } } },
+          },
         },
       })) as unknown as CaseDetail | null;
     }
@@ -199,6 +218,19 @@ export default async function CaseDetailPage(
     userId: p.userId,
   }));
 
+  const messagesDto: MessageDto[] = (item.messages ?? []).map((m) => ({
+    id: m.id,
+    contenu: m.contenu,
+    createdAt: m.createdAt,
+    lu: m.lu,
+    auteurId: m.auteurId,
+    auteurNom: m.auteur.name ?? m.auteur.role,
+    auteurRole: m.auteur.role === "JURISTE" ? "JURISTE" : m.auteur.role === "ADMIN" ? "ADMIN" : "CLIENT",
+  }));
+
+  // Marque comme lus les messages du juriste dès l'ouverture du détail.
+  await marquerMessagesLus(item.id).catch(() => {});
+
   const pvUrl = await storageUrl(item.pvUrl);
   const isImage = pvUrl?.match(/\.(jpe?g|png|webp)(\?.*)?$/i);
   const courrier = item.courriers[item.courriers.length - 1];
@@ -211,6 +243,21 @@ export default async function CaseDetailPage(
     "preuveEtalonnage" in item.extractedData
       ? await storageUrl(String(item.extractedData.preuveEtalonnage))
       : null;
+  // Signature du profil (capturée au dépôt) : proposée en réutilisation lors
+  // de la signature de la lettre (data-URL pour l'aperçu, lecture via stockage).
+  const signatureProfil = await (async () => {
+    try {
+      const row = await prisma.user.findUnique({
+        where: { id: user.id },
+        select: { signatureUrl: true },
+      });
+      if (!row?.signatureUrl) return null;
+      const buf = await storageRead(row.signatureUrl);
+      return buf ? `data:image/png;base64,${buf.toString("base64")}` : null;
+    } catch {
+      return null;
+    }
+  })();
   const evenements = await Promise.all(
     item.evenements.map(async (e) => ({
       ...e,
@@ -491,6 +538,15 @@ export default async function CaseDetailPage(
       </div>
 
       <div className="mt-8">
+        <FilMessages
+          dossierId={item.id}
+          messages={messagesDto}
+          currentUserId={user.id}
+          currentRole={user.role as "CLIENT" | "JURISTE" | "ADMIN"}
+        />
+      </div>
+
+      <div className="mt-8">
         <AvocatRequest
           dossierId={item.id}
           match={
@@ -539,6 +595,9 @@ export default async function CaseDetailPage(
                   vehiculeCede?: boolean;
                   vehiculeVole?: boolean;
                   conducteurDifferent?: boolean;
+                  adresseIncorrecte?: boolean;
+                  travaux_présents?: boolean;
+                  conditions_meteo?: string;
                 } | null
               }
             />
@@ -613,7 +672,7 @@ export default async function CaseDetailPage(
                 de contestation.
               </p>
               <div className="mt-6">
-                <SignaturePad dossierId={item.id} />
+                <SignaturePad dossierId={item.id} signatureInitiale={signatureProfil} />
               </div>
             </div>
           </div>
