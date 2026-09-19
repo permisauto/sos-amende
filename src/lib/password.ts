@@ -9,11 +9,18 @@ const FORMAT = "scrypt";
 const SALT_BYTES = 16;
 const KEY_BYTES = 64;
 const SCRYPT_OPTS = { N: 1 << 15, r: 8, p: 1 } as const;
+// OpenSSL limite par défaut maxmem à 32 Mo : scrypt à (N=2^15, r=8) consomme
+// 128*N*r = 32 Mo ce qui dépasse sur certains runtimes (Node < 23, Vercel).
+// On relève explicitement la limite à 128 Mo pour rester sûr.
+const SCRYPT_MAXMEM = 128 * 1024 * 1024;
 
 /** Hache un mot de passe interne (scrypt + sel aléatoire). */
 export function hashPassword(motDePasse: string): string {
   const sel = randomBytes(SALT_BYTES);
-  const cle = scryptSync(motDePasse, sel, KEY_BYTES, SCRYPT_OPTS);
+  const cle = scryptSync(motDePasse, sel, KEY_BYTES, {
+    ...SCRYPT_OPTS,
+    maxmem: SCRYPT_MAXMEM,
+  });
   return [
     FORMAT,
     SCRYPT_OPTS.N,
@@ -42,7 +49,12 @@ export function verifyPassword(
   const sel = Buffer.from(parties[4], "hex");
   const attendu = Buffer.from(parties[5], "hex");
   if (!sel.length || !attendu.length) return false;
-  const calcule = scryptSync(motDePasse, sel, attendu.length, { N, r, p });
+  const calcule = scryptSync(motDePasse, sel, attendu.length, {
+    N,
+    r,
+    p,
+    maxmem: SCRYPT_MAXMEM,
+  });
   return timedEqualCalcule(attendu, calcule);
 }
 
