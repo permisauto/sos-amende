@@ -96,8 +96,8 @@ async function checkGroq(): Promise<HealthCheckResult> {
   if (!process.env.GROQ_API_KEY) {
     return {
       name: "groq",
-      status: "unhealthy",
-      error: "GROQ_API_KEY manquante",
+      status: "degraded",
+      error: "GROQ_API_KEY manquante (optionnelle, scripts de veille uniquement)",
     };
   }
 
@@ -154,48 +154,21 @@ async function checkResend(): Promise<HealthCheckResult> {
   if (!key.startsWith("re_")) {
     return {
       name: "resend",
-      status: "degraded",
+      status: "unhealthy",
       error: "Format clé Resend invalide (attendu: re_...)",
       latencyMs: 0,
     };
   }
 
-  try {
-    const { Resend } = await import("resend");
-    const resend = new Resend(key);
-    const start = Date.now();
-
-    // Test minimal : liste des domaines (léger)
-    const { data, error } = await resend.domains.list();
-
-    const latencyMs = Date.now() - start;
-
-    if (error) {
-      return {
-        name: "resend",
-        status: "unhealthy",
-        latencyMs,
-        error: error.message,
-      };
-    }
-
-    return {
-      name: "resend",
-      status: getStatus(latencyMs),
-      latencyMs,
-      details: { message: "API Resend accessible" },
-    };
-  } catch (err: unknown) {
-    // En dev sans clé valide, on retourne degraded au lieu de unhealthy
-    const latencyMs = Date.now() - start;
-    return {
-      name: "resend",
-      status: process.env.NODE_ENV === "production" ? "unhealthy" : "degraded",
-      latencyMs,
-      error: err instanceof Error ? err.message : "Erreur inconnue",
-      details: { message: "Test email non effectué (dev)" },
-    };
-  }
+  // Clé présente et format valide. On ne teste pas l'API Resend : la plupart des
+  // clés sont restreintes aux emails (domains.list et autres endpoints refusés).
+  // Le seul garant fiable est un envoi réel, testé en E2E.
+  return {
+    name: "resend",
+    status: "healthy",
+    latencyMs: Date.now() - start,
+    details: { message: "AUTH_RESEND_KEY présente et format re_ valide" },
+  };
 }
 
 async function checkDataGouv(): Promise<HealthCheckResult> {
