@@ -14,7 +14,7 @@ Sources de vérité à garder synchronisées :
 - `prisma/seed.ts` → table `FailleJuridique` (les 4 failles AMENDE)
 - `src/lib/moteur.ts` → `FAILLE_IDS`, `detecterFailles` (règles + ordre de priorité), `scoreFaille`
 - `src/lib/catalogue-sources.ts` → `CATALOGUE_SOURCES` (propositions sourcées §H)
-- Base live : table `FailleJuridique` (admin `Base juridique`, auto-alimentation PROPOSEE, import/export JSON)
+- Base live : table `FailleJuridique` (bibliothèque juridique unifiée, auto-alimentation PROPOSEE, import/export JSON)
 
 ---
 
@@ -186,7 +186,7 @@ juriste avant toute activation** (pas de jurisprudence non vérifiée).
   notifiée, nullité pour procédure inapplicable, vol/usurpation de plaque,
   cession (déjà signal via questionnaire, section B).
 - **Pas de nouvelle faille activée avant validation juriste** : l'insertion
-  d'une faille se fait par l'admin (`Base juridique`) avec `reglesDetection`
+  d'une faille se fait par l'admin (bibliothèque juridique unifiée) avec `reglesDetection`
   (ex. `texteContient` « majorée ») et un template rédigé/validé.
 - La **Jurisprudence du 12/01/2026 n° 25-80.412** est signalée **non
   confirmée** : l'intégrer dans un produit uniquement si le juriste la

@@ -49,12 +49,6 @@ export default async function DashboardLayout({
               {user?.role === "ADMIN" && (
                 <>
                   <Link
-                    href="/dashboard/admin/failles"
-                    className="hover:text-zinc-900"
-                  >
-                    Base juridique
-                  </Link>
-                  <Link
                     href="/dashboard/admin/radars"
                     className="hover:text-zinc-900"
                   >

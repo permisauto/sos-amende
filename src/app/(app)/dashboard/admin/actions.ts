@@ -105,7 +105,7 @@ export async function creerFaille(
     },
   });
 
-  revalidatePath("/dashboard/admin/failles");
+  revalidatePath("/dashboard/juriste/failles");
   return { ok: true };
 }
 
@@ -138,7 +138,7 @@ export async function modifierFaille(
     },
   });
 
-  revalidatePath("/dashboard/admin/failles");
+  revalidatePath("/dashboard/juriste/failles");
   return { ok: true };
 }
 
@@ -161,7 +161,7 @@ export async function basculerFaille(
     },
   });
 
-  revalidatePath("/dashboard/admin/failles");
+  revalidatePath("/dashboard/juriste/failles");
   return { ok: true, statut: faille.statut === "ACTIVE" ? "INACTIVE" : "ACTIVE" };
 }
 
@@ -180,7 +180,7 @@ export async function importerFaillesDepuisSources(
 
   const count = await synchroniserCatalogue();
 
-  revalidatePath("/dashboard/admin/failles");
+  revalidatePath("/dashboard/juriste/failles");
   return { ok: true, count };
 }
 
@@ -219,7 +219,6 @@ export async function validerPropositionFaille(
     validateMockFaille(id, action);
   }
 
-  revalidatePath("/dashboard/admin/failles");
   revalidatePath("/dashboard/juriste/failles");
   return { ok: true, statut: action };
 }
@@ -296,7 +295,7 @@ export async function importerFailles(
     });
   }
 
-  revalidatePath("/dashboard/admin/failles");
+  revalidatePath("/dashboard/juriste/failles");
   return { ok: true, count: checked.data.length };
 }
 
@@ -468,7 +467,6 @@ export async function activerToutesPropositions(
     }
   }
 
-  revalidatePath("/dashboard/admin/failles");
   revalidatePath("/dashboard/juriste/failles");
   return { ok: true };
 }

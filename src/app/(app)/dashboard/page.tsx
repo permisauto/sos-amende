@@ -17,7 +17,7 @@ export default async function DashboardPage() {
     redirect(
       user.role === "JURISTE"
         ? "/dashboard/juriste"
-        : "/dashboard/admin/failles",
+        : "/dashboard/juriste/failles",
     );
   }
 

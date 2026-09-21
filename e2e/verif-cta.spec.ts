@@ -187,16 +187,16 @@ test.describe("Juriste — file & actions", () => {
 });
 
 test.describe("Admin — base & radars", () => {
-  test("admin : navigation (Base juridique, Radars) et synchronisation", async ({
+  test("admin : navigation (Bibliothèque juridique, Radars) et synchronisation", async ({
     page,
   }) => {
     await loginAs(page, "e2e-admin@test.local");
-    await expect(page.getByRole("link", { name: "Base juridique" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Bibliothèque juridique" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Radars" })).toBeVisible();
 
-    // Base juridique : bouton synchroniser
-    await page.getByRole("link", { name: "Base juridique" }).click();
-    await expect(page).toHaveURL(/\/dashboard\/admin\/failles/);
+    // Bibliothèque juridique : bouton synchroniser
+    await page.getByRole("link", { name: "Bibliothèque juridique" }).click();
+    await expect(page).toHaveURL(/\/dashboard\/juriste\/failles/);
     const syncBtn = page.getByRole("button", { name: "Synchroniser maintenant" });
     await expect(syncBtn).toBeVisible();
 
@@ -215,7 +215,7 @@ test.describe("Admin — base & radars", () => {
   }) => {
     // Vérifie qu'il y a des failles PROPOSEE (seed en crée)
     await loginAs(page, "e2e-admin@test.local");
-    await page.goto("/dashboard/admin/failles");
+    await page.goto("/dashboard/juriste/failles");
     const btn = page.getByRole("button", { name: /Activer les \d+ propositions/ });
     if ((await btn.count()) > 0) {
       await expect(btn).toBeVisible();

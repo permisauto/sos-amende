@@ -27,7 +27,7 @@ export async function GET(req: Request) {
   const dashboards: Record<string, string> = {
     CLIENT: "/dashboard",
     JURISTE: "/dashboard/juriste",
-    ADMIN: "/dashboard/admin/failles",
+    ADMIN: "/dashboard/juriste/failles",
   };
 
   const base = (process.env.NEXT_PUBLIC_APP_URL ?? "https://recours-permis-pv.com").replace(/\uFEFF/g, "").trim();

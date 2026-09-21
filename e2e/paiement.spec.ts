@@ -7,7 +7,7 @@ async function validerVirementAdmin(browser: Browser, email: string) {
   await loginAs(page, "e2e-admin@test.local");
 
   // Confirmer que la session est bien celle de l'admin
-  await expect(page.getByRole("link", { name: "Base juridique" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Bibliothèque juridique" })).toBeVisible();
 
   await page.goto("/dashboard/admin/paiements");
   // Le paiement du client jetable apparaît dans la file d'attente.

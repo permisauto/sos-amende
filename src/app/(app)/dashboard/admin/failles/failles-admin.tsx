@@ -163,7 +163,7 @@ export function FaillesAdmin({
             {filters.map((item) => (
               <Link
                 key={item.value}
-                href={`/dashboard/admin/failles${item.value === "ALL" ? "" : `?f=${item.value}`}`}
+                href={`/dashboard/juriste/failles${item.value === "ALL" ? "" : `?f=${item.value}`}`}
                 className={`rounded-full px-4 py-2 text-sm font-medium transition ${
                   filter === item.value
                     ? "bg-emerald-600 text-white"

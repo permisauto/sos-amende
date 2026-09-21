@@ -25,7 +25,7 @@ export async function GET(req: Request) {
   }
 
   const count = await synchroniserCatalogue();
-  revalidatePath("/dashboard/admin/failles");
+  revalidatePath("/dashboard/juriste/failles");
   return NextResponse.json({
     ok: true,
     synchronisees: count,
