@@ -57,3 +57,12 @@ next-env.d.ts
 
 .vercel
 .env*
+
+# scripts/outils locaux non versionnés (jamais commités)
+/testSaaS.js
+/agentDetective.js
+/agentExtracteur.js
+/agentRedacteur.js
+/pipelineContestation.js
+/scripts/veilleJuridique.js
+/images/
