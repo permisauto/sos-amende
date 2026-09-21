@@ -77,6 +77,53 @@ export async function envoyerMessage(
   return { ok: true };
 }
 
+// Message interne admin ↔ juriste (section « Messages », hors dossier). Le
+// destinataire est obligatoirement un membre de l'équipe (JURISTE ou ADMIN).
+export async function envoyerMessageInterne(
+  _prev: MessageState,
+  formData: FormData,
+): Promise<MessageState> {
+  const expediteur = await requireJuriste();
+  const destinataireId = String(formData.get("destinataireId") ?? "");
+  const contenu = String(formData.get("contenu") ?? "")
+    .trim()
+    .slice(0, 4000);
+  if (contenu.length < 3) {
+    return { error: "Message trop court (3 caractères minimum)." };
+  }
+  if (destinataireId === expediteur.id) {
+    return { error: "Vous ne pouvez pas vous écrire à vous-même." };
+  }
+
+  const destinataire = await prisma.user.findFirst({
+    where: { id: destinataireId, role: { in: ["JURISTE", "ADMIN"] } },
+    select: { id: true },
+  });
+  if (!destinataire)
+    return { error: "Destinataire introuvable ou accès refusé." };
+
+  await prisma.messageInterne.create({
+    data: { expediteurId: expediteur.id, destinataireId, contenu },
+  });
+  revalidatePath("/dashboard/messages");
+  return { ok: true };
+}
+
+/**
+ * Marque comme lus les messages internes reçus d'un interlocuteur par
+ * l'utilisateur courant (JURISTE ou ADMIN). Appelé à l'ouverture du fil.
+ */
+export async function marquerInternesLus(avecId: string): Promise<void> {
+  const user = await requireJuriste().catch(() => null);
+  if (!user) return;
+  await prisma.messageInterne
+    .updateMany({
+      where: { expediteurId: avecId, destinataireId: user.id, lu: false },
+      data: { lu: true },
+    })
+    .catch(() => {});
+}
+
 /**
  * Marque comme lus les messages adressés à l'utilisateur courant (client ou
  * juriste) sur un dossier. Appelé à l'ouverture du détail.

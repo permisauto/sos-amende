@@ -1,11 +1,24 @@
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/dal";
 import { signOutAction } from "./actions";
+import { prisma } from "@/lib/prisma";
 
 export default async function DashboardLayout({
   children,
 }: LayoutProps<"/dashboard">) {
   const user = await getCurrentUser();
+
+  // Badge « messages non lus » pour les échanges internes admin ↔ juriste.
+  let messagesNonLus = 0;
+  if (user && (user.role === "JURISTE" || user.role === "ADMIN")) {
+    try {
+      messagesNonLus = await prisma.messageInterne.count({
+        where: { destinataireId: user.id, lu: false },
+      });
+    } catch (e) {
+      console.error("messages: DB indisponible", e);
+    }
+  }
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -33,6 +46,17 @@ export default async function DashboardLayout({
               {(user?.role === "JURISTE" || user?.role === "ADMIN") && (
                 <>
                   <Link
+                    href="/dashboard/messages"
+                    className="flex items-center gap-1.5 hover:text-zinc-900"
+                  >
+                    Messages
+                    {messagesNonLus > 0 && (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                        {messagesNonLus}
+                      </span>
+                    )}
+                  </Link>
+                  <Link
                     href="/dashboard/juriste/lettres"
                     className="hover:text-zinc-900"
                   >
@@ -48,6 +72,18 @@ export default async function DashboardLayout({
               )}
               {user?.role === "ADMIN" && (
                 <>
+                  <Link
+                    href="/dashboard/admin/dossiers"
+                    className="hover:text-zinc-900"
+                  >
+                    Suivi des dossiers
+                  </Link>
+                  <Link
+                    href="/dashboard/admin/lettres"
+                    className="hover:text-zinc-900"
+                  >
+                    Lettres vérifiées
+                  </Link>
                   <Link
                     href="/dashboard/admin/radars"
                     className="hover:text-zinc-900"

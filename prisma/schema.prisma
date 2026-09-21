@@ -34,6 +34,8 @@ model User {
   lawyerMatches  LawyerMatch[]
   payments       Payment[]
   messages       Message[]
+  messagesInternesEnvoyes MessageInterne[] @relation("MessageInterneEnvoye")
+  messagesInternesRecus   MessageInterne[] @relation("MessageInterneRecu")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -233,6 +235,22 @@ model Message {
   createdAt DateTime @default(now())
 
   @@index([dossierId, createdAt])
+}
+
+// Message interne admin ↔ juriste (hors dossier, section « Messages »). Les
+// échanges entre l'administrateur et les juristes sont bidirectionnels.
+model MessageInterne {
+  id             String   @id @default(cuid())
+  expediteurId   String
+  expediteur     User     @relation("MessageInterneEnvoye", fields: [expediteurId], references: [id], onDelete: Cascade)
+  destinataireId String
+  destinataire   User     @relation("MessageInterneRecu", fields: [destinataireId], references: [id], onDelete: Cascade)
+  contenu        String   @db.Text
+  lu             Boolean  @default(false) // lu par le destinataire
+  createdAt      DateTime @default(now())
+
+  @@index([destinataireId, lu])
+  @@index([expediteurId, createdAt])
 }
 
 model RadarCalibration {
