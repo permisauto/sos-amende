@@ -16,12 +16,15 @@ import { marquerMessagesLus } from "../../messages/actions";
 const statusLabels: Record<string, string> = {
   BROUILLON: "Brouillon",
   EN_ANALYSE: "En analyse",
+  EN_ATTENTE_PAIEMENT: "Paiement en attente",
+  EN_ATTENTE_VALIDATION: "Validation du juriste",
+  EN_ATTENTE_PRE_SIGNATURE: "À signer",
   A_VERIFIER: "À vérifier",
   PRET: "Prêt",
   ENVOYE: "Envoyé",
   REJETE: "Rejeté",
   ERREUR_TECHNIQUE: "Erreur technique",
-  RESOLU: "Résolu",
+  RESOLU: "Réponse de l'administration",
   ANNULE: "Annulé",
 };
 
@@ -282,15 +285,26 @@ export default async function CaseDetailPage(
   const lettreVisible = item.statut === "ENVOYE" || item.statut === "RESOLU";
   const isDemo = item.id.startsWith("pv-") || item.id.startsWith("dec-") || item.pvUrl === "/uploads/demo-pv.jpg";
 
+  // Position des statuts (anciens inclus) sur les étapes affichées.
+  const STATUT_ETAPE: Record<string, number> = {
+    EN_ANALYSE: 1,
+    EN_ATTENTE_PAIEMENT: 1,
+    EN_ATTENTE_VALIDATION: 2,
+    A_VERIFIER: 2,
+    EN_ATTENTE_PRE_SIGNATURE: 3,
+    PRET: 3,
+    ENVOYE: 4,
+    RESOLU: 5,
+  };
   const workflow = [
     { statut: "BROUILLON", label: "Création" },
     { statut: "EN_ANALYSE", label: "Analyse" },
-    { statut: "A_VERIFIER", label: "Signature" },
-    { statut: "PRET", label: "Validation juriste" },
-    { statut: "ENVOYE", label: "Envoi LRAR" },
-    { statut: "RESOLU", label: "Résolution" },
+    { statut: "EN_ATTENTE_VALIDATION", label: "Validation juriste" },
+    { statut: "EN_ATTENTE_PRE_SIGNATURE", label: "Signature" },
+    { statut: "ENVOYE", label: "Envoi" },
+    { statut: "RESOLU", label: "Réponse" },
   ];
-  const currentIndex = workflow.findIndex((s) => s.statut === item.statut);
+  const currentIndex = STATUT_ETAPE[item.statut] ?? -1;
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -603,7 +617,9 @@ export default async function CaseDetailPage(
             />
           </div>
         </div>
-      ) : item.statut === "A_VERIFIER" && !item.lettreGeneree ? (
+      ) : (item.statut === "EN_ATTENTE_VALIDATION" ||
+          item.statut === "A_VERIFIER") &&
+        !item.lettreGeneree ? (
         <div className="mt-8 rounded-2xl border border-zinc-200 bg-white p-6">
           <h2 className="text-lg font-semibold">
             Examen par un juriste en cours
@@ -618,14 +634,43 @@ export default async function CaseDetailPage(
             En attente de l&apos;avis du juriste
           </span>
         </div>
-      ) : item.statut === "A_VERIFIER" && item.lettreGeneree ? (
+      ) : item.statut === "EN_ATTENTE_VALIDATION" && item.lettreGeneree ? (
+        <div className="mt-8 rounded-2xl border border-zinc-200 bg-white p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold">
+              Lettre en cours de validation
+            </h2>
+            <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+              En attente de validation du juriste
+            </span>
+          </div>
+          <p className="mt-2 text-sm text-zinc-600">
+            Votre lettre de contestation a été préparée sur une base juridique
+            validée. Un juriste la vérifie ainsi que les pièces versées — vous
+            serez notifié dès qu&apos;elle est prête pour signature.
+          </p>
+        </div>
+      ) : item.statut === "EN_ATTENTE_PAIEMENT" ? (
+        <div className="mt-8 rounded-2xl border-2 border-emerald-600 bg-emerald-50 p-6">
+          <h2 className="text-lg font-semibold text-emerald-900">✓ Faille validée — finalisez votre paiement</h2>
+          <p className="mt-2 text-sm text-emerald-800">
+            Le scan et le scoring de votre dossier sont terminés. Pour débloquer
+            la lettre et la faire valider par un juriste, réglez votre dossier
+            ({item.type === "AMENDE" ? "39 €" : "59 €"}) par virement bancaire.
+          </p>
+          <Link href={`/dashboard/paiement/${item.id}`} className="mt-4 inline-block rounded-full bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700">
+            Payer — virement bancaire
+          </Link>
+        </div>
+      ) : (item.statut === "A_VERIFIER" && item.lettreGeneree) ||
+        item.statut === "EN_ATTENTE_PRE_SIGNATURE" ? (
         user.credits < 1 ? (
           <div className="mt-8 rounded-2xl border-2 border-emerald-600 bg-emerald-50 p-6">
             <h2 className="text-lg font-semibold text-emerald-900">✓ Faille validée — finalisez votre paiement</h2>
             <p className="mt-2 text-sm text-emerald-800">
               Le scan et le scoring ({item.failleJuridique ? "faille détectée" : "analyse terminée"}) sont gratuits. Pour débloquer la lettre ({item.type === "AMENDE" ? "39 €" : "59 €"}) et la faire signer/valider par un juriste, renseignez vos coordonnées et choisissez votre paiement.
             </p>
-            <Link href={`/dashboard/paiement/${item.id}`} className="mt-4 inline-block rounded-full bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700">
+            <Link href={`/paiement?type=${item.type}`} className="mt-4 inline-block rounded-full bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700">
               Payer — virement bancaire
             </Link>
             <p className="mt-2 text-xs text-emerald-700">Nom, prénom, email, WhatsApp demandés à l'étape suivante.</p>

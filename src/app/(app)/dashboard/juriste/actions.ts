@@ -4,7 +4,13 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireJuristeRedacteur } from "@/lib/dal";
-import { remplirTemplate } from "@/lib/moteur";
+import {
+  FAILLE_IDS,
+  detecterFailles,
+  remplirTemplate,
+  type ExtractedData,
+  type RegleDetection,
+} from "@/lib/moteur";
 import { notifierStatut } from "@/lib/notifications";
 import { storageRead, storageWrite } from "@/lib/storage";
 import { generateLettrePdf } from "@/lib/lettre-pdf";
@@ -13,6 +19,9 @@ import { organismeEnvoi } from "@/lib/envoi";
 import { setDemoLettre } from "@/lib/demo-lettres";
 
 export type ValidationState = { error?: string; ok?: boolean } | undefined;
+
+const CANAUX_ENVOI = ["ANTAI", "TELERECOURS", "LRAR"] as const;
+type CanalEnvoi = (typeof CANAUX_ENVOI)[number];
 
 const DECISION_OMP = ["ACCEPTE", "REJETE"] as const;
 
@@ -38,7 +47,7 @@ function isDemoId(id: string): boolean {
  * dossier passe en ENVOYE avec accusé de dépôt ; en cas d'échec il reste
  * PRET/validé et le client conserve son kit LRAR en secours.
  */
-async function soumettreEtMarquerEnvoye(dossierId: string) {
+export async function soumettreEtMarquerEnvoye(dossierId: string) {
   const dossier = await prisma.dossier.findUnique({
     where: { id: dossierId },
     include: {
@@ -169,32 +178,90 @@ export async function validerDossier(
   await requireJuristeRedacteur();
 
   const dossierId = String(formData.get("dossierId") ?? "");
+  const canalSaisi = String(formData.get("canalEnvoi") ?? "");
   const dossier = await prisma.dossier.findUnique({
     where: { id: dossierId },
-    include: { courriers: { orderBy: { createdAt: "asc" } } },
+    include: {
+      courriers: { orderBy: { createdAt: "asc" } },
+      user: { select: { signatureUrl: true } },
+    },
   });
   if (!dossier) {
     if (isDemoId(dossierId)) {
       revalidatePath("/dashboard/juriste");
       revalidatePath(`/dashboard/juriste/${dossierId}`);
-      redirect(`/dashboard/juriste/${dossierId}?valide=ok&envoye=ok`);
+      redirect(`/dashboard/juriste/${dossierId}?valide=ok`);
     }
     return { error: "Dossier introuvable." };
   }
-  if (dossier.statut !== "PRET") {
-    return { error: "Le dossier doit être signé et prêt à l'envoi." };
+  // Statuts éligibles : EN_ATTENTE_VALIDATION (nouveau flux) et legs
+  // PRET/A_VERIFIER (dossiers démarrés avant la refonte, démos).
+  if (
+    dossier.statut !== "EN_ATTENTE_VALIDATION" &&
+    dossier.statut !== "PRET" &&
+    dossier.statut !== "A_VERIFIER"
+  ) {
+    return { error: "Seul un dossier en attente de validation peut être approuvé." };
   }
-  const courrier = dossier.courriers[dossier.courriers.length - 1];
-  if (!courrier?.pdfUrl) {
-    return { error: "Aucune lettre signée à valider." };
+  if (!dossier.lettreGeneree) {
+    return { error: "Aucune lettre générée à valider." };
   }
 
-  // Validation humaine de la lettre (garde-fou).
+  // Canal d'envoi choisi par le juriste (défaut selon le type d'infraction).
+  const canal: CanalEnvoi =
+    CANAUX_ENVOI.find((c) => c === canalSaisi) ??
+    (dossier.type === "SUSPENSION" ? "TELERECOURS" : "ANTAI");
+
+  const courrier = dossier.courriers[dossier.courriers.length - 1];
+  const dejaSigne = !!courrier?.pdfUrl;
+  const signatureProfil = dossier.user?.signatureUrl ?? null;
+
+  // Cas A : la signature capturée au dépôt (User.signatureUrl) permet de
+  // produire directement la lettre signée — l'envoi suit immédiatement après
+  // validation, sans repasser par la signature du client.
+  let pdfSigne: { pdfUrl: string; signatureUrl: string } | null = null;
+  if (!dejaSigne && signatureProfil) {
+    const sig = await storageRead(signatureProfil);
+    if (sig) {
+      try {
+        const pdfBuffer = await generateLettrePdf(
+          dossier.lettreGeneree,
+          `data:image/png;base64,${sig.toString("base64")}`,
+        );
+        const pdfUrl = await storageWrite(
+          `pdfs/lettre-${dossier.id}-${Date.now()}.pdf`,
+          pdfBuffer,
+        );
+        pdfSigne = { pdfUrl, signatureUrl: signatureProfil };
+      } catch (e) {
+        // Signature illisible : repli sur le cas B sans bloquer le juriste.
+        console.error("validerDossier: génération PDF pré-signé échouée", e);
+      }
+    }
+  }
+
+  const estSigne = dejaSigne || !!pdfSigne;
+
   await prisma.$transaction([
     prisma.dossier.update({
       where: { id: dossier.id },
-      data: { valideLe: new Date() },
+      data: {
+        statut: estSigne ? "PRET" : "EN_ATTENTE_PRE_SIGNATURE",
+        valideLe: new Date(),
+        canalEnvoi: canal,
+      },
     }),
+    ...(pdfSigne
+      ? [
+          prisma.courrier.create({
+            data: {
+              dossierId: dossier.id,
+              signatureUrl: pdfSigne.signatureUrl,
+              pdfUrl: pdfSigne.pdfUrl,
+            },
+          }),
+        ]
+      : []),
     prisma.dossierEvent.create({
       data: { dossierId: dossier.id, type: "VALIDATION" },
     }),
@@ -203,9 +270,20 @@ export async function validerDossier(
   // Notification (défensive : sans AUTH_RESEND_KEY, aucun e-mail envoyé).
   await notifierStatut(dossier.id).catch(() => false);
 
-  // Envoi immédiat de la contestation (lettre + preuves) au portail
-  // ANTAI / Télérecours. En cas d'échec le dossier reste validé et le client
-  // conserve son kit LRAR en secours (bouton de relance côté juriste).
+  revalidatePath("/dashboard/juriste");
+  revalidatePath(`/dashboard/juriste/${dossier.id}`);
+  revalidatePath(`/dashboard/cases/${dossier.id}`);
+
+  // Cas B : la lettre validée attend la signature du client.
+  if (!estSigne) {
+    redirect(`/dashboard/juriste/${dossier.id}?valide=ok`);
+  }
+
+  // Lettre déjà signée : envoi immédiat (sauf canal LRAR → kit côté client).
+  if (canal === "LRAR") {
+    redirect(`/dashboard/juriste/${dossier.id}?valide=ok`);
+  }
+
   const envoi = await soumettreEtMarquerEnvoye(dossier.id);
 
   revalidatePath("/dashboard/juriste");
@@ -254,6 +332,137 @@ export async function envoyerContestation(
   return { error: envoi.error };
 }
 
+export type VerificationPousseeState = { error?: string; ok?: boolean } | undefined;
+
+/**
+ * Vérification poussée (action déclenchée par le juriste sur un dossier en
+ * EN_ATTENTE_VALIDATION) : ses remarques sont annexées au texte scanné et le
+ * moteur relance la détection de failles sur ce contexte enrichi. La lettre
+ * est régénérée si de nouvelles failles sont trouvées ; aucune donnée
+ * juridique n'est inventée — les seules sources restent les templates
+ * validés par l'admin (FailleJuridique ACTIVE).
+ */
+export async function relancerVerificationPoussee(
+  _prev: VerificationPousseeState,
+  formData: FormData,
+): Promise<VerificationPousseeState> {
+  await requireJuristeRedacteur();
+
+  const dossierId = String(formData.get("dossierId") ?? "");
+  const remarques = String(formData.get("remarques") ?? "").trim();
+  if (remarques.length < 10) {
+    return {
+      error:
+        "Précisez vos remarques (au moins 10 caractères) avant la vérification poussée.",
+    };
+  }
+
+  const dossier = await prisma.dossier.findUnique({
+    where: { id: dossierId },
+  });
+  if (!dossier) {
+    return { error: "Dossier introuvable." };
+  }
+  if (dossier.statut !== "EN_ATTENTE_VALIDATION") {
+    return {
+      error:
+        "La vérification poussée n'est disponible que sur un dossier en attente de validation.",
+    };
+  }
+
+  const data = (dossier.extractedData ?? {}) as ExtractedData;
+  const texteAjour = [
+    dossier.pvTexte,
+    `[Vérification poussée du juriste — ${remarques}]`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const failles = await prisma.failleJuridique.findMany({
+    where: { statut: "ACTIVE", typeInfraction: dossier.type },
+  });
+
+  let dateExpirationEtalonnage: Date | null = null;
+  if (data.radarId) {
+    const cal = await prisma.radarCalibration.findFirst({
+      where: { radarId: data.radarId },
+      orderBy: { dateExpiration: "desc" },
+    });
+    if (cal) dateExpirationEtalonnage = cal.dateExpiration;
+  }
+
+  const candidats = detecterFailles(
+    data,
+    texteAjour,
+    failles.map((f) => ({
+      id: f.id,
+      reglesDetection: f.reglesDetection as unknown as
+        | RegleDetection[]
+        | null,
+    })),
+    { dateExpirationEtalonnage },
+  );
+
+  const principalId = candidats[0] ?? null;
+  const faille = principalId
+    ? failles.find((f) => f.id === principalId) ?? null
+    : null;
+
+  if (principalId === FAILLE_IDS.etalonnage && data.radarId) {
+    const cal = await prisma.radarCalibration.findFirst({
+      where: { radarId: data.radarId },
+      orderBy: { dateExpiration: "desc" },
+    });
+    if (cal) data.preuveEtalonnage = cal.preuveUrl;
+  }
+
+  const lettre = faille
+    ? remplirTemplate(faille.templateLettre, data)
+    : null;
+
+  await prisma.$transaction([
+    prisma.dossier.update({
+      where: { id: dossier.id },
+      data: {
+        remarquesJuriste: remarques,
+        pvTexte: texteAjour,
+        failleJuridiqueId: faille?.id ?? null,
+        lettreGeneree: lettre,
+        extractedData: data as object,
+      },
+    }),
+    prisma.dossierEvent.create({
+      data: {
+        dossierId: dossier.id,
+        type: "VERIFICATION_POUSSEE",
+        detail: remarques,
+      },
+    }),
+    ...(lettre
+      ? [
+          prisma.dossierEvent.create({
+            data: {
+              dossierId: dossier.id,
+              type: "LETTRE_GENEREE",
+              detail: "Lettre régénérée après vérification poussée.",
+            },
+          }),
+        ]
+      : []),
+    prisma.dossierFaille.deleteMany({ where: { dossierId: dossier.id } }),
+    ...candidats.map((failleId) =>
+      prisma.dossierFaille.create({
+        data: { dossierId: dossier.id, failleId, statut: "CANDIDATE" },
+      }),
+    ),
+  ]);
+
+  revalidatePath("/dashboard/juriste");
+  revalidatePath(`/dashboard/juriste/${dossier.id}`);
+  revalidatePath(`/dashboard/cases/${dossier.id}`);
+  return { ok: true };
+}
+
 /**
  * Modification de la lettre générée par le juriste avant validation :
  *  - A_VERIFIER : la lettre n'est pas encore signée — seul le texte change ;
@@ -287,7 +496,11 @@ export async function modifierLettre(
     }
     return { error: "Dossier introuvable." };
   }
-  if (dossier.statut !== "A_VERIFIER" && dossier.statut !== "PRET") {
+  if (
+    dossier.statut !== "A_VERIFIER" &&
+    dossier.statut !== "PRET" &&
+    dossier.statut !== "EN_ATTENTE_VALIDATION"
+  ) {
     return { error: "La lettre ne peut être modifiée qu'avant validation." };
   }
 
@@ -366,8 +579,8 @@ export async function retournerDossier(
     }
     return { error: "Dossier introuvable." };
   }
-  if (dossier.statut !== "PRET") {
-    return { error: "Seul un dossier signé peut être retourné." };
+  if (dossier.statut !== "PRET" && dossier.statut !== "EN_ATTENTE_VALIDATION") {
+    return { error: "Seul un dossier en attente de validation peut être retourné." };
   }
 
   await prisma.$transaction([
@@ -410,7 +623,12 @@ export async function rejeterDossier(
     }
     return { error: "Dossier introuvable." };
   }
-  if (dossier.statut !== "PRET" && dossier.statut !== "A_VERIFIER") {
+  if (
+    dossier.statut !== "PRET" &&
+    dossier.statut !== "A_VERIFIER" &&
+    dossier.statut !== "EN_ATTENTE_VALIDATION" &&
+    dossier.statut !== "EN_ATTENTE_PRE_SIGNATURE"
+  ) {
     return { error: "Seul un dossier en attente peut être rejeté." };
   }
 
@@ -464,7 +682,11 @@ export async function confirmerFaille(
     if (isDemoId(dossierId)) return undefined;
     return { error: "Dossier introuvable." };
   }
-  if (dossier.statut !== "A_VERIFIER" && dossier.statut !== "PRET") {
+  if (
+    dossier.statut !== "A_VERIFIER" &&
+    dossier.statut !== "PRET" &&
+    dossier.statut !== "EN_ATTENTE_VALIDATION"
+  ) {
     return {
       error:
         "La faille ne peut être confirmée que tant que la lettre n'est pas envoyée.",

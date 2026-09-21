@@ -115,9 +115,16 @@ export async function notifierStatut(dossierId: string): Promise<boolean> {
 
   const dossier = await prisma.dossier.findUnique({
     where: { id: dossierId },
-    include: {
+    select: {
+      id: true,
+      statut: true,
+      extractedData: true,
+      lettreGeneree: true,
+      motifRejet: true,
+      decisionOmp: true,
+      decisionDetail: true,
+      prix: true,
       user: { select: { email: true, name: true } },
-      courriers: { orderBy: { createdAt: "desc" }, take: 1 },
     },
   });
   if (!dossier) return false;
@@ -125,11 +132,41 @@ export async function notifierStatut(dossierId: string): Promise<boolean> {
   const data = (dossier.extractedData ?? {}) as { num_pv?: string };
   const ref = data.num_pv ? ` (PV n° ${data.num_pv})` : "";
   const prenom = dossier.user.name ?? "Client";
+  const montant = dossier.prix ? `${dossier.prix} €` : "39 €";
 
   let subject = "";
   let html = "";
 
   switch (dossier.statut) {
+    case "EN_ATTENTE_PAIEMENT":
+      subject = "Votre dossier est en attente de paiement";
+      html = `
+        <p>Bonjour ${prenom},</p>
+        <p>Une faille juridique a été détectée pour votre dossier${ref} : votre
+        analyse est gratuite, mais débloquer la lettre nécessite le règlement
+        (${montant}) par virement bancaire.</p>
+        <p><a href="${process.env.NEXT_PUBLIC_APP_URL ?? "https://recours-permis-pv.com"}/dashboard/cases/${dossier.id}">Régler mon dossier</a></p>
+        ${ACCUEIL}`;
+      break;
+    case "EN_ATTENTE_VALIDATION":
+      if (!dossier.lettreGeneree) return false;
+      subject = "Votre dossier est en cours de validation par un juriste";
+      html = `
+        <p>Bonjour ${prenom},</p>
+        <p>Votre dossier${ref} a été analysé : une lettre de contestation a été
+        préparée et est en cours de validation par un juriste.</p>
+        <p>Vous serez notifié dès qu'elle est prête pour votre signature.</p>
+        ${ACCUEIL}`;
+      break;
+    case "EN_ATTENTE_PRE_SIGNATURE":
+      subject = "Votre lettre validée est prête à signer";
+      html = `
+        <p>Bonjour ${prenom},</p>
+        <p>Votre lettre de contestation${ref} a été validée par notre juriste.
+        Il ne vous reste qu'à la signer électroniquement, elle sera transmise
+        automatiquement.</p>
+        ${ACCUEIL}`;
+      break;
     case "A_VERIFIER":
       if (!dossier.lettreGeneree) return false;
       subject = "Votre lettre de contestation est prête à signer";

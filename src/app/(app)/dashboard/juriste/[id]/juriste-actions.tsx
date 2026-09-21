@@ -15,12 +15,14 @@ export function JuristeActions({
   validee = false,
   organisme = "ANTAI",
   lectureSeule = false,
+  showCanal = false,
 }: {
   dossierId: string;
   mode?: "full" | "rejet";
   validee?: boolean;
   organisme?: string;
   lectureSeule?: boolean;
+  showCanal?: boolean;
 }) {
   const [valideState, valideAction, validePending] = useActionState(
     validerDossier,
@@ -61,6 +63,32 @@ export function JuristeActions({
           <>
             <form action={valideAction} className="flex flex-col gap-2">
               <input type="hidden" name="dossierId" value={dossierId} />
+              {showCanal && (
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-zinc-700">
+                    Canal d&apos;envoi de la contestation
+                  </span>
+                  <select
+                    name="canalEnvoi"
+                    defaultValue=""
+                    required
+                    className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                  >
+                    <option value="" disabled>
+                      Choisir le canal…
+                    </option>
+                    <option value="ANTAI">
+                      Soumission automatique ({organisme} — envoi en ligne)
+                    </option>
+                    <option value="TELERECOURS">
+                      Télérecours (tribunal administratif)
+                    </option>
+                    <option value="LRAR">
+                      LRAR — lettre recommandée envoyée par le client
+                    </option>
+                  </select>
+                </label>
+              )}
               <button
                 type="submit"
                 disabled={validePending}
@@ -68,7 +96,9 @@ export function JuristeActions({
               >
                 {validePending
                   ? "Validation…"
-                  : "Approuver la lettre et envoyer la contestation"}
+                  : showCanal
+                    ? "Approuver la lettre"
+                    : "Approuver la lettre et envoyer la contestation"}
               </button>
               {valideState?.error && (
                 <p className="rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700">

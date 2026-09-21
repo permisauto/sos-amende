@@ -25,8 +25,9 @@ async function signerLettre(page: import("@playwright/test").Page) {
   await page
     .getByRole("button", { name: "Signer et générer le PDF" })
     .click();
+  // Signature validée par le juriste → envoi automatique à ANTAI (mock)
   await expect(
-    page.getByRole("heading", { name: "Lettre signée" }),
+    page.getByRole("heading", { name: "Contestation envoyée" }),
   ).toBeVisible();
 }
 
@@ -37,28 +38,26 @@ async function approuverLettre(browser: Browser) {
 
   // Confirmer que la session est bien celle du juriste
   await expect(page.getByText("Juriste E2E", { exact: true })).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "Espace juriste" }),
-  ).toBeVisible();
 
   await page.goto("/dashboard/juriste");
   await page.getByRole("link", { name: "Client E2E" }).first().click();
   await page.waitForURL(/\/dashboard\/juriste\/[^/]+$/);
   await page
-    .getByRole("button", { name: "Approuver la lettre et envoyer la contestation" })
+    .getByLabel("Canal d'envoi de la contestation")
+    .selectOption("ANTAI");
+  await page
+    .getByRole("button", { name: "Approuver la lettre" })
     .click();
-  // Validation → envoi automatique à ANTAI (mock) avec accusé de dépôt
+  // Lettre validée (sans signature) → en attente de la signature du client
   await expect(
-    page.getByText("Lettre validée et contestation envoyée à ANTAI", {
+    page.getByText("en attente de la signature du client", {
       exact: false,
     }),
   ).toBeVisible();
-  // La timeline juriste retrace la validation puis l'envoi
+  // La timeline juriste retrace la validation (l'envoi viendra après la
+  // signature du client)
   await expect(
     page.getByText("Validation par le juriste", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("Envoyé à ANTAI", { exact: false }).first(),
   ).toBeVisible();
 
   await ctx.close();
@@ -101,7 +100,7 @@ async function decisionOmpJuriste(browser: Browser) {
   await ctx.close();
 }
 
-test("flux complet : dépôt → analyse → signature → validation juriste → envoi automatique ANTAI → décision OMP", async ({
+test("flux complet : dépôt → analyse → validation juriste → signature → envoi automatique ANTAI → décision OMP", async ({
   page,
   browser,
 }) => {
@@ -111,21 +110,20 @@ test("flux complet : dépôt → analyse → signature → validation juriste �
 
   const dossierId = await createDossier(page);
   await analyserDossier(page);
-  await signerLettre(page);
 
-  // Le client voit sa lettre signée, en attente de validation du juriste
+  // Le client voit sa lettre, en attente de validation du juriste
   await expect(
     page.getByText("En attente de validation du juriste", { exact: false }),
   ).toBeVisible();
 
-  // Le juriste approuve la lettre → envoi automatique à ANTAI (mock)
+  // Le juriste approuve la lettre → en attente de la signature du client
   await approuverLettre(browser);
   await page.goto(`/dashboard/cases/${dossierId}`);
 
+  // Le client signe → la validée est transmise automatiquement à ANTAI (mock)
+  await signerLettre(page);
+
   // Côté client : la contestation est envoyée, la lettre est révélée
-  await expect(
-    page.getByRole("heading", { name: "Contestation envoyée" }),
-  ).toBeVisible();
   await expect(
     page.getByText("Envoyé à ANTAI", { exact: false }).first(),
   ).toBeVisible();

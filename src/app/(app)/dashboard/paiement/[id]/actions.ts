@@ -20,6 +20,9 @@ export async function payerParVirement(_prev: VirementState, formData: FormData)
 
   const dossier = await prisma.dossier.findFirst({ where: { id: dossierId, userId: user.id } });
   if (!dossier) return { error: "Dossier introuvable." };
+  if (dossier.statut !== "EN_ATTENTE_PAIEMENT") {
+    return { error: "Ce dossier n'est pas en attente de paiement." };
+  }
 
   // Sauvegarde contact dans extractedData et User
   const data = (dossier.extractedData as Record<string, unknown> | null) ?? {};
@@ -27,6 +30,7 @@ export async function payerParVirement(_prev: VirementState, formData: FormData)
     prisma.payment.create({
       data: {
         userId: user.id,
+        dossierId: dossier.id,
         amount: dossier.type === "SUSPENSION" ? 59 : 39,
         currency: "EUR",
         status: "PENDING_VIREMENT",

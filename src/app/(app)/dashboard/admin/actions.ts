@@ -358,10 +358,38 @@ export async function validerVirement(
   }
   if (payment.status !== "PENDING_VIREMENT") return { error: "Seuls les virements en attente peuvent être validés." };
 
-  await prisma.$transaction([
-    prisma.payment.update({ where: { id }, data: { status: "PAID" } }),
-    prisma.user.update({ where: { id: payment.userId }, data: { credits: { increment: 1 } } }),
-  ]);
+  await prisma.$transaction(async (tx) => {
+    await tx.payment.update({ where: { id }, data: { status: "PAID" } });
+
+    // Paiement rattaché à un dossier en attente (EN_ATTENTE_PAIEMENT) : le
+    // crédit sert directement le dossier — il passe en EN_ATTENTE_VALIDATION
+    // pour le juriste, sans créditer le client (le paiement a été consommé).
+    if (payment.dossierId) {
+      const dossierLie = await tx.dossier.findUnique({
+        where: { id: payment.dossierId },
+        select: { id: true, statut: true },
+      });
+      if (dossierLie && dossierLie.statut === "EN_ATTENTE_PAIEMENT") {
+        await tx.dossier.update({
+          where: { id: dossierLie.id },
+          data: { statut: "EN_ATTENTE_VALIDATION" },
+        });
+        await tx.dossierEvent.create({
+          data: {
+            dossierId: dossierLie.id,
+            type: "EN_ATTENTE",
+            detail: "Paiement validé — dossier transmis au juriste",
+          },
+        });
+        return;
+      }
+    }
+
+    await tx.user.update({
+      where: { id: payment.userId },
+      data: { credits: { increment: 1 } },
+    });
+  });
 
   const user = await prisma.user.findUnique({ where: { id: payment.userId } });
   if (user) {

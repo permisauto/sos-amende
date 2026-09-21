@@ -6,12 +6,15 @@ import { PayerCta } from "@/components/payer-cta";
 const statusLabels: Record<string, string> = {
   BROUILLON: "Brouillon",
   EN_ANALYSE: "En analyse",
+  EN_ATTENTE_PAIEMENT: "Paiement en attente",
+  EN_ATTENTE_VALIDATION: "Validation du juriste",
+  EN_ATTENTE_PRE_SIGNATURE: "À signer",
   A_VERIFIER: "À vérifier",
   PRET: "Prêt",
   ENVOYE: "Envoyé",
   REJETE: "Rejeté",
   ERREUR_TECHNIQUE: "Erreur technique",
-  RESOLU: "Résolu",
+  RESOLU: "Réponse de l'administration",
   ANNULE: "Annulé",
 };
 

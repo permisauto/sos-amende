@@ -13,12 +13,7 @@ export default async function PaiementPage(props: PageProps<"/dashboard/paiement
     include: { failleJuridique: true, faillesRetenues: { include: { faille: true } } },
   });
   if (!dossier) notFound();
-  if (dossier.statut !== "A_VERIFIER" || !dossier.lettreGeneree) {
-    redirect(`/dashboard/cases/${id}`);
-  }
-
-  // Si déjà payé (crédit dispo), pas besoin de repayer
-  if (user.credits > 0) {
+  if (dossier.statut !== "EN_ATTENTE_PAIEMENT" || !dossier.lettreGeneree) {
     redirect(`/dashboard/cases/${id}`);
   }
 

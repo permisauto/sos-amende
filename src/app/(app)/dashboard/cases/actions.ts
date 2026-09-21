@@ -17,6 +17,7 @@ import {
 import { generateLettrePdf } from "@/lib/lettre-pdf";
 import { extrairePv, normaliserPv } from "@/lib/ocr";
 import { notifierStatut } from "@/lib/notifications";
+import { soumettreEtMarquerEnvoye } from "../juriste/actions";
 
 const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
 const MAX_SIZE = 8 * 1024 * 1024; // 8 Mo
@@ -224,43 +225,67 @@ export async function analyserDossier(
     ? remplirTemplate(faille.templateLettre, data)
     : null;
 
-  await prisma.$transaction([
-    prisma.dossier.update({
+  // Débit du crédit au moment de la mise en file de validation (payant) :
+  // - faille + crédit disponible  → débit immédiat → EN_ATTENTE_VALIDATION ;
+  // - faille sans crédit          → EN_ATTENTE_PAIEMENT (le virement est
+  //   rattaché au dossier ; à sa validation l'admin consomme le crédit, net à
+  //   zéro) ;
+  // - sans faille (aucune lettre) → EN_ATTENTE_VALIDATION sans débit : le
+  //   juriste examine le fondement, le crédit n'est jamais débité.
+  const statut = await prisma.$transaction(async (tx) => {
+    let next: "EN_ATTENTE_VALIDATION" | "EN_ATTENTE_PAIEMENT";
+    if (faille) {
+      const debit = await tx.user.updateMany({
+        where: { id: user.id, credits: { gte: 1 } },
+        data: { credits: { decrement: 1 } },
+      });
+      next =
+        debit.count === 1 ? "EN_ATTENTE_VALIDATION" : "EN_ATTENTE_PAIEMENT";
+    } else {
+      next = "EN_ATTENTE_VALIDATION";
+    }
+
+    await tx.dossier.update({
       where: { id: dossier.id },
       data: {
         extractedData: data as object,
         failleJuridiqueId: faille?.id ?? null,
         lettreGeneree: lettre,
         dateLimite: dateLimitePv(data.date, dossier.type),
-        statut: "A_VERIFIER",
+        statut: next,
       },
-    }),
-    prisma.dossierEvent.create({
-      data: {
-        dossierId: dossier.id,
-        type: "ANALYSE",
-      },
-    }),
-    prisma.dossierEvent.create({
+    });
+    await tx.dossierEvent.create({
+      data: { dossierId: dossier.id, type: "ANALYSE" },
+    });
+    await tx.dossierEvent.create({
       data: {
         dossierId: dossier.id,
         type: faille ? "LETTRE_GENEREE" : "EN_ATTENTE",
+        detail:
+          next === "EN_ATTENTE_PAIEMENT"
+            ? "En attente de paiement (virement bancaire)"
+            : undefined,
       },
-    }),
+    });
     // Réinitialise les candidatures puis rejoue toutes les failles détectées
-    // (un retour à l'analyse relance la détection automatique).
-    prisma.dossierFaille.deleteMany({ where: { dossierId: dossier.id } }),
-    ...candidats.map((failleId) =>
-      prisma.dossierFaille.create({
+    // (une relance de l'analyse relance aussi la détection automatique).
+    await tx.dossierFaille.deleteMany({ where: { dossierId: dossier.id } });
+    for (const failleId of candidats) {
+      await tx.dossierFaille.create({
         data: { dossierId: dossier.id, failleId, statut: "CANDIDATE" },
-      }),
-    ),
-  ]);
+      });
+    }
+    return next;
+  });
 
   // Notification (défensive : sans AUTH_RESEND_KEY, aucun e-mail envoyé).
   await notifierStatut(dossier.id).catch(() => false);
 
   revalidatePath(`/dashboard/cases/${dossier.id}`);
+  if (statut === "EN_ATTENTE_PAIEMENT") {
+    redirect(`/dashboard/paiement/${dossier.id}`);
+  }
   redirect(`/dashboard/cases/${dossier.id}?analyse=ok`);
 }
 
@@ -328,21 +353,16 @@ export async function signerDossier(
   if (!dossier) {
     return { error: "Dossier introuvable." };
   }
-  if (dossier.statut !== "A_VERIFIER") {
-    return { error: "La signature n'est disponible qu'une fois la lettre générée." };
+  if (dossier.statut !== "A_VERIFIER" && dossier.statut !== "EN_ATTENTE_PRE_SIGNATURE") {
+    return { error: "La signature n'est disponible qu'une fois la lettre validée par un juriste." };
   }
   if (!dossier.lettreGeneree) {
     return { error: "Aucune lettre à signer." };
   }
 
-  // Paiement requis : le dépôt est gratuit, la signature débloque le crédit
-  const debit = await prisma.user.updateMany({
-    where: { id: user.id, credits: { gte: 1 } },
-    data: { credits: { decrement: 1 } },
-  });
-  if (debit.count === 0) {
-    return { error: "Paiement requis : finalisez votre paiement (virement bancaire) avant de signer." };
-  }
+  // Le crédit est déjà consommé à l'analyse (EN_ATTENTE_VALIDATION) ou par la
+  // validation du virement (EN_ATTENTE_PAIEMENT → EN_ATTENTE_VALIDATION) :
+  // la signature ne débite plus rien.
 
   // Signature : celle capturée au dépôt (User.signatureUrl) est réutilisée ;
   // une nouvelle trace écrase la précédente et devient la référence du profil.
@@ -402,6 +422,19 @@ export async function signerDossier(
   ]);
 
   revalidatePath(`/dashboard/cases/${dossier.id}`);
+
+  // Signature du client = feu vert à l'envoi (dossier déjà validé par le
+  // juriste) : soumission immédiate au portail (ANTAI / Télérecours), sauf si
+  // le canal LRAR a été choisi (le client poste sa lettre en recommandé, kit
+  // affiché côté client). Un dossier hérité en A_VERIFIER (jamais validé)
+  // reste en PRET : le juriste le validera avant tout envoi.
+  if (dossier.canalEnvoi === "LRAR" || !dossier.valideLe) {
+    redirect(`/dashboard/cases/${dossier.id}?signe=ok`);
+  }
+  const envoi = await soumettreEtMarquerEnvoye(dossier.id);
+  if (envoi.ok) {
+    redirect(`/dashboard/cases/${dossier.id}?envoye=ok`);
+  }
   redirect(`/dashboard/cases/${dossier.id}?signe=ok`);
 }
 

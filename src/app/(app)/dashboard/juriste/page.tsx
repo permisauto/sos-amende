@@ -5,6 +5,9 @@ import { requireJuriste } from "@/lib/dal";
 const statusLabels: Record<string, string> = {
   BROUILLON: "Brouillon",
   EN_ANALYSE: "En analyse",
+  EN_ATTENTE_PAIEMENT: "En attente de paiement",
+  EN_ATTENTE_VALIDATION: "À valider par le juriste",
+  EN_ATTENTE_PRE_SIGNATURE: "En attente de signature client",
   A_VERIFIER: "À vérifier",
   PRET: "Prêt",
   ENVOYE: "Envoyé",
@@ -15,8 +18,9 @@ const statusLabels: Record<string, string> = {
 };
 
 const filters = [
-  { value: "PRET", label: "À valider" },
-  { value: "A_VERIFIER", label: "En attente de signature" },
+  { value: "EN_ATTENTE_VALIDATION", label: "À valider" },
+  { value: "EN_ATTENTE_PRE_SIGNATURE", label: "En attente de signature" },
+  { value: "EN_ATTENTE_PAIEMENT", label: "En attente de paiement" },
   { value: "ENVOYE", label: "Envoyés" },
   { value: "ALL", label: "Tous" },
 ];
@@ -24,6 +28,9 @@ const filters = [
 const statusValues = [
   "BROUILLON",
   "EN_ANALYSE",
+  "EN_ATTENTE_PAIEMENT",
+  "EN_ATTENTE_VALIDATION",
+  "EN_ATTENTE_PRE_SIGNATURE",
   "A_VERIFIER",
   "PRET",
   "ENVOYE",
@@ -35,6 +42,9 @@ const statusValues = [
 type Statut = (typeof statusValues)[number];
 
 const statutBadge: Record<string, string> = {
+  EN_ATTENTE_VALIDATION: "bg-amber-100 text-amber-800",
+  EN_ATTENTE_PRE_SIGNATURE: "bg-indigo-100 text-indigo-800",
+  EN_ATTENTE_PAIEMENT: "bg-zinc-100 text-zinc-600",
   PRET: "bg-amber-100 text-amber-800",
   A_VERIFIER: "bg-indigo-100 text-indigo-800",
   ENVOYE: "bg-emerald-100 text-emerald-800",
@@ -47,13 +57,13 @@ export default async function JuristePage(
 ) {
   const juriste = await requireJuriste();
   const { f } = await props.searchParams;
-  const raw = typeof f === "string" ? f.toUpperCase() : "PRET";
+  const raw = typeof f === "string" ? f.toUpperCase() : "EN_ATTENTE_VALIDATION";
   const statut: Statut | "ALL" =
     raw === "ALL"
       ? "ALL"
       : statusValues.includes(raw as Statut)
         ? (raw as Statut)
-        : "PRET";
+        : "EN_ATTENTE_VALIDATION";
 
   let dossiers: Array<{
     id: string;
@@ -98,17 +108,25 @@ export default async function JuristePage(
     <div className="mx-auto max-w-5xl">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Espace juriste</h1>
+          <h1 className="text-2xl font-bold">Vue d&apos;ensemble</h1>
           <p className="mt-1 text-sm text-zinc-600">
             Validez les lettres, suivez les envois et renseignez les décisions.
           </p>
         </div>
-        <Link
-          href="/dashboard/juriste/failles"
-          className="rounded-full border border-zinc-300 px-5 py-2.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
-        >
-          Bibliothèque juridique
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/dashboard/juriste/lettres"
+            className="rounded-full border border-zinc-300 px-5 py-2.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
+          >
+            Bibliothèque des lettres générées
+          </Link>
+          <Link
+            href="/dashboard/juriste/failles"
+            className="rounded-full border border-zinc-300 px-5 py-2.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
+          >
+            Bibliothèque juridique
+          </Link>
+        </div>
       </div>
 
       {/* Statistiques */}
@@ -116,19 +134,19 @@ export default async function JuristePage(
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
           <p className="text-sm font-medium text-amber-700">À valider</p>
           <p className="mt-1 text-3xl font-bold text-amber-900">
-            {countBy("PRET")}
+            {countBy("EN_ATTENTE_VALIDATION") + countBy("PRET")}
           </p>
           <p className="mt-1 text-xs text-amber-700">
-            Lettres signées à approuver
+            Lettres générées à vérifier avant envoi
           </p>
         </div>
         <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-5">
-          <p className="text-sm font-medium text-indigo-700">À vérifier</p>
+          <p className="text-sm font-medium text-indigo-700">À signer</p>
           <p className="mt-1 text-3xl font-bold text-indigo-900">
-            {countBy("A_VERIFIER")}
+            {countBy("EN_ATTENTE_PRE_SIGNATURE")}
           </p>
           <p className="mt-1 text-xs text-indigo-700">
-            En attente de signature client
+            En attente de la signature du client
           </p>
         </div>
         <div className="rounded-2xl border border-zinc-200 bg-white p-5">
@@ -148,7 +166,7 @@ export default async function JuristePage(
         {filters.map((item) => (
           <Link
             key={item.value}
-            href={`/dashboard/juriste${item.value === "PRET" ? "" : `?f=${item.value}`}`}
+            href={`/dashboard/juriste${item.value === "EN_ATTENTE_VALIDATION" ? "" : `?f=${item.value}`}`}
             className={`rounded-full px-4 py-2 text-sm font-medium transition ${
               statut === item.value
                 ? "bg-emerald-600 text-white"

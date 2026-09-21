@@ -153,12 +153,12 @@ test.describe("Juriste — file & actions", () => {
   test("juriste : les filtres de file fonctionnent", async ({ page }) => {
     await loginAs(page, "e2e-juriste@test.local");
     await page.goto("/dashboard/juriste");
-    // Le filtre actif par défaut est "À valider" (PRET)
+    // Le filtre actif par défaut est "À valider" (EN_ATTENTE_VALIDATION)
     await expect(
       page.getByRole("link", { name: /À valider/ }).first(),
     ).toBeVisible();
     for (const [label, url] of [
-      ["En attente de signature", "/dashboard/juriste?f=A_VERIFIER"],
+      ["En attente de signature", "/dashboard/juriste?f=EN_ATTENTE_PRE_SIGNATURE"],
       ["Envoyés", "/dashboard/juriste?f=ENVOYE"],
       ["Tous", "/dashboard/juriste?f=ALL"],
     ] as const) {
@@ -229,7 +229,7 @@ test.describe("Téléchargements (fichiers)", () => {
     browser,
   }) => {
     // Le seed ne crée aucun dossier : ce test est autonome, il fabrique un
-    // dossier analysé (A_VERIFIER avec lettre) puis consulte le détail juriste.
+    // dossier analysé (EN_ATTENTE_VALIDATION avec lettre) puis consulte le détail juriste.
     await loginAs(page, "e2e-client@test.local");
     const dossierId = await createDossier(page);
     await analyserDossier(page);

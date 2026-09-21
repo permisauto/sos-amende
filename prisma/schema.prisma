@@ -107,7 +107,9 @@ model Dossier {
   motifRejet       String? @db.Text // raison du rejet juriste (statut REJETE)
   decisionOmp      String? // décision OMP après envoi : ACCEPTE | REJETE
   decisionDetail   String? @db.Text // note du juriste sur la décision OMP
-  valideLe         DateTime? // validation de la lettre par le juriste (PRET → kit LRAR)
+  valideLe         DateTime? // validation de la lettre par le juriste (kit envoi)
+  canalEnvoi       String?   // canal d'envoi choisi par le juriste : ANTAI | TELERECOURS | LRAR
+  remarquesJuriste String?   @db.Text // remarques de la vérification poussée (relance du moteur)
   dateLimite       DateTime? // délai de contestation : 45 j (amende) / 2 mois (suspension)
   travaux_présents Boolean? //TRUE si travaux connus sur la route au jour de l'infraction
   prix             Decimal       @db.Decimal(10, 2)
@@ -119,6 +121,7 @@ model Dossier {
   rappels          Rappel[]
   evenements       DossierEvent[]
   lawyerMatch      LawyerMatch?
+  payments         Payment[]
   messages         Message[]
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -273,6 +276,7 @@ model LawyerMatch {
 model Payment {
   id               String    @id @default(cuid())
   userId           String
+  dossierId        String? // dossier concerné quand le paiement est effectué depuis le paywall du dossier
   amount           Decimal   @db.Decimal(10, 2)
   currency         String    @default("EUR")
   status           String
@@ -281,7 +285,8 @@ model Payment {
   preuveNom        String? // nom du fichier d'origine
   preuveUploadedAt DateTime?
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dossier Dossier? @relation(fields: [dossierId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -306,11 +311,14 @@ enum DossierStatut {
   BROUILLON
   EN_ANALYSE
   A_VERIFIER
+  EN_ATTENTE_PAIEMENT // faille détectée mais crédit manquant — le client finalise son virement
+  EN_ATTENTE_VALIDATION // lettre générée, soumise à la validation du juriste
+  EN_ATTENTE_PRE_SIGNATURE // lettre validée par le juriste, en attente de la signature du client (cas B)
   PRET
   ENVOYE
   REJETE
   ERREUR_TECHNIQUE // sect. 11D
-  RESOLU
+  RESOLU // libellé client : « Réponse de l'administration »
   ANNULE
 }
 
@@ -345,4 +353,5 @@ enum DossierEventType {
   RETOUR
   PREUVE // pièce justificative ajoutée (client ou juriste)
   MESSAGE // message échangé entre le juriste et le client (fil de discussion)
+  VERIFICATION_POUSSEE // relance du moteur par le juriste (remarques → nouvelle détection/lettre)
 }

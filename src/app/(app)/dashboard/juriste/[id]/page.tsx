@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireJuriste } from "@/lib/dal";
 import { storageUrl } from "@/lib/storage";
 import { JuristeActions, DecisionOmpForm } from "./juriste-actions";
+import { VerificationPoussee } from "./verification-poussee";
 import { LettreEdition } from "./lettre-edition";
 import { AvocatTraitement } from "./avocat-traitement";
 import { FaillesCandidates } from "./failles-candidates";
@@ -25,6 +26,9 @@ import { marquerMessagesLus } from "../../messages/actions";
 const statusLabels: Record<string, string> = {
   BROUILLON: "Brouillon",
   EN_ANALYSE: "En analyse",
+  EN_ATTENTE_PAIEMENT: "En attente de paiement",
+  EN_ATTENTE_VALIDATION: "À valider",
+  EN_ATTENTE_PRE_SIGNATURE: "En attente de signature client",
   A_VERIFIER: "À vérifier",
   PRET: "Prêt",
   ENVOYE: "Envoyé",
@@ -35,6 +39,18 @@ const statusLabels: Record<string, string> = {
 };
 
 const statutChip: Record<string, { label: string; cls: string }> = {
+  EN_ATTENTE_PAIEMENT: {
+    label: "En attente de paiement",
+    cls: "bg-zinc-100 text-zinc-600",
+  },
+  EN_ATTENTE_VALIDATION: {
+    label: "À valider",
+    cls: "bg-amber-100 text-amber-800",
+  },
+  EN_ATTENTE_PRE_SIGNATURE: {
+    label: "Validée — en attente de la signature du client",
+    cls: "bg-indigo-100 text-indigo-800",
+  },
   A_VERIFIER: {
     label: "À corriger avant envoi",
     cls: "bg-amber-100 text-amber-800",
@@ -66,6 +82,8 @@ type JuristeCaseDetail = {
   pvTexte: string | null;
   extractedData: Record<string, unknown> | null;
   lettreGeneree: string | null;
+  canalEnvoi: string | null;
+  remarquesJuriste: string | null;
   failleJuridique: {
     id: string;
     titreFaille: string;
@@ -113,7 +131,7 @@ type JuristeCaseDetail = {
   decisionOmp: "ACCEPTE" | "REJETE" | null;
   decisionDetail: string | null;
   valideLe: Date | null;
-  user: { name: string | null; email: string | null };
+  user: { name: string | null; email: string | null; signatureUrl: string | null };
   messages: Array<{
     id: string;
     contenu: string;
@@ -155,7 +173,11 @@ const JURISTE_MOCK_BY_ID: Record<string, JuristeDemoMock> = {
 function demoJuristeDossier(id: string): JuristeCaseDetail | null {
   const mock = JURISTE_MOCK_BY_ID[id];
   if (!mock) return null;
-  const mockUser = { name: "Jean Dupont", email: "e2e-client@test.local" };
+  const mockUser = {
+    name: "Jean Dupont",
+    email: "e2e-client@test.local",
+    signatureUrl: null,
+  };
   const evenements = [
     { type: "CREATION", detail: "Dossier créé", createdAt: new Date(MOCK_NOW_JURISTE - 86400000 * 2) },
     { type: "ANALYSE", detail: "Analyse OCR + questionnaire", createdAt: new Date(MOCK_NOW_JURISTE - 86400000 * 1) },
@@ -179,6 +201,8 @@ function demoJuristeDossier(id: string): JuristeCaseDetail | null {
     pvTexte: mock.pvTexte,
     extractedData: mock.extractedData,
     lettreGeneree: mock.lettreGeneree,
+    canalEnvoi: null,
+    remarquesJuriste: null,
     failleJuridique: mock.failleJuridique,
     failleJuridiqueId: mock.failleJuridique?.id ?? null,
     faillesRetenues: mock.failleJuridique
@@ -226,7 +250,7 @@ export default async function JuristeCasePage(
           orderBy: { createdAt: "asc" },
           include: { auteur: { select: { id: true, name: true, role: true } } },
         },
-        user: { select: { name: true, email: true } },
+        user: { select: { name: true, email: true, signatureUrl: true } },
       },
     })) as unknown as JuristeCaseDetail | null;
   } catch (e) {
@@ -345,17 +369,25 @@ export default async function JuristeCasePage(
   const envoiEvent = evenements.find((e) => e.type === "ENVOI");
 
   const isDemo = item.id.startsWith("pv-") || item.id.startsWith("dec-");
-  const editable = item.statut === "A_VERIFIER" || item.statut === "PRET";
+  const editable =
+    item.statut === "A_VERIFIER" ||
+    item.statut === "PRET" ||
+    item.statut === "EN_ATTENTE_VALIDATION";
   const chip = statutChip[item.statut] ?? {
     label: statusLabels[item.statut] ?? item.statut,
     cls: "bg-zinc-100 text-zinc-600",
   };
   const lettreAccroche =
-    item.statut === "A_VERIFIER"
-      ? "Lettre générée par le moteur, à relire et corriger avant la signature du client."
-      : item.statut === "PRET"
-        ? `Lettre signée par le client. Corrigez si nécessaire (la signature est recollée automatiquement), puis approuvez l'envoi — la contestation sera transmise à ${organismeEnvoi(item.type)}.`
-        : `Lettre de contestation transmise à ${organismeEnvoi(item.type)} pour ce dossier.`;
+    item.statut === "EN_ATTENTE_VALIDATION"
+      ? "Lettre générée par le moteur, à relire. Corrigez, lancez une vérification poussée si nécessaire, puis approuvez — la contestation sera transmise au canal choisi."
+      : item.statut === "EN_ATTENTE_PRE_SIGNATURE"
+        ? "Lettre validée par vos soins : le client doit maintenant la signer. Une fois signée, la contestation sera transmise à " +
+          `${organismeEnvoi(item.type)} automatiquement (sauf canal LRAR).`
+        : item.statut === "A_VERIFIER"
+          ? "Lettre générée par le moteur, à relire et corriger avant la signature du client."
+          : item.statut === "PRET"
+            ? `Lettre signée par le client. Corrigez si nécessaire (la signature est recollée automatiquement), puis approuvez l'envoi — la contestation sera transmise à ${organismeEnvoi(item.type)}.`
+            : `Lettre de contestation transmise à ${organismeEnvoi(item.type)} pour ce dossier.`;
 
   return (
     <div className="mx-auto max-w-7xl">
@@ -406,6 +438,12 @@ export default async function JuristeCasePage(
             Lettre validée, mais l&apos;envoi à {organismeEnvoi(item.type)} a
             échoué. Relancez l&apos;envoi ci-dessous ou laissez le client
             transmettre sa contestation par LRAR (kit d&apos;envoi).
+          </div>
+        ) : item.statut === "EN_ATTENTE_PRE_SIGNATURE" ? (
+          <div className="mt-4 rounded-xl bg-indigo-50 px-4 py-3 text-sm text-indigo-800">
+            Lettre validée — le client est notifié et doit maintenant la
+            signer. Dès sa signature, la contestation sera transmise
+            automatiquement (sauf canal LRAR).
           </div>
         ) : (
           <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
@@ -483,7 +521,17 @@ export default async function JuristeCasePage(
                     </p>
                   )}
                   <div className="mt-6 border-t border-zinc-100 pt-6">
-                    {item.statut === "PRET" ? (
+                    {item.statut === "EN_ATTENTE_VALIDATION" ? (
+                      <>
+                        <VerificationPoussee dossierId={item.id} lectureSeule={lectureSeule} />
+                        <JuristeActions
+                          dossierId={item.id}
+                          showCanal
+                          organisme={organismeEnvoi(item.type)}
+                          lectureSeule={lectureSeule}
+                        />
+                      </>
+                    ) : item.statut === "PRET" ? (
                       <JuristeActions
                         dossierId={item.id}
                         validee={Boolean(item.valideLe)}
@@ -677,6 +725,16 @@ export default async function JuristeCasePage(
                 </p>
               )}
             </div>
+            {item.remarquesJuriste && (
+              <div className="mt-4 border-t border-zinc-100 pt-4">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                  Vérification poussée
+                </h3>
+                <p className="mt-2 whitespace-pre-wrap rounded-xl bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
+                  {item.remarquesJuriste}
+                </p>
+              </div>
+            )}
           </section>
 
           <section className="rounded-2xl border border-zinc-200 bg-white p-6">
