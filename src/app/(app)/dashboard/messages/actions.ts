@@ -77,48 +77,47 @@ export async function envoyerMessage(
   return { ok: true };
 }
 
-// Message interne admin ↔ juriste (section « Messages », hors dossier). Le
-// destinataire est obligatoirement un membre de l'équipe (JURISTE ou ADMIN).
+// Message interne — fil d'équipe admin ↔ juristes, ancré sur un dossier.
+// Pas de destinataire précis : tout membre (JURISTE ou ADMIN) peut lire et
+// répondre dans le fil, qui reste invisible pour le client.
 export async function envoyerMessageInterne(
   _prev: MessageState,
   formData: FormData,
 ): Promise<MessageState> {
   const expediteur = await requireJuriste();
-  const destinataireId = String(formData.get("destinataireId") ?? "");
+  const dossierId = String(formData.get("dossierId") ?? "");
   const contenu = String(formData.get("contenu") ?? "")
     .trim()
     .slice(0, 4000);
   if (contenu.length < 3) {
     return { error: "Message trop court (3 caractères minimum)." };
   }
-  if (destinataireId === expediteur.id) {
-    return { error: "Vous ne pouvez pas vous écrire à vous-même." };
-  }
 
-  const destinataire = await prisma.user.findFirst({
-    where: { id: destinataireId, role: { in: ["JURISTE", "ADMIN"] } },
+  const dossier = await prisma.dossier.findUnique({
+    where: { id: dossierId },
     select: { id: true },
   });
-  if (!destinataire)
-    return { error: "Destinataire introuvable ou accès refusé." };
+  if (!dossier) return { error: "Dossier introuvable." };
 
   await prisma.messageInterne.create({
-    data: { expediteurId: expediteur.id, destinataireId, contenu },
+    data: { dossierId, expediteurId: expediteur.id, contenu },
   });
-  revalidatePath("/dashboard/messages");
+  revalidatePath(`/dashboard/juriste/${dossierId}`);
+  revalidatePath("/dashboard/juriste");
+  revalidatePath("/dashboard/admin/dossiers");
   return { ok: true };
 }
 
 /**
- * Marque comme lus les messages internes reçus d'un interlocuteur par
- * l'utilisateur courant (JURISTE ou ADMIN). Appelé à l'ouverture du fil.
+ * Marque comme lus les messages internes du fil d'un dossier écrits par un
+ * autre membre de l'équipe (JURISTE ou ADMIN). Appelé à l'ouverture du détail.
  */
-export async function marquerInternesLus(avecId: string): Promise<void> {
+export async function marquerInternesLus(dossierId: string): Promise<void> {
   const user = await requireJuriste().catch(() => null);
   if (!user) return;
   await prisma.messageInterne
     .updateMany({
-      where: { expediteurId: avecId, destinataireId: user.id, lu: false },
+      where: { dossierId, expediteurId: { not: user.id }, lu: false },
       data: { lu: true },
     })
     .catch(() => {});

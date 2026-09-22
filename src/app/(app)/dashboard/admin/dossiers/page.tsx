@@ -126,6 +126,7 @@ export default async function AdminSuiviDossiersPage(props: {
     failleJuridique: { titreFaille: string } | null;
   }> = [];
   let stats: Array<{ statut: string; _count: number }> = [];
+  let nonLusEquipe = new Map<string, number>();
 
   const EN_COURS = [
     "BROUILLON",
@@ -157,9 +158,17 @@ export default async function AdminSuiviDossiersPage(props: {
         },
       }),
       prisma.dossier.groupBy({ by: ["statut"], _count: true }),
+      prisma.messageInterne.groupBy({
+        by: ["dossierId"],
+        where: { lu: false, expediteurId: { not: admin.id } },
+        _count: { _all: true },
+      }),
     ]);
     dossiers = res[0] as unknown as typeof dossiers;
     stats = res[1] as unknown as Array<{ statut: string; _count: number }>;
+    nonLusEquipe = new Map(
+      res[2].map((g) => [g.dossierId, g._count._all]),
+    );
   } catch (e) {
     console.error("admin/dossiers: DB indisponible", e);
   }
@@ -251,6 +260,13 @@ export default async function AdminSuiviDossiersPage(props: {
                       {item.user.name ?? item.user.email}
                     </Link>
                     <p className="text-xs text-zinc-500">{item.user.email}</p>
+                    {(nonLusEquipe.get(item.id) ?? 0) > 0 && (
+                      <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-800">
+                        <span className="h-1.5 w-1.5 rounded-full bg-violet-600" />
+                        Équipe : {(nonLusEquipe.get(item.id) ?? 0)} nouveau
+                        {nonLusEquipe.get(item.id)! > 1 ? "x" : ""}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-zinc-600">
                     {item.type === "AMENDE" ? "Amende" : "Suspension"}

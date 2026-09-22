@@ -35,7 +35,6 @@ model User {
   payments       Payment[]
   messages       Message[]
   messagesInternesEnvoyes MessageInterne[] @relation("MessageInterneEnvoye")
-  messagesInternesRecus   MessageInterne[] @relation("MessageInterneRecu")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -125,6 +124,7 @@ model Dossier {
   lawyerMatch      LawyerMatch?
   payments         Payment[]
   messages         Message[]
+  messageInternes  MessageInterne[]
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -237,20 +237,23 @@ model Message {
   @@index([dossierId, createdAt])
 }
 
-// Message interne admin ↔ juriste (hors dossier, section « Messages »). Les
-// échanges entre l'administrateur et les juristes sont bidirectionnels.
+// Fil d'équipe admin ↔ juristes, ancré sur un dossier (« fil par dossier »).
+// Pas de destinataire précis : chaque message est visible et répondable par
+// tout membre de l'équipe (JURISTE ou ADMIN). « lu » = le fil a été ouvert
+// par un membre (lu global, pas par utilisateur). Le client ne voit jamais ces
+// échanges. Ne pas confondre avec Message (juriste ↔ client, par dossier).
 model MessageInterne {
-  id             String   @id @default(cuid())
-  expediteurId   String
-  expediteur     User     @relation("MessageInterneEnvoye", fields: [expediteurId], references: [id], onDelete: Cascade)
-  destinataireId String
-  destinataire   User     @relation("MessageInterneRecu", fields: [destinataireId], references: [id], onDelete: Cascade)
-  contenu        String   @db.Text
-  lu             Boolean  @default(false) // lu par le destinataire
-  createdAt      DateTime @default(now())
+  id           String   @id @default(cuid())
+  dossierId    String
+  dossier      Dossier  @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+  expediteurId String
+  expediteur   User     @relation("MessageInterneEnvoye", fields: [expediteurId], references: [id], onDelete: Cascade)
+  contenu      String   @db.Text
+  lu           Boolean  @default(false) // lu par un membre de l'équipe
+  createdAt    DateTime @default(now())
 
-  @@index([destinataireId, lu])
-  @@index([expediteurId, createdAt])
+  @@index([dossierId, lu])
+  @@index([dossierId, createdAt])
 }
 
 model RadarCalibration {

@@ -76,6 +76,7 @@ export default async function JuristePage(
   }> = [];
   let stats: Array<{ statut: string; _count: number }> = [];
   let nonLus = new Map<string, number>();
+  let nonLusEquipe = new Map<string, number>();
   try {
     const res = await Promise.all([
       prisma.dossier.findMany({
@@ -93,10 +94,16 @@ export default async function JuristePage(
         where: { lu: false, auteurId: { not: juriste.id } },
         _count: { _all: true },
       }),
+      prisma.messageInterne.groupBy({
+        by: ["dossierId"],
+        where: { lu: false, expediteurId: { not: juriste.id } },
+        _count: { _all: true },
+      }),
     ]);
     dossiers = res[0];
     stats = res[1] as Array<{ statut: string; _count: number }>;
     nonLus = new Map(res[2].map((g) => [g.dossierId, g._count._all]));
+    nonLusEquipe = new Map(res[3].map((g) => [g.dossierId, g._count._all]));
   } catch (e) {
     console.error("juriste dashboard: DB indisponible", e);
   }
@@ -220,6 +227,13 @@ export default async function JuristePage(
                           {(nonLus.get(item.id) ?? 0) > 1
                             ? `${nonLus.get(item.id)} nouveaux`
                             : "Nouveau"}
+                        </span>
+                      )}
+                      {(nonLusEquipe.get(item.id) ?? 0) > 0 && (
+                        <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-800">
+                          <span className="h-1.5 w-1.5 rounded-full bg-violet-600" />
+                          Équipe : {(nonLusEquipe.get(item.id) ?? 0)} nouveau
+                          {nonLusEquipe.get(item.id)! > 1 ? "x" : ""}
                         </span>
                       )}
                     </td>

@@ -30,6 +30,13 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Scripts/outils locaux non versionnés (jamais commités) — voir .gitignore.
+    "testSaaS.js",
+    "agentDetective.js",
+    "agentExtracteur.js",
+    "agentRedacteur.js",
+    "pipelineContestation.js",
+    "scripts/veilleJuridique.js",
   ]),
 ]);
 

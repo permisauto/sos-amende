@@ -19,16 +19,21 @@ async function searchRadarsDataGouv(query: string) {
     if (!res.ok) throw new Error(`data.gouv.fr error ${res.status}`);
     const data = await res.json();
 
-    const records = data.records?.map((r: any) => ({
-      radarId: r.fields?.numero_homologation || r.fields?.numero_homologation_cinemometre,
-      marque: r.fields?.marque,
-      modele: r.fields?.modele,
-      type: r.fields?.type_cinemometre,
-      dateHomologation: r.fields?.date_homologation,
-      organisme: r.fields?.organisme_homologateur,
-      statut: r.fields?.statut,
-      source: "data.gouv.fr",
-    })).filter((r: any) => r.radarId) || [];
+    type RecordDataGouv = { fields?: Record<string, unknown> };
+    const records = ((data.records as RecordDataGouv[] | undefined) ?? [])
+      .map((r) => ({
+        radarId:
+          (r.fields?.numero_homologation as string | undefined) ||
+          (r.fields?.numero_homologation_cinemometre as string | undefined),
+        marque: r.fields?.marque,
+        modele: r.fields?.modele,
+        type: r.fields?.type_cinemometre,
+        dateHomologation: r.fields?.date_homologation,
+        organisme: r.fields?.organisme_homologateur,
+        statut: r.fields?.statut,
+        source: "data.gouv.fr",
+      }))
+      .filter((r) => r.radarId);
 
     return NextResponse.json({ records, total: records.length });
   } catch (err: unknown) {

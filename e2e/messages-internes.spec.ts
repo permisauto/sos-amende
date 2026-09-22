@@ -1,77 +1,99 @@
-import { expect, test } from "@playwright/test";
-import { loginAs } from "./helpers";
+import { expect, test, type Browser } from "@playwright/test";
+import { analyserDossier, createDossier, loginAs } from "./helpers";
 
-test.describe("Messages internes admin ↔ juriste", () => {
-  test("l'admin écrit à un juriste, le juriste répond et reçoit le badge non-lu", async ({
-    page,
+/** Crée + analyse un dossier client E2E et renvoie son id. */
+async function creerDossierAnalysed(browser: Browser): Promise<string> {
+  const ctx = await browser.newContext();
+  const page = await ctx.newPage();
+  await loginAs(page, "e2e-client@test.local");
+  const dossierId = await createDossier(page);
+  await analyserDossier(page);
+  await ctx.close();
+  return dossierId;
+}
+
+test.describe("Fil d'équipe admin ↔ juriste (par dossier)", () => {
+  test("l'admin écrit sur le dossier, le juriste répond dans le même fil, badge « Équipe »", async ({
     browser,
   }) => {
     test.slow();
 
-    // 1. L'admin ouvre la messagerie et écrit au juriste.
-    await loginAs(page, "e2e-admin@test.local");
-    await page.goto("/dashboard/messages");
-    await expect(
-      page.getByRole("heading", { name: "Messages" }),
-    ).toBeVisible();
-    await expect(page.getByRole("link", { name: /Juriste E2E/ })).toBeVisible();
+    const dossierId = await creerDossierAnalysed(browser);
 
-    await page.getByRole("link", { name: /Juriste E2E/ }).click();
-    await expect(page.getByText("Discussion avec Juriste E2E")).toBeVisible();
-    await page.getByPlaceholder("Écrire à Juriste E2E…").fill(
-      "Bonjour, merci de vérifier le dossier en attente.",
-    );
-    await page.getByRole("button", { name: "Envoyer" }).click();
+    // 1. L'admin ouvre le détail du dossier et écrit dans le fil d'équipe.
+    const ctxAdmin = await browser.newContext();
+    const apage = await ctxAdmin.newPage();
+    await loginAs(apage, "e2e-admin@test.local");
+    await apage.goto(`/dashboard/juriste/${dossierId}`);
     await expect(
-      page.getByText("Message envoyé.", { exact: true }),
+      apage.getByRole("heading", { name: "Échanges internes (équipe)" }),
+    ).toBeVisible();
+    await apage
+      .getByPlaceholder("Message à l'équipe…")
+      .fill("Merci de vérifier ce dossier.");
+    await apage.getByRole("button", { name: "Envoyer à l'équipe" }).click();
+    await expect(
+      apage.getByText("Message envoyé à l'équipe.", { exact: true }),
     ).toBeVisible();
 
-    // 2. Le juriste se connecte : badge non-lu dans la nav, fil visible.
-    const ctx = await browser.newContext();
-    const jpage = await ctx.newPage();
+    // 2. Le juriste voit le badge « Équipe » dans la file, ouvre le fil,
+    //    lit le message et répond dans le même fil.
+    const ctxJ = await browser.newContext();
+    const jpage = await ctxJ.newPage();
     await loginAs(jpage, "e2e-juriste@test.local");
-    const badge = jpage.getByRole("link", { name: /Messages/ });
-    await expect(badge).toBeVisible();
-    // Un badge « non lu » est affiché à côté du lien Messages.
+    await jpage.goto("/dashboard/juriste");
+    // Workers parallèles partageant les comptes : la file peut se rendre avant
+    // que le message ne soit visible — on re-polle la page jusqu'au badge.
+    await expect
+      .poll(
+        async () => {
+          await jpage.reload();
+          return jpage.getByText(/Équipe : \d+ nouveau/).count();
+        },
+        { timeout: 15_000 },
+      )
+      .toBeGreaterThan(0);
+    await jpage.goto(`/dashboard/juriste/${dossierId}`);
+    await jpage.waitForURL(/\/dashboard\/juriste\/[^/]+$/);
     await expect(
-      jpage.locator("a[href='/dashboard/messages']").getByText(/^\d+$/),
+      jpage.getByText("Merci de vérifier ce dossier."),
     ).toBeVisible();
-
-    await jpage.goto("/dashboard/messages");
     await jpage
-      .getByRole("link", { name: /Admin E2E/ })
-      .first()
-      .click();
-    await expect(
-      jpage.getByText("Bonjour, merci de vérifier le dossier en attente."),
-    ).toBeVisible();
-
-    // 3. Le juriste répond : l'échange est bidirectionnel.
-    await jpage
-      .getByPlaceholder("Écrire à Admin E2E…")
+      .getByPlaceholder("Message à l'équipe…")
       .fill("C'est noté, je m'en occupe.");
-    await jpage.getByRole("button", { name: "Envoyer" }).click();
+    await jpage.getByRole("button", { name: "Envoyer à l'équipe" }).click();
     await expect(
-      jpage.getByText("Message envoyé.", { exact: true }),
+      jpage.getByText("Message envoyé à l'équipe.", { exact: true }),
     ).toBeVisible();
-    await ctx.close();
+    await ctxJ.close();
 
-    // 4. L'admin retrouve la réponse dans le même fil.
-    await page.reload();
+    // 3. L'admin retrouve la réponse dans le même fil.
+    await apage.reload();
     await expect(
-      page
+      apage
         .getByRole("paragraph")
         .filter({ hasText: "C'est noté, je m'en occupe." })
         .first(),
     ).toBeVisible();
+    await ctxAdmin.close();
   });
 
-  test("un client ne peut pas écrire dans la messagerie interne", async ({
-    page,
+  test("un client ne voit jamais les échanges internes de son dossier", async ({
+    browser,
   }) => {
+    const dossierId = await creerDossierAnalysed(browser);
+
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
     await loginAs(page, "e2e-client@test.local");
-    await page.goto("/dashboard/messages");
-    await expect(page).not.toHaveURL(/\/dashboard\/messages/);
-    await expect(page.getByRole("link", { name: "Messages" })).toHaveCount(0);
+    await page.goto(`/dashboard/cases/${dossierId}`);
+    await expect(
+      page.getByRole("heading", { name: "Échanges internes (équipe)" }),
+    ).toHaveCount(0);
+    await expect(page.getByPlaceholder("Message à l'équipe…")).toHaveCount(0);
+    await expect(
+      page.getByText("Coordination entre l'administration et les juristes"),
+    ).toHaveCount(0);
+    await ctx.close();
   });
 });

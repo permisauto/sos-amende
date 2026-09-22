@@ -21,7 +21,14 @@ import {
 import type { JurisprudenceRef } from "@/lib/catalogue-sources";
 import { organismeEnvoi } from "@/lib/envoi";
 import { FilMessages, type MessageDto } from "@/components/messages";
-import { marquerMessagesLus } from "../../messages/actions";
+import {
+  FilEquipe,
+  type MessageEquipeDto,
+} from "../../messages/fil-equipe";
+import {
+  marquerMessagesLus,
+  marquerInternesLus,
+} from "../../messages/actions";
 
 const statusLabels: Record<string, string> = {
   BROUILLON: "Brouillon",
@@ -140,6 +147,14 @@ type JuristeCaseDetail = {
     auteurId: string;
     auteur: { id: string; name: string | null; role: string };
   }>;
+  messageInternes: Array<{
+    id: string;
+    contenu: string;
+    createdAt: Date;
+    lu: boolean;
+    expediteurId: string;
+    expediteur: { id: string; name: string | null; role: string };
+  }>;
 };
 
 type JuristeDemoMock = {
@@ -224,6 +239,7 @@ function demoJuristeDossier(id: string): JuristeCaseDetail | null {
     valideLe: mock.statut === "ENVOYE" || mock.statut === "RESOLU" ? new Date() : null,
     user: mockUser,
     messages: [],
+    messageInternes: [],
   };
 }
 
@@ -249,6 +265,12 @@ export default async function JuristeCasePage(
         messages: {
           orderBy: { createdAt: "asc" },
           include: { auteur: { select: { id: true, name: true, role: true } } },
+        },
+        messageInternes: {
+          orderBy: { createdAt: "asc" },
+          include: {
+            expediteur: { select: { id: true, name: true, role: true } },
+          },
         },
         user: { select: { name: true, email: true, signatureUrl: true } },
       },
@@ -289,8 +311,23 @@ export default async function JuristeCasePage(
     auteurRole: (m.auteur.role === "JURISTE" || m.auteur.role === "ADMIN" ? m.auteur.role : "CLIENT") as "CLIENT" | "JURISTE" | "ADMIN",
   }));
 
-  // Marque comme lus les messages du client dès l'ouverture du détail.
+  const equipeDto: MessageEquipeDto[] = (item.messageInternes ?? []).map(
+    (m) => ({
+      id: m.id,
+      contenu: m.contenu,
+      createdAt: m.createdAt,
+      lu: m.lu,
+      expediteurId: m.expediteurId,
+      expediteurNom: m.expediteur.name ?? m.expediteur.role,
+      expediteurRole: (m.expediteur.role === "ADMIN"
+        ? "ADMIN"
+        : "JURISTE") as "JURISTE" | "ADMIN",
+    }),
+  );
+
+  // Marque comme lus les messages du client et du fil d'équipe dès l'ouverture.
   await marquerMessagesLus(item.id).catch(() => {});
+  await marquerInternesLus(item.id).catch(() => {});
 
   const candidats = item.faillesRetenues.map((df) => ({
     failleId: df.failleId,
@@ -773,6 +810,12 @@ export default async function JuristeCasePage(
             messages={messagesDto}
             currentUserId={juriste.id}
             currentRole={juriste.role as "CLIENT" | "JURISTE" | "ADMIN"}
+          />
+
+          <FilEquipe
+            dossierId={item.id}
+            messages={equipeDto}
+            currentUserId={juriste.id}
           />
 
           <AvocatTraitement

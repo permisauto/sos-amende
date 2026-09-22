@@ -3,27 +3,28 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import { envoyerMessageInterne } from "./actions";
 
-export type MessageInterneDto = {
+export type MessageEquipeDto = {
   id: string;
   contenu: string;
   createdAt: Date;
   lu: boolean;
   expediteurId: string;
+  expediteurNom: string;
+  expediteurRole: "JURISTE" | "ADMIN";
 };
 
 /**
- * Fil de messagerie interne (admin ↔ juriste), hors dossier. Bidirectionnel :
- * chacun peut écrire et répondre dans le même fil.
+ * Fil d'équipe admin ↔ juristes, ancré sur un dossier. Chaque message est
+ * visible et répondable par tout membre (JURISTE ou ADMIN), sans destinataire
+ * précis ; le client ne voit jamais ces échanges.
  */
-export function FilInterne({
-  destinataireId,
-  destinataireNom,
+export function FilEquipe({
+  dossierId,
   messages,
   currentUserId,
 }: {
-  destinataireId: string;
-  destinataireNom: string;
-  messages: MessageInterneDto[];
+  dossierId: string;
+  messages: MessageEquipeDto[];
   currentUserId: string;
 }) {
   const [state, action, pending] = useActionState(
@@ -33,6 +34,10 @@ export function FilInterne({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState("");
 
+  const nouveaux = messages.filter(
+    (m) => m.expediteurId !== currentUserId && !m.lu,
+  ).length;
+
   useEffect(() => {
     scrollRef.current?.scrollTo({
       top: scrollRef.current.scrollHeight,
@@ -41,34 +46,40 @@ export function FilInterne({
   }, [messages.length, pending]);
 
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white">
-      <div className="border-b border-zinc-100 px-6 py-4">
-        <h2 className="text-lg font-semibold">
-          Discussion avec {destinataireNom}
-        </h2>
-        <p className="mt-0.5 text-sm text-zinc-600">
-          Échanges internes : coordination, questions sur un dossier, consignes.
-        </p>
+    <div className="rounded-2xl border border-zinc-200 bg-white p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">Échanges internes (équipe)</h2>
+          <p className="mt-1 text-sm text-zinc-600">
+            Coordination entre l&apos;administration et les juristes sur ce
+            dossier. Le client ne voit pas ces échanges.
+          </p>
+        </div>
+        {nouveaux > 0 && (
+          <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+            {nouveaux > 1 ? `${nouveaux} nouveaux` : "Nouveau"}
+          </span>
+        )}
       </div>
 
       {state?.ok && (
-        <p className="mx-6 mt-4 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800">
-          Message envoyé.
+        <p className="mt-3 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800">
+          Message envoyé à l&apos;équipe.
         </p>
       )}
       {state?.error && (
-        <p className="mx-6 mt-4 rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700">
+        <p className="mt-3 rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700">
           {state.error}
         </p>
       )}
 
       <div
         ref={scrollRef}
-        className="mx-6 my-4 flex max-h-[26rem] flex-col gap-3 overflow-y-auto rounded-xl border border-zinc-100 bg-zinc-50 p-4"
+        className="mt-4 flex max-h-80 flex-col gap-3 overflow-y-auto rounded-xl border border-zinc-100 bg-zinc-50 p-4"
       >
         {messages.length === 0 ? (
           <p className="px-2 py-6 text-center text-sm text-zinc-500">
-            Aucun message pour le moment. Écrivez le premier message ci-dessous.
+            Aucun échange interne pour le moment.
           </p>
         ) : (
           messages.map((m) => {
@@ -82,8 +93,23 @@ export function FilInterne({
                     : "self-start rounded-bl-md bg-white text-zinc-800"
                 }`}
               >
+                <p
+                  className={`text-[11px] font-semibold uppercase tracking-wide ${
+                    mine ? "text-emerald-100" : "text-zinc-500"
+                  }`}
+                >
+                  {mine
+                    ? "Vous"
+                    : m.expediteurRole === "ADMIN"
+                      ? "Administration"
+                      : m.expediteurNom || "Juriste"}
+                </p>
                 <p className="mt-0.5 whitespace-pre-wrap">{m.contenu}</p>
-                <p className={`mt-1 text-[11px] ${mine ? "text-emerald-100" : "text-zinc-400"}`}>
+                <p
+                  className={`mt-1 text-[11px] ${
+                    mine ? "text-emerald-100" : "text-zinc-400"
+                  }`}
+                >
                   {m.createdAt.toLocaleString("fr-FR", {
                     dateStyle: "short",
                     timeStyle: "short",
@@ -95,8 +121,8 @@ export function FilInterne({
         )}
       </div>
 
-      <form action={action} className="flex flex-col gap-3 px-6 pb-6">
-        <input type="hidden" name="destinataireId" value={destinataireId} />
+      <form action={action} className="mt-4 flex flex-col gap-3">
+        <input type="hidden" name="dossierId" value={dossierId} />
         <textarea
           name="contenu"
           value={draft}
@@ -104,7 +130,7 @@ export function FilInterne({
           required
           rows={3}
           maxLength={4000}
-          placeholder={`Écrire à ${destinataireNom}…`}
+          placeholder="Message à l'équipe…"
           className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
         />
         <div className="flex items-center justify-between gap-3">
@@ -118,7 +144,7 @@ export function FilInterne({
             disabled={pending || draft.trim().length < 3}
             className="rounded-full bg-emerald-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {pending ? "Envoi…" : "Envoyer"}
+            {pending ? "Envoi…" : "Envoyer à l'équipe"}
           </button>
         </div>
       </form>
