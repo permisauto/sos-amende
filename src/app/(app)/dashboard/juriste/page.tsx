@@ -57,13 +57,13 @@ export default async function JuristePage(
 ) {
   const juriste = await requireJuriste();
   const { f } = await props.searchParams;
-  const raw = typeof f === "string" ? f.toUpperCase() : "EN_ATTENTE_VALIDATION";
+  const raw = typeof f === "string" ? f.toUpperCase() : "ALL";
   const statut: Statut | "ALL" =
     raw === "ALL"
       ? "ALL"
       : statusValues.includes(raw as Statut)
         ? (raw as Statut)
-        : "EN_ATTENTE_VALIDATION";
+        : "ALL";
 
   let dossiers: Array<{
     id: string;
@@ -122,12 +122,6 @@ export default async function JuristePage(
         </div>
         <div className="flex flex-wrap gap-2">
           <Link
-            href="/dashboard/juriste/lettres"
-            className="rounded-full border border-zinc-300 px-5 py-2.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
-          >
-            Bibliothèque des lettres générées
-          </Link>
-          <Link
             href="/dashboard/juriste/failles"
             className="rounded-full border border-zinc-300 px-5 py-2.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
           >
@@ -173,7 +167,7 @@ export default async function JuristePage(
         {filters.map((item) => (
           <Link
             key={item.value}
-            href={`/dashboard/juriste${item.value === "EN_ATTENTE_VALIDATION" ? "" : `?f=${item.value}`}`}
+            href={`/dashboard/juriste${item.value === "ALL" ? "" : `?f=${item.value}`}`}
             className={`rounded-full px-4 py-2 text-sm font-medium transition ${
               statut === item.value
                 ? "bg-emerald-600 text-white"

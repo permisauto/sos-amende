@@ -33,12 +33,6 @@ export default async function DashboardLayout({
               {(user?.role === "JURISTE" || user?.role === "ADMIN") && (
                 <>
                   <Link
-                    href="/dashboard/juriste/lettres"
-                    className="hover:text-zinc-900"
-                  >
-                    Bibliothèque des lettres générées
-                  </Link>
-                  <Link
                     href="/dashboard/juriste/failles"
                     className="hover:text-zinc-900"
                   >

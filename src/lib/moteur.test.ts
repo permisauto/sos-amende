@@ -7,6 +7,7 @@ import {
   detecterFailles,
   etalonnageExpire,
   joursRestants,
+  remplirLettreMulti,
   remplirTemplate,
   scoreFaille,
   type ExtractedData,
@@ -210,6 +211,65 @@ describe("remplirTemplate", () => {
     expect(remplirTemplate("PV {num_pv} motif {inconnu}", {})).toBe(
       "PV {num_pv} motif {inconnu}",
     );
+  });
+});
+
+describe("remplirLettreMulti", () => {
+  const data: ExtractedData = {
+    nom: "DUPONT",
+    plaque: "AB-123-CD",
+    num_pv: "123",
+  };
+  const prescription = {
+    id: FAILLE_IDS.prescription,
+    titreFaille: "Prescription de l'action publique",
+    articleLoi: "Art. 9 CPP",
+    templateLettre:
+      "Je soussigné {nom}, conteste le PV {num_pv}.\n\nLa prescription est acquise après un an.\n\nJe demande l'annulation.",
+  };
+  const erreurPlaque = {
+    id: FAILLE_IDS.erreurPlaque,
+    titreFaille: "Erreur de plaque",
+    articleLoi: "Art. 530-1 CPP",
+    templateLettre:
+      "Je soussigné {nom}, véhicule {plaque}.\n\nLa plaque ne correspond pas à mon véhicule.",
+  };
+
+  it("retourne le template unique tel quel quand une seule faille", () => {
+    expect(remplirLettreMulti([prescription], data)).toBe(
+      remplirTemplate(prescription.templateLettre, data),
+    );
+  });
+
+  it("juxtapose toutes les failles sans répéter l'en-tête", () => {
+    const lettreOk = remplirLettreMulti([prescription, erreurPlaque], data)!;
+    expect(lettreOk).toContain(
+      "Argument n° 1 — Prescription de l'action publique (Art. 9 CPP)",
+    );
+    expect(lettreOk).toContain(
+      "Argument n° 2 — Erreur de plaque (Art. 530-1 CPP)",
+    );
+    // la 2e section ne répète pas l'identification (première section)
+    expect(lettreOk).not.toContain("véhicule AB-123-CD");
+    // la 1re section porte l'en-tête complète + argument
+    expect(lettreOk).toContain("Je soussigné DUPONT, conteste le PV 123.");
+    expect(lettreOk).toContain("La plaque ne correspond pas à mon véhicule.");
+  });
+
+  it("garde le texte entier d'une faille monopharagraphique (pas d'en-tête détachable)", () => {
+    const une = {
+      id: "faille-x",
+      titreFaille: "Faille X",
+      articleLoi: "",
+      templateLettre: "En-tête de {nom}.",
+    };
+    const lettre = remplirLettreMulti([prescription, une], data)!;
+    expect(lettre).toContain("Argument n° 2 — Faille X");
+    expect(lettre).toContain("En-tête de DUPONT.");
+  });
+
+  it("retourne null sans faille", () => {
+    expect(remplirLettreMulti([], data)).toBeNull();
   });
 });
 

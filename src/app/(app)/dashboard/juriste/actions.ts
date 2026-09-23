@@ -7,7 +7,7 @@ import { requireJuristeRedacteur } from "@/lib/dal";
 import {
   FAILLE_IDS,
   detecterFailles,
-  remplirTemplate,
+  remplirLettreMulti,
   type ExtractedData,
   type RegleDetection,
 } from "@/lib/moteur";
@@ -416,9 +416,20 @@ export async function relancerVerificationPoussee(
     if (cal) data.preuveEtalonnage = cal.preuveUrl;
   }
 
-  const lettre = faille
-    ? remplirTemplate(faille.templateLettre, data)
-    : null;
+  // Lettre multi-arguments : la relance régénère une lettre qui juxtapose
+  // toutes les failles candidates sur le contexte enrichi du juriste.
+  const candidatsFailles = candidats
+    .map((id) => failles.find((f) => f.id === id))
+    .filter((f): f is NonNullable<typeof f> => !!f);
+  const lettre = remplirLettreMulti(
+    candidatsFailles.map((f) => ({
+      id: f.id,
+      titreFaille: f.titreFaille,
+      articleLoi: f.articleLoi,
+      templateLettre: f.templateLettre,
+    })),
+    data,
+  );
 
   await prisma.$transaction([
     prisma.dossier.update({
@@ -663,8 +674,9 @@ export type TraiterFailleState = { error?: string } | undefined;
 
 /**
  * Confirmation d'une faille candidate par le juriste : elle devient la faille
- * principale du dossier et la lettre est régénérée à partir de son template
- * validé (base juridique qui s'alimente par ces validations).
+ * principale du dossier et la lettre est régénérée en juxtaposant la faille
+ * confirmée aux autres failles toujours candidates (les écartées sont
+ * exclues). La base juridique s'alimente par ces validations.
  */
 export async function confirmerFaille(
   _prev: TraiterFailleState,
@@ -706,11 +718,11 @@ export async function confirmerFaille(
     };
   }
 
-  const data = (dossier.extractedData ?? {}) as Record<string, unknown>;
-  const lettre = remplirTemplate(faille.templateLettre, data);
+  const data = (dossier.extractedData ?? {}) as ExtractedData;
 
+  // 1) Une seule faille principale par dossier : la confirmation écarte la
+  //    précédente en tant que principale (elle redevient candidate).
   await prisma.$transaction([
-    // une seule faille principale par dossier
     prisma.dossierFaille.updateMany({
       where: { dossierId, statut: "CONFIRMEE" },
       data: { statut: "CANDIDATE" },
@@ -720,6 +732,33 @@ export async function confirmerFaille(
       create: { dossierId, failleId, statut: "CONFIRMEE" },
       update: { statut: "CONFIRMEE" },
     }),
+  ]);
+
+  // 2) Lettre multi-arguments : la faille confirmée (en premier) est
+  //    juxtaposée aux autres failles toujours candidates — jamais une écartée.
+  const retenues = await prisma.dossierFaille.findMany({
+    where: {
+      dossierId,
+      statut: { in: ["CONFIRMEE", "CANDIDATE"] },
+      faille: { statut: "ACTIVE" },
+    },
+    include: { faille: true },
+  });
+  retenues.sort(
+    (a, b) =>
+      Number(b.statut === "CONFIRMEE") - Number(a.statut === "CONFIRMEE"),
+  );
+  const lettre = remplirLettreMulti(
+    retenues.map((df) => ({
+      id: df.faille.id,
+      titreFaille: df.faille.titreFaille,
+      articleLoi: df.faille.articleLoi,
+      templateLettre: df.faille.templateLettre,
+    })),
+    data,
+  );
+
+  await prisma.$transaction([
     prisma.dossier.update({
       where: { id: dossier.id },
       data: { failleJuridiqueId: faille.id, lettreGeneree: lettre },

@@ -357,18 +357,20 @@ export async function validerVirement(
   }
   if (payment.status !== "PENDING_VIREMENT") return { error: "Seuls les virements en attente peuvent être validés." };
 
+  // Paiement rattaché à un dossier en attente (EN_ATTENTE_PAIEMENT) : le
+  // crédit sert directement le dossier — il passe en EN_ATTENTE_VALIDATION
+  // pour le juriste, sans créditer le client (le paiement a été consommé).
+  let dossierEnValidation: string | null = null;
   await prisma.$transaction(async (tx) => {
     await tx.payment.update({ where: { id }, data: { status: "PAID" } });
 
-    // Paiement rattaché à un dossier en attente (EN_ATTENTE_PAIEMENT) : le
-    // crédit sert directement le dossier — il passe en EN_ATTENTE_VALIDATION
-    // pour le juriste, sans créditer le client (le paiement a été consommé).
     if (payment.dossierId) {
       const dossierLie = await tx.dossier.findUnique({
         where: { id: payment.dossierId },
         select: { id: true, statut: true },
       });
       if (dossierLie && dossierLie.statut === "EN_ATTENTE_PAIEMENT") {
+        dossierEnValidation = dossierLie.id;
         await tx.dossier.update({
           where: { id: dossierLie.id },
           data: { statut: "EN_ATTENTE_VALIDATION" },
@@ -394,6 +396,13 @@ export async function validerVirement(
   if (user) {
     const { notifierPaiementValide } = await import("@/lib/notifications");
     await notifierPaiementValide(user.email, user.name);
+  }
+
+  // Le dossier venant de basculer en EN_ATTENTE_VALIDATION : le client est
+  // notifié que la lettre est en cours de validation (défensif sans clé).
+  if (dossierEnValidation) {
+    const { notifierStatut } = await import("@/lib/notifications");
+    await notifierStatut(dossierEnValidation).catch(() => false);
   }
 
   revalidatePath("/dashboard/admin/paiements");

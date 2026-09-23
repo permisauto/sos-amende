@@ -18,6 +18,7 @@ export type FailleBibliotheque = {
   statut: string;
   regle?: string | null;
   jurisprudence: RefJurisprudentielle[];
+  templateLettre?: string | null;
 };
 
 /**
@@ -126,6 +127,16 @@ export function BibliothequeJuriste({
               )}
             </div>
           )}
+          {failleRetenue.templateLettre && (
+            <details className="mt-2">
+              <summary className="cursor-pointer select-none text-xs font-semibold text-emerald-800 hover:text-emerald-900">
+                Aperçu du modèle de lettre
+              </summary>
+              <p className="mt-1 whitespace-pre-wrap rounded-lg bg-white/70 px-3 py-2 text-xs leading-relaxed text-emerald-900">
+                {failleRetenue.templateLettre}
+              </p>
+            </details>
+          )}
         </div>
       )}
 
@@ -229,6 +240,16 @@ export function BibliothequeJuriste({
                       ) : null,
                     )}
                   </div>
+                )}
+                {f.templateLettre && (
+                  <details className="mt-2">
+                    <summary className="cursor-pointer select-none text-xs font-semibold text-zinc-500 hover:text-zinc-700">
+                      Aperçu du modèle de lettre
+                    </summary>
+                    <p className="mt-1 whitespace-pre-wrap rounded-lg bg-zinc-50 px-3 py-2 text-xs leading-relaxed text-zinc-600">
+                      {f.templateLettre}
+                    </p>
+                  </details>
                 )}
               </li>
             ))}

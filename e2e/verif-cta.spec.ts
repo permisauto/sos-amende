@@ -153,14 +153,14 @@ test.describe("Juriste — file & actions", () => {
   test("juriste : les filtres de file fonctionnent", async ({ page }) => {
     await loginAs(page, "e2e-juriste@test.local");
     await page.goto("/dashboard/juriste");
-    // Le filtre actif par défaut est "À valider" (EN_ATTENTE_VALIDATION)
-    await expect(
-      page.getByRole("link", { name: /À valider/ }).first(),
-    ).toBeVisible();
+    // Le filtre actif par défaut est "Tous" (intégralité des dossiers clients)
+    const tous = page.getByRole("link", { name: "Tous" });
+    await expect(tous).toBeVisible();
+    expect(await tous.getAttribute("href")).toBe("/dashboard/juriste");
     for (const [label, url] of [
+      ["À valider", "/dashboard/juriste?f=EN_ATTENTE_VALIDATION"],
       ["En attente de signature", "/dashboard/juriste?f=EN_ATTENTE_PRE_SIGNATURE"],
       ["Envoyés", "/dashboard/juriste?f=ENVOYE"],
-      ["Tous", "/dashboard/juriste?f=ALL"],
     ] as const) {
       const link = page.getByRole("link", { name: new RegExp(label) }).first();
       await expect(link).toBeVisible();

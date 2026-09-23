@@ -7,16 +7,15 @@ import { JuristeActions, DecisionOmpForm } from "./juriste-actions";
 import { VerificationPoussee } from "./verification-poussee";
 import { LettreEdition } from "./lettre-edition";
 import { AvocatTraitement } from "./avocat-traitement";
-import { FaillesCandidates } from "./failles-candidates";
+import { SuggestionsDrawer } from "./suggestions-drawer";
 import { Preuves, type PreuveDto } from "@/components/preuves";
 import {
   DossierTimeline,
   type TimelineEvent,
 } from "@/components/dossier-timeline";
-import {
-  BibliothequeJuriste,
-  type FailleBibliotheque,
-  type RefJurisprudentielle,
+import type {
+  FailleBibliotheque,
+  RefJurisprudentielle,
 } from "@/components/bibliotheque-juriste";
 import type { JurisprudenceRef } from "@/lib/catalogue-sources";
 import { organismeEnvoi } from "@/lib/envoi";
@@ -361,11 +360,13 @@ export default async function JuristeCasePage(
     })),
   );
 
-  // Bibliothèque juridique dynamique — résiliente si DB down
+  // Bibliothèque juridique dynamique — résiliente si DB down. Filtrée sur le
+  // type du dossier : seules les failles du même type (AMENDE/SUSPENSION) sont
+  // proposées comme suggestions contextuelles au juriste.
   let bibliotheque: Awaited<ReturnType<typeof prisma.failleJuridique.findMany>> = [];
   try {
     bibliotheque = await prisma.failleJuridique.findMany({
-      where: { statut: { in: ["ACTIVE", "PROPOSEE"] } },
+      where: { statut: { in: ["ACTIVE", "PROPOSEE"] }, typeInfraction: item.type },
       orderBy: [{ statut: "asc" }, { createdAt: "desc" }],
     });
   } catch (e) {
@@ -397,6 +398,7 @@ export default async function JuristeCasePage(
     statut: f.statut,
     regle: f.regle,
     jurisprudence: toRefs(f.jurisprudence),
+    templateLettre: f.templateLettre,
   }));
 
   const dateLimite = item.dateLimite
@@ -447,6 +449,14 @@ export default async function JuristeCasePage(
             <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-600">
               {item.type === "AMENDE" ? "Amende" : "Suspension de permis"}
             </span>
+            {item.user.signatureUrl &&
+              (item.statut === "EN_ATTENTE_VALIDATION" ||
+                item.statut === "A_VERIFIER" ||
+                item.statut === "PRET") && (
+                <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-700">
+                  Pré-signé dans son espace
+                </span>
+              )}
           </div>
           <p className="mt-1 text-sm text-zinc-500">{item.user.email}</p>
         </div>
@@ -695,26 +705,6 @@ export default async function JuristeCasePage(
 
         {/* Colonne latérale — références et contexte de vérification */}
         <div className="flex flex-col gap-6">
-          <BibliothequeJuriste
-            failleRetenue={failleRetenue}
-            bibliotheque={bibliothequeDto}
-          />
-
-          {candidats.length > 0 && (
-            <section className="rounded-2xl border border-zinc-200 bg-white p-6">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-                Failles détectées — à confirmer ou écarter
-              </h2>
-              <div className="mt-3">
-                <FaillesCandidates
-                  dossierId={item.id}
-                  candidats={candidats}
-                  lectureSeule={lectureSeule}
-                />
-              </div>
-            </section>
-          )}
-
           <section className="rounded-2xl border border-zinc-200 bg-white p-6">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
               Données du dossier
@@ -840,6 +830,14 @@ export default async function JuristeCasePage(
           )}
         </div>
       </div>
+
+      <SuggestionsDrawer
+        dossierId={item.id}
+        candidats={candidats}
+        lectureSeule={lectureSeule}
+        failleRetenue={failleRetenue}
+        bibliotheque={bibliothequeDto}
+      />
     </div>
   );
 }

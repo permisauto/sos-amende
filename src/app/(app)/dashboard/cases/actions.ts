@@ -10,7 +10,7 @@ import {
   FAILLE_IDS,
   dateLimitePv,
   detecterFailles,
-  remplirTemplate,
+  remplirLettreMulti,
   type ExtractedData,
   type RegleDetection,
 } from "@/lib/moteur";
@@ -221,9 +221,21 @@ export async function analyserDossier(
     if (cal) data.preuveEtalonnage = cal.preuveUrl;
   }
 
-  const lettre = faille
-    ? remplirTemplate(faille.templateLettre, data)
-    : null;
+  // Lettre multi-arguments : toutes les failles candidates sont juxtaposées
+  // dans une seule lettre (chaque section reste un template admin validé).
+  // La première candidate reste la faille principale (failleJuridiqueId).
+  const candidatsFailles = candidats
+    .map((id) => failles.find((f) => f.id === id))
+    .filter((f): f is NonNullable<typeof f> => !!f);
+  const lettre = remplirLettreMulti(
+    candidatsFailles.map((f) => ({
+      id: f.id,
+      titreFaille: f.titreFaille,
+      articleLoi: f.articleLoi,
+      templateLettre: f.templateLettre,
+    })),
+    data,
+  );
 
   // Débit du crédit au moment de la mise en file de validation (payant) :
   // - faille + crédit disponible  → débit immédiat → EN_ATTENTE_VALIDATION ;

@@ -283,6 +283,51 @@ export function remplirTemplate(
   });
 }
 
+export type FailleLettre = {
+  id: string;
+  titreFaille: string;
+  articleLoi: string;
+  templateLettre: string;
+};
+
+/**
+ * Lettre de contestation multi-arguments : juxtapose toutes les failles
+ * détectées/confirmées en une seule lettre (chacune apporte un argument
+ * distinct). Seules les sources validées par l'admin sont utilisées — les
+ * modèles `templateLettre` tels quels, jamais de texte inventé.
+ *
+ * La première section porte l'en-tête complète (identification du titulaire,
+ * objet de la contestation) ; les suivantes n'en gardent que l'argumentation
+ * sous un sous-titre. Une seule faille → comportement identique à
+ * remplirTemplate (aucune régression sur les lettres existantes).
+ */
+export function remplirLettreMulti(
+  failles: FailleLettre[],
+  data: ExtractedData,
+): string | null {
+  if (!failles || failles.length === 0) return null;
+  if (failles.length === 1) {
+    return remplirTemplate(failles[0].templateLettre, data);
+  }
+
+  const sections: string[] = [];
+  failles.forEach((faille, i) => {
+    const corps = remplirTemplate(faille.templateLettre, data).trim();
+    const sousTitre = `Argument n° ${i + 1} — ${faille.titreFaille}${
+      faille.articleLoi ? ` (${faille.articleLoi})` : ""
+    }`;
+    if (i === 0) {
+      sections.push(`${sousTitre}\n\n${corps}`);
+      return;
+    }
+    // L'en-tête (premier paragraphe : identification) est déjà porté par la
+    // première section — on ne répète que l'argumentation propre à la faille.
+    const sansEnTete = corps.split(/\n\s*\n/).slice(1).join("\n\n").trim();
+    sections.push(`${sousTitre}\n\n${sansEnTete || corps}`);
+  });
+  return sections.join("\n\n");
+}
+
 /**
  * Score pointu par faille — pondéré par faille + preuves + questionnaire.
  * Le questionnaire affine : chaque réponse complémentaire qui matche renforce
