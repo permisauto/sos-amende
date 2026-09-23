@@ -46,7 +46,7 @@ async function approuverLettre(browser: Browser) {
     .getByLabel("Canal d'envoi de la contestation")
     .selectOption("ANTAI");
   await page
-    .getByRole("button", { name: "Approuver la lettre" })
+    .getByRole("button", { name: "Valider et Envoyer" })
     .click();
   // Lettre validée (sans signature) → en attente de la signature du client
   await expect(

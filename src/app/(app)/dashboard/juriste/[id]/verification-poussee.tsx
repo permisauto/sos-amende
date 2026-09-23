@@ -33,7 +33,7 @@ export function VerificationPoussee({
         onClick={() => setOuvert(true)}
         className="rounded-full border border-sky-300 px-4 py-2 text-sm font-medium text-sky-700 transition hover:bg-sky-50"
       >
-        Relancer la vérification poussée
+        Relancer la vérification
       </button>
 
       {ouvert && (

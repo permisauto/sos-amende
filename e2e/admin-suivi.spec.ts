@@ -12,7 +12,7 @@ async function approuverDerniereLettre(browser: Browser) {
   await page
     .getByLabel("Canal d'envoi de la contestation")
     .selectOption("ANTAI");
-  await page.getByRole("button", { name: "Approuver la lettre" }).click();
+  await page.getByRole("button", { name: "Valider et Envoyer" }).click();
   await expect(
     page.getByText("en attente de la signature du client", {
       exact: false,
@@ -57,7 +57,7 @@ test.describe("Admin — suivi des dossiers & lettres vérifiées", () => {
 
     // Consultation seule : pas d'action possible depuis la vue admin.
     await expect(
-      apage.getByRole("button", { name: "Approuver la lettre" }),
+      apage.getByRole("button", { name: "Valider et Envoyer" }),
     ).toHaveCount(0);
     await expect(
       apage.getByRole("button", { name: "Envoyer la contestation" }),
@@ -89,7 +89,7 @@ test.describe("Admin — suivi des dossiers & lettres vérifiées", () => {
       apage.getByRole("link", { name: "Dossier (lecture seule)" }),
     ).toBeVisible();
     await expect(
-      apage.getByRole("button", { name: "Approuver la lettre" }),
+      apage.getByRole("button", { name: "Valider et Envoyer" }),
     ).toHaveCount(0);
     await ctxAdmin.close();
   });

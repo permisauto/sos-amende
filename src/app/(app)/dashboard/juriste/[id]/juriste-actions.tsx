@@ -97,8 +97,8 @@ export function JuristeActions({
                 {validePending
                   ? "Validation…"
                   : showCanal
-                    ? "Approuver la lettre"
-                    : "Approuver la lettre et envoyer la contestation"}
+                    ? "Valider et Envoyer"
+                    : "Valider et envoyer la contestation"}
               </button>
               {valideState?.error && (
                 <p className="rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700">
