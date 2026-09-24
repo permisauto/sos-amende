@@ -179,7 +179,7 @@ async function checkDataGouv(): Promise<HealthCheckResult> {
     const timeout = setTimeout(() => controlleur.abort(), 5000);
 
     const res = await fetch(
-      "https://data.gouv.fr/api/1/datasets/cinemometres-homologues/records?rows=1",
+      "https://static.data.gouv.fr/resources/radars-automatiques/20181025-141231/radars.csv",
       { signal: controlleur.signal }
     );
     clearTimeout(timeout);
@@ -199,7 +199,7 @@ async function checkDataGouv(): Promise<HealthCheckResult> {
       name: "data.gouv.fr (radars)",
       status: "healthy",
       latencyMs: Date.now() - start,
-      details: { message: "API data.gouv.fr accessible" },
+      details: { message: "radars.csv data.gouv.fr accessible" },
     };
 } catch (err: unknown) {
     return {
