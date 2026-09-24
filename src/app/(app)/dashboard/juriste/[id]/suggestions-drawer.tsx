@@ -8,20 +8,34 @@ import {
   type FailleBibliotheque,
 } from "@/components/bibliotheque-juriste";
 
+export type LettreProposee = {
+  failleId: string;
+  titreFaille: string;
+  articleLoi: string;
+  lettre: string;
+};
+
 export function SuggestionsDrawer({
   dossierId,
   candidats,
   lectureSeule,
   failleRetenue,
   bibliotheque,
+  lettresProposees,
+  lettreCombine,
+  lettrePrincipale,
 }: {
   dossierId: string;
   candidats: CandidatDto[];
   lectureSeule: boolean;
   failleRetenue: FailleBibliotheque | null;
   bibliotheque: FailleBibliotheque[];
+  lettresProposees: LettreProposee[];
+  lettreCombine: string | null;
+  lettrePrincipale: string | null;
 }) {
   const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -33,6 +47,16 @@ export function SuggestionsDrawer({
     closeRef.current?.focus();
     return () => document.removeEventListener("keydown", onKey);
   }, [open]);
+
+  async function copier(texte: string, cle: string) {
+    try {
+      await navigator.clipboard.writeText(texte);
+      setCopied(cle);
+      setTimeout(() => setCopied(null), 1500);
+    } catch {
+      setCopied(null);
+    }
+  }
 
   return (
     <>
@@ -92,6 +116,87 @@ export function SuggestionsDrawer({
                   candidats={candidats}
                   lectureSeule={lectureSeule}
                 />
+              </div>
+            </section>
+          )}
+
+          {(lettresProposees.length > 0 || lettrePrincipale) && (
+            <section className="rounded-2xl border border-zinc-200 bg-white p-6">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
+                Lettres proposées pour ce dossier
+              </h2>
+              {lettreCombine && lettresProposees.length > 1 && (
+                <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-emerald-800">
+                      Lettre combinée (toutes les failles confirmer)
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => copier(lettreCombine, "combine")}
+                      className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-emerald-700"
+                    >
+                      {copied === "combine" ? "Copié !" : "Copier"}
+                    </button>
+                  </div>
+                  <details className="mt-2">
+                    <summary className="cursor-pointer select-none text-xs font-semibold text-emerald-800 hover:text-emerald-900">
+                      Aperçu du texte complet
+                    </summary>
+                    <p className="mt-1 whitespace-pre-wrap rounded-lg bg-white/80 px-3 py-2 text-xs leading-relaxed text-emerald-900">
+                      {lettreCombine}
+                    </p>
+                  </details>
+                </div>
+              )}
+              <div className="mt-3 flex flex-col gap-3">
+                {lettresProposees.map((lp) => (
+                  <div
+                    key={lp.failleId}
+                    className="rounded-xl border border-zinc-200 bg-zinc-50 p-3"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-medium text-zinc-800">
+                        {lp.titreFaille}
+                        {lp.articleLoi ? (
+                          <span className="ml-1 text-xs text-zinc-500">
+                            ({lp.articleLoi})
+                          </span>
+                        ) : null}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => copier(lp.lettre, lp.failleId)}
+                        className="rounded-full bg-zinc-200 px-3 py-1 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-300"
+                      >
+                        {copied === lp.failleId ? "Copié !" : "Copier"}
+                      </button>
+                    </div>
+                    <details className="mt-2">
+                      <summary className="cursor-pointer select-none text-xs font-semibold text-zinc-500 hover:text-zinc-700">
+                        Aperçu de la lettre générée
+                      </summary>
+                      <p className="mt-1 whitespace-pre-wrap rounded-lg bg-white px-3 py-2 text-xs leading-relaxed text-zinc-700">
+                        {lp.lettre}
+                      </p>
+                    </details>
+                  </div>
+                ))}
+                {lettresProposees.length === 0 && lettrePrincipale && (
+                  <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+                    <p className="text-sm font-medium text-zinc-800">
+                      Lettre actuelle du dossier
+                    </p>
+                    <details className="mt-2">
+                      <summary className="cursor-pointer select-none text-xs font-semibold text-zinc-500 hover:text-zinc-700">
+                        Aperçu du texte complet
+                      </summary>
+                      <p className="mt-1 whitespace-pre-wrap rounded-lg bg-white px-3 py-2 text-xs leading-relaxed text-zinc-700">
+                        {lettrePrincipale}
+                      </p>
+                    </details>
+                  </div>
+                )}
               </div>
             </section>
           )}

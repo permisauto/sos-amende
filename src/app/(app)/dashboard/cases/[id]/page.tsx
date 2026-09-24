@@ -751,7 +751,15 @@ export default async function CaseDetailPage(
               Votre lettre est signée. Un juriste la vérifie avant que vous
               puissiez transmettre votre contestation.
             </p>
-            <div className="mt-4 flex flex-wrap items-center gap-4">
+            {item.lettreGeneree && (
+              <div className="mt-4 whitespace-pre-wrap rounded-xl bg-zinc-50 p-6 text-sm leading-relaxed text-zinc-800">
+                {item.lettreGeneree}
+              </div>
+            )}
+            <p className="mt-3 text-xs font-medium text-zinc-500">
+              Votre signature est apposée en bas de la lettre :
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-4">
               {signatureUrl && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img

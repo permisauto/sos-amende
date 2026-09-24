@@ -8,7 +8,9 @@ import { VerificationPoussee } from "./verification-poussee";
 import { LettreEdition } from "./lettre-edition";
 import { AvocatTraitement } from "./avocat-traitement";
 import { SuggestionsDrawer } from "./suggestions-drawer";
+import { PreuvesApiBlock } from "@/components/preuves-api";
 import { Preuves, type PreuveDto } from "@/components/preuves";
+import { SignatureApercu } from "@/components/signature-apercu";
 import {
   DossierTimeline,
   type TimelineEvent,
@@ -18,6 +20,11 @@ import type {
   RefJurisprudentielle,
 } from "@/components/bibliotheque-juriste";
 import type { JurisprudenceRef } from "@/lib/catalogue-sources";
+import {
+  remplirLettreMulti,
+  remplirTemplate,
+  type ExtractedData,
+} from "@/lib/moteur";
 import { organismeEnvoi } from "@/lib/envoi";
 import { FilMessages, type MessageDto } from "@/components/messages";
 import {
@@ -89,6 +96,7 @@ type JuristeCaseDetail = {
   extractedData: Record<string, unknown> | null;
   lettreGeneree: string | null;
   canalEnvoi: string | null;
+  conditions_meteo: string | null;
   remarquesJuriste: string | null;
   failleJuridique: {
     id: string;
@@ -103,8 +111,11 @@ type JuristeCaseDetail = {
     failleId: string;
     statut: string;
     faille: {
+      id: string;
+      statut: string;
       titreFaille: string;
       articleLoi: string;
+      templateLettre?: string | null;
     };
   }>;
   courriers: Array<{
@@ -216,6 +227,7 @@ function demoJuristeDossier(id: string): JuristeCaseDetail | null {
     extractedData: mock.extractedData,
     lettreGeneree: mock.lettreGeneree,
     canalEnvoi: null,
+    conditions_meteo: null,
     remarquesJuriste: null,
     failleJuridique: mock.failleJuridique,
     failleJuridiqueId: mock.failleJuridique?.id ?? null,
@@ -337,6 +349,26 @@ export default async function JuristeCasePage(
   }));
 
   const data = item.extractedData as Record<string, unknown> | null;
+
+  const dataLettres = (item.extractedData ?? {}) as ExtractedData;
+  const faillesActivesAvecTemplate = item.faillesRetenues
+    .filter((df) => df.faille.statut === "ACTIVE" && df.faille.templateLettre)
+    .map((df) => df.faille);
+  const lettresProposees = faillesActivesAvecTemplate.map((f) => ({
+    failleId: f.id,
+    titreFaille: f.titreFaille,
+    articleLoi: f.articleLoi ?? "",
+    lettre: remplirTemplate(f.templateLettre!, dataLettres),
+  }));
+  const lettreCombine = remplirLettreMulti(
+    faillesActivesAvecTemplate.map((f) => ({
+      id: f.id,
+      titreFaille: f.titreFaille,
+      articleLoi: f.articleLoi ?? "",
+      templateLettre: f.templateLettre!,
+    })),
+    dataLettres,
+  );
   const questionnaire = data
     ? [
         { cle: "paiementDejaFait", lib: "Amende déjà payée" },
@@ -353,6 +385,8 @@ export default async function JuristeCasePage(
   const isImage = pvUrl?.match(/\.(jpe?g|png|webp)(\?.*)?$/i);
   const pdfUrl = await storageUrl(courrier?.pdfUrl ?? null);
   const accuseUrl = await storageUrl(courrier?.preuveDepotUrl ?? null);
+  const signatureCourrier = await storageUrl(courrier?.signatureUrl ?? null);
+  const signatureProfil = await storageUrl(item.user.signatureUrl ?? null);
   const evenements = await Promise.all(
     item.evenements.map(async (e) => ({
       ...e,
@@ -642,6 +676,24 @@ export default async function JuristeCasePage(
                   ) : null}
                 </>
               )}
+              {signatureCourrier && (
+                <div className="mt-4">
+                  <SignatureApercu
+                    signatureUrl={signatureCourrier}
+                    label="Signature du client déjà apposée"
+                    note="Cette signature est collée en bas de la lettre — elle est conservée après toute modification (PDF régénéré automatiquement)."
+                  />
+                </div>
+              )}
+              {!signatureCourrier && signatureProfil && (
+                <div className="mt-4">
+                  <SignatureApercu
+                    signatureUrl={signatureProfil}
+                    label="Pré-signature (profil client)"
+                    note="Signature capturée au dépôt du dossier : elle sera proposée au client à la signature et apposée en bas de la lettre."
+                  />
+                </div>
+              )}
             </div>
           </section>
 
@@ -806,6 +858,12 @@ export default async function JuristeCasePage(
             currentUserId={null}
           />
 
+          <PreuvesApiBlock
+            dossierId={item.id}
+            lectureSeule={lectureSeule}
+            conditionsMeteo={item.conditions_meteo}
+          />
+
           <FilMessages
             dossierId={item.id}
             messages={messagesDto}
@@ -848,6 +906,9 @@ export default async function JuristeCasePage(
         lectureSeule={lectureSeule}
         failleRetenue={failleRetenue}
         bibliotheque={bibliothequeDto}
+        lettresProposees={lettresProposees}
+        lettreCombine={lettreCombine}
+        lettrePrincipale={item.lettreGeneree}
       />
     </div>
   );
