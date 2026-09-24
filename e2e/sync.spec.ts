@@ -56,6 +56,15 @@ test("synchronisation : pipeline juriste, lettres proposées, signature visible 
   await pj.getByRole("button", { name: /Fermer les suggestions/ }).click();
 
   await pj.getByLabel("Canal d'envoi de la contestation").selectOption("LRAR");
+  // Canaux restreints au type (amende → ANTAI ou LRAR, jamais Télérecours)
+  await expect(
+    pj.getByLabel("Canal d'envoi de la contestation").locator('option[value="ANTAI"]'),
+  ).toHaveCount(1);
+  await expect(
+    pj
+      .getByLabel("Canal d'envoi de la contestation")
+      .locator('option[value="TELERECOURS"]'),
+  ).toHaveCount(0);
   await pj.getByRole("button", { name: "Valider et Envoyer" }).click();
   await expect(
     pj.getByText("Validation par le juriste", { exact: true }),
@@ -84,6 +93,16 @@ test("synchronisation : pipeline juriste, lettres proposées, signature visible 
   await pj2.goto(`/dashboard/juriste/${dossierId}`);
   await expect(
     pj2.getByText("Signature du client déjà apposée", { exact: true }),
+  ).toBeVisible();
+  // Récap « Envoi de la contestation » : canal LRAR retenu + pièces jointes
+  await expect(
+    pj2.getByText("Envoi de la contestation", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    pj2.getByText(
+      "Lettre recommandée avec accusé de réception (envoi par le client)",
+      { exact: true },
+    ),
   ).toBeVisible();
   await ctxJuriste2.close();
 

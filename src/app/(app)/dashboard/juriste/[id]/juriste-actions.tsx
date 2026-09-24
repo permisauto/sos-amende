@@ -8,12 +8,14 @@ import {
   retournerDossier,
   validerDossier,
 } from "../actions";
+import { canauxEnvoi, libelleCanal, type InfractionType } from "@/lib/envoi";
 
 export function JuristeActions({
   dossierId,
   mode = "full",
   validee = false,
   organisme = "ANTAI",
+  type = "AMENDE",
   lectureSeule = false,
   showCanal = false,
 }: {
@@ -21,6 +23,7 @@ export function JuristeActions({
   mode?: "full" | "rejet";
   validee?: boolean;
   organisme?: string;
+  type?: InfractionType;
   lectureSeule?: boolean;
   showCanal?: boolean;
 }) {
@@ -77,15 +80,11 @@ export function JuristeActions({
                     <option value="" disabled>
                       Choisir le canal…
                     </option>
-                    <option value="ANTAI">
-                      Soumission automatique ({organisme} — envoi en ligne)
-                    </option>
-                    <option value="TELERECOURS">
-                      Télérecours (tribunal administratif)
-                    </option>
-                    <option value="LRAR">
-                      LRAR — lettre recommandée envoyée par le client
-                    </option>
+                    {canauxEnvoi(type).map((canal) => (
+                      <option key={canal} value={canal}>
+                        {libelleCanal(canal)}
+                      </option>
+                    ))}
                   </select>
                 </label>
               )}

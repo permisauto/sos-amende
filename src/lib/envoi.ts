@@ -7,6 +7,38 @@
 
 export type InfractionType = "AMENDE" | "SUSPENSION";
 
+export type CanalEnvoi = "ANTAI" | "TELERECOURS" | "LRAR";
+
+/**
+ * Canaux d'envoi proposés selon le type d'infraction.
+ * - AMENDE : ANTAI (envoi en ligne) ou LRAR (envoi par le client)
+ * - SUSPENSION : Télérecours (envoi en ligne) ou LRAR (envoi par le client)
+ */
+export function canauxEnvoi(type: InfractionType): CanalEnvoi[] {
+  return type === "SUSPENSION" ? ["TELERECOURS", "LRAR"] : ["ANTAI", "LRAR"];
+}
+
+export function libelleCanal(canal: CanalEnvoi): string {
+  switch (canal) {
+    case "ANTAI":
+      return "ANTAI — envoi en ligne (automatique)";
+    case "TELERECOURS":
+      return "Télérecours — envoi en ligne (tribunal administratif)";
+    case "LRAR":
+      return "Lettre recommandée avec accusé de réception (envoi par le client)";
+  }
+}
+
+export function libelleCanalDepuisStockage(
+  canal: string | null | undefined,
+  type: InfractionType,
+): string {
+  if (canal === "ANTAI" || canal === "TELERECOURS" || canal === "LRAR") {
+    return libelleCanal(canal);
+  }
+  return libelleCanal(canauxEnvoi(type)[0]);
+}
+
 export function destinataireLrar(type: InfractionType): string {
   return type === "SUSPENSION"
     ? "à l'adresse du préfet indiquée sur votre décision"

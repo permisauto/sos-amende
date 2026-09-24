@@ -3,10 +3,15 @@ import { requireJuriste } from "@/lib/dal";
 import { generateLettrePdf } from "@/lib/lettre-pdf";
 import { storageRead } from "@/lib/storage";
 import { getDemoLettre } from "@/lib/demo-lettres";
+import { lirePiecesJointesPourDossierId } from "@/lib/preuves-api";
 
-async function buildPdf(id: string, overrideLettre?: string | null): Promise<{ lettre: string | null; signatureDataUrl: string | null }> {
+async function buildPdf(
+  id: string,
+  overrideLettre?: string | null,
+): Promise<{ lettre: string | null; signatureDataUrl: string | null; piecesJointes: string[] }> {
   let lettre: string | null = overrideLettre ?? null;
   let signatureDataUrl: string | null = null;
+  let piecesJointes: string[] = [];
 
   const demoLettre = getDemoLettre(id);
   if (demoLettre || overrideLettre) {
@@ -16,15 +21,18 @@ async function buildPdf(id: string, overrideLettre?: string | null): Promise<{ l
       const sig = await storageRead("/uploads/demo-signature.png");
       if (sig) signatureDataUrl = `data:image/png;base64,${sig.toString("base64")}`;
     } catch {}
-    if (lettre) return { lettre, signatureDataUrl };
+    if (lettre) return { lettre, signatureDataUrl, piecesJointes };
   }
 
   const dossier = await prisma.dossier.findUnique({
     where: { id },
     include: { courriers: { orderBy: { createdAt: "asc" } } },
   });
-  if (!dossier?.lettreGeneree) return { lettre: null, signatureDataUrl: null };
+  if (!dossier?.lettreGeneree) {
+    return { lettre: null, signatureDataUrl: null, piecesJointes };
+  }
   lettre = overrideLettre ?? dossier.lettreGeneree;
+  piecesJointes = await lirePiecesJointesPourDossierId(prisma, id);
   const courrier = dossier.courriers[dossier.courriers.length - 1];
   if (courrier?.signatureUrl) {
     try {
@@ -32,7 +40,7 @@ async function buildPdf(id: string, overrideLettre?: string | null): Promise<{ l
       if (sig) signatureDataUrl = `data:image/png;base64,${sig.toString("base64")}`;
     } catch {}
   }
-  return { lettre, signatureDataUrl };
+  return { lettre, signatureDataUrl, piecesJointes };
 }
 
 export async function GET(
@@ -41,9 +49,9 @@ export async function GET(
 ) {
   await requireJuriste();
   const { id } = await params;
-  const { lettre, signatureDataUrl } = await buildPdf(id);
+  const { lettre, signatureDataUrl, piecesJointes } = await buildPdf(id);
   if (!lettre) return new Response("Lettre introuvable", { status: 404 });
-  const pdf = await generateLettrePdf(lettre, signatureDataUrl);
+  const pdf = await generateLettrePdf(lettre, signatureDataUrl, piecesJointes);
   return new Response(Buffer.from(pdf) as unknown as BodyInit, {
     headers: {
       "Content-Type": "application/pdf",
@@ -64,9 +72,9 @@ export async function POST(
     const body = (await req.json()) as { lettre?: string };
     if (typeof body.lettre === "string" && body.lettre.trim().length >= 10) override = body.lettre.trim();
   } catch {}
-  const { lettre, signatureDataUrl } = await buildPdf(id, override);
+  const { lettre, signatureDataUrl, piecesJointes } = await buildPdf(id, override);
   if (!lettre) return new Response("Lettre introuvable", { status: 404 });
-  const pdf = await generateLettrePdf(lettre, signatureDataUrl);
+  const pdf = await generateLettrePdf(lettre, signatureDataUrl, piecesJointes);
   return new Response(Buffer.from(pdf) as unknown as BodyInit, {
     headers: {
       "Content-Type": "application/pdf",

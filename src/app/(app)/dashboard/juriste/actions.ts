@@ -15,14 +15,11 @@ import { notifierStatut } from "@/lib/notifications";
 import { storageRead, storageWrite } from "@/lib/storage";
 import { generateLettrePdf } from "@/lib/lettre-pdf";
 import { soumettreDossier } from "@/lib/antai";
-import { organismeEnvoi } from "@/lib/envoi";
+import { canauxEnvoi, organismeEnvoi, type CanalEnvoi } from "@/lib/envoi";
 import { setDemoLettre } from "@/lib/demo-lettres";
-import { recupererPreuvesPourDossierId } from "@/lib/preuves-api";
+import { listePiecesJointes, recupererPreuvesPourDossierId } from "@/lib/preuves-api";
 
 export type ValidationState = { error?: string; ok?: boolean } | undefined;
-
-const CANAUX_ENVOI = ["ANTAI", "TELERECOURS", "LRAR"] as const;
-type CanalEnvoi = (typeof CANAUX_ENVOI)[number];
 
 const DECISION_OMP = ["ACCEPTE", "REJETE"] as const;
 
@@ -79,9 +76,16 @@ export async function soumettreEtMarquerEnvoye(dossierId: string) {
   }
 
   const organisme = organismeEnvoi(dossier.type);
+  const dataExt = (dossier.extractedData ?? {}) as Record<string, unknown>;
+  const piecesJointes = listePiecesJointes({
+    type: dossier.type,
+    conditionsMeteo: dossier.conditions_meteo,
+    numRef: typeof dataExt["num_pv"] === "string" ? (dataExt["num_pv"] as string) : null,
+    preuves: dossier.preuves.map((p) => ({ nom: p.nom, type: p.type, url: p.url })),
+  });
   const result = await soumettreDossier(
     dossier,
-    dossier.preuves.map((p) => ({ nom: p.nom })),
+    piecesJointes.map((nom) => ({ nom })),
   );
   if (!result.ok) {
     // Rollback : retour en PRET (lettre validée) — le client peut poster en
@@ -186,6 +190,7 @@ export async function validerDossier(
     include: {
       courriers: { orderBy: { createdAt: "asc" } },
       user: { select: { signatureUrl: true } },
+      preuves: { orderBy: { createdAt: "asc" } },
     },
   });
   if (!dossier) {
@@ -209,10 +214,28 @@ export async function validerDossier(
     return { error: "Aucune lettre générée à valider." };
   }
 
-  // Canal d'envoi choisi par le juriste (défaut selon le type d'infraction).
-  const canal: CanalEnvoi =
-    CANAUX_ENVOI.find((c) => c === canalSaisi) ??
-    (dossier.type === "SUSPENSION" ? "TELERECOURS" : "ANTAI");
+  // Canal d'envoi choisi par le juriste, restreint au type d'infraction
+  // (AMENDE : ANTAI/LRAR, SUSPENSION : Télérecours/LRAR).
+  const canaux = canauxEnvoi(dossier.type);
+  let canal: CanalEnvoi = canaux[0];
+  if (canalSaisi) {
+    const valide = canaux.some((c) => c === canalSaisi);
+    if (!valide) {
+      return {
+        error:
+          "Canal d'envoi invalide pour ce type de dossier (amende : ANTAI ou lettre recommandée ; suspension : Télérecours ou lettre recommandée).",
+      };
+    }
+    canal = canalSaisi as CanalEnvoi;
+  }
+
+  const dataExt = (dossier.extractedData ?? {}) as Record<string, unknown>;
+  const piecesJointes = listePiecesJointes({
+    type: dossier.type,
+    conditionsMeteo: dossier.conditions_meteo,
+    numRef: typeof dataExt["num_pv"] === "string" ? (dataExt["num_pv"] as string) : null,
+    preuves: dossier.preuves.map((p) => ({ nom: p.nom, type: p.type, url: p.url })),
+  });
 
   const courrier = dossier.courriers[dossier.courriers.length - 1];
   const dejaSigne = !!courrier?.pdfUrl;
@@ -229,6 +252,7 @@ export async function validerDossier(
         const pdfBuffer = await generateLettrePdf(
           dossier.lettreGeneree,
           `data:image/png;base64,${sig.toString("base64")}`,
+          piecesJointes,
         );
         const pdfUrl = await storageWrite(
           `pdfs/lettre-${dossier.id}-${Date.now()}.pdf`,
@@ -504,7 +528,10 @@ export async function modifierLettre(
 
   const dossier = await prisma.dossier.findUnique({
     where: { id: dossierId },
-    include: { courriers: { orderBy: { createdAt: "asc" } } },
+    include: {
+      courriers: { orderBy: { createdAt: "asc" } },
+      preuves: { orderBy: { createdAt: "asc" } },
+    },
   });
   if (!dossier) {
     if (isDemoId(dossierId)) {
@@ -524,6 +551,14 @@ export async function modifierLettre(
     return { error: "La lettre ne peut être modifiée qu'avant validation." };
   }
 
+  const dataExt = (dossier.extractedData ?? {}) as Record<string, unknown>;
+  const piecesJointes = listePiecesJointes({
+    type: dossier.type,
+    conditionsMeteo: dossier.conditions_meteo,
+    numRef: typeof dataExt["num_pv"] === "string" ? (dataExt["num_pv"] as string) : null,
+    preuves: dossier.preuves.map((p) => ({ nom: p.nom, type: p.type, url: p.url })),
+  });
+
   const courrier = dossier.courriers[dossier.courriers.length - 1];
   let pdfUrl: string | null = courrier?.pdfUrl ?? null;
   if (courrier?.signatureUrl) {
@@ -533,7 +568,7 @@ export async function modifierLettre(
     const sig = await storageRead(courrier.signatureUrl);
     const sigDataUrl = sig ? `data:image/png;base64,${sig.toString("base64")}` : null;
     try {
-      const pdfBuffer = await generateLettrePdf(lettre, sigDataUrl);
+      const pdfBuffer = await generateLettrePdf(lettre, sigDataUrl, piecesJointes);
       pdfUrl = await storageWrite(
         `pdfs/lettre-${dossier.id}-${Date.now()}.pdf`,
         pdfBuffer,
@@ -545,7 +580,7 @@ export async function modifierLettre(
   } else if (courrier) {
     // Lettre signée sans signature PNG (cas rare) : régénère un PDF sans signature
     try {
-      const pdfBuffer = await generateLettrePdf(lettre, null);
+      const pdfBuffer = await generateLettrePdf(lettre, null, piecesJointes);
       pdfUrl = await storageWrite(
         `pdfs/lettre-${dossier.id}-${Date.now()}.pdf`,
         pdfBuffer,

@@ -17,7 +17,7 @@ import {
 import { generateLettrePdf } from "@/lib/lettre-pdf";
 import { extrairePv, normaliserPv } from "@/lib/ocr";
 import { notifierStatut } from "@/lib/notifications";
-import { recupererPreuvesPourDossierId } from "@/lib/preuves-api";
+import { listePiecesJointes, recupererPreuvesPourDossierId } from "@/lib/preuves-api";
 import { soumettreEtMarquerEnvoye } from "../juriste/actions";
 
 const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
@@ -368,6 +368,7 @@ export async function signerDossier(
 
   const dossier = await prisma.dossier.findFirst({
     where: { id: dossierId, userId: user.id },
+    include: { preuves: { orderBy: { createdAt: "asc" } } },
   });
   if (!dossier) {
     return { error: "Dossier introuvable." };
@@ -418,7 +419,19 @@ export async function signerDossier(
     return { error: "Signature invalide." };
   }
 
-  const pdfBuffer = await generateLettrePdf(dossier.lettreGeneree, signatureDataUrl);
+  const dataExt = (dossier.extractedData ?? {}) as Record<string, unknown>;
+  const piecesJointes = listePiecesJointes({
+    type: dossier.type,
+    conditionsMeteo: dossier.conditions_meteo,
+    numRef: typeof dataExt["num_pv"] === "string" ? (dataExt["num_pv"] as string) : null,
+    preuves: dossier.preuves.map((p) => ({ nom: p.nom, type: p.type, url: p.url })),
+  });
+
+  const pdfBuffer = await generateLettrePdf(
+    dossier.lettreGeneree,
+    signatureDataUrl,
+    piecesJointes,
+  );
   const pdfName = `pdfs/lettre-${dossier.id}.pdf`;
   const pdfUrl = await storageWrite(pdfName, pdfBuffer);
 

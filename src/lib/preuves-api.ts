@@ -8,6 +8,7 @@
  */
 
 import type { PrismaClient } from "@/generated/prisma/client";
+import type { InfractionType } from "./envoi";
 
 const BAN_ENDPOINT = "https://api-adresse.data.gouv.fr/search/";
 const OPENMETEO_ENDPOINT = "https://archive-api.open-meteo.com/v1/archive";
@@ -334,6 +335,70 @@ export async function rechercherTravaux(opts: {
   } catch {
     return [];
   }
+}
+
+/* ------------------- Pièces jointes de la contestation -------------------- */
+
+export type PieceJointe = {
+  nom: string;
+  type: string;
+  url: string;
+};
+
+/**
+ * Liste les pièces jointes à mentionner dans la lettre et à transmettre avec la
+ * contestation : la copie du PV / de la décision, puis chaque preuve réellement
+ * récupérée (météo, fiche radar, travaux, pièces versées). Fonction pure —
+ * aucun texte juridique inventé, seul un inventaire procédural. On ne liste que
+ * les preuves présentes en base (garde-fou anti-hallucination) ; pour la météo,
+ * on rappelle le relevé `conditions_meteo` si disponible.
+ */
+export function listePiecesJointes(opts: {
+  type: InfractionType;
+  conditionsMeteo?: string | null;
+  numRef?: string | null;
+  preuves: PieceJointe[];
+}): string[] {
+  const items: string[] = [];
+  const ref = opts.numRef ? ` n° ${opts.numRef}` : "";
+  items.push(
+    opts.type === "SUSPENSION"
+      ? `Copie de la décision de suspension${ref}`
+      : `Copie de l'avis de contravention${ref}`,
+  );
+  for (const p of opts.preuves) {
+    const nom = p.nom?.trim();
+    if (!nom) continue;
+    if (p.type === "METEO" && opts.conditionsMeteo) {
+      items.push(`${nom} — ${opts.conditionsMeteo}`);
+    } else {
+      items.push(nom);
+    }
+  }
+  return items;
+}
+
+/**
+ * Lecteur des pièces jointes d'un dossier (PV + preuves stockées). Sert à
+ * garnir la lettre PDF et le récépissé d'envoi. `dep` accepte prisma ou une
+ * transaction Prisma.
+ */
+export async function lirePiecesJointesPourDossierId(
+  dep: Pick<PrismaClient, "dossier">,
+  dossierId: string,
+): Promise<string[]> {
+  const dossier = await dep.dossier.findUnique({
+    where: { id: dossierId },
+    include: { preuves: { orderBy: { createdAt: "asc" } } },
+  });
+  if (!dossier) return [];
+  const data = (dossier.extractedData ?? {}) as Record<string, unknown>;
+  return listePiecesJointes({
+    type: dossier.type,
+    conditionsMeteo: dossier.conditions_meteo,
+    numRef: typeof data["num_pv"] === "string" ? (data["num_pv"] as string) : null,
+    preuves: dossier.preuves.map((p) => ({ nom: p.nom, type: p.type, url: p.url })),
+  });
 }
 
 /* ------------------- Orchestration (écriture des preuves) ----------------- */

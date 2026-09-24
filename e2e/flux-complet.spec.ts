@@ -73,6 +73,10 @@ async function decisionOmpJuriste(browser: Browser, dossierId: string) {
       exact: true,
     }),
   ).toBeVisible();
+  // La lettre envoyée reste visible et téléchargeable côté juriste (B)
+  await expect(
+    page.getByRole("link", { name: "Télécharger la lettre (PDF)" }).first(),
+  ).toBeVisible();
 
   // Suivi post-envoi : le juriste enregistre la décision OMP → dossier Résolu
   await page

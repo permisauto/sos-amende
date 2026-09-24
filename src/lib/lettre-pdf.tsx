@@ -14,6 +14,20 @@ const styles = StyleSheet.create({
   signatureBlock: {
     marginTop: 64,
   },
+  pjBlock: {
+    marginTop: 28,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#e2e2e2",
+  },
+  pjTitle: {
+    fontWeight: "bold",
+    marginBottom: 6,
+  },
+  pjItem: {
+    fontSize: 10,
+    lineHeight: 1.5,
+  },
   signatureLabel: {
     fontSize: 10,
     color: "#666",
@@ -29,12 +43,25 @@ const styles = StyleSheet.create({
 export async function generateLettrePdf(
   texte: string,
   signatureDataUrl: string | null,
+  piecesJointes?: string[] | null,
 ): Promise<Buffer> {
   const { renderToBuffer } = await import("@react-pdf/renderer");
   const element = (
     <Document>
       <Page size="A4" style={styles.page}>
         <Text style={styles.body}>{texte}</Text>
+        {piecesJointes && piecesJointes.length > 0 && (
+          <View style={styles.pjBlock}>
+            <Text style={styles.pjTitle}>
+              Pièces jointes à l'appui de la contestation :
+            </Text>
+            {piecesJointes.map((pj, idx) => (
+              <Text key={`${pj}-${idx}`} style={styles.pjItem}>
+                — {pj}
+              </Text>
+            ))}
+          </View>
+        )}
         <View style={styles.signatureBlock}>
           <Text style={styles.signatureLabel}>Signature du requérant :</Text>
           {signatureDataUrl ? (

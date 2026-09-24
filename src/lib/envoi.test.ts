@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  canauxEnvoi,
   dateRefLibelle,
   delaiLibelle,
   destinataireLrar,
+  libelleCanal,
+  libelleCanalDepuisStockage,
   numeroRefLibelle,
   organismeEnvoi,
   pieceAJoindre,
@@ -48,5 +51,25 @@ describe("envoi — libellés par type d'infraction", () => {
   it("organisme destinataire de l'envoi automatisé", () => {
     expect(organismeEnvoi("AMENDE")).toContain("ANTAI");
     expect(organismeEnvoi("SUSPENSION")).toContain("Télérecours");
+  });
+
+  it("canaux d'envoi restreints au type d'infraction", () => {
+    expect(canauxEnvoi("AMENDE")).toEqual(["ANTAI", "LRAR"]);
+    expect(canauxEnvoi("SUSPENSION")).toEqual(["TELERECOURS", "LRAR"]);
+    // Jamais de Télérecours pour une amende, jamais d'ANTAI pour une suspension.
+    expect(canauxEnvoi("AMENDE")).not.toContain("TELERECOURS");
+    expect(canauxEnvoi("SUSPENSION")).not.toContain("ANTAI");
+  });
+
+  it("libellés de canal explicites", () => {
+    expect(libelleCanal("ANTAI")).toContain("ANTAI");
+    expect(libelleCanal("TELERECOURS")).toContain("Télérecours");
+    expect(libelleCanal("LRAR")).toContain("recommandé");
+  });
+
+  it("libellé de canal depuis la valeur stockée, avec repli sur le défaut du type", () => {
+    expect(libelleCanalDepuisStockage("LRAR", "AMENDE")).toContain("recommandé");
+    expect(libelleCanalDepuisStockage(null, "AMENDE")).toContain("ANTAI");
+    expect(libelleCanalDepuisStockage("", "SUSPENSION")).toContain("Télérecours");
   });
 });

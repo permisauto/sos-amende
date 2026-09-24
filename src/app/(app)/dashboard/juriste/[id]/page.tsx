@@ -25,7 +25,8 @@ import {
   remplirTemplate,
   type ExtractedData,
 } from "@/lib/moteur";
-import { organismeEnvoi } from "@/lib/envoi";
+import { organismeEnvoi, libelleCanalDepuisStockage } from "@/lib/envoi";
+import { listePiecesJointes } from "@/lib/preuves-api";
 import { FilMessages, type MessageDto } from "@/components/messages";
 import {
   FilEquipe,
@@ -381,6 +382,13 @@ export default async function JuristeCasePage(
         .map((item) => item.lib)
     : [];
   const courrier = item.courriers[item.courriers.length - 1];
+  const pjData = (item.extractedData ?? {}) as Record<string, unknown>;
+  const piecesJointes = listePiecesJointes({
+    type: item.type,
+    conditionsMeteo: item.conditions_meteo,
+    numRef: typeof pjData["num_pv"] === "string" ? (pjData["num_pv"] as string) : null,
+    preuves: item.preuves.map((p) => ({ nom: p.nom, type: p.type, url: p.url })),
+  });
   const pvUrl = await storageUrl(item.pvUrl);
   const isImage = pvUrl?.match(/\.(jpe?g|png|webp)(\?.*)?$/i);
   const pdfUrl = await storageUrl(courrier?.pdfUrl ?? null);
@@ -618,6 +626,7 @@ export default async function JuristeCasePage(
                         <JuristeActions
                           dossierId={item.id}
                           showCanal
+                          type={item.type}
                           organisme={organismeEnvoi(item.type)}
                           lectureSeule={lectureSeule}
                         />
@@ -626,6 +635,7 @@ export default async function JuristeCasePage(
                       <JuristeActions
                         dossierId={item.id}
                         validee={Boolean(item.valideLe)}
+                        type={item.type}
                         organisme={organismeEnvoi(item.type)}
                         lectureSeule={lectureSeule}
                       />
@@ -644,6 +654,21 @@ export default async function JuristeCasePage(
                   {item.lettreGeneree && (
                     <div className="whitespace-pre-wrap rounded-xl bg-zinc-50 p-6 text-sm leading-relaxed text-zinc-800">
                       {item.lettreGeneree}
+                    </div>
+                  )}
+                  {piecesJointes.length > 0 && (
+                    <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-5">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                        Pièces jointes à la contestation
+                      </p>
+                      <ul className="mt-2 space-y-1 text-sm text-zinc-700">
+                        {piecesJointes.map((pj) => (
+                          <li key={pj} className="flex items-start gap-2">
+                            <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-600" />
+                            <span>{pj}</span>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   )}
                   {(courrier?.pdfUrl && pdfUrl) || item.lettreGeneree ? (
@@ -696,6 +721,63 @@ export default async function JuristeCasePage(
               )}
             </div>
           </section>
+
+          {item.valideLe && (
+            <section className="rounded-2xl border border-emerald-200 bg-white p-6">
+              <h2 className="font-semibold text-emerald-900">
+                Envoi de la contestation
+              </h2>
+              <dl className="mt-3 space-y-0 text-sm">
+                <div className="flex flex-wrap justify-between gap-2 border-b border-zinc-100 py-2">
+                  <dt className="text-zinc-500">Statut</dt>
+                  <dd className="font-medium text-zinc-800">
+                    {statusLabels[item.statut] ?? item.statut}
+                  </dd>
+                </div>
+                <div className="flex flex-wrap justify-between gap-2 border-b border-zinc-100 py-2">
+                  <dt className="text-zinc-500">Canal d&apos;envoi</dt>
+                  <dd className="font-medium text-zinc-800">
+                    {libelleCanalDepuisStockage(item.canalEnvoi, item.type)}
+                  </dd>
+                </div>
+                <div className="flex flex-wrap justify-between gap-2 border-b border-zinc-100 py-2">
+                  <dt className="text-zinc-500">Destinataire</dt>
+                  <dd className="font-medium text-zinc-800">
+                    {organismeEnvoi(item.type)}
+                  </dd>
+                </div>
+                <div className="flex flex-wrap justify-between gap-2 border-b border-zinc-100 py-2">
+                  <dt className="text-zinc-500">Validée le</dt>
+                  <dd className="font-medium text-zinc-800">
+                    {dateFormat.format(item.valideLe)}
+                  </dd>
+                </div>
+              </dl>
+              <div className="mt-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                  Pièces jointes à la contestation
+                </p>
+                <ul className="mt-2 space-y-1 text-sm text-zinc-700">
+                  {piecesJointes.map((pj) => (
+                    <li key={pj} className="flex items-start gap-2">
+                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-600" />
+                      <span>{pj}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              {accuseUrl && (
+                <a
+                  href={accuseUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-4 inline-block rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                >
+                  Télécharger l&apos;accusé de dépôt (PDF)
+                </a>
+              )}
+            </section>
+          )}
 
           {item.statut === "ENVOYE" && (
             <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
