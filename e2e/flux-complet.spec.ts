@@ -31,7 +31,7 @@ async function signerLettre(page: import("@playwright/test").Page) {
   ).toBeVisible();
 }
 
-async function approuverLettre(browser: Browser) {
+async function approuverLettre(browser: Browser, dossierId: string) {
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
   await loginAs(page, "e2e-juriste@test.local");
@@ -39,9 +39,7 @@ async function approuverLettre(browser: Browser) {
   // Confirmer que la session est bien celle du juriste
   await expect(page.getByText("Juriste E2E", { exact: true })).toBeVisible();
 
-  await page.goto("/dashboard/juriste");
-  await page.getByRole("link", { name: "Client E2E" }).first().click();
-  await page.waitForURL(/\/dashboard\/juriste\/[^/]+$/);
+  await page.goto(`/dashboard/juriste/${dossierId}`);
   await page
     .getByLabel("Canal d'envoi de la contestation")
     .selectOption("ANTAI");
@@ -63,14 +61,12 @@ async function approuverLettre(browser: Browser) {
   await ctx.close();
 }
 
-async function decisionOmpJuriste(browser: Browser) {
+async function decisionOmpJuriste(browser: Browser, dossierId: string) {
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
   await loginAs(page, "e2e-juriste@test.local");
 
-  await page.goto("/dashboard/juriste?f=ENVOYE");
-  await page.getByRole("link", { name: "Client E2E" }).first().click();
-  await page.waitForURL(/\/dashboard\/juriste\/[^/]+$/);
+  await page.goto(`/dashboard/juriste/${dossierId}`);
 
   await expect(
     page.getByText("Dossier envoyé — contestation transmise", {
@@ -117,11 +113,15 @@ test("flux complet : dépôt → analyse → validation juriste → signature �
   ).toBeVisible();
 
   // Le juriste approuve la lettre → en attente de la signature du client
-  await approuverLettre(browser);
+  await approuverLettre(browser, dossierId);
   await page.goto(`/dashboard/cases/${dossierId}`);
 
-  // Le client signe → la validée est transmise automatiquement à ANTAI (mock)
-  await signerLettre(page);
+  // Le client signe → la lettre validée est transmise automatiquement à ANTAI
+  // (mock). Si la lettre a déjà été signée via la signature du profil (Cas A),
+  // l'envoi a déjà eu lieu et le canvas n'est pas affiché.
+  if (await page.locator("canvas").first().isVisible().catch(() => false)) {
+    await signerLettre(page);
+  }
 
   // Côté client : la contestation est envoyée, la lettre est révélée
   await expect(
@@ -135,7 +135,7 @@ test("flux complet : dépôt → analyse → validation juriste → signature �
   ).toBeVisible();
 
   // Le juriste enregistre la décision OMP → dossier Résolu
-  await decisionOmpJuriste(browser);
+  await decisionOmpJuriste(browser, dossierId);
 
   // Le client retrouve la décision : dossier résolu
   await page.goto(`/dashboard/cases/${dossierId}`);

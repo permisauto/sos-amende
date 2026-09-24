@@ -2,21 +2,19 @@ import { expect, test, type Browser } from "@playwright/test";
 import { analyserDossier, createDossier, loginAs } from "./helpers";
 
 /** Le juriste approuve la lettre du client E2E (→ `valideLe` renseigné). */
-async function approuverDerniereLettre(browser: Browser) {
+async function approuverDerniereLettre(browser: Browser, dossierId: string) {
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
   await loginAs(page, "e2e-juriste@test.local");
-  await page.goto("/dashboard/juriste");
-  await page.getByRole("link", { name: "Client E2E" }).first().click();
-  await page.waitForURL(/\/dashboard\/juriste\/[^/]+$/);
+  await page.goto(`/dashboard/juriste/${dossierId}`);
   await page
     .getByLabel("Canal d'envoi de la contestation")
     .selectOption("ANTAI");
   await page.getByRole("button", { name: "Valider et Envoyer" }).click();
+  // Validation enregistrée (que la lettre soit déjà signée via la signature du
+  // profil — Cas A — ou qu'elle attende la signature du client — Cas B).
   await expect(
-    page.getByText("en attente de la signature du client", {
-      exact: false,
-    }),
+    page.getByText("Validation par le juriste", { exact: true }),
   ).toBeVisible();
   await ctx.close();
 }
@@ -30,9 +28,9 @@ test.describe("Admin — suivi des dossiers & lettres vérifiées", () => {
 
     // Prépare un dossier : client crée + analyse (À valider), juriste approuve.
     await loginAs(page, "e2e-client@test.local");
-    await createDossier(page);
+    const dossierId = await createDossier(page);
     await analyserDossier(page);
-    await approuverDerniereLettre(browser);
+    await approuverDerniereLettre(browser, dossierId);
 
     // Admin : suivi des dossiers — vue d'ensemble par état d'avancement.
     const ctxAdmin = await browser.newContext();
