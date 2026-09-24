@@ -363,7 +363,10 @@ export async function relancerVerificationPoussee(
   if (!dossier) {
     return { error: "Dossier introuvable." };
   }
-  if (dossier.statut !== "EN_ATTENTE_VALIDATION") {
+  if (
+    dossier.statut !== "EN_ATTENTE_VALIDATION" &&
+    dossier.statut !== "A_VERIFIER"
+  ) {
     return {
       error:
         "La vérification poussée n'est disponible que sur un dossier en attente de validation.",

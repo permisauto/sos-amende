@@ -568,8 +568,18 @@ export default async function JuristeCasePage(
                     </p>
                   )}
                   <div className="mt-6 border-t border-zinc-100 pt-6">
-                    {item.statut === "EN_ATTENTE_VALIDATION" ? (
+                    <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+                      Prochaine étape
+                    </p>
+                    <div className="mt-3 flex flex-col gap-3">
+                    {item.statut === "EN_ATTENTE_VALIDATION" ||
+                    item.statut === "A_VERIFIER" ? (
                       <>
+                        <p className="rounded-xl bg-sky-50 px-4 py-2.5 text-sm text-sky-800">
+                          Valider la lettre finale pour déclencher l&apos;envoi
+                          automatique (canal ANTAI, Télérecours ou LRAR) — la
+                          recherche peut être affinée avant validation.
+                        </p>
                         <VerificationPoussee dossierId={item.id} lectureSeule={lectureSeule} />
                         <JuristeActions
                           dossierId={item.id}
@@ -592,6 +602,7 @@ export default async function JuristeCasePage(
                         lectureSeule={lectureSeule}
                       />
                     )}
+                    </div>
                   </div>
                 </>
               ) : (
