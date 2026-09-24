@@ -17,6 +17,7 @@ import {
 import { generateLettrePdf } from "@/lib/lettre-pdf";
 import { extrairePv, normaliserPv } from "@/lib/ocr";
 import { notifierStatut } from "@/lib/notifications";
+import { recupererPreuvesPourDossierId } from "@/lib/preuves-api";
 import { soumettreEtMarquerEnvoye } from "../juriste/actions";
 
 const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
@@ -291,10 +292,15 @@ export async function analyserDossier(
     return next;
   });
 
+  // Preuves externes (météo, fiche radar, travaux) récupérées automatiquement
+  // depuis les sources publiques. Best-effort : ne bloque jamais l'analyse.
+  await recupererPreuvesPourDossierId(prisma, dossier.id).catch(() => {});
+
   // Notification (défensive : sans AUTH_RESEND_KEY, aucun e-mail envoyé).
   await notifierStatut(dossier.id).catch(() => false);
 
   revalidatePath(`/dashboard/cases/${dossier.id}`);
+  revalidatePath("/dashboard/juriste");
   if (statut === "EN_ATTENTE_PAIEMENT") {
     redirect(`/dashboard/paiement/${dossier.id}`);
   }
@@ -347,6 +353,7 @@ export async function envoyerDossier(
   await notifierStatut(dossier.id).catch(() => false);
 
   revalidatePath(`/dashboard/cases/${dossier.id}`);
+  revalidatePath("/dashboard/juriste");
   redirect(`/dashboard/cases/${dossier.id}?envoye=ok`);
 }
 
@@ -434,6 +441,8 @@ export async function signerDossier(
   ]);
 
   revalidatePath(`/dashboard/cases/${dossier.id}`);
+  revalidatePath("/dashboard/juriste");
+  revalidatePath(`/dashboard/juriste/${dossier.id}`);
 
   // Signature du client = feu vert à l'envoi (dossier déjà validé par le
   // juriste) : soumission immédiate au portail (ANTAI / Télérecours), sauf si

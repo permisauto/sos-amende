@@ -18,6 +18,9 @@ const TYPE_LABELS: Record<string, string> = {
   PHOTO: "Photo du véhicule",
   CERTIFICAT: "Certificat",
   AUTRE: "Autre pièce",
+  METEO: "Météo (source externe)",
+  RADAR: "Fiche radar (donnée officielle)",
+  TRAVAUX: "Travaux (source OpenData)",
 };
 
 const inputCls =
@@ -78,14 +81,20 @@ export function Preuves({
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <a
-                  href={p.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
-                >
-                  Ouvrir
-                </a>
+                {p.url ? (
+                  <a
+                    href={p.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
+                  >
+                    Ouvrir
+                  </a>
+                ) : (
+                  <span className="rounded-full bg-emerald-50 px-4 py-1.5 text-sm font-medium text-emerald-700">
+                    Récupérée
+                  </span>
+                )}
                 {currentUserId && p.userId === currentUserId && (
                   <form action={delAction}>
                     <input type="hidden" name="preuveId" value={p.id} />

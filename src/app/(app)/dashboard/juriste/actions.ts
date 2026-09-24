@@ -17,6 +17,7 @@ import { generateLettrePdf } from "@/lib/lettre-pdf";
 import { soumettreDossier } from "@/lib/antai";
 import { organismeEnvoi } from "@/lib/envoi";
 import { setDemoLettre } from "@/lib/demo-lettres";
+import { recupererPreuvesPourDossierId } from "@/lib/preuves-api";
 
 export type ValidationState = { error?: string; ok?: boolean } | undefined;
 
@@ -168,6 +169,7 @@ export async function enregistrerDecisionOmp(
   revalidatePath("/dashboard/juriste");
   revalidatePath(`/dashboard/juriste/${dossier.id}`);
   revalidatePath(`/dashboard/cases/${dossier.id}`);
+  revalidatePath("/dashboard/admin/dossiers");
   redirect(`/dashboard/juriste/${dossier.id}?decision=ok`);
 }
 
@@ -273,6 +275,7 @@ export async function validerDossier(
   revalidatePath("/dashboard/juriste");
   revalidatePath(`/dashboard/juriste/${dossier.id}`);
   revalidatePath(`/dashboard/cases/${dossier.id}`);
+  revalidatePath("/dashboard/admin/dossiers");
 
   // Cas B : la lettre validée attend la signature du client.
   if (!estSigne) {
@@ -289,6 +292,7 @@ export async function validerDossier(
   revalidatePath("/dashboard/juriste");
   revalidatePath(`/dashboard/juriste/${dossier.id}`);
   revalidatePath(`/dashboard/cases/${dossier.id}`);
+  revalidatePath("/dashboard/admin/dossiers");
   if (envoi.ok) {
     redirect(`/dashboard/juriste/${dossier.id}?valide=ok&envoye=ok`);
   }
@@ -326,6 +330,7 @@ export async function envoyerContestation(
   revalidatePath("/dashboard/juriste");
   revalidatePath(`/dashboard/juriste/${dossier.id}`);
   revalidatePath(`/dashboard/cases/${dossier.id}`);
+  revalidatePath("/dashboard/admin/dossiers");
   if (envoi.ok) {
     redirect(`/dashboard/juriste/${dossier.id}?envoye=ok`);
   }
@@ -474,6 +479,7 @@ export async function relancerVerificationPoussee(
   revalidatePath("/dashboard/juriste");
   revalidatePath(`/dashboard/juriste/${dossier.id}`);
   revalidatePath(`/dashboard/cases/${dossier.id}`);
+  revalidatePath("/dashboard/admin/dossiers");
   return { ok: true };
 }
 
@@ -574,6 +580,7 @@ export async function modifierLettre(
   revalidatePath("/dashboard/juriste");
   revalidatePath(`/dashboard/juriste/${dossier.id}`);
   revalidatePath(`/dashboard/cases/${dossier.id}`);
+  revalidatePath("/dashboard/admin/dossiers");
   return { ok: true };
 }
 
@@ -613,6 +620,7 @@ export async function retournerDossier(
   revalidatePath("/dashboard/juriste");
   revalidatePath(`/dashboard/juriste/${dossier.id}`);
   revalidatePath(`/dashboard/cases/${dossier.id}`);
+  revalidatePath("/dashboard/admin/dossiers");
   redirect(`/dashboard/juriste/${dossier.id}?retourne=ok`);
 }
 
@@ -668,6 +676,7 @@ export async function rejeterDossier(
   revalidatePath("/dashboard/juriste");
   revalidatePath(`/dashboard/juriste/${dossier.id}`);
   revalidatePath(`/dashboard/cases/${dossier.id}`);
+  revalidatePath("/dashboard/admin/dossiers");
   redirect(`/dashboard/juriste/${dossier.id}?rejete=ok`);
 }
 
@@ -777,6 +786,7 @@ export async function confirmerFaille(
 
   revalidatePath(`/dashboard/juriste/${dossier.id}`);
   revalidatePath(`/dashboard/cases/${dossier.id}`);
+  revalidatePath("/dashboard/admin/dossiers");
   return undefined;
 }
 
@@ -818,6 +828,7 @@ export async function rejeterFaille(
 
   revalidatePath(`/dashboard/juriste/${dossier.id}`);
   revalidatePath(`/dashboard/cases/${dossier.id}`);
+  revalidatePath("/dashboard/admin/dossiers");
   return undefined;
 }
 
@@ -878,4 +889,30 @@ export async function traiterDemandeAvocat(
   revalidatePath(`/dashboard/juriste/${match.dossierId}`);
   revalidatePath(`/dashboard/cases/${match.dossierId}`);
   return undefined;
+}
+
+export type PreuvesApiState = { ok?: boolean; error?: string; ajoutees?: string[] };
+
+/**
+ * Récupération des preuves externes (météo, fiche radar, travaux) pour un
+ * dossier, depuis les sources publiques. Best-effort : n'ajoute que des
+ * preuves réellement obtenues, et ne fait jamais échouer le flux.
+ */
+export async function recupererPreuvesApi(
+  dossierId: string,
+): Promise<PreuvesApiState> {
+  await requireJuristeRedacteur();
+
+  if (isDemoId(dossierId)) return { ok: true, ajoutees: [] };
+
+  const dossier = await prisma.dossier.findUnique({
+    where: { id: dossierId },
+    select: { id: true },
+  });
+  if (!dossier) return { error: "Dossier introuvable." };
+
+  const { ajoutees } = await recupererPreuvesPourDossierId(prisma, dossierId);
+  revalidatePath(`/dashboard/juriste/${dossierId}`);
+  revalidatePath(`/dashboard/cases/${dossierId}`);
+  return { ok: true, ajoutees };
 }
