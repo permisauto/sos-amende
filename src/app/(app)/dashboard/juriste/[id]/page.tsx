@@ -467,7 +467,7 @@ export default async function JuristeCasePage(
         : item.statut === "A_VERIFIER"
           ? "Lettre générée par le moteur, à relire et corriger avant la signature du client."
           : item.statut === "PRET"
-            ? `Lettre signée par le client. Corrigez si nécessaire (la signature est recollée automatiquement), puis approuvez l'envoi — la contestation sera transmise à ${organismeEnvoi(item.type)}.`
+            ? "Lettre signée par le client, à consulter en lecture seule. Choisissez le canal d'envoi (en ligne ou lettre recommandée avec accusé de réception) puis approuvez la contestation — la signature du client est conservée en cas de correction."
             : `Lettre de contestation transmise à ${organismeEnvoi(item.type)} pour ce dossier.`;
 
   return (
@@ -635,6 +635,7 @@ export default async function JuristeCasePage(
                       <JuristeActions
                         dossierId={item.id}
                         validee={Boolean(item.valideLe)}
+                        showCanal={!Boolean(item.valideLe)}
                         type={item.type}
                         organisme={organismeEnvoi(item.type)}
                         lectureSeule={lectureSeule}
@@ -655,6 +656,12 @@ export default async function JuristeCasePage(
                     <div className="whitespace-pre-wrap rounded-xl bg-zinc-50 p-6 text-sm leading-relaxed text-zinc-800">
                       {item.lettreGeneree}
                     </div>
+                  )}
+                  {!item.lettreGeneree && (
+                    <p className="rounded-xl bg-zinc-50 px-4 py-3 text-sm text-zinc-600">
+                      Aucune lettre générée pour ce dossier — en attente
+                      d&apos;analyse ou aucun fondement juridique applicable.
+                    </p>
                   )}
                   {piecesJointes.length > 0 && (
                     <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-5">

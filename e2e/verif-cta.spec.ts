@@ -239,6 +239,19 @@ test.describe("Téléchargements (fichiers)", () => {
     await loginAs(jpage, "e2e-juriste@test.local");
     await jpage.goto(`/dashboard/juriste/${dossierId}`);
 
+    // Consultation par défaut : la lettre s'affiche en lecture seule, la
+    // modification est une action explicite (« Modifier la lettre »).
+    await expect(
+      jpage.getByRole("button", { name: "Modifier la lettre" }),
+    ).toBeVisible();
+    await expect(
+      jpage.getByLabel("Texte de la lettre de contestation"),
+    ).toHaveCount(0);
+    await jpage.getByRole("button", { name: "Modifier la lettre" }).click();
+    await expect(
+      jpage.getByLabel("Texte de la lettre de contestation"),
+    ).toBeVisible();
+
     // Sur le détail, le bouton "Télécharger la lettre affichée (PDF)" est un button POST → download
     const btn = jpage
       .getByRole("button", { name: /Télécharger la lettre/ })
