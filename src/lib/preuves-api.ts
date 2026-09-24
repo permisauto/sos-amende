@@ -10,6 +10,38 @@
 import type { PrismaClient } from "@/generated/prisma/client";
 import type { InfractionType } from "./envoi";
 
+/* ---------- Pertinence des preuves selon la faille retenue ---------------- */
+
+export type TypePreuveExterne = "METEO" | "RADAR" | "TRAVAUX";
+
+/**
+ * Chaque preuve externe n'est récupérée à l'analyse que si une faille du
+ * dossier la rend pertinente (mapping faille → types de preuves). Hors
+ * mapping, aucune preuve d'un type donné n'est cherchée — une preuve hors-sujet
+ * ne serait jamais versée ni citée dans la lettre. La relance manuelle du
+ * juriste (recupererPreuvesApi) reste libre de tout récupérer.
+ */
+const PREUVES_PAR_FAILLE: Record<string, TypePreuveExterne[]> = {
+  "faille-certificat-etalonnage": ["RADAR"],
+  "faille-etalonnage-jurisprudence": ["RADAR"],
+  "faille-homologation-radar": ["RADAR"],
+  "faille-travaux-signalisation": ["TRAVAUX"],
+  "faille-panneau-non-conforme": ["TRAVAUX"],
+  "faille-meteo-visibilite": ["METEO"],
+};
+
+/**
+ * Types de preuves externes pertinents pour un ensemble de failles candidates
+ * (IDs = slugs FAILLE_IDS/id de la base). Fonction pure, testée.
+ */
+export function typesPreuvesPourFailles(faillesIds: Iterable<string>): Set<TypePreuveExterne> {
+  const types = new Set<TypePreuveExterne>();
+  for (const id of faillesIds) {
+    for (const t of PREUVES_PAR_FAILLE[id] ?? []) types.add(t);
+  }
+  return types;
+}
+
 const BAN_ENDPOINT = "https://api-adresse.data.gouv.fr/search/";
 const OPENMETEO_ENDPOINT = "https://archive-api.open-meteo.com/v1/archive";
 const RADARS_CSV_URL =
@@ -436,13 +468,18 @@ export async function lettreAvecPiecesVersees(
 /**
  * Récupère les preuves externes d'un dossier et les enregistre (Preuve +
  * conditions_meteo). Best-effort : n'ajoute jamais que des preuves réellement
- * obtenues. `dep` accepte prisma ou une transaction Prisma.
+ * obtenues. `dep` accepte prisma ou une transaction Prisma. `opts.types`
+ * restreint la recherche aux types pertinents (voir PREUVES_PAR_FAILLE) ; sans
+ * `types`, tous les types sont cherchés (relance manuelle du juriste).
  */
 export async function recupererPreuvesPourDossierId(
   dep: Pick<PrismaClient, "dossier" | "preuve">,
   dossierId: string,
+  opts?: { types?: Set<TypePreuveExterne> },
 ): Promise<{ ajoutees: string[] }> {
   const ajoutees: string[] = [];
+  const besoins = opts?.types;
+  const besoin = (t: TypePreuveExterne) => !besoins || besoins.has(t);
   try {
     const dossier = await dep.dossier.findUnique({ where: { id: dossierId } });
     if (!dossier) return { ajoutees };
@@ -467,7 +504,13 @@ export async function recupererPreuvesPourDossierId(
         ? (data["longitude"] as number)
         : null;
 
-    if ((latitude === null || longitude === null) && (data["adresse"] || data["lieu"])) {
+    const coordsUtiles =
+      besoin("METEO") || besoin("TRAVAUX") || besoin("RADAR");
+    if (
+      coordsUtiles &&
+      (latitude === null || longitude === null) &&
+      (data["adresse"] || data["lieu"])
+    ) {
       const adresse = String(data["adresse"] ?? data["lieu"] ?? "");
       const coords = await geocoderAdresse(adresse);
       if (coords) {
@@ -490,43 +533,47 @@ export async function recupererPreuvesPourDossierId(
     }
 
     if (date && latitude !== null && longitude !== null) {
-      const resume = await preuveMeteo({
-        latitude,
-        longitude,
-        date,
-      });
-      if (resume) {
-        await dep.preuve
-          .create({
-            data: {
-              dossierId,
-              nom: "Bulletin météo historique",
-              type: "METEO",
-              url: "",
-            },
-          })
-          .catch(() => {});
-        await dep.dossier
-          .update({ where: { id: dossierId }, data: { conditions_meteo: resume } })
-          .catch(() => {});
-        ajoutees.push(`météo (${resume})`);
+      if (besoin("METEO")) {
+        const resume = await preuveMeteo({
+          latitude,
+          longitude,
+          date,
+        });
+        if (resume) {
+          await dep.preuve
+            .create({
+              data: {
+                dossierId,
+                nom: "Bulletin météo historique",
+                type: "METEO",
+                url: "",
+              },
+            })
+            .catch(() => {});
+          await dep.dossier
+            .update({ where: { id: dossierId }, data: { conditions_meteo: resume } })
+            .catch(() => {});
+          ajoutees.push(`météo (${resume})`);
+        }
       }
 
-      const chantiers = await rechercherTravaux({ latitude, longitude, date });
-      for (const c of chantiers.slice(0, 5)) {
-        await dep.preuve
-          .create({
-            data: {
-              dossierId,
-              nom: `Travaux — ${c.localisation}`,
-              type: "TRAVAUX",
-              url: "",
-            },
-          })
-          .catch(() => {});
-      }
-      if (chantiers.length) {
-        ajoutees.push(`travaux (${chantiers.length} chantier${chantiers.length > 1 ? "s" : ""})`);
+      if (besoin("TRAVAUX")) {
+        const chantiers = await rechercherTravaux({ latitude, longitude, date });
+        for (const c of chantiers.slice(0, 5)) {
+          await dep.preuve
+            .create({
+              data: {
+                dossierId,
+                nom: `Travaux — ${c.localisation}`,
+                type: "TRAVAUX",
+                url: "",
+              },
+            })
+            .catch(() => {});
+        }
+        if (chantiers.length) {
+          ajoutees.push(`travaux (${chantiers.length} chantier${chantiers.length > 1 ? "s" : ""})`);
+        }
       }
     }
 
@@ -534,7 +581,10 @@ export async function recupererPreuvesPourDossierId(
       typeof data["radarId"] === "string" && data["radarId"]
         ? (data["radarId"] as string)
         : null;
-    if (radarId || (latitude !== null && longitude !== null)) {
+    if (
+      besoin("RADAR") &&
+      (radarId || (latitude !== null && longitude !== null))
+    ) {
       const radar = await rechercherRadar({ radarId, latitude, longitude });
       if (radar) {
         await dep.preuve

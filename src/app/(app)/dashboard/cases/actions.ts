@@ -21,6 +21,7 @@ import {
   lettreAvecPiecesVersees,
   listePiecesJointes,
   recupererPreuvesPourDossierId,
+  typesPreuvesPourFailles,
 } from "@/lib/preuves-api";
 import { soumettreEtMarquerEnvoye } from "../juriste/actions";
 
@@ -297,8 +298,13 @@ export async function analyserDossier(
   });
 
   // Preuves externes (météo, fiche radar, travaux) récupérées automatiquement
-  // depuis les sources publiques. Best-effort : ne bloque jamais l'analyse.
-  await recupererPreuvesPourDossierId(prisma, dossier.id).catch(() => {});
+  // depuis les sources publiques, uniquement pour les types pertinents aux
+  // failles détectées (voir PREUVES_PAR_FAILLE) — pas de preuve hors-sujet.
+  // Best-effort : ne bloque jamais l'analyse.
+  const typesPreuves = typesPreuvesPourFailles(candidats);
+  await recupererPreuvesPourDossierId(prisma, dossier.id, {
+    types: typesPreuves,
+  }).catch(() => {});
 
   // Pièces versées : les preuves réellement récupérées sont citées par écrit
   // dans le corps de la lettre (inventaire factuel, jamais de texte inventé).

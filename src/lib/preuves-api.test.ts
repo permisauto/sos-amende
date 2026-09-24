@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { listePiecesJointes, paragraphePiecesVersees } from "./preuves-api";
+import {
+  listePiecesJointes,
+  paragraphePiecesVersees,
+  typesPreuvesPourFailles,
+} from "./preuves-api";
 
 describe("listePiecesJointes — inventaire des pièces jointes de la contestation", () => {
   it("liste toujours la copie du PV / de la décision avec sa référence", () => {
@@ -87,5 +91,41 @@ describe("paragraphePiecesVersees — mention écrite des pièces dans la lettre
     const resultat = lettre + paragraphePiecesVersees(["Copie de l'avis"]);
     expect(resultat).toContain("\n\nPièces versées");
     expect(resultat.startsWith(lettre)).toBe(true);
+  });
+});
+
+describe("typesPreuvesPourFailles — pertinence faille → preuves externes", () => {
+  it("reste vide sans faille pertinente (aucune preuve cherchée)", () => {
+    expect(typesPreuvesPourFailles([]).size).toBe(0);
+    expect(
+      typesPreuvesPourFailles(["faille-prescription-1-an", "faille-erreur-plaque"]).size,
+    ).toBe(0);
+  });
+
+  it("mappe la faille étalonnage sur la fiche radar uniquement", () => {
+    const types = typesPreuvesPourFailles(["faille-certificat-etalonnage"]);
+    expect(types.has("RADAR")).toBe(true);
+    expect(types.has("METEO")).toBe(false);
+    expect(types.has("TRAVAUX")).toBe(false);
+  });
+
+  it("mappe la faille travaux sur les chantiers routiers", () => {
+    const types = typesPreuvesPourFailles(["faille-travaux-signalisation"]);
+    expect(types.has("TRAVAUX")).toBe(true);
+  });
+
+  it("mappe la faille météo sur le bulletin météo", () => {
+    const types = typesPreuvesPourFailles(["faille-meteo-visibilite"]);
+    expect(types.has("METEO")).toBe(true);
+  });
+
+  it("fait l'union des types quand plusieurs failles sont pertinentes", () => {
+    const types = typesPreuvesPourFailles([
+      "faille-certificat-etalonnage",
+      "faille-travaux-signalisation",
+    ]);
+    expect(types.has("RADAR")).toBe(true);
+    expect(types.has("TRAVAUX")).toBe(true);
+    expect(types.has("METEO")).toBe(false);
   });
 });
