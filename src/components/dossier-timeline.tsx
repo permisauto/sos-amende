@@ -5,7 +5,7 @@ const EVENT_LABELS: Record<string, string> = {
   EN_ATTENTE: "En attente de validation du juriste",
   SIGNATURE: "Lettre signée électroniquement",
   VALIDATION: "Validation par le juriste",
-  ENVOI: "Envoyé par le client en recommandé (LRAR)",
+  ENVOI: "Contestation envoyée par SOS Amende",
   VERIFICATION_POUSSEE: "Vérification poussée relancée",
   DECISION: "Décision OMP enregistrée",
   REJET: "Dossier rejeté",

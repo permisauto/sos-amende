@@ -25,7 +25,7 @@ import {
   remplirTemplate,
   type ExtractedData,
 } from "@/lib/moteur";
-import { organismeEnvoi, libelleCanalDepuisStockage } from "@/lib/envoi";
+import { organismeEnvoi, destinataireLrar, libelleCanalDepuisStockage } from "@/lib/envoi";
 import { listePiecesJointes } from "@/lib/preuves-api";
 import { FilMessages, type MessageDto } from "@/components/messages";
 import {
@@ -463,11 +463,11 @@ export default async function JuristeCasePage(
       ? "Lettre générée par le moteur, à relire. Corrigez, lancez une vérification poussée si nécessaire, puis approuvez — la contestation sera transmise au canal choisi."
       : item.statut === "EN_ATTENTE_PRE_SIGNATURE"
         ? "Lettre validée par vos soins : le client doit maintenant la signer. Une fois signée, la contestation sera transmise à " +
-          `${organismeEnvoi(item.type)} automatiquement (sauf canal LRAR).`
+          `${organismeEnvoi(item.type)} automatiquement (sauf canal LRAR, envoyé par SOS Amende).`
         : item.statut === "A_VERIFIER"
           ? "Lettre générée par le moteur, à relire et corriger avant la signature du client."
           : item.statut === "PRET"
-            ? "Lettre signée par le client, à consulter en lecture seule. Choisissez le canal d'envoi (en ligne ou lettre recommandée avec accusé de réception) puis approuvez la contestation — la signature du client est conservée en cas de correction."
+            ? "Lettre signée par le client, à consulter en lecture seule. Choisissez le canal d'envoi (en ligne ou lettre recommandée avec accusé de réception — SOS Amende envoie par nos soins) puis approuvez la contestation — la signature du client est conservée en cas de correction."
             : `Lettre de contestation transmise à ${organismeEnvoi(item.type)} pour ce dossier.`;
 
   return (
@@ -525,19 +525,20 @@ export default async function JuristeCasePage(
         ) : searchParams.envoi === "echec" ? (
           <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             Lettre validée, mais l&apos;envoi à {organismeEnvoi(item.type)} a
-            échoué. Relancez l&apos;envoi ci-dessous ou laissez le client
-            transmettre sa contestation par LRAR (kit d&apos;envoi).
+            échoué. Relancez l&apos;envoi ci-dessous ou choisissez le canal
+            lettre recommandée — SOS Amende envoie la lettre par nos soins.
           </div>
         ) : item.statut === "EN_ATTENTE_PRE_SIGNATURE" ? (
           <div className="mt-4 rounded-xl bg-indigo-50 px-4 py-3 text-sm text-indigo-800">
             Lettre validée — le client est notifié et doit maintenant la
             signer. Dès sa signature, la contestation sera transmise
-            automatiquement (sauf canal LRAR).
+            automatiquement (sauf canal LRAR, envoyé par SOS Amende).
           </div>
         ) : (
           <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-            Lettre validée, le client peut maintenant transmettre sa
-            contestation (en ligne ou par LRAR).
+            Lettre validée — SOS Amende transmet la contestation. Vous pouvez
+            relancer l&apos;envoi en ligne ou l&apos;envoyer en lettre
+            recommandée (par nos soins).
           </div>
         ))}
 
@@ -619,8 +620,9 @@ export default async function JuristeCasePage(
                       <>
                         <p className="rounded-xl bg-sky-50 px-4 py-2.5 text-sm text-sky-800">
                           Valider la lettre finale pour déclencher l&apos;envoi
-                          automatique (canal ANTAI, Télérecours ou LRAR) — la
-                          recherche peut être affinée avant validation.
+                          (canal ANTAI, Télérecours, ou lettre recommandée
+                          envoyée par SOS Amende) — la recherche peut être
+                          affinée avant validation.
                         </p>
                         <VerificationPoussee dossierId={item.id} lectureSeule={lectureSeule} />
                         <JuristeActions
@@ -751,7 +753,9 @@ export default async function JuristeCasePage(
                 <div className="flex flex-wrap justify-between gap-2 border-b border-zinc-100 py-2">
                   <dt className="text-zinc-500">Destinataire</dt>
                   <dd className="font-medium text-zinc-800">
-                    {organismeEnvoi(item.type)}
+                    {item.canalEnvoi === "LRAR"
+                      ? destinataireLrar(item.type)
+                      : organismeEnvoi(item.type)}
                   </dd>
                 </div>
                 <div className="flex flex-wrap justify-between gap-2 border-b border-zinc-100 py-2">
@@ -794,9 +798,11 @@ export default async function JuristeCasePage(
               </h2>
               <p className="mt-1 text-sm text-emerald-800">
                 La contestation (lettre + pièces jointes) a été transmise à{" "}
-                {organismeEnvoi(item.type)} — ou confirmée en recommandé avec
-                accusé de réception par le client. À la réception de la réponse
-                de l&apos;OMP, enregistrez la décision pour clore le dossier.
+                {item.canalEnvoi === "LRAR"
+                  ? destinataireLrar(item.type)
+                  : organismeEnvoi(item.type)}{" "}
+                — par SOS Amende. À la réception de la réponse de
+                l&apos;OMP, enregistrez la décision pour clore le dossier.
               </p>
 
               {envoiEvent?.detail && (

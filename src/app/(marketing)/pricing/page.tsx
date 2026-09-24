@@ -33,7 +33,7 @@ export default function PricingPage() {
             <li>Lettre de contestation générée dynamiquement</li>
             <li>Signature électronique</li>
             <li>Validation par un juriste</li>
-            <li>Kit d&apos;envoi en recommandé avec accusé de réception (LRAR)</li>
+            <li>Envoi en recommandé avec accusé de réception (LRAR) par nos soins</li>
             <li>Suivi jusqu&apos;à la décision</li>
           </ul>
           <Link href="/deposer?type=AMENDE" className="mt-6 inline-block w-full rounded-full bg-emerald-600 px-6 py-3 text-center font-semibold text-white transition hover:bg-emerald-700">
@@ -56,7 +56,7 @@ export default function PricingPage() {
             <li>Recours gracieux au préfet généré</li>
             <li>Signature électronique</li>
             <li>Validation par un juriste</li>
-            <li>Kit d&apos;envoi en recommandé avec accusé de réception (LRAR)</li>
+            <li>Envoi en recommandé avec accusé de réception (LRAR) par nos soins</li>
             <li>Suivi des délais et de la commission médicale</li>
           </ul>
           <Link href="/deposer?type=SUSPENSION" className="mt-6 inline-block w-full rounded-full bg-emerald-600 px-6 py-3 text-center font-semibold text-white transition hover:bg-emerald-700">

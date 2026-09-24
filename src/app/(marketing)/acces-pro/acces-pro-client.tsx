@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 const ACCES = [
-  { role: "JURISTE", label: "Juriste", email: "e2e-juriste@test.local", desc: "File d'attente, validation, kit LRAR", href: "/dashboard/juriste?dev=1" },
+  { role: "JURISTE", label: "Juriste", email: "e2e-juriste@test.local", desc: "File d'attente, validation, envoi de la contestation", href: "/dashboard/juriste?dev=1" },
   { role: "ADMIN", label: "Admin", email: "e2e-admin@test.local", desc: "Suivi des dossiers, bibliothèque, radars", href: "/dashboard/admin/dossiers?dev=1" },
   { role: "CLIENT", label: "Client (test)", email: "e2e-client@test.local", desc: "Dépôt, scoring, paiement", href: "/dashboard?dev=1" },
 ] as const;

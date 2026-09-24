@@ -39,6 +39,8 @@ export type PreuveInfo = {
   organisme?: string;
   /** Noms des pièces jointes transmises avec la contestation. */
   preuves?: string[];
+  /** Variant « lettre recommandée avec accusé de réception » (envoi LRAR par SOS Amende). */
+  lrar?: boolean;
 };
 
 export async function generatePreuvePdf(
@@ -50,10 +52,14 @@ export async function generatePreuvePdf(
     <Document>
       <Page size="A4" style={styles.page}>
         <Text style={styles.title}>
-          Accusé de dépôt — {info.organisme ?? "ANTAI"} (portail de simulation)
+          {info.lrar
+            ? "Accusé de dépôt — lettre recommandée avec accusé de réception (LRAR) envoyée par SOS Amende"
+            : `Accusé de dépôt — ${info.organisme ?? "ANTAI"} (portail de simulation)`}
         </Text>
         <View style={styles.row}>
-          <Text style={styles.label}>Numéro de dépôt</Text>
+          <Text style={styles.label}>
+            {info.lrar ? "Numéro de recommandé" : "Numéro de dépôt"}
+          </Text>
           <Text>{info.numeroDepot}</Text>
         </View>
         <View style={styles.row}>
@@ -91,8 +97,9 @@ export async function generatePreuvePdf(
           </View>
         )}
         <Text style={styles.footer}>
-          Document généré par la plateforme de simulation {info.organisme ?? "ANTAI"}{" "}
-          (développement). Ne constitue pas un justificatif officiel.
+          {info.lrar
+            ? "Document généré par la plateforme SOS Amende (développement). Conservez le récépissé de dépôt La Poste et l'accusé de réception qui fera foi de la notification."
+            : `Document généré par la plateforme de simulation ${info.organisme ?? "ANTAI"} (développement). Ne constitue pas un justificatif officiel.`}
         </Text>
       </Page>
     </Document>

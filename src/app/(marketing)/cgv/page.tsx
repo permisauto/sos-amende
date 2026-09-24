@@ -68,8 +68,9 @@ export default function CgvPage() {
           Validation de la lettre par un juriste partenaire ;
         </li>
         <li>
-          Préparation du kit d'envoi en recommandé avec accusé de réception
-          (LRAR) — l'envoi est effectué par le Client lui-même ;
+          Préparation et transmission de la contestation en recommandé avec
+          accusé de réception (LRAR) ou via le portail officiel — l'envoi est
+          effectué par SOS AMENDE ;
         </li>
         <li>
           Suivi du dossier jusqu'à la décision (acceptation ou rejet) et rappels
@@ -122,18 +123,19 @@ export default function CgvPage() {
         Le Client s'engage à fournir des informations exactes et complètes, à
         relire les informations extraites par l'OCR avant de les valider
         (relecture humaine obligatoire) et à vérifier le bien-fondé de la lettre
-        générée avant de la signer.
+        générée avant de la signer. SOS Amende se charge ensuite de transmettre
+        la contestation (en ligne ou en recommandé avec accusé de réception).
       </p>
       <p>
         Il appartient au Client de respecter les délais légaux de contestation
         (45 jours pour l'amende forfaitaire, 2 mois pour le recours gracieux
-        d'une décision de suspension) et d'expédier la lettre en LRAR dans les
-        délais. Les rappels de SOS Amende sont une aide, et non une garantie de
-        l'expédition.
+        d'une décision de suspension). Les rappels de SOS Amende sont une aide,
+        et non une garantie de l'expédition.
       </p>
       <p>
-        Le Client reste seul responsable de l'envoi de la lettre et de la
-        vérification des informations saisies.
+        Le Client reste seul responsable de la vérification des informations
+        saisies ; SOS Amende transmet la contestation dans les meilleurs délais
+        après validation par ses juristes.
       </p>
 
       <h2 className="text-lg font-semibold text-zinc-900">Article 7. Responsabilité</h2>

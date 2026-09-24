@@ -341,7 +341,7 @@ async function main() {
         { type: "VALIDATION", detail: "Lettre validée par le juriste", createdAt: d.valideLe },
       ];
       if (d.statut === "ENVOYE" || d.statut === "RESOLU") {
-        events.push({ type: "ENVOI", detail: "Envoyé par le client en recommandé avec accusé de réception", createdAt: d.dateLimite ? new Date(d.dateLimite.getTime() - 86400000) : undefined });
+        events.push({ type: "ENVOI", detail: "Envoyé par SOS Amende en lettre recommandée avec accusé de réception", createdAt: d.dateLimite ? new Date(d.dateLimite.getTime() - 86400000) : undefined });
       }
       if (d.statut === "RESOLU") {
         events.push({ type: "DECISION", detail: `Décision OMP: ${d.decisionOmp} - ${d.decisionDetail}`, createdAt: new Date() });

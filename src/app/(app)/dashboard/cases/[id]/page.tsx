@@ -6,7 +6,7 @@ import { joursRestants } from "@/lib/moteur";
 import { storageRead, storageUrl } from "@/lib/storage";
 import { AnalyseForm } from "./analyse-form";
 import { SignaturePad } from "./signature-pad";
-import { LrKit } from "./lr-kit";
+import { EnvoiSuivi } from "./envoi-suivi";
 import { AvocatRequest } from "./avocat-request";
 import { Preuves, type PreuveDto } from "@/components/preuves";
 import { DossierTimeline, type TimelineEvent } from "@/components/dossier-timeline";
@@ -278,8 +278,6 @@ export default async function CaseDetailPage(
             text: "Délai dépassé — agissez immédiatement",
           };
 
-  const data = item.extractedData as Record<string, unknown> | null;
-  const numPv = typeof data?.num_pv === "string" ? data.num_pv : null;
   // La lettre n'est révélée au client qu'après l'envoi effectif de la
   // contestation (vérifiée et validée par le juriste).
   const lettreVisible = item.statut === "ENVOYE" || item.statut === "RESOLU";
@@ -725,11 +723,9 @@ export default async function CaseDetailPage(
       ) : item.statut === "PRET" && item.courriers.length > 0 ? (
         item.valideLe ? (
           <>
-            <LrKit
-              dossierId={item.id}
+            <EnvoiSuivi
               dateLimite={item.dateLimite}
               type={item.type}
-              numPv={numPv}
             />
             {pdfUrl && (
               <div className="mt-6">
@@ -748,8 +744,8 @@ export default async function CaseDetailPage(
               </span>
             </div>
             <p className="mt-1 text-sm text-zinc-600">
-              Votre lettre est signée. Un juriste la vérifie avant que vous
-              puissiez transmettre votre contestation.
+              Votre lettre est signée. Un juriste la vérifie avant que SOS
+              Amende transmette votre contestation.
             </p>
             {item.lettreGeneree && (
               <div className="mt-4 whitespace-pre-wrap rounded-xl bg-zinc-50 p-6 text-sm leading-relaxed text-zinc-800">
@@ -779,9 +775,9 @@ export default async function CaseDetailPage(
             </h2>
             <p className="mt-1 text-sm text-emerald-800">
               {item.type === "AMENDE"
-                ? "L'OMP examinera votre requête"
-                : "Le préfet examinera votre recours"}{" "}
-              — conservez votre accusé d&apos;envoi, il fait foi de la date.
+                ? "Votre contestation a été transmise par SOS Amende — l'OMP examinera votre requête"
+                : "Votre contestation a été transmise par SOS Amende — le préfet examinera votre recours"}
+              . Conservez votre accusé d&apos;envoi, il fait foi de la date.
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               {preuveDepotUrl ? (
@@ -829,8 +825,9 @@ export default async function CaseDetailPage(
         <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-6">
           <h2 className="font-semibold text-amber-900">Prochaines étapes</h2>
           <p className="mt-1 text-sm text-amber-800">
-            Une fois signée et validée par un juriste, votre lettre pourra être
-            transmise en ligne ou en recommandé avec accusé de réception (LRAR).
+            Une fois signée et validée par un juriste, votre lettre sera
+            transmise par SOS Amende (en ligne ou en recommandé avec accusé de
+            réception).
           </p>
         </div>
       )}

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useActionState } from "react";
 import {
   enregistrerDecisionOmp,
@@ -63,8 +64,8 @@ export function JuristeActions({
             <p className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
               Lettre déjà validée.{" "}
               {canalEnvoi === "LRAR"
-                ? "Canal retenu : lettre recommandée — le client enverra sa contestation par LRAR. Vous pouvez basculer vers un envoi en ligne (ANTAI/Télérecours)."
-                : "Choisissez le canal d'envoi ci-dessus, puis relancez l'envoi en ligne ou laissez le client transmettre sa contestation par LRAR."}
+                ? "Canal retenu : lettre recommandée — SOS Amende envoie la lettre par nos soins. Vous pouvez basculer vers un envoi en ligne (ANTAI/Télérecours)."
+                : "Choisissez le canal d'envoi ci-dessus, puis relancez l'envoi en ligne ou envoyez la lettre recommandée (SOS Amende)."}
             </p>
           </>
         ) : (
@@ -163,11 +164,12 @@ export function JuristeActions({
 }
 
 /**
- * Relance / choix du canal d'envoi de la contestation (lettre + pièces
- * jointes) — affiché quand la validation a été enregistrée (dossier PRET +
- * validé). Le juriste choisit ou bascule le canal au moment de l'envoi :
- * amende → ANTAI (en ligne) ou lettre recommandée ; suspension → Télérecours
- * (en ligne) ou lettre recommandée.
+ * Envoi / bascule du canal de la contestation (lettre + pièces jointes) —
+ * affiché quand la validation a été enregistrée (dossier PRET + validé). Le
+ * juriste choisit ou bascule le canal au moment de l'envoi : amende → ANTAI
+ * (en ligne) ou lettre recommandée (envoyée par SOS Amende) ; suspension →
+ * Télérecours (en ligne) ou lettre recommandée. Pour le canal LRAR, SOS Amende
+ * expédie la lettre : le juriste peut saisir le numéro de recommandé.
  */
 export function EnvoyerContestationForm({
   dossierId,
@@ -184,6 +186,9 @@ export function EnvoyerContestationForm({
     envoyerContestation,
     undefined,
   );
+  const [canal, setCanal] = useState<string | null>(
+    canalActuel ?? canauxEnvoi(type)[0],
+  );
 
   return (
     <form action={formAction} className="flex flex-col gap-2">
@@ -194,20 +199,33 @@ export function EnvoyerContestationForm({
         </span>
         <select
           name="canalEnvoi"
-          defaultValue={canalActuel ?? canauxEnvoi(type)[0]}
+          value={canal ?? ""}
+          onChange={(e) => setCanal(e.target.value)}
           required
           className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
         >
           <option value="" disabled>
             Choisir le canal…
           </option>
-          {canauxEnvoi(type).map((canal) => (
-            <option key={canal} value={canal}>
-              {libelleCanal(canal)}
+          {canauxEnvoi(type).map((c) => (
+            <option key={c} value={c}>
+              {libelleCanal(c)}
             </option>
           ))}
         </select>
       </label>
+      {canal === "LRAR" && (
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium text-zinc-700">
+            Numéro de recommandé (optionnel)
+          </span>
+          <input
+            name="numeroRecommandé"
+            placeholder="Ex. 3A 018 234 5678 9"
+            className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+          />
+        </label>
+      )}
       <button
         type="submit"
         disabled={pending}
@@ -215,11 +233,19 @@ export function EnvoyerContestationForm({
       >
         {pending
           ? "Envoi…"
-          : `Envoyer la contestation à ${organisme} (lettre + preuves)`}
+          : canal === "LRAR"
+            ? "Envoyer la lettre recommandée (SOS Amende)"
+            : `Envoyer la contestation à ${organisme} (lettre + preuves)`}
       </button>
       {state?.error && (
         <p className="rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700">
           {state.error}
+        </p>
+      )}
+      {canal === "LRAR" && (
+        <p className="text-xs text-zinc-500">
+          SOS Amende expédie la lettre en recommandé avec accusé de réception
+          pour le compte du client : aucune action de sa part.
         </p>
       )}
     </form>

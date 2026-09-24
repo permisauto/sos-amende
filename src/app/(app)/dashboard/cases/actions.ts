@@ -323,54 +323,6 @@ export async function analyserDossier(
 
 export type SignerState = { error?: string } | undefined;
 
-export type EnvoyerState = { error?: string } | undefined;
-
-/**
- * Envoi LRAR par le client (Option A v1) : la lettre validée par le juriste
- * est postée par le client lui-même (recommandé avec accusé de réception).
- * La transmission automatisée (RPA ANTAI) arrivera dans une étape ultérieure.
- */
-export async function envoyerDossier(
-  _prev: EnvoyerState,
-  formData: FormData,
-): Promise<EnvoyerState> {
-  const user = await requireUser();
-
-  const dossierId = String(formData.get("dossierId") ?? "");
-  const dossier = await prisma.dossier.findFirst({
-    where: { id: dossierId, userId: user.id },
-  });
-  if (!dossier) {
-    return { error: "Dossier introuvable." };
-  }
-  if (dossier.statut !== "PRET" || !dossier.valideLe) {
-    return {
-      error: "La lettre doit d'abord être validée par un juriste.",
-    };
-  }
-
-  await prisma.$transaction([
-    prisma.dossier.update({
-      where: { id: dossier.id },
-      data: { statut: "ENVOYE" },
-    }),
-    prisma.dossierEvent.create({
-      data: {
-        dossierId: dossier.id,
-        type: "ENVOI",
-        detail: "Envoyé par le client en recommandé avec accusé de réception",
-      },
-    }),
-  ]);
-
-  // Notification (défensive : sans AUTH_RESEND_KEY, aucun e-mail envoyé).
-  await notifierStatut(dossier.id).catch(() => false);
-
-  revalidatePath(`/dashboard/cases/${dossier.id}`);
-  revalidatePath("/dashboard/juriste");
-  redirect(`/dashboard/cases/${dossier.id}?envoye=ok`);
-}
-
 export async function signerDossier(
   _prev: SignerState,
   formData: FormData,
@@ -473,9 +425,9 @@ export async function signerDossier(
 
   // Signature du client = feu vert à l'envoi (dossier déjà validé par le
   // juriste) : soumission immédiate au portail (ANTAI / Télérecours), sauf si
-  // le canal LRAR a été choisi (le client poste sa lettre en recommandé, kit
-  // affiché côté client). Un dossier hérité en A_VERIFIER (jamais validé)
-  // reste en PRET : le juriste le validera avant tout envoi.
+  // le canal LRAR a été choisi (SOS Amende envoie la lettre par nos soins — le
+  // juriste déclenche le dépôt). Un dossier hérité en A_VERIFIER (jamais
+  // validé) reste en PRET : le juriste le validera avant tout envoi.
   if (dossier.canalEnvoi === "LRAR" || !dossier.valideLe) {
     redirect(`/dashboard/cases/${dossier.id}?signe=ok`);
   }

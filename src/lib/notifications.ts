@@ -178,12 +178,12 @@ export async function notifierStatut(dossierId: string): Promise<boolean> {
         ${ACCUEIL}`;
       break;
     case "ENVOYE":
-      subject = "Votre lettre de contestation a été envoyée";
+      subject = "Votre lettre de contestation a été transmise";
       html = `
         <p>Bonjour ${prenom},</p>
-        <p>Votre dossier${ref} a été envoyé en recommandé avec accusé de
-        réception. L'OMP examinera votre requête ; pensez à conserver le
-        récépissé de votre envoi.</p>
+        <p>Votre dossier${ref} a été transmis par SOS Amende (en ligne ou en
+        lettre recommandée avec accusé de réception). L'OMP examinera votre
+        requête ; l'accusé de dépôt est consultable dans votre suivi.</p>
         ${ACCUEIL}`;
       break;
     case "REJETE":

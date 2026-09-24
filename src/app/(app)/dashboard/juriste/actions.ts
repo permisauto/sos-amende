@@ -15,7 +15,8 @@ import { notifierStatut } from "@/lib/notifications";
 import { storageRead, storageWrite } from "@/lib/storage";
 import { generateLettrePdf } from "@/lib/lettre-pdf";
 import { soumettreDossier } from "@/lib/antai";
-import { canauxEnvoi, organismeEnvoi, type CanalEnvoi } from "@/lib/envoi";
+import { generatePreuvePdf } from "@/lib/preuve-pdf";
+import { destinataireLrar, canauxEnvoi, organismeEnvoi, type CanalEnvoi } from "@/lib/envoi";
 import { setDemoLettre } from "@/lib/demo-lettres";
 import { lettreAvecPiecesVersees, listePiecesJointes, recupererPreuvesPourDossierId } from "@/lib/preuves-api";
 
@@ -43,7 +44,8 @@ function isDemoId(id: string): boolean {
  * Soumission de la contestation (lettre + pièces jointes) vers le portail
  * ANTAI / Télérecours dès la validation du juriste. En cas de succès le
  * dossier passe en ENVOYE avec accusé de dépôt ; en cas d'échec il reste
- * PRET/validé et le client conserve son kit LRAR en secours.
+ * PRET/validé — le juriste peut relancer ou basculer sur le canal lettre
+ * recommandée (envoyée par SOS Amende).
  */
 export async function soumettreEtMarquerEnvoye(dossierId: string) {
   const dossier = await prisma.dossier.findUnique({
@@ -55,7 +57,7 @@ export async function soumettreEtMarquerEnvoye(dossierId: string) {
   });
   if (!dossier) return { ok: false as const, error: "Dossier introuvable." };
   // Garde de statut : seul un dossier PRET (signé, validé) peut être envoyé.
-  // Évite un double envoi (course avec l'envoi LRAR du client, relance…).
+  // Évite un double envoi (course de relance, envoi LRAR par nos soins…).
   if (dossier.statut !== "PRET") {
     return {
       ok: false as const,
@@ -63,19 +65,20 @@ export async function soumettreEtMarquerEnvoye(dossierId: string) {
     };
   }
   // Garde-fou canal : un dossier au canal lettre recommandée ne doit jamais
-  // partir en soumission en ligne — le client l'envoie lui-même par LRAR.
+  // partir en soumission en ligne — l'envoi LRAR est effectué par SOS Amende
+  // (`envoyerParLrar`), pas par ce portail.
   if (dossier.canalEnvoi === "LRAR") {
     return {
       ok: false as const,
       error:
-        "Canal lettre recommandée retenu : la contestation est envoyée par le client (LRAR), pas en ligne.",
+        "Canal lettre recommandée retenu : la contestation est envoyée par SOS Amende (LRAR), pas en ligne.",
     };
   }
 
   // Verrou atomique : la transition PRET → ENVOYE se fait AVANT l'appel
   // externe pour empêcher deux soumissions concurrentes (deux clics, relance
   // simultanée du client et du juriste). Si la soumission échoue, on revient
-  // en PRET (le client conserve son kit LRAR en secours).
+  // en PRET (lettre validée, relançable).
   const verrou = await prisma.dossier.updateMany({
     where: { id: dossier.id, statut: "PRET" },
     data: { statut: "ENVOYE" },
@@ -97,8 +100,9 @@ export async function soumettreEtMarquerEnvoye(dossierId: string) {
     piecesJointes.map((nom) => ({ nom })),
   );
   if (!result.ok) {
-    // Rollback : retour en PRET (lettre validée) — le client peut poster en
-    // LRAR ou le juriste relancer via `envoyerContestation`.
+    // Rollback : retour en PRET (lettre validée) — le juriste relance ou
+    // bascule sur le canal lettre recommandée (SOS Amende) via
+    // `envoyerContestation`.
     await prisma.dossier.update({
       where: { id: dossier.id },
       data: { statut: "PRET" },
@@ -325,7 +329,9 @@ export async function validerDossier(
     redirect(`/dashboard/juriste/${dossier.id}?valide=ok`);
   }
 
-  // Lettre déjà signée : envoi immédiat (sauf canal LRAR → kit côté client).
+  // Lettre déjà signée : envoi immédiat (sauf canal LRAR → SOS Amende envoie
+  // la lettre par nos soins ; le juriste déclenche le dépôt via
+  // `envoyerContestation`).
   if (canal === "LRAR") {
     redirect(`/dashboard/juriste/${dossier.id}?valide=ok`);
   }
@@ -343,8 +349,11 @@ export async function validerDossier(
 }
 
 /**
- * Relance de l'envoi par le juriste quand la validation a été enregistrée mais
- * que la soumission au portail a échoué (dossier PRET + validé, jamais ENVOYE).
+ * Relance / déclenchement de l'envoi par le juriste quand la validation a été
+ * enregistrée (dossier PRET + validé, jamais ENVOYE). Pour le canal LRAR,
+ * l'envoi est fait par nos soins (SOS Amende expédie la lettre recommandée) :
+ * le juriste enregistre le dépôt et le numéro de recommandé. Pour un canal en
+ * ligne (ANTAI / Télérecours), la soumission passe par le portail mock.
  */
 export async function envoyerContestation(
   _prev: ValidationState,
@@ -354,7 +363,14 @@ export async function envoyerContestation(
 
   const dossierId = String(formData.get("dossierId") ?? "");
   const canalSaisi = String(formData.get("canalEnvoi") ?? "");
-  const dossier = await prisma.dossier.findUnique({ where: { id: dossierId } });
+  const numeroRecommandé = String(formData.get("numeroRecommandé") ?? "").trim();
+  const dossier = await prisma.dossier.findUnique({
+    where: { id: dossierId },
+    include: {
+      preuves: { orderBy: { createdAt: "asc" } },
+      courriers: { orderBy: { createdAt: "asc" } },
+    },
+  });
   if (!dossier) {
     if (isDemoId(dossierId)) {
       revalidatePath("/dashboard/juriste");
@@ -383,20 +399,30 @@ export async function envoyerContestation(
     }
     canal = canalSaisi as CanalEnvoi;
   }
-  await prisma.dossier.update({
-    where: { id: dossier.id },
-    data: { canalEnvoi: canal },
-  });
 
-  // Canal LRAR : pas de soumission en ligne — le client poste sa lettre en
-  // recommandé avec accusé de réception (kit LRAR déjà sur son espace).
+  // Canal LRAR : l'envoi est effectué par SOS Amende (par nos soins). Le
+  // juriste enregistre le dépôt de la lettre recommandée avec accusé de
+  // réception — l'accusé de dépôt est généré sur-le-champ.
   if (canal === "LRAR") {
+    await prisma.dossier.update({
+      where: { id: dossier.id },
+      data: { canalEnvoi: canal },
+    });
+    const envoi = await envoyerParLrar(dossier.id, { numeroRecommandé });
     revalidatePath("/dashboard/juriste");
     revalidatePath(`/dashboard/juriste/${dossier.id}`);
     revalidatePath(`/dashboard/cases/${dossier.id}`);
     revalidatePath("/dashboard/admin/dossiers");
-    redirect(`/dashboard/juriste/${dossier.id}?valide=ok`);
+    if (envoi.ok) {
+      redirect(`/dashboard/juriste/${dossier.id}?envoye=ok`);
+    }
+    return { error: envoi.error };
   }
+
+  await prisma.dossier.update({
+    where: { id: dossier.id },
+    data: { canalEnvoi: canal },
+  });
 
   const envoi = await soumettreEtMarquerEnvoye(dossierId);
 
@@ -408,6 +434,92 @@ export async function envoyerContestation(
     redirect(`/dashboard/juriste/${dossier.id}?envoye=ok`);
   }
   return { error: envoi.error };
+}
+
+/**
+ * Envoi LRAR par nos soins : SOS Amende expédie la lettre recommandée avec
+ * accusé de réception pour le compte du client. Verrou atomique PRET → ENVOYE
+ * (jamais d'envoi en ligne sur ce canal), accusé de dépôt LRAR généré et
+ * rattaché au courrier existant.
+ */
+export async function envoyerParLrar(
+  dossierId: string,
+  opts: { numeroRecommandé?: string } = {},
+) {
+  const dossier = await prisma.dossier.findUnique({
+    where: { id: dossierId },
+    include: {
+      preuves: { orderBy: { createdAt: "asc" } },
+      courriers: { orderBy: { createdAt: "asc" } },
+    },
+  });
+  if (!dossier) return { ok: false as const, error: "Dossier introuvable." };
+  if (dossier.statut !== "PRET" || !dossier.valideLe) {
+    return {
+      ok: false as const,
+      error: "La contestation doit être validée et pas encore envoyée.",
+    };
+  }
+
+  const verrou = await prisma.dossier.updateMany({
+    where: { id: dossier.id, statut: "PRET" },
+    data: { statut: "ENVOYE" },
+  });
+  if (verrou.count === 0) {
+    return { ok: false as const, error: "Dossier déjà envoyé." };
+  }
+
+  const dataExt = (dossier.extractedData ?? {}) as Record<string, unknown>;
+  const piecesJointes = listePiecesJointes({
+    type: dossier.type,
+    conditionsMeteo: dossier.conditions_meteo,
+    numRef: typeof dataExt["num_pv"] === "string" ? (dataExt["num_pv"] as string) : null,
+    preuves: dossier.preuves.map((p) => ({ nom: p.nom, type: p.type, url: p.url })),
+  });
+
+  const numero = opts.numeroRecommandé || `LRAR-${Date.now().toString(36).toUpperCase()}`;
+  const dateDepot = new Date().toISOString();
+  let preuveUrl: string | null = null;
+  try {
+    const pdf = await generatePreuvePdf({
+      numeroDepot: numero,
+      dateDepot,
+      numPv: typeof dataExt["num_pv"] === "string" ? (dataExt["num_pv"] as string) : "—",
+      plaque: typeof dataExt["plaque"] === "string" ? (dataExt["plaque"] as string) : undefined,
+      type: dossier.type,
+      nom: typeof dataExt["nom"] === "string" ? (dataExt["nom"] as string) : undefined,
+      organisme:
+        dossier.type === "SUSPENSION" ? "Préfecture" : "OMP",
+      preuves: piecesJointes,
+      lrar: true,
+    });
+    preuveUrl = await storageWrite(`preuves/lrar-${dossier.id}-${Date.now()}.pdf`, pdf);
+  } catch (e) {
+    console.error("envoyerParLrar: génération accusé LRAR échouée", e);
+  }
+
+  const courrier = dossier.courriers[dossier.courriers.length - 1];
+  await prisma.$transaction([
+    ...(courrier
+      ? [
+          prisma.courrier.update({
+            where: { id: courrier.id },
+            data: { preuveDepotUrl: preuveUrl },
+          }),
+        ]
+      : []),
+    prisma.dossierEvent.create({
+      data: {
+        dossierId: dossier.id,
+        type: "ENVOI",
+        detail: `Envoyé par SOS Amende en lettre recommandée avec accusé de réception (n° ${numero}) — ${destinataireLrar(dossier.type)}.`,
+      },
+    }),
+  ]);
+
+  await notifierStatut(dossier.id).catch(() => false);
+
+  return { ok: true as const, numeroDepot: numero };
 }
 
 export type VerificationPousseeState = { error?: string; ok?: boolean } | undefined;

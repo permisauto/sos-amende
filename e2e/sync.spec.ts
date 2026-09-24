@@ -24,7 +24,7 @@ async function signerLettre(page: import("@playwright/test").Page) {
     .click();
 }
 
-test("synchronisation : pipeline juriste, lettres proposées, signature visible du juriste et suivi admin", async ({
+test("synchronisation : pipeline juriste, lettres proposées, signature visible du juriste, envoi LRAR par SOS Amende et suivi admin", async ({
   page,
   browser,
 }) => {
@@ -36,7 +36,7 @@ test("synchronisation : pipeline juriste, lettres proposées, signature visible 
   await analyserDossier(page);
 
   // 2) Juriste : la file est classée par étapes et le drawer propose les
-  //    lettres ; approbation en canal LRAR (le client transmettra lui-même).
+  //    lettres ; approbation en canal LRAR (l'envoi est effectué par SOS Amende).
   const ctxJuriste = await browser.newContext();
   const pj = await ctxJuriste.newPage();
   await loginAs(pj, "e2e-juriste@test.local");
@@ -72,21 +72,25 @@ test("synchronisation : pipeline juriste, lettres proposées, signature visible 
   await ctxJuriste.close();
 
   // 3) Client : si la lettre n'a pas déjà été signée via la signature du profil
-  //    (Cas A), le client signe lui-même → PRET, kit LRAR affiché.
+  //    (Cas A), le client signe lui-même → PRET validé. Le client n'envoie
+  //    plus rien : il voit le suivi informatif « transmission par SOS Amende ».
   await page.goto(`/dashboard/cases/${dossierId}`);
   const canvas = page.locator("canvas").first();
   if (await canvas.isVisible().catch(() => false)) {
     await signerLettre(page);
   }
   await expect(
-    page.getByRole("button", { name: "J'ai envoyé ma contestation" }),
+    page.getByRole("heading", {
+      name: "Contestation validée — transmission par SOS Amende",
+    }),
   ).toBeVisible();
   await expect(
-    page.getByText("vérifiée et validée par un juriste", { exact: false }),
+    page.getByText("aucune action n'est requise de votre part", { exact: false }),
   ).toBeVisible();
 
   // 4) Juriste : la signature du client est visible dans la lettre (PDF
-  //    signé régénéré) — synchronisation client → juriste.
+  //    signé régénéré) — synchronisation client → juriste. Le juriste envoie
+  //    ensuite la lettre recommandée, par nos soins (SOS Amende).
   const ctxJuriste2 = await browser.newContext();
   const pj2 = await ctxJuriste2.newPage();
   await loginAs(pj2, "e2e-juriste@test.local");
@@ -100,7 +104,7 @@ test("synchronisation : pipeline juriste, lettres proposées, signature visible 
   ).toBeVisible();
   await expect(
     pj2.getByRole("definition").filter({
-      hasText: "Lettre recommandée avec accusé de réception (envoi par le client)",
+      hasText: "Lettre recommandée avec accusé de réception (envoi par SOS Amende)",
     }),
   ).toBeVisible();
   // Le formulaire d'envoi propose le choix de canal, pré-rempli au canal
@@ -109,16 +113,22 @@ test("synchronisation : pipeline juriste, lettres proposées, signature visible 
   await expect(
     pj2.getByLabel("Canal d'envoi de la contestation"),
   ).toHaveValue("LRAR");
+  await pj2
+    .getByRole("button", { name: "Envoyer la lettre recommandée (SOS Amende)" })
+    .click();
+  await expect(
+    pj2.getByText("Contestation envoyée à", { exact: false }),
+  ).toBeVisible();
   await ctxJuriste2.close();
 
-  // 5) Admin : le suivi reflète la même étape (Prêt) — synchronisation
+  // 5) Admin : le suivi reflète la même étape (Envoyé) — synchronisation
   //    juriste → admin.
   const ctxAdmin = await browser.newContext();
   const pa = await ctxAdmin.newPage();
   await loginAs(pa, "e2e-admin@test.local");
   await pa.goto("/dashboard/admin/dossiers");
   await expect(
-    pa.getByText("Étape 6 / 7 — Prêt", { exact: true }).first(),
+    pa.getByText("Étape 7 / 7 — Envoyé", { exact: true }).first(),
   ).toBeVisible();
   await ctxAdmin.close();
 });
