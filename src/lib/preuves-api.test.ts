@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { listePiecesJointes } from "./preuves-api";
+import { listePiecesJointes, paragraphePiecesVersees } from "./preuves-api";
 
 describe("listePiecesJointes — inventaire des pièces jointes de la contestation", () => {
   it("liste toujours la copie du PV / de la décision avec sa référence", () => {
@@ -64,5 +64,28 @@ describe("listePiecesJointes — inventaire des pièces jointes de la contestati
     });
     expect(pieces).toContain("Piece valide");
     expect(pieces).not.toContain("");
+  });
+});
+
+describe("paragraphePiecesVersees — mention écrite des pièces dans la lettre", () => {
+  it("retourne une chaîne vide sans pièces (garde-fou anti-hallucination)", () => {
+    expect(paragraphePiecesVersees([])).toBe("");
+  });
+
+  it("liste chaque pièce réellement versée dans le corps de la lettre", () => {
+    const paragraphe = paragraphePiecesVersees([
+      "Copie de l'avis de contravention n° PV-1",
+      "Bulletin météo historique — Pluie modérée",
+    ]);
+    expect(paragraphe).toContain("Pièces versées à l'appui de la contestation");
+    expect(paragraphe).toContain("- Copie de l'avis de contravention n° PV-1");
+    expect(paragraphe).toContain("- Bulletin météo historique — Pluie modérée");
+  });
+
+  it("s'ajoute en fin de lettre avec deux retours à la ligne", () => {
+    const lettre = "Je conteste l'avis reçu le 2026-01-01.";
+    const resultat = lettre + paragraphePiecesVersees(["Copie de l'avis"]);
+    expect(resultat).toContain("\n\nPièces versées");
+    expect(resultat.startsWith(lettre)).toBe(true);
   });
 });

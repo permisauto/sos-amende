@@ -17,7 +17,7 @@ import { generateLettrePdf } from "@/lib/lettre-pdf";
 import { soumettreDossier } from "@/lib/antai";
 import { canauxEnvoi, organismeEnvoi, type CanalEnvoi } from "@/lib/envoi";
 import { setDemoLettre } from "@/lib/demo-lettres";
-import { listePiecesJointes, recupererPreuvesPourDossierId } from "@/lib/preuves-api";
+import { lettreAvecPiecesVersees, listePiecesJointes, recupererPreuvesPourDossierId } from "@/lib/preuves-api";
 
 export type ValidationState = { error?: string; ok?: boolean } | undefined;
 
@@ -60,6 +60,15 @@ export async function soumettreEtMarquerEnvoye(dossierId: string) {
     return {
       ok: false as const,
       error: "Ce dossier n'est plus en attente d'envoi (déjà transmis ?).",
+    };
+  }
+  // Garde-fou canal : un dossier au canal lettre recommandée ne doit jamais
+  // partir en soumission en ligne — le client l'envoie lui-même par LRAR.
+  if (dossier.canalEnvoi === "LRAR") {
+    return {
+      ok: false as const,
+      error:
+        "Canal lettre recommandée retenu : la contestation est envoyée par le client (LRAR), pas en ligne.",
     };
   }
 
@@ -237,6 +246,15 @@ export async function validerDossier(
     preuves: dossier.preuves.map((p) => ({ nom: p.nom, type: p.type, url: p.url })),
   });
 
+  // La lettre validée cite par écrit les pièces réellement versées (mention
+  // des preuves récupérées) — y compris pour les dossiers analysés avant cette
+  // évolution ; le PDF signé reprend ce même texte.
+  const lettreFinale = await lettreAvecPiecesVersees(
+    prisma,
+    dossier.id,
+    dossier.lettreGeneree,
+  );
+
   const courrier = dossier.courriers[dossier.courriers.length - 1];
   const dejaSigne = !!courrier?.pdfUrl;
   const signatureProfil = dossier.user?.signatureUrl ?? null;
@@ -250,7 +268,7 @@ export async function validerDossier(
     if (sig) {
       try {
         const pdfBuffer = await generateLettrePdf(
-          dossier.lettreGeneree,
+          lettreFinale,
           `data:image/png;base64,${sig.toString("base64")}`,
           piecesJointes,
         );
@@ -275,6 +293,7 @@ export async function validerDossier(
         statut: estSigne ? "PRET" : "EN_ATTENTE_PRE_SIGNATURE",
         valideLe: new Date(),
         canalEnvoi: canal,
+        lettreGeneree: lettreFinale,
       },
     }),
     ...(pdfSigne
@@ -334,6 +353,7 @@ export async function envoyerContestation(
   await requireJuristeRedacteur();
 
   const dossierId = String(formData.get("dossierId") ?? "");
+  const canalSaisi = String(formData.get("canalEnvoi") ?? "");
   const dossier = await prisma.dossier.findUnique({ where: { id: dossierId } });
   if (!dossier) {
     if (isDemoId(dossierId)) {
@@ -347,6 +367,35 @@ export async function envoyerContestation(
     return {
       error: "La contestation doit être validée et pas encore envoyée.",
     };
+  }
+
+  // Canal d'envoi : par défaut celui retenu à la validation ; le juriste peut
+  // basculer au moment de l'envoi (ANTAI↔LRAR / Télérecours↔LRAR).
+  let canal: CanalEnvoi =
+    (dossier.canalEnvoi as CanalEnvoi | null) ?? canauxEnvoi(dossier.type)[0];
+  if (canalSaisi) {
+    const valide = canauxEnvoi(dossier.type).some((c) => c === canalSaisi);
+    if (!valide) {
+      return {
+        error:
+          "Canal d'envoi invalide pour ce type de dossier (amende : ANTAI ou lettre recommandée ; suspension : Télérecours ou lettre recommandée).",
+      };
+    }
+    canal = canalSaisi as CanalEnvoi;
+  }
+  await prisma.dossier.update({
+    where: { id: dossier.id },
+    data: { canalEnvoi: canal },
+  });
+
+  // Canal LRAR : pas de soumission en ligne — le client poste sa lettre en
+  // recommandé avec accusé de réception (kit LRAR déjà sur son espace).
+  if (canal === "LRAR") {
+    revalidatePath("/dashboard/juriste");
+    revalidatePath(`/dashboard/juriste/${dossier.id}`);
+    revalidatePath(`/dashboard/cases/${dossier.id}`);
+    revalidatePath("/dashboard/admin/dossiers");
+    redirect(`/dashboard/juriste/${dossier.id}?valide=ok`);
   }
 
   const envoi = await soumettreEtMarquerEnvoye(dossierId);
@@ -499,6 +548,19 @@ export async function relancerVerificationPoussee(
       }),
     ),
   ]);
+
+  // Mention écrite des pièces réellement récupérées dans la lettre régénérée.
+  const lettreAvecPieces = await lettreAvecPiecesVersees(
+    prisma,
+    dossier.id,
+    lettre,
+  );
+  if (lettreAvecPieces !== lettre) {
+    await prisma.dossier.update({
+      where: { id: dossier.id },
+      data: { lettreGeneree: lettreAvecPieces },
+    });
+  }
 
   revalidatePath("/dashboard/juriste");
   revalidatePath(`/dashboard/juriste/${dossier.id}`);
@@ -818,6 +880,19 @@ export async function confirmerFaille(
       },
     }),
   ]);
+
+  // Mention écrite des pièces réellement récupérées dans la lettre régénérée.
+  const lettreAvecPieces = await lettreAvecPiecesVersees(
+    prisma,
+    dossier.id,
+    lettre,
+  );
+  if (lettreAvecPieces !== lettre) {
+    await prisma.dossier.update({
+      where: { id: dossier.id },
+      data: { lettreGeneree: lettreAvecPieces },
+    });
+  }
 
   revalidatePath(`/dashboard/juriste/${dossier.id}`);
   revalidatePath(`/dashboard/cases/${dossier.id}`);

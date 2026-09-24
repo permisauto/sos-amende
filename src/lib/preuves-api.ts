@@ -401,6 +401,36 @@ export async function lirePiecesJointesPourDossierId(
   });
 }
 
+/**
+ * Paragraphe « Pièces versées » inséré dans le corps de la lettre : inventaire
+ * procédural (jamais de texte juridique inventé) construit depuis la liste des
+ * pièces réellement jointes (cf. `listePiecesJointes`, garde-fou
+ * anti-hallucination). Retourne une chaîne vide s'il n'y a rien à verser.
+ */
+export function paragraphePiecesVersees(piecesJointes: string[]): string {
+  if (!piecesJointes.length) return "";
+  return (
+    "\n\nPièces versées à l'appui de la contestation :\n" +
+    piecesJointes.map((p) => `- ${p}`).join("\n")
+  );
+}
+
+/**
+ * Ajoute au texte de la lettre le paragraphe « Pièces versées » listant les
+ * preuves réellement récupérées du dossier. Ne modifie rien si la lettre est
+ * vide (aucun fondement) ou si aucune pièce n'est disponible.
+ */
+export async function lettreAvecPiecesVersees(
+  dep: Pick<PrismaClient, "dossier">,
+  dossierId: string,
+  lettre: string | null,
+): Promise<string> {
+  if (!lettre || !lettre.trim()) return lettre ?? "";
+  const pieces = await lirePiecesJointesPourDossierId(dep, dossierId);
+  if (!pieces.length) return lettre;
+  return lettre + paragraphePiecesVersees(pieces);
+}
+
 /* ------------------- Orchestration (écriture des preuves) ----------------- */
 
 /**

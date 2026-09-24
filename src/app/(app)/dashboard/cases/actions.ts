@@ -17,7 +17,11 @@ import {
 import { generateLettrePdf } from "@/lib/lettre-pdf";
 import { extrairePv, normaliserPv } from "@/lib/ocr";
 import { notifierStatut } from "@/lib/notifications";
-import { listePiecesJointes, recupererPreuvesPourDossierId } from "@/lib/preuves-api";
+import {
+  lettreAvecPiecesVersees,
+  listePiecesJointes,
+  recupererPreuvesPourDossierId,
+} from "@/lib/preuves-api";
 import { soumettreEtMarquerEnvoye } from "../juriste/actions";
 
 const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
@@ -295,6 +299,16 @@ export async function analyserDossier(
   // Preuves externes (météo, fiche radar, travaux) récupérées automatiquement
   // depuis les sources publiques. Best-effort : ne bloque jamais l'analyse.
   await recupererPreuvesPourDossierId(prisma, dossier.id).catch(() => {});
+
+  // Pièces versées : les preuves réellement récupérées sont citées par écrit
+  // dans le corps de la lettre (inventaire factuel, jamais de texte inventé).
+  const lettreVersee = await lettreAvecPiecesVersees(prisma, dossier.id, lettre);
+  if (lettreVersee !== lettre) {
+    await prisma.dossier.update({
+      where: { id: dossier.id },
+      data: { lettreGeneree: lettreVersee },
+    });
+  }
 
   // Notification (défensive : sans AUTH_RESEND_KEY, aucun e-mail envoyé).
   await notifierStatut(dossier.id).catch(() => false);

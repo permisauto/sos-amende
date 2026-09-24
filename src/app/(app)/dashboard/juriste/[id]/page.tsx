@@ -638,6 +638,7 @@ export default async function JuristeCasePage(
                         showCanal={!Boolean(item.valideLe)}
                         type={item.type}
                         organisme={organismeEnvoi(item.type)}
+                        canalEnvoi={item.canalEnvoi}
                         lectureSeule={lectureSeule}
                       />
                     ) : (

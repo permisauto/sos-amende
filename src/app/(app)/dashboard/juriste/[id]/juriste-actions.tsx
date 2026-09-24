@@ -18,6 +18,7 @@ export function JuristeActions({
   type = "AMENDE",
   lectureSeule = false,
   showCanal = false,
+  canalEnvoi = null,
 }: {
   dossierId: string;
   mode?: "full" | "rejet";
@@ -26,6 +27,7 @@ export function JuristeActions({
   type?: InfractionType;
   lectureSeule?: boolean;
   showCanal?: boolean;
+  canalEnvoi?: string | null;
 }) {
   const [valideState, valideAction, validePending] = useActionState(
     validerDossier,
@@ -55,11 +57,14 @@ export function JuristeActions({
             <EnvoyerContestationForm
               dossierId={dossierId}
               organisme={organisme}
+              type={type}
+              canalActuel={canalEnvoi}
             />
             <p className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
-              Lettre déjà validée. L&apos;envoi automatique n&apos;a pas
-              abouti : relancez-le ci-dessus ou laissez le client transmettre
-              sa contestation par LRAR.
+              Lettre déjà validée.{" "}
+              {canalEnvoi === "LRAR"
+                ? "Canal retenu : lettre recommandée — le client enverra sa contestation par LRAR. Vous pouvez basculer vers un envoi en ligne (ANTAI/Télérecours)."
+                : "Choisissez le canal d'envoi ci-dessus, puis relancez l'envoi en ligne ou laissez le client transmettre sa contestation par LRAR."}
             </p>
           </>
         ) : (
@@ -158,16 +163,22 @@ export function JuristeActions({
 }
 
 /**
- * Relance de l'envoi de la contestation (lettre + pièces jointes) vers
- * ANTAI / Télérecours — affiché quand la validation a été enregistrée mais que
- * la soumission automatique a échoué (dossier PRET + validé).
+ * Relance / choix du canal d'envoi de la contestation (lettre + pièces
+ * jointes) — affiché quand la validation a été enregistrée (dossier PRET +
+ * validé). Le juriste choisit ou bascule le canal au moment de l'envoi :
+ * amende → ANTAI (en ligne) ou lettre recommandée ; suspension → Télérecours
+ * (en ligne) ou lettre recommandée.
  */
 export function EnvoyerContestationForm({
   dossierId,
   organisme = "ANTAI",
+  type = "AMENDE",
+  canalActuel = null,
 }: {
   dossierId: string;
   organisme?: string;
+  type?: InfractionType;
+  canalActuel?: string | null;
 }) {
   const [state, formAction, pending] = useActionState(
     envoyerContestation,
@@ -177,6 +188,26 @@ export function EnvoyerContestationForm({
   return (
     <form action={formAction} className="flex flex-col gap-2">
       <input type="hidden" name="dossierId" value={dossierId} />
+      <label className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-zinc-700">
+          Canal d&apos;envoi de la contestation
+        </span>
+        <select
+          name="canalEnvoi"
+          defaultValue={canalActuel ?? canauxEnvoi(type)[0]}
+          required
+          className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+        >
+          <option value="" disabled>
+            Choisir le canal…
+          </option>
+          {canauxEnvoi(type).map((canal) => (
+            <option key={canal} value={canal}>
+              {libelleCanal(canal)}
+            </option>
+          ))}
+        </select>
+      </label>
       <button
         type="submit"
         disabled={pending}

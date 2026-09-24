@@ -99,11 +99,16 @@ test("synchronisation : pipeline juriste, lettres proposées, signature visible 
     pj2.getByText("Envoi de la contestation", { exact: true }),
   ).toBeVisible();
   await expect(
-    pj2.getByText(
-      "Lettre recommandée avec accusé de réception (envoi par le client)",
-      { exact: true },
-    ),
+    pj2.getByRole("definition").filter({
+      hasText: "Lettre recommandée avec accusé de réception (envoi par le client)",
+    }),
   ).toBeVisible();
+  // Le formulaire d'envoi propose le choix de canal, pré-rempli au canal
+  // retenu à la validation (LRAR) — le juriste peut basculer vers un envoi
+  // en ligne (ANTAI/Télérecours) à tout moment.
+  await expect(
+    pj2.getByLabel("Canal d'envoi de la contestation"),
+  ).toHaveValue("LRAR");
   await ctxJuriste2.close();
 
   // 5) Admin : le suivi reflète la même étape (Prêt) — synchronisation
