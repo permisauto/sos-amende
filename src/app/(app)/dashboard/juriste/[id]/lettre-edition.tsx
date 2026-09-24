@@ -18,11 +18,13 @@ export function LettreEdition({
   lettre,
   signee,
   lectureSeule = false,
+  signatureUrl = null,
 }: {
   dossierId: string;
   lettre: string;
   signee: boolean;
   lectureSeule?: boolean;
+  signatureUrl?: string | null;
 }) {
   const [state, formAction, pending] = useActionState(
     modifierLettre,
@@ -76,7 +78,27 @@ export function LettreEdition({
     <div className="flex flex-col gap-3">
       <div className="max-h-96 overflow-y-auto rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm leading-relaxed text-zinc-800">
         {lectureActive ? (
-          <p className="whitespace-pre-wrap">{lettre}</p>
+          <>
+            <p className="whitespace-pre-wrap">{lettre}</p>
+            {signatureUrl && (
+              <div className="mt-10">
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                  Signature du client déjà apposée
+                </p>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={signatureUrl}
+                  alt="Signature du client"
+                  className="mt-3 h-16 w-auto rounded-lg border border-zinc-300 bg-white p-1"
+                />
+                <p className="mt-2 text-xs leading-relaxed text-zinc-500">
+                  Cette signature est collée en bas de la lettre — elle est
+                  conservée après toute modification (PDF régénéré
+                  automatiquement).
+                </p>
+              </div>
+            )}
+          </>
         ) : (
           <form action={formAction} className="flex flex-col gap-3">
             <input type="hidden" name="dossierId" value={dossierId} />

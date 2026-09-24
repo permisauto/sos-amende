@@ -602,6 +602,7 @@ export default async function JuristeCasePage(
                       lettre={item.lettreGeneree}
                       signee={item.statut === "PRET"}
                       lectureSeule={lectureSeule}
+                      signatureUrl={signatureCourrier}
                     />
                   ) : (
                     <p className="rounded-xl bg-zinc-50 px-4 py-3 text-sm text-zinc-600">
@@ -656,8 +657,28 @@ export default async function JuristeCasePage(
               ) : (
                 <>
                   {item.lettreGeneree && (
-                    <div className="whitespace-pre-wrap rounded-xl bg-zinc-50 p-6 text-sm leading-relaxed text-zinc-800">
-                      {item.lettreGeneree}
+                    <div className="rounded-xl bg-zinc-50 p-6">
+                      <div className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-800">
+                        {item.lettreGeneree}
+                      </div>
+                      {signatureCourrier && (
+                        <div className="mt-10">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                            Signature du client déjà apposée
+                          </p>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={signatureCourrier}
+                            alt="Signature du client"
+                            className="mt-3 h-16 w-auto rounded-lg border border-zinc-300 bg-white p-1"
+                          />
+                          <p className="mt-2 text-xs leading-relaxed text-zinc-500">
+                            Cette signature est collée en bas de la lettre — elle
+                            est conservée après toute modification (PDF régénéré
+                            automatiquement).
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                   {!item.lettreGeneree && (
@@ -710,15 +731,6 @@ export default async function JuristeCasePage(
                     </div>
                   ) : null}
                 </>
-              )}
-              {signatureCourrier && (
-                <div className="mt-4">
-                  <SignatureApercu
-                    signatureUrl={signatureCourrier}
-                    label="Signature du client déjà apposée"
-                    note="Cette signature est collée en bas de la lettre — elle est conservée après toute modification (PDF régénéré automatiquement)."
-                  />
-                </div>
               )}
               {!signatureCourrier && signatureProfil && (
                 <div className="mt-4">
