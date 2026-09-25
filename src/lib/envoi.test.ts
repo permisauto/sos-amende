@@ -90,10 +90,10 @@ describe("envoi — formalisme de la lettre", () => {
   it("objet type-aware : avis de contravention vs décision de suspension", () => {
     expect(
       objetLettre({ type: "AMENDE", numRef: "123", dateRef: "2026-05-10" }),
-    ).toBe("Contestation de l'avis de contravention n° 123 du 2026-05-10");
+    ).toBe("Contestation de l'avis de contravention n° 123 du 10 mai 2026");
     expect(
       objetLettre({ type: "SUSPENSION", numRef: "456", dateRef: "2026-07-01" }),
-    ).toBe("Recours contre la décision de suspension n° 456 du 2026-07-01");
+    ).toBe("Recours contre la décision de suspension n° 456 du 1er juillet 2026");
   });
 
   it("objet sans numéro ni date : pas de valeur fabriquée", () => {
@@ -102,16 +102,24 @@ describe("envoi — formalisme de la lettre", () => {
     );
   });
 
-  it("habillage complet : Objet, P.J., Madame Monsieur, corps, politesse", () => {
+  it("habillage complet : en-tête, Objet, Madame Monsieur, corps, politesse", () => {
     const lettre = formaterLettreOfficielle({
       type: "AMENDE",
       corps: "Je soussigné(e) DUPONT, conteste le PV 123.",
       numRef: "123",
       dateRef: "2026-05-10",
-      piecesJointes: ["Copie de l'avis de contravention", "Bulletin météo"],
+      nom: "DUPONT Jeanne",
+      date: "2026-05-20",
     });
-    expect(lettre.startsWith("Objet : Contestation de l'avis de contravention n° 123")).toBe(true);
-    expect(lettre).toContain("P.J. : Copie de l'avis de contravention · Bulletin météo");
+    expect(lettre.startsWith("DUPONT Jeanne")).toBe(true);
+    expect(lettre).toContain("Monsieur l'Officier du ministère public");
+    expect(lettre).toContain("Le 20 mai 2026");
+    expect(lettre).toContain(
+      "Objet : Contestation de l'avis de contravention n° 123 du 10 mai 2026",
+    );
+    // La liste des pièces jointes n'est jamais répliquée dans le corps
+    // (éliminée ici : elle figure une seule fois, sous la signature, au PDF).
+    expect(lettre).not.toContain("P.J.");
     expect(lettre).toContain("Madame, Monsieur,");
     expect(lettre).toContain("Je soussigné(e) DUPONT, conteste le PV 123.");
     expect(lettre.endsWith(formulePolitesse())).toBe(true);
@@ -129,6 +137,32 @@ describe("envoi — formalisme de la lettre", () => {
     expect(deuxFois).toBe(uneFois);
     const nbObjets = deuxFois.split(/^Objet :/m).length - 1;
     expect(nbObjets).toBe(1);
+    const nbPolitesses = deuxFois.split(formulePolitesse()).length - 1;
+    expect(nbPolitesses).toBe(1);
+  });
+
+  it("en-tête destinataire type-aware : préfet pour une suspension", () => {
+    const lettre = formaterLettreOfficielle({
+      type: "SUSPENSION",
+      corps: "Je conteste la décision du 1er août 2026.",
+      date: "2026-08-10",
+    });
+    expect(lettre).toContain("Monsieur le Préfet");
+    expect(lettre).toContain("Le 10 août 2026");
+    expect(lettre).toContain(
+      "Objet : Recours contre la décision de suspension",
+    );
+  });
+
+  it("aucune valeur inventée : pas d'adresse ni de date fabriquées", () => {
+    const lettre = formaterLettreOfficielle({
+      type: "AMENDE",
+      corps: "Je conteste le PV.",
+    });
+    expect(lettre).not.toMatch(/adresse/i);
+    expect(lettre.startsWith("Monsieur l'Officier du ministère public")).toBe(
+      true,
+    );
   });
 
   it("retourne une chaîne vide quand le corps est vide", () => {

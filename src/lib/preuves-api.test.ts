@@ -1,7 +1,6 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 import {
   listePiecesJointes,
-  paragraphePiecesVersees,
   typesPreuvesPourFailles,
   faillesPourTypePreuve,
   recupererPreuvesPourDossierId,
@@ -70,29 +69,6 @@ describe("listePiecesJointes — inventaire des pièces jointes de la contestati
     });
     expect(pieces).toContain("Piece valide");
     expect(pieces).not.toContain("");
-  });
-});
-
-describe("paragraphePiecesVersees — mention écrite des pièces dans la lettre", () => {
-  it("retourne une chaîne vide sans pièces (garde-fou anti-hallucination)", () => {
-    expect(paragraphePiecesVersees([])).toBe("");
-  });
-
-  it("liste chaque pièce réellement versée dans le corps de la lettre", () => {
-    const paragraphe = paragraphePiecesVersees([
-      "Copie de l'avis de contravention n° PV-1",
-      "Bulletin météo historique — Pluie modérée",
-    ]);
-    expect(paragraphe).toContain("Pièces versées à l'appui de la contestation");
-    expect(paragraphe).toContain("- Copie de l'avis de contravention n° PV-1");
-    expect(paragraphe).toContain("- Bulletin météo historique — Pluie modérée");
-  });
-
-  it("s'ajoute en fin de lettre avec deux retours à la ligne", () => {
-    const lettre = "Je conteste l'avis reçu le 2026-01-01.";
-    const resultat = lettre + paragraphePiecesVersees(["Copie de l'avis"]);
-    expect(resultat).toContain("\n\nPièces versées");
-    expect(resultat.startsWith(lettre)).toBe(true);
   });
 });
 
@@ -165,14 +141,14 @@ describe("recupererPreuvesPourDossierId — anti-redondance (vérification, pas 
     },
   };
 
-  function mockFetch() {
+  function mockFetch(weathercode: number = 61) {
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes("archive-api.open-meteo.com")) {
         return new Response(
           JSON.stringify({
             daily: {
-              weathercode: [61],
+              weathercode: [weathercode],
               temperature_2m_max: [12],
               temperature_2m_min: [8],
               precipitation_sum: [5],
@@ -254,5 +230,18 @@ describe("recupererPreuvesPourDossierId — anti-redondance (vérification, pas 
     expect(res.ajoutees.map((a) => a)).toEqual(["radar (radar fixe)"]);
     expect(res.verifiees).toContain("météo déjà identifiée (revérifiée)");
     expect(res.verifiees).toContain("travaux déjà identifiés (revérifiés)");
+  });
+
+  it("n'atteste JAMAIS une météo clémente : preuve non caractérisante écartée", async () => {
+    // weathercode 0 = ciel dégagé : une belle journée ne prouve rien pour la
+    // faille « visibilité » — aucune preuve METEO créée, message informatif.
+    mockFetch(0);
+    const dep = depAvecExistant([]);
+    const res = await recupererPreuvesPourDossierId(dep as never, "d1");
+    expect(dep.__creates.map((c) => c.type)).not.toContain("METEO");
+    expect(res.ajoutees.some((a) => a.startsWith("météo"))).toBe(false);
+    expect(
+      res.verifiees.some((v) => v.includes("conditions non défavorables")),
+    ).toBe(true);
   });
 });

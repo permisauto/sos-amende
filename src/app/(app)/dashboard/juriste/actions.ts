@@ -18,7 +18,7 @@ import { soumettreDossier } from "@/lib/antai";
 import { generatePreuvePdf } from "@/lib/preuve-pdf";
 import { destinataireLrar, canauxEnvoi, formaterLettreOfficielle, organismeEnvoi, type CanalEnvoi } from "@/lib/envoi";
 import { setDemoLettre } from "@/lib/demo-lettres";
-import { lettreAvecPiecesVersees, listePiecesJointes, recupererPreuvesPourDossierId } from "@/lib/preuves-api";
+import { listePiecesJointes, recupererPreuvesPourDossierId } from "@/lib/preuves-api";
 
 export type ValidationState = { error?: string; ok?: boolean } | undefined;
 
@@ -202,7 +202,7 @@ export async function validerDossier(
     where: { id: dossierId },
     include: {
       courriers: { orderBy: { createdAt: "asc" } },
-      user: { select: { signatureUrl: true } },
+      user: { select: { name: true, signatureUrl: true } },
       preuves: { orderBy: { createdAt: "asc" } },
     },
   });
@@ -250,19 +250,16 @@ export async function validerDossier(
     preuves: dossier.preuves.map((p) => ({ nom: p.nom, type: p.type, url: p.url })),
   });
 
-  // La lettre validée cite par écrit les pièces réellement versées (mention
-  // des preuves récupérées) — y compris pour les dossiers analysés avant cette
-  // évolution ; le PDF signé reprend ce même texte. Habillage professionnel
-  // (Objet, Madame, Monsieur, politesse) appliqué aussi aux anciennes lettres.
+  // Habillage professionnel (en-tête, Objet, Madame, Monsieur, politesse)
+  // appliqué aussi aux anciennes lettres. La liste des pièces jointes figure
+  // une seule fois, sous la signature, dans le PDF signé.
   const lettreFinale = formaterLettreOfficielle({
     type: dossier.type,
-    corps: await lettreAvecPiecesVersees(
-      prisma,
-      dossier.id,
-      dossier.lettreGeneree,
-    ),
+    corps: dossier.lettreGeneree,
     numRef: typeof dataExt["num_pv"] === "string" ? (dataExt["num_pv"] as string) : null,
     dateRef: typeof dataExt["date"] === "string" ? (dataExt["date"] as string) : null,
+    nom: dossier.user?.name ?? null,
+    date: new Date().toISOString().slice(0, 10),
   });
 
   const courrier = dossier.courriers[dossier.courriers.length - 1];
@@ -555,6 +552,7 @@ export async function relancerVerificationPoussee(
 
   const dossier = await prisma.dossier.findUnique({
     where: { id: dossierId },
+    include: { user: { select: { name: true } } },
   });
   if (!dossier) {
     return { error: "Dossier introuvable." };
@@ -667,18 +665,14 @@ export async function relancerVerificationPoussee(
     ),
   ]);
 
-  // Mention écrite des pièces réellement récupérées dans la lettre régénérée.
-  const lettreAvecPieces = await lettreAvecPiecesVersees(
-    prisma,
-    dossier.id,
-    lettre,
-  );
   const docVerif = (dossier.extractedData ?? {}) as Record<string, unknown>;
   const lettreOfficielleVerif = formaterLettreOfficielle({
     type: dossier.type,
-    corps: lettreAvecPieces,
+    corps: lettre ?? "",
     numRef: typeof docVerif["num_pv"] === "string" ? (docVerif["num_pv"] as string) : null,
     dateRef: typeof docVerif["date"] === "string" ? (docVerif["date"] as string) : null,
+    nom: dossier.user?.name ?? null,
+    date: new Date().toISOString().slice(0, 10),
   });
   if (lettreOfficielleVerif !== lettre) {
     await prisma.dossier.update({
@@ -795,6 +789,181 @@ export async function modifierLettre(
         dossierId: dossier.id,
         type: "LETTRE_GENEREE",
         detail: "Lettre modifiée par le juriste.",
+      },
+    }),
+  ]);
+
+  revalidatePath("/dashboard/juriste");
+  revalidatePath(`/dashboard/juriste/${dossier.id}`);
+  revalidatePath(`/dashboard/cases/${dossier.id}`);
+  revalidatePath("/dashboard/admin/dossiers");
+  return { ok: true };
+}
+
+export type GenererVarianteState = { error?: string; ok?: boolean } | undefined;
+
+/**
+ * Générateur de lettre (variantes) : le juriste ne se retrouve pas avec une
+ * seule lettre pré-rédigée — il choisit une combinaison de failles connues
+ * (candidates du dossier, statut ACTIVE) et le moteur régénère une lettre
+ * depuis les templates de la base juridique, puis l'habille officiellement.
+ * Aucun texte hors template : seules les failles ACTIVE validées par l'admin
+ * alimentent la réponse (anti-hallucination).
+ *
+ * Fenêtre : A_VERIFIER / PRET / EN_ATTENTE_VALIDATION (idem modifierLettre).
+ *  - A_VERIFIER : seule la lettre (texte) change ;
+ *  - PRET : la lettre est signée — le PDF est régénéré en recollant
+ *    automatiquement la signature existante en bas de la nouvelle lettre.
+ */
+export async function genererVarianteLettre(
+  _prev: GenererVarianteState,
+  formData: FormData,
+): Promise<GenererVarianteState> {
+  await requireJuristeRedacteur();
+
+  const dossierId = String(formData.get("dossierId") ?? "");
+  const failleIds = formData
+    .getAll("failleId")
+    .map((v) => String(v))
+    .filter(Boolean);
+  if (failleIds.length === 0) {
+    return { error: "Sélectionnez au moins une faille pour réécrire la lettre." };
+  }
+
+  const dossier = await prisma.dossier.findUnique({
+    where: { id: dossierId },
+    include: {
+      user: { select: { name: true } },
+      courriers: { orderBy: { createdAt: "asc" } },
+      preuves: { orderBy: { createdAt: "asc" } },
+    },
+  });
+  if (!dossier) {
+    if (isDemoId(dossierId)) {
+      // Dossier de démonstration : pas de base de failles — on refuse poliment
+      // (le composant n'est pas rendu sur les dossiers démo, garde défensive).
+      return { error: "Générateur indisponible sur un dossier de démonstration." };
+    }
+    return { error: "Dossier introuvable." };
+  }
+  if (
+    dossier.statut !== "A_VERIFIER" &&
+    dossier.statut !== "PRET" &&
+    dossier.statut !== "EN_ATTENTE_VALIDATION"
+  ) {
+    return { error: "La lettre ne peut plus être réécrite après l'envoi." };
+  }
+
+  // 1) Failles sélectionnées : ACTIVE + du bon type + template présent.
+  const failles = await prisma.failleJuridique.findMany({
+    where: { id: { in: failleIds } },
+  });
+  const parId = new Map(failles.map((f) => [f.id, f]));
+  const retenues = failleIds
+    .map((id) => parId.get(id))
+    .filter(
+      (f): f is NonNullable<typeof f> =>
+        !!f &&
+        f.statut === "ACTIVE" &&
+        !!f.templateLettre &&
+        f.typeInfraction === dossier.type,
+    );
+  if (retenues.length === 0) {
+    return {
+      error:
+        "Aucune des failles sélectionnées n'est utilisable (statut ACTIVE, type du dossier, template présent).",
+    };
+  }
+
+  const data = (dossier.extractedData ?? {}) as ExtractedData;
+  const lettre = remplirLettreMulti(
+    retenues.map((f) => ({
+      id: f.id,
+      titreFaille: f.titreFaille,
+      articleLoi: f.articleLoi,
+      templateLettre: f.templateLettre,
+    })),
+    data,
+  );
+
+  const docVariante = (dossier.extractedData ?? {}) as Record<string, unknown>;
+  const lettreOfficielle = formaterLettreOfficielle({
+    type: dossier.type,
+    corps: lettre ?? "",
+    numRef: typeof docVariante["num_pv"] === "string" ? (docVariante["num_pv"] as string) : null,
+    dateRef: typeof docVariante["date"] === "string" ? (docVariante["date"] as string) : null,
+    nom: dossier.user?.name ?? null,
+    date: new Date().toISOString().slice(0, 10),
+  });
+
+  // 2) PDF signé : si la lettre a déjà été signée (PRET), on régénère le PDF
+  //    en recollant la signature existante (règle partagée avec modifierLettre).
+  const courrier = dossier.courriers[dossier.courriers.length - 1];
+  const piecesJointes = listePiecesJointes({
+    type: dossier.type,
+    conditionsMeteo: dossier.conditions_meteo,
+    numRef: typeof docVariante["num_pv"] === "string" ? (docVariante["num_pv"] as string) : null,
+    preuves: dossier.preuves.map((p) => ({ nom: p.nom, type: p.type, url: p.url })),
+  });
+  let pdfUrl: string | null = courrier?.pdfUrl ?? null;
+  if (courrier?.signatureUrl) {
+    const sig = await storageRead(courrier.signatureUrl);
+    const sigDataUrl = sig ? `data:image/png;base64,${sig.toString("base64")}` : null;
+    try {
+      const pdfBuffer = await generateLettrePdf(lettreOfficielle, sigDataUrl, piecesJointes);
+      pdfUrl = await storageWrite(`pdfs/lettre-${dossier.id}-${Date.now()}.pdf`, pdfBuffer);
+    } catch (e) {
+      console.error("genererVarianteLettre: génération PDF échouée", e);
+    }
+  } else if (courrier) {
+    try {
+      const pdfBuffer = await generateLettrePdf(lettreOfficielle, null, piecesJointes);
+      pdfUrl = await storageWrite(`pdfs/lettre-${dossier.id}-${Date.now()}.pdf`, pdfBuffer);
+    } catch (e) {
+      console.error("genererVarianteLettre: génération PDF sans signature échouée", e);
+    }
+  }
+
+  // 3) Persistance : nouvelle lettre + faille principale + événement. Une
+  //    seule faille principale par dossier : la première retenue passe en
+  //    CONFIRMEE, les autres retenues (juxtaposées dans la lettre) restent
+  //    CANDIDATE — cohérent avec confirmerFaille.
+  await prisma.$transaction([
+    prisma.dossierFaille.updateMany({
+      where: { dossierId: dossier.id, statut: "CONFIRMEE" },
+      data: { statut: "CANDIDATE" },
+    }),
+    prisma.dossier.update({
+      where: { id: dossier.id },
+      data: {
+        lettreGeneree: lettreOfficielle,
+        failleJuridiqueId: retenues[0].id,
+      },
+    }),
+    ...(courrier && pdfUrl
+      ? [
+          prisma.courrier.update({
+            where: { id: courrier.id },
+            data: { pdfUrl },
+          }),
+        ]
+      : []),
+    ...retenues.map((f, i) =>
+      prisma.dossierFaille.upsert({
+        where: { dossierId_failleId: { dossierId: dossier.id, failleId: f.id } },
+        create: {
+          dossierId: dossier.id,
+          failleId: f.id,
+          statut: i === 0 ? "CONFIRMEE" : "CANDIDATE",
+        },
+        update: { statut: i === 0 ? "CONFIRMEE" : "CANDIDATE" },
+      }),
+    ),
+    prisma.dossierEvent.create({
+      data: {
+        dossierId: dossier.id,
+        type: "LETTRE_GENEREE",
+        detail: `Lettre réécrite (variante) — ${retenues.map((f) => f.titreFaille).join(", ")}`,
       },
     }),
   ]);
@@ -923,6 +1092,7 @@ export async function confirmerFaille(
 
   const dossier = await prisma.dossier.findUnique({
     where: { id: dossierId },
+    include: { user: { select: { name: true } } },
   });
   if (!dossier) {
     if (isDemoId(dossierId)) return undefined;
@@ -1006,18 +1176,14 @@ export async function confirmerFaille(
     }),
   ]);
 
-  // Mention écrite des pièces réellement récupérées dans la lettre régénérée.
-  const lettreAvecPieces = await lettreAvecPiecesVersees(
-    prisma,
-    dossier.id,
-    lettre,
-  );
   const docConfirme = (dossier.extractedData ?? {}) as Record<string, unknown>;
   const lettreOfficielle = formaterLettreOfficielle({
     type: dossier.type,
-    corps: lettreAvecPieces,
+    corps: lettre ?? "",
     numRef: typeof docConfirme["num_pv"] === "string" ? (docConfirme["num_pv"] as string) : null,
     dateRef: typeof docConfirme["date"] === "string" ? (docConfirme["date"] as string) : null,
+    nom: dossier.user?.name ?? null,
+    date: new Date().toISOString().slice(0, 10),
   });
   if (lettreOfficielle !== lettre) {
     await prisma.dossier.update({

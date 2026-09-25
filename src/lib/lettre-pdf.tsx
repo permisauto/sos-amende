@@ -50,6 +50,17 @@ export async function generateLettrePdf(
     <Document>
       <Page size="A4" style={styles.page}>
         <Text style={styles.body}>{texte}</Text>
+        <View style={styles.signatureBlock}>
+          <Text style={styles.signatureLabel}>Signature du requérant :</Text>
+          {signatureDataUrl ? (
+            // eslint-disable-next-line jsx-a11y/alt-text
+            <Image src={signatureDataUrl} style={styles.signature} />
+          ) : (
+            <Text style={{ fontSize: 9, color: "#999" }}>
+              (lettre non signée — signature apposée par le client après validation)
+            </Text>
+          )}
+        </View>
         {piecesJointes && piecesJointes.length > 0 && (
           <View style={styles.pjBlock}>
             <Text style={styles.pjTitle}>
@@ -62,17 +73,6 @@ export async function generateLettrePdf(
             ))}
           </View>
         )}
-        <View style={styles.signatureBlock}>
-          <Text style={styles.signatureLabel}>Signature du requérant :</Text>
-          {signatureDataUrl ? (
-            // eslint-disable-next-line jsx-a11y/alt-text
-            <Image src={signatureDataUrl} style={styles.signature} />
-          ) : (
-            <Text style={{ fontSize: 9, color: "#999" }}>
-              (lettre non signée — signature apposée par le client après validation)
-            </Text>
-          )}
-        </View>
       </Page>
     </Document>
   );

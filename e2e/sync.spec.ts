@@ -56,6 +56,25 @@ test("synchronisation : pipeline juriste, lettres proposées, signature visible 
   ).toBeVisible();
   await pj.getByRole("button", { name: /Fermer les suggestions/ }).click();
 
+  // Générateur de lettre : si la lettre ne convient pas, le juriste choisit
+  // une variante (combinaison de failles) avec résumé avant application.
+  await pj.getByRole("button", { name: "Récrire la lettre" }).click();
+  await expect(
+    pj.getByRole("heading", { name: "Générateur de lettre" }),
+  ).toBeVisible();
+  await expect(
+    pj.getByText("Résumé avant application", { exact: true }),
+  ).toBeVisible();
+  await pj.getByRole("button", { name: "Voir le récapitulatif" }).click();
+  await expect(
+    pj.getByRole("button", { name: "Appliquer cette variante" }),
+  ).toBeVisible();
+  await pj.getByRole("button", { name: "Appliquer cette variante" }).click();
+  await expect(pj.getByRole("heading", { name: "Générateur de lettre" })).toBeHidden();
+  await expect(
+    pj.getByRole("button", { name: "Récrire la lettre" }),
+  ).toBeVisible();
+
   await pj.getByLabel("Canal d'envoi de la contestation").selectOption("LRAR");
   // Canaux restreints au type (amende → ANTAI ou LRAR, jamais Télérecours)
   await expect(

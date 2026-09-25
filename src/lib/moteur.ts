@@ -1,3 +1,5 @@
+import { formaterDateFr } from "./envoi";
+
 export type ExtractedData = {
   nom?: string;
   plaque?: string;
@@ -87,6 +89,19 @@ export function etalonnageExpire(
   const pv = new Date(`${datePv}T00:00:00Z`);
   if (Number.isNaN(exp.getTime()) || Number.isNaN(pv.getTime())) return false;
   return pv.getTime() > exp.getTime();
+}
+
+/**
+ * Conditions météo « défavorables » au sens de la faille visibilité : pluie,
+ * neige, brouillard, verglas ou orage. Règle partagée par le moteur (détection)
+ * et les preuves (une preuve météo n'est versée que si elle caractérise
+ * réellement cette faille — jamais une simple journée ensoleillée).
+ */
+export function meteoDefavorable(conditions?: string | null): boolean {
+  return (
+    !!conditions &&
+    /pluie|neige|brouillard|verglas|orage/i.test(String(conditions))
+  );
 }
 
 export function detecterFaille(
@@ -203,7 +218,9 @@ function evalRegle(
     case "travauxPresents":
       return (data as Record<string, unknown>).travaux_présents === true || (data as Record<string, unknown>).travaux === true;
     case "meteoDefavorable":
-      return !!((data as Record<string, unknown>).conditions_meteo) && /pluie|neige|brouillard|verglas|orage/i.test(String((data as Record<string, unknown>).conditions_meteo));
+      return meteoDefavorable(
+        (data as Record<string, unknown>).conditions_meteo as string | undefined,
+      );
     case "vehiculeCede":
       return (data as Record<string, unknown>).vehiculeCede === true;
     case "vehiculeVole":
@@ -258,7 +275,7 @@ function predicatHerite(
     case FAILLE_IDS.travaux:
       return d.travaux_présents === true;
     case FAILLE_IDS.meteo:
-      return !!d.conditions_meteo && /pluie|neige|brouillard|verglas|orage/i.test(String(d.conditions_meteo));
+      return meteoDefavorable(d.conditions_meteo as string | undefined);
     case FAILLE_IDS.cession:
       return d.vehiculeCede === true;
     case FAILLE_IDS.conducteur:
@@ -272,15 +289,41 @@ function predicatHerite(
   }
 }
 
+/**
+ * Remplit les variables `{...}` d'un template avec les données extraites.
+ * Une date ISO (`AAAA-MM-JJ`) est écrite en toutes lettres (qualité rédaction
+ * française) ; une variable non renseignée est retirée proprement (avec son
+ * éventuel déterminant « n° » précédent) pour ne jamais laisser `{x}` brut
+ * dans une lettre.
+ */
 export function remplirTemplate(
   template: string,
   data: ExtractedData,
 ): string {
-  return template.replace(/\{(\w+)\}/g, (match, key: string) => {
+  const rempli = template.replace(/\{(\w+)\}/g, (match, key: string) => {
     const value = (data as Record<string, string | boolean | undefined>)[key];
     if (value === undefined || value === null) return match;
-    return String(value);
+    const dateFr = typeof value === "string" ? formaterDateFr(value) : "";
+    return dateFr || String(value);
   });
+  return nettoyerLettre(rempli);
+}
+
+/**
+ * Nettoyage rédactionnel final d'une lettre : supprime les variables
+ * `{...}` encore non renseignées et les artefacts laissés derrière elles
+ * (« n° », espaces, doublons de ponctuation). Ne supprime jamais du texte
+ * juridique — aucune invention.
+ */
+export function nettoyerLettre(texte: string): string {
+  return texte
+    .replace(/\{[\w-]+\}/g, "")
+    .replace(/\bn°\s*([,.])/g, "$1")
+    .replace(/\bn°\s+(?=\.|,|$)/g, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\s+([,.;:!?])/g, "$1")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/^\s+|\s+$/g, "");
 }
 
 export type FailleLettre = {

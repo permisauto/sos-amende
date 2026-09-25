@@ -19,7 +19,6 @@ import { extrairePv, normaliserPv } from "@/lib/ocr";
 import { notifierStatut } from "@/lib/notifications";
 import { formaterLettreOfficielle } from "@/lib/envoi";
 import {
-  lettreAvecPiecesVersees,
   listePiecesJointes,
   recupererPreuvesPourDossierId,
   typesPreuvesPourFailles,
@@ -307,16 +306,17 @@ export async function analyserDossier(
     types: typesPreuves,
   }).catch(() => {});
 
-  // Pièces versées : les preuves réellement récupérées sont citées par écrit
-  // dans le corps de la lettre (inventaire factuel, jamais de texte inventé).
-  const lettreVersee = await lettreAvecPiecesVersees(prisma, dossier.id, lettre);
-  // Habillage professionnel (Objet, Madame, Monsieur, politesse) — voir
-  // formaterLettreOfficielle ; idempotent, laisse l'argumentation intacte.
+  // Habillage professionnel (en-tête, Objet, Madame, Monsieur, politesse) —
+  // voir formaterLettreOfficielle ; idempotent, laisse l'argumentation intacte.
+  // La liste des pièces jointes figure une seule fois, sous la signature, dans
+  // le PDF signé (voir generateLettrePdf) — jamais doublée dans le corps.
   const lettreFinale = formaterLettreOfficielle({
     type: dossier.type,
-    corps: lettreVersee,
+    corps: lettre ?? "",
     numRef: data.num_pv,
     dateRef: data.date,
+    nom: user.name ?? null,
+    date: new Date().toISOString().slice(0, 10),
   });
   if (lettreFinale !== lettre) {
     await prisma.dossier.update({

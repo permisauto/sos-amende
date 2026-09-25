@@ -6,6 +6,7 @@ import { storageUrl } from "@/lib/storage";
 import { JuristeActions, DecisionOmpForm } from "./juriste-actions";
 import { VerificationPoussee } from "./verification-poussee";
 import { LettreEdition } from "./lettre-edition";
+import { GenerateurLettre } from "./generateur-lettre";
 import { AvocatTraitement } from "./avocat-traitement";
 import { SuggestionsDrawer } from "./suggestions-drawer";
 import { PreuvesApiBlock } from "@/components/preuves-api";
@@ -390,6 +391,34 @@ export default async function JuristeCasePage(
     })),
     dataLettres,
   );
+  // Variantes du générateur de lettre : une combinaison possible par sous-ensemble
+  // (toutes les failles actives, ou chacune seule) — le juriste choisit celle
+  // qu'il souhaite appliquer, avec résumé avant application.
+  const variantes = faillesActivesAvecTemplate.length
+    ? [
+        ...(lettreCombine && faillesActivesAvecTemplate.length > 1
+          ? [
+              {
+                cle: "combinee",
+                titre: "Toutes les failles (lettre complète)",
+                failleIds: faillesActivesAvecTemplate.map((f) => f.id),
+                fondements: faillesActivesAvecTemplate.map((f) => ({
+                  titre: f.titreFaille,
+                  article: f.articleLoi ?? "",
+                })),
+                lettre: lettreCombine,
+              },
+            ]
+          : []),
+        ...faillesActivesAvecTemplate.map((f) => ({
+          cle: `seule-${f.id}`,
+          titre: `Faille seule : ${f.titreFaille}`,
+          failleIds: [f.id],
+          fondements: [{ titre: f.titreFaille, article: f.articleLoi ?? "" }],
+          lettre: remplirTemplate(f.templateLettre!, dataLettres),
+        })),
+      ]
+    : [];
   const questionnaire = data
     ? [
         { cle: "paiementDejaFait", lib: "Amende déjà payée" },
@@ -646,6 +675,17 @@ export default async function JuristeCasePage(
                           affinée avant validation.
                         </p>
                         <VerificationPoussee dossierId={item.id} lectureSeule={lectureSeule} />
+                        <div className="flex flex-wrap items-center gap-3">
+                          <GenerateurLettre
+                            dossierId={item.id}
+                            variantes={variantes}
+                            lectureSeule={lectureSeule}
+                          />
+                          <span className="text-xs text-zinc-500">
+                            La lettre ne vous convient pas ? Choisissez une autre
+                            combinaison de fondements juridiques.
+                          </span>
+                        </div>
                         <JuristeActions
                           dossierId={item.id}
                           showCanal
@@ -655,15 +695,30 @@ export default async function JuristeCasePage(
                         />
                       </>
                     ) : item.statut === "PRET" ? (
-                      <JuristeActions
-                        dossierId={item.id}
-                        validee={Boolean(item.valideLe)}
-                        showCanal={!Boolean(item.valideLe)}
-                        type={item.type}
-                        organisme={organismeEnvoi(item.type)}
-                        canalEnvoi={item.canalEnvoi}
-                        lectureSeule={lectureSeule}
-                      />
+                      <>
+                        {!item.valideLe && (
+                          <div className="flex flex-wrap items-center gap-3">
+                            <GenerateurLettre
+                              dossierId={item.id}
+                              variantes={variantes}
+                              lectureSeule={lectureSeule}
+                            />
+                            <span className="text-xs text-zinc-500">
+                              Lettre signée par le client : une variante
+                              réécrite conserve la signature et régénère le PDF.
+                            </span>
+                          </div>
+                        )}
+                        <JuristeActions
+                          dossierId={item.id}
+                          validee={Boolean(item.valideLe)}
+                          showCanal={!Boolean(item.valideLe)}
+                          type={item.type}
+                          organisme={organismeEnvoi(item.type)}
+                          canalEnvoi={item.canalEnvoi}
+                          lectureSeule={lectureSeule}
+                        />
+                      </>
                     ) : (
                       <JuristeActions
                         dossierId={item.id}

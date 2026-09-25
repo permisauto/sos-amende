@@ -9,6 +9,7 @@
 
 import type { PrismaClient } from "@/generated/prisma/client";
 import type { InfractionType } from "./envoi";
+import { meteoDefavorable } from "./moteur";
 
 /* ---------- Pertinence des preuves selon la faille retenue ---------------- */
 
@@ -448,42 +449,6 @@ export async function lirePiecesJointesPourDossierId(
   });
 }
 
-/**
- * Paragraphe « Pièces versées » inséré dans le corps de la lettre : inventaire
- * procédural (jamais de texte juridique inventé) construit depuis la liste des
- * pièces réellement jointes (cf. `listePiecesJointes`, garde-fou
- * anti-hallucination). Retourne une chaîne vide s'il n'y a rien à verser.
- */
-export function paragraphePiecesVersees(piecesJointes: string[]): string {
-  if (!piecesJointes.length) return "";
-  return (
-    "\n\nPièces versées à l'appui de la contestation :\n" +
-    piecesJointes.map((p) => `- ${p}`).join("\n")
-  );
-}
-
-/**
- * Ajoute au texte de la lettre le paragraphe « Pièces versées » listant les
- * preuves réellement récupérées du dossier. Ne modifie rien si la lettre est
- * vide (aucun fondement) ou si aucune pièce n'est disponible.
- */
-export async function lettreAvecPiecesVersees(
-  dep: Pick<PrismaClient, "dossier">,
-  dossierId: string,
-  lettre: string | null,
-): Promise<string> {
-  if (!lettre || !lettre.trim()) return lettre ?? "";
-  // Idempotent : une lettre déjà garnie ne doit jamais être re-garnie
-  // (doublon du paragraphe « Pièces versées » sinon — validerDossier/appelé
-  // plusieurs fois sur la même lettre).
-  if (lettre.includes("Pièces versées à l'appui de la contestation")) {
-    return lettre;
-  }
-  const pieces = await lirePiecesJointesPourDossierId(dep, dossierId);
-  if (!pieces.length) return lettre;
-  return lettre + paragraphePiecesVersees(pieces);
-}
-
 /* ------------------- Orchestration (écriture des preuves) ----------------- */
 
 /**
@@ -581,7 +546,11 @@ export async function recupererPreuvesPourDossierId(
             longitude,
             date,
           });
-          if (resume) {
+          // La preuve météo ne caractérise la faille « visibilité » QUE si les
+          // conditions récupérées sont réellement défavorables (pluie, neige,
+          // brouillard, verglas, orage). Une journée ensoleillée ou neutre ne
+          // justifie aucune preuve : elle est écartée, jamais versée ni citée.
+          if (resume && meteoDefavorable(resume)) {
             await dep.preuve
               .create({
                 data: {
@@ -596,6 +565,10 @@ export async function recupererPreuvesPourDossierId(
               .update({ where: { id: dossierId }, data: { conditions_meteo: resume } })
               .catch(() => {});
             ajoutees.push(`météo (${resume})`);
+          } else if (resume) {
+            verifiees.push(
+              "météo vérifiée : conditions non défavorables ce jour-là (preuve non caractérisante pour la faille météo)",
+            );
           }
         }
       }

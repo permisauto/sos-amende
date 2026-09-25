@@ -207,9 +207,27 @@ describe("remplirTemplate", () => {
     );
   });
 
-  it("laisse les variables inconnues intactes", () => {
+  it("écrit les dates en toutes lettres (qualité rédaction française)", () => {
+    const lettre = remplirTemplate(
+      "J'ai reçu le PV {num_pv} en date du {date}.",
+      { num_pv: "123", date: "2026-05-01" },
+    );
+    expect(lettre).toContain("en date du 1er mai 2026");
+    expect(lettre).not.toContain("2026-05-01");
+  });
+
+  it("retire les variables inconnues et leurs artefacts (jamais {x} brut)", () => {
     expect(remplirTemplate("PV {num_pv} motif {inconnu}", {})).toBe(
-      "PV {num_pv} motif {inconnu}",
+      "PV motif",
+    );
+    expect(remplirTemplate("cinémomètre n° {radarId}", {})).toBe(
+      "cinémomètre",
+    );
+  });
+
+  it("nettoie les espaces et la ponctuation résiduels", () => {
+    expect(remplirTemplate("Texte  avec   des   espaces .", {})).toBe(
+      "Texte avec des espaces.",
     );
   });
 });

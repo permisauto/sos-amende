@@ -150,7 +150,7 @@ Cette omission constitue un vice de forme qui entache la régularité de la proc
     ],
     templateLettre: `Je soussigné(e) {nom}, conteste l'avis de contravention n° {num_pv} relatif au véhicule portant la plaque {plaque}.
 
-Je n'étais pas le conducteur de ce véhicule au moment des faits : le véhicule était [volé / cédé / utilisé sans mon accord] à la date de l'infraction. Vous trouverez en pièce jointe les justificatifs [récépissé de plainte / certificat de cession] en ma possession.
+Je n'étais pas le conducteur de ce véhicule au moment des faits : le véhicule se trouvait alors sous le contrôle d'un tiers (vol, cession ou usage non autorisé). Vous trouverez en pièce jointe les justificatifs correspondants en ma possession.
 
 En application de l'article 529-10 du Code de procédure pénale, la requête en exonération est recevable lorsque le titulaire du certificat d'immatriculation établit qu'il n'est pas l'auteur de l'infraction, notamment en cas de vol, d'usurpation de plaque ou de cession du véhicule (Conseil d'État, 9 juillet 2010, n° 339261).
 
@@ -349,7 +349,11 @@ Je demande en conséquence le retrait de la décision de suspension prise à mon
     regle: "La peine d'amende forfaitaire majorée (titre exécutoire signé par le MP) se prescrit par 3 ans à compter de sa signature ; à défaut d'acte d'exécution pendant 3 ans, elle est prescrite.",
     reglesDetection: [{ type: "texteContient", motif: "titre exécutoire" }],
     jurisprudence: [{ reference: "Cass. crim., 25 fév. 2025, n° 24-85.473", juridiction: "Cour de cassation", url: "https://www.legifrance.gouv.fr/juri/id/JURITEXT000051234567", verifiee: false, resume: "Le titre exécutoire (AFM) fait courir la prescription triennale de la peine à compter de sa signature par le MP." }],
-    templateLettre: `Je soussigné(e) {nom}, conteste le titre exécutoire n° {num_pv} : plus de 3 ans se sont écoulés depuis sa signature sans acte d'exécution. En application de l'art. 133-4 CP et 530 CPP, la peine est prescrite.`,
+    templateLettre: `Je soussigné(e) {nom}, conteste le titre exécutoire n° {num_pv} qui m'est réclamé pour l'amende forfaitaire majorée.
+ 
+Plus de trois ans se sont écoulés depuis la signature de ce titre sans qu'aucun acte d'exécution n'ait été accompli à mon encontre. En application de l'article 133-4 du Code pénal et de l'article 530 alinéa 1er du Code de procédure pénale, la peine d'amende forfaitaire majorée se prescrit par trois ans à compter de sa signature par le ministère public.
+ 
+Je demande en conséquence de constater la prescription de la peine et l'annulation de la somme qui m'est réclamée.`,
   },
   {
     id: "faille-absence-signature-agent",
@@ -360,7 +364,11 @@ Je demande en conséquence le retrait de la décision de suspension prise à mon
     regle: "Le PV doit être signé sur chaque feuillet par l'agent ayant constaté personnellement ; l'avis (copie) n'a pas à l'être, seul l'original fait foi. Absence sur l'original = nullité si grief.",
     reglesDetection: [{ type: "texteAbsent", motif: "signature" }],
     jurisprudence: [{ reference: "Cass. crim., 6 mars 2013", juridiction: "Cour de cassation", url: null, verifiee: false, resume: "Absence de signature de l'agent sur le PV original = nullité substantielle si grief établi." }],
-    templateLettre: `Je soussigné(e) {nom}, conteste l'avis n° {num_pv} : le PV original n'est pas signé par l'agent verbalisateur, en violation de l'art. 429 CPP. Je demande communication du PV original.`,
+    templateLettre: `Je soussigné(e) {nom}, conteste l'avis de contravention n° {num_pv}.
+
+Le procès-verbal original d'infraction n'est pas signé par l'agent verbalisateur, en violation de l'article 429 du Code de procédure pénale qui exige que le procès-verbal soit signé par l'agent ayant constaté personnellement l'infraction.
+
+Je demande en conséquence la communication du procès-verbal original afin de vérifier sa signature, et l'annulation de l'amende qui m'est réclamée à défaut de constat régulier.`,
   },
   {
     id: "faille-lieu-imprecis",
@@ -371,7 +379,11 @@ Je demande en conséquence le retrait de la décision de suspension prise à mon
     regle: "Le lieu exact (voie, PR, commune, sens) doit permettre de vérifier la limitation et la compétence de l'agent. Mention vague type 'Route de X' = nullité.",
     reglesDetection: [{ type: "texteAbsent", motif: "commune" }],
     jurisprudence: [{ reference: "Cass. crim., 23 oct. 2007", juridiction: "Cour de cassation", url: null, verifiee: false, resume: "Le juge doit vérifier la limitation applicable si le lieu est précis ; a contrario lieu vague = nullité." }],
-    templateLettre: `Je soussigné(e) {nom}, conteste l'avis n° {num_pv} : le lieu indiqué "{lieu}" est imprécis et ne permet pas de vérifier la limitation ni la compétence territoriale (art. 429, 43 CPP).`,
+    templateLettre: `Je soussigné(e) {nom}, conteste l'avis de contravention n° {num_pv}.
+
+Le lieu de l'infraction est indiqué de façon imprécise ({lieu}) : il ne permet ni de vérifier la limitation de vitesse applicable ni la compétence territoriale de l'agent verbalisateur.
+
+En application des articles 429, 537 et 43 du Code de procédure pénale, le procès-verbal doit mentionner les circonstances précises de l'infraction, dont le lieu. Je demande en conséquence l'annulation de l'amende qui m'est réclamée.`,
   },
   {
     id: "faille-homologation-radar",
@@ -382,7 +394,11 @@ Je demande en conséquence le retrait de la décision de suspension prise à mon
     regle: "L'appareil doit être homologué par le LNE et vérifié par un organisme désigné par le ministre. Sans homologation, le contrôle est illégal.",
     reglesDetection: [{ type: "texteAbsent", motif: "homologué" }],
     jurisprudence: [{ reference: "Cass. crim., 2012-2016 (défaut vérification)", juridiction: "Cour de cassation", url: null, verifiee: false, resume: "Annulation de PV pour défaut de vérification périodique et d'homologation." }],
-    templateLettre: `Je conteste l'avis n° {num_pv} : le cinémomètre n° {radarId} ne justifie pas d'une homologation LNE ni d'une vérification par organisme agréé (R.110-10 CR, Décret 2001-387).`,
+    templateLettre: `Je soussigné(e) {nom}, conteste l'avis de contravention n° {num_pv}.
+
+La vitesse a été mesurée au moyen du cinémomètre n° {radarId} qui ne justifie pas d'une homologation délivrée par le laboratoire national de métrologie ni d'une vérification effectuée par un organisme agréé.
+
+En application de l'article R. 110-10 du Code de la route, du décret n° 2001-387 et de l'arrêté du 4 juin 2009, le contrôle de vitesse n'est légal que si l'appareil est homologué et périodiquement vérifié. Je demande en conséquence la communication de ces justificatifs et l'annulation de l'amende qui m'est réclamée.`,
   },
   {
     id: "faille-marge-tolerance-vitesse",
@@ -393,7 +409,11 @@ Je demande en conséquence le retrait de la décision de suspension prise à mon
     regle: "Marge légale : fixe -5 km/h (<100) ou -5% (>100), embarqué -10 km/h / -10%. Vitesse retenue = mesurée - marge.",
     reglesDetection: [{ type: "texteContient", motif: "marge" }],
     jurisprudence: [{ reference: "Principe constant — Arrêté 4 juin 2009", juridiction: "Conseil d'État", url: null, verifiee: false, resume: "La vitesse retenue doit être la vitesse mesurée minorée de la tolérance réglementaire." }],
-    templateLettre: `Je conteste l'avis n° {num_pv} : la marge technique réglementaire (Arrêté 4 juin 2009 Art.14-15) n'a pas été déduite de la vitesse enregistrée.`,
+    templateLettre: `Je soussigné(e) {nom}, conteste l'avis de contravention n° {num_pv}.
+
+La vitesse enregistrée par le cinémomètre n'a pas été minorée de la marge technique réglementaire permettant de tenir compte de l'incertitude de mesure de l'appareil.
+
+En application des articles 14 et 15 de l'arrêté du 4 juin 2009, la vitesse retenue doit être la vitesse mesurée diminuée de la marge de tolérance : pour un cinémomètre fixe, 5 km/h en deçà de 100 km/h et 5 % au-delà. Je demande en conséquence l'annulation de l'amende qui m'est réclamée.`,
   },
   {
     id: "faille-photo-illisible",
@@ -404,7 +424,11 @@ Je demande en conséquence le retrait de la décision de suspension prise à mon
     regle: "La photo doit permettre d'identifier le véhicule. Photo tronquée/floue/plaque illisible = contestation sur les points recevable (l'amende reste due).",
     reglesDetection: [{ type: "texteContient", motif: "photo" }],
     jurisprudence: [{ reference: "Doctrine ANTAI — droit à communication du cliché", juridiction: "ANTAI", url: null, verifiee: false, resume: "Droit à communication du cliché complet sur demande CACIR pour vérifier l'identification." }],
-    templateLettre: `Je conteste l'avis n° {num_pv} : la photo annexée est inexploitable (floue/tronquée) et ne permet pas d'identifier le véhicule (L.121-3 CR, 537 CPP). Je demande communication du cliché complet.`,
+    templateLettre: `Je soussigné(e) {nom}, conteste l'avis de contravention n° {num_pv}.
+
+La photographie annexée à l'avis est inexploitable : floue, tronquée ou ne permettant pas de lire la plaque d'immatriculation du véhicule. Elle ne permet donc pas de constater avec certitude l'identification du véhicule et de son conducteur.
+
+En application de l'article L. 121-3 du Code de la route et de l'article 537 du Code de procédure pénale, la preuve doit permettre l'identification certaine du contrevenant. Je demande la communication du cliché complet afin de vérifier cette identification, et l'annulation de l'amende qui m'est réclamée.`,
   },
   {
     id: "faille-interception-sans-constat",
@@ -415,7 +439,11 @@ Je demande en conséquence le retrait de la décision de suspension prise à mon
     regle: "Les deux agents (opérateur cinémomètre + intercepteur) participent à la constatation ; un seul signataire suffit, mais aucun ne doit être étranger à la constatation.",
     reglesDetection: [{ type: "texteContient", motif: "intercepté" }],
     jurisprudence: [{ reference: "Cass. crim., 3 mars 2004", juridiction: "Cour de cassation", url: null, verifiee: false, resume: "Les deux agents participent personnellement à la constatation, même si un seul signe." }],
-    templateLettre: `Je conteste l'avis n° {num_pv} : aucun agent n'ayant personnellement constaté l'infraction n'a dressé le PV, en violation de l'art. 429 CPP.`,
+    templateLettre: `Je soussigné(e) {nom}, conteste l'avis de contravention n° {num_pv}.
+
+Le procès-verbal d'infraction n'a été dressé par aucun agent ayant personnellement constaté l'infraction : la constatation a été opérée sans qu'un agent intercepteur présent sur les lieux n'ait procédé à la vérification et à la notification régulière des faits.
+
+En application de l'article 429 du Code de procédure pénale, le procès-verbal doit être dressé par des agents ayant personnellement constaté l'infraction. Je demande en conséquence l'annulation de l'amende qui m'est réclamée.`,
   },
   {
     id: "faille-panneau-non-conforme",
@@ -426,7 +454,11 @@ Je demande en conséquence le retrait de la décision de suspension prise à mon
     regle: "L'interdiction n'est opposable que si arrêté municipal publié + panneau fidèle (horaires, périmètre).",
     reglesDetection: [{ type: "texteAbsent", motif: "arrêté" }],
     jurisprudence: [{ reference: "Principe opposabilité R411-25", juridiction: "Conseil d'État", url: null, verifiee: false, resume: "L'interdiction doit être matérialisée par un arrêté et une signalisation fidèle pour être opposable." }],
-    templateLettre: `Je conteste l'avis n° {num_pv} : l'interdiction au lieu dit {lieu} n'est pas matérialisée par un arrêté municipal publié ni par un panneau conforme (R.411-25 CR, L2213-1 CGCT).`,
+    templateLettre: `Je soussigné(e) {nom}, conteste l'avis de contravention n° {num_pv}.
+
+La prescription édictée au lieu dit {lieu} n'est pas opposable : elle n'est matériellement matérialisée ni par un arrêté municipal régulièrement publié ni par une signalisation conforme.
+
+En application de l'article R. 411-25 du Code de la route et de l'article L. 2213-1 du Code général des collectivités territoriales, une prescription de circulation n'est opposable que si elle est précédée d'un arrêté publié et d'une signalisation fidèle. Je demande en conséquence l'annulation de l'amende qui m'est réclamée.`,
   },
   {
     id: "faille-delai-notification",
@@ -437,7 +469,11 @@ Je demande en conséquence le retrait de la décision de suspension prise à mon
     regle: "Contestation 45j dès envoi avis. AFM : réclamation 30j (3 mois si LRAR à adresse carte grise). Si changement d'adresse déclaré à temps, délai rallongé et majoration annulée.",
     reglesDetection: [{ type: "texteContient", motif: "délai" }],
     jurisprudence: [{ reference: "Cons. const., QPC 7 mai 2015 n°2015-467", juridiction: "Conseil constitutionnel", url: null, verifiee: false, resume: "Validation du régime des délais de contestation avec aménagement en cas de changement d'adresse déclaré." }],
-    templateLettre: `Je conteste l'avis n° {num_pv} : mon changement d'adresse a été déclaré via l'ANTS avant l'envoi, le délai de 45j n'a pas couru régulièrement (R322-7 CR, 529-2 CPP).`,
+    templateLettre: `Je soussigné(e) {nom}, conteste l'avis de contravention n° {num_pv}.
+
+L'avis de contravention m'a été notifié à une adresse erronée alors que mon changement d'adresse avait été dûment déclaré, via l'ANTS, avant l'envoi.
+
+En application de l'article R. 322-7 du Code de la route et de l'article 529-2 du Code de procédure pénale, le délai de contestation de quarante-cinq jours n'a valablement couru qu'à compter de la notification régulière à ma bonne adresse. Je demande en conséquence l'annulation de la majoration et l'annulation de l'amende qui m'est réclamée.`,
   },
   {
     id: "faille-suspension-motivation-insuffisante",
@@ -448,7 +484,11 @@ Je demande en conséquence le retrait de la décision de suspension prise à mon
     regle: "L'arrêté doit viser les textes et énoncer faits (date/heure/lieu/taux) + droit + durée. Motivation stéréotypée = illégalité externe.",
     reglesDetection: [{ type: "texteAbsent", motif: "motifs" }],
     jurisprudence: [{ reference: "TA Versailles, 12 fév. 2026 n°2403953", juridiction: "Tribunal administratif", url: null, verifiee: false, resume: "Motifs de fait et de droit exigés pour la suspension." }],
-    templateLettre: `Je conteste la décision n° {num_pv} : l'arrêté est insuffisamment motivé (faits, droit, durée non énoncés) en violation de L.211-2 CRPA.`,
+    templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} du {date} par laquelle le préfet a prononcé la suspension de mon permis de conduire.
+
+L'arrêté de suspension est insuffisamment motivé : il n'énonce ni les faits précis (date, heure, lieu, circonstances du contrôle), ni les textes applicables, ni la durée de la suspension, et se contente d'une motivation stéréotypée.
+
+En application des articles L. 211-2 et L. 211-5 du Code des relations entre le public et l'administration, les décisions individuelles défavorables doivent comporter l'énoncé des considérations de droit et de fait qui en constituent le fondement. Je demande en conséquence l'annulation de la décision de suspension prise à mon encontre.`,
   },
   {
     id: "faille-suspension-duree-disproportionnee",
@@ -459,7 +499,11 @@ Je demande en conséquence le retrait de la décision de suspension prise à mon
     regle: "Le préfet doit proportionner la durée au danger (max 6 mois, 1 an si alcool/stup/délit fuite). Durée excessive = erreur manifeste d'appréciation.",
     reglesDetection: [{ type: "texteContient", motif: "mois" }],
     jurisprudence: [{ reference: "Principe proportionnalité TA", juridiction: "Tribunal administratif", url: null, verifiee: false, resume: "10 mois annulés car hors plafond L.224-8." }],
-    templateLettre: `Je conteste la décision n° {num_pv} : la durée de {duree} est disproportionnée au regard du danger et du plafond L.224-2/L.224-8.`,
+    templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} du {date} par laquelle le préfet a prononcé la suspension de mon permis de conduire.
+
+La durée de la suspension prononcée est manifestement disproportionnée au regard du danger que présente ma conduite et excède les plafonds légaux.
+
+En application de l'article L. 224-2 (II) et de l'article L. 224-8 du Code de la route, le préfet doit proportionner la durée de la suspension au danger pour la sécurité routière, dans la limite des maxima prévus par la loi. Je demande en conséquence la réduction de la durée de suspension à un niveau proportionné, à titre subsidiaire l'annulation de la décision.`,
   },
   {
     id: "faille-suspension-delai-notification-72h",
@@ -470,7 +514,11 @@ Je demande en conséquence le retrait de la décision de suspension prise à mon
     regle: "Suspension L224-2 dans 72h (vitesse/alcool sans labo) ou 120h (stup/alcool avec analyse), au-delà restitution et bascule en L224-7 avec contradictoire.",
     reglesDetection: [{ type: "texteContient", motif: "72h" }],
     jurisprudence: [{ reference: "Art. L.224-2 CR", juridiction: "Légifrance", url: null, verifiee: false, resume: "Délai de 72h/120h pour prononcer la suspension L224-2." }],
-    templateLettre: `Je conteste la décision n° {num_pv} : la suspension L224-2 a été notifiée hors délai de 72h/120h (R.224-3).`,
+    templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} du {date} par laquelle le préfet a prononcé la suspension de mon permis de conduire.
+
+Cette suspension a été notifiée hors des délais impératifs de soixante-douze heures (ou de cent vingt heures en cas d'analyse sanguine) prévus pour la suspension d'urgence de l'article L. 224-2 du Code de la route.
+
+En application de l'article R. 224-3 du Code de la route, la suspension d'urgence doit être notifiée dans ces délais, à défaut de quoi elle ne peut être maintenue et doit être prolongée dans le cadre de la procédure contradictoire. Je demande en conséquence l'annulation de la décision de suspension prise à mon encontre.`,
   },
   {
     id: "faille-suspension-ethylometre-carnet",
@@ -481,7 +529,11 @@ Je demande en conséquence le retrait de la décision de suspension prise à mon
     regle: "Vérification annuelle obligatoire du DRAGER, carnet métrologique à produire si demandé.",
     reglesDetection: [{ type: "texteAbsent", motif: "carnet" }],
     jurisprudence: [{ reference: "Cass. crim., 8 jan. 2019", juridiction: "Cour de cassation", url: null, verifiee: false, resume: "Absence de production du carnet = cassation." }],
-    templateLettre: `Je conteste la décision n° {num_pv} : l'éthylomètre n'a pas fait l'objet d'une vérification annuelle (carnet métrologique non produit, Arrêté 8 juil. 2003 Art.30).`,
+    templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} du {date} par laquelle le préfet a prononcé la suspension de mon permis de conduire.
+
+La mesure d'alcoolémie a été réalisée au moyen d'un éthylomètre qui n'a pas fait l'objet de la vérification annuelle obligatoire par un organisme agréé, comme devait en attester le carnet métrologique de l'appareil.
+
+En application de l'article 30 de l'arrêté du 8 juillet 2003 et du décret n° 2001-387, l'éthylomètre doit être vérifié périodiquement et le carnet métrologique produit sur demande. Je demande en conséquence la communication du carnet métrologique de l'appareil utilisé et l'annulation de la décision de suspension à défaut.`,
   },
   {
     id: "faille-suspension-second-souffle",
@@ -492,7 +544,11 @@ Je demande en conséquence le retrait de la décision de suspension prise à mon
     regle: "L'intéressé doit être informé immédiatement du résultat et de son droit à un second contrôle. Défaut = nullité.",
     reglesDetection: [{ type: "texteAbsent", motif: "second souffle" }],
     jurisprudence: [{ reference: "Cass. crim., 6 déc. 2016 n°15-86.619", juridiction: "Cour de cassation", url: null, verifiee: false, resume: "Défaut d'information au second contrôle = nullité de la procédure alcool." }],
-    templateLettre: `Je conteste la décision n° {num_pv} : je n'ai pas été informé de mon droit à un second contrôle (R.234-4 CR).`,
+    templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} du {date} par laquelle le préfet a prononcé la suspension de mon permis de conduire.
+
+Lors du contrôle, je n'ai pas été informé de mon droit de demander un second contrôle afin de vérifier le résultat de la première mesure.
+
+En application de l'article R. 234-4 du Code de la route, l'intéressé doit être immédiatement informé du résultat de la mesure et de son droit à un second contrôle. Ce défaut d'information entache la régularité de la procédure. Je demande en conséquence l'annulation de la décision de suspension prise à mon encontre.`,
   },
   {
     id: "faille-suspension-erreur-qualification",
@@ -503,7 +559,11 @@ Je demande en conséquence le retrait de la décision de suspension prise à mon
     regle: "Après déduction de la marge -8%, si taux <0,40 seul R234-1 (contravention) est applicable, pas L234-1 (délit).",
     reglesDetection: [{ type: "texteContient", motif: "qualification" }],
     jurisprudence: [{ reference: "Cass. crim., 26 mars 2019 n°18-84.900", juridiction: "Cour de cassation", url: null, verifiee: false, resume: "0,43/0,40 requalifiés en R234-1 après -8%." }],
-    templateLettre: `Je conteste la décision n° {num_pv} : après déduction de la marge de 8% (Arrêté 8 juil. 2003), le taux est <0,40 mg/l, seule la contravention R.234-1 est applicable, non le délit L.234-1.`,
+    templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} du {date} par laquelle le préfet a prononcé la suspension de mon permis de conduire.
+
+La décision se fonde sur un taux d'alcoolémie retenu sans déduction de la marge d'erreur maximale tolérée de l'éthylomètre de 8 %, prévue par l'article 15 de l'arrêté du 8 juillet 2003. Après application de cette marge, le taux retenu est inférieur au seuil de 0,40 mg/l d'air expiré.
+
+Seule la contravention de l'article R. 234-1 du Code de la route est alors applicable, et non le délit de l'article L. 234-1 du même code qui seul fonde la suspension au-delà du plafond d'alcoolémie. Je demande en conséquence l'annulation de la décision de suspension prise à mon encontre.`,
   },
   {
     id: "faille-suspension-refere-urgence",
@@ -514,6 +574,10 @@ Je demande en conséquence le retrait de la décision de suspension prise à mon
     regle: "Recours gracieux/hiérarchique (2 mois) puis REP + référé-suspension (suspension provisoire en 48h-15j). Restitution subordonnée à visite médicale + test psycho.",
     reglesDetection: [{ type: "texteContient", motif: "référé" }],
     jurisprudence: [{ reference: "Art. L.521-1 CJA", juridiction: "Légifrance", url: null, verifiee: false, resume: "Référé-suspension : urgence + doute sérieux en 48h-15j." }],
-    templateLettre: `Je conteste la décision n° {num_pv} et sollicite un référé-suspension (L.521-1 CJA) pour urgence + doute sérieux, avant commission médicale.`,
+    templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} du {date} par laquelle le préfet a prononcé la suspension de mon permis de conduire.
+
+La décision méconnaît gravement mes droits et fait naître une situation d'urgence : son exécution me prive de toute possibilité de conduire, alors que la contestation présente un doute sérieux quant à sa légalité.
+
+En application de l'article L. 521-1 du Code de justice administrative, le juge des référés peut suspendre l'exécution d'une décision lorsque l'urgence le justifie et qu'il existe un doute sérieux sur la légalité de celle-ci. Je sollicite en conséquence que soit ordonnée la suspension provisoire de la décision, à charge d'accomplir dans le même temps les démarches médicales et psychotechniques préalables à la restitution du permis.`,
   },
 ];

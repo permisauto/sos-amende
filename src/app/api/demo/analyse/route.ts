@@ -329,6 +329,8 @@ export async function POST(req: Request) {
           corps: remplirTemplate(faillePrincipale.templateLettre, data),
           numRef: data.num_pv,
           dateRef: data.date,
+          nom: "Alex Martin",
+          date: new Date().toISOString().slice(0, 10),
         })
       : null;
 

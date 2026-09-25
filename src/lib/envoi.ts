@@ -115,12 +115,44 @@ export function formulePolitesse(): string {
   return "Je vous prie d'agréer, Madame, Monsieur, l'expression de ma considération distinguée.";
 }
 
+const MOIS_FR = [
+  "janvier",
+  "février",
+  "mars",
+  "avril",
+  "mai",
+  "juin",
+  "juillet",
+  "août",
+  "septembre",
+  "octobre",
+  "novembre",
+  "décembre",
+] as const;
+
+/**
+ * Met une date ISO (`AAAA-MM-JJ`) en toutes lettres en français
+ * (« 2026-05-01 » → « 1er mai 2026 »). Une valeur non reconnue est
+ * retournée telle quelle (aucune valeur fabriquée).
+ */
+export function formaterDateFr(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso.trim());
+  if (!match) return iso;
+  const [, an, mois, jour] = match;
+  const m = Number(mois);
+  if (m < 1 || m > 12) return iso;
+  const j = Number(jour);
+  if (!Number.isInteger(j)) return iso;
+  return `${j === 1 ? "1er" : j} ${MOIS_FR[m - 1]} ${an}`;
+}
+
 /**
  * Objet normalisé de la lettre, type-aware :
  * - AMENDE    → « Contestation de l'avis de contravention n° X du D »
  * - SUSPENSION → « Recours contre la décision de suspension n° X du D »
- * La référence et la date ne sont ajoutées que si réellement disponibles
- * (aucune valeur fabriquée).
+ * La date est écrite en toutes lettres (seule si réellement disponible,
+ * aucune valeur fabriquée).
  */
 export function objetLettre(opts: {
   type: InfractionType;
@@ -128,35 +160,83 @@ export function objetLettre(opts: {
   dateRef?: string | null;
 }): string {
   const ref = opts.numRef ? ` n° ${opts.numRef}` : "";
-  const date = opts.dateRef ? ` du ${opts.dateRef}` : "";
+  const dateFr = formaterDateFr(opts.dateRef);
+  const date = dateFr ? ` du ${dateFr}` : "";
   return opts.type === "SUSPENSION"
     ? `Recours contre la décision de suspension${ref}${date}`
     : `Contestation de l'avis de contravention${ref}${date}`;
 }
 
 /**
- * Habillage professionnel de la lettre générée : en-tête (Objet, mention des
- * pièces jointes), formule d'appel « Madame, Monsieur, », corps validé par
- * l'admin puis formule de politesse finale. La signature est ajoutée à part
- * lors de l'apposition (PDF). Idempotent : si la lettre a déjà été habillée
- * (commence par « Objet : »), elle est retournée telle quelle.
+ * Libellé du destinataire d'en-tête, type-aware :
+ * - AMENDE    → l'Officier du ministère public près le tribunal compétent
+ * - SUSPENSION → le préfet auteur de la décision
+ * Formulation administrative générique : aucune adresse n'est inventée, la
+ * précision est laissée au requérant.
+ */
+export function formuleEnTeteDestinataire(type: InfractionType): string {
+  return type === "SUSPENSION"
+    ? "Monsieur le Préfet"
+    : "Monsieur l'Officier du ministère public";
+}
+
+/**
+ * En-tête administrative de la lettre : bloc expéditeur (nom + adresse si
+ * renseignés), destinataire type-aware, date de rédaction en toutes lettres.
+ * Pure : rien n'est inventé, chaque bloc n'apparaît que si la donnée existe.
+ */
+export function enTeteLettre(opts: {
+  type: InfractionType;
+  nom?: string | null;
+  adresse?: string | null;
+  dateRedaction?: string | null;
+}): string[] {
+  const lignes: string[] = [];
+  const expediteur = [opts.nom?.trim(), opts.adresse?.trim()].filter(Boolean);
+  if (expediteur.length > 0) {
+    lignes.push(...(expediteur as string[]));
+  }
+  lignes.push(formuleEnTeteDestinataire(opts.type));
+  lignes.push("");
+  const dateFr = formaterDateFr(opts.dateRedaction);
+  if (dateFr) lignes.push(`Le ${dateFr}`);
+  lignes.push("");
+  return lignes;
+}
+
+/**
+ * Habillage professionnel de la lettre générée : en-tête administrative
+ * (coordonnées requérant si connues, destinataire type-aware, date de
+ * rédaction en toutes lettres), Objet, formule d'appel « Madame, Monsieur, »,
+ * corps validé par l'admin puis formule de politesse finale. La liste des
+ * pièces jointes figure UNE seule fois, sous la signature, dans le PDF signé
+ * (voir generateLettrePdf) — jamais doublée dans le corps. Pure : chaque bloc
+ * n'apparaît que si sa donnée existe réellement (aucune valeur fabriquée).
+ *
+ * Idempotent : si la lettre a déjà été habillée (formule de politesse
+ * présente), elle est retournée telle quelle — aucune re-formulation.
  */
 export function formaterLettreOfficielle(opts: {
   type: InfractionType;
   corps: string;
   numRef?: string | null;
   dateRef?: string | null;
-  piecesJointes?: string[];
+  nom?: string | null;
+  adresse?: string | null;
+  date?: string | null;
 }): string {
   const corps = opts.corps.trim();
   if (!corps) return "";
-  if (corps.startsWith("Objet :")) return corps;
+  if (corps.includes(formulePolitesse())) return corps;
 
   const lignes: string[] = [];
+  lignes.push(...enTeteLettre({
+    type: opts.type,
+    nom: opts.nom,
+    adresse: opts.adresse,
+    dateRedaction: opts.date,
+  }));
   lignes.push(`Objet : ${objetLettre(opts)}`);
-  if (opts.piecesJointes && opts.piecesJointes.length > 0) {
-    lignes.push(`P.J. : ${opts.piecesJointes.join(" · ")}`);
-  }
   lignes.push("");
   lignes.push(formuleAppel());
   lignes.push("");
