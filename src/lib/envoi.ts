@@ -98,3 +98,70 @@ export function portailEnLigne(type: InfractionType): {
         url: "https://www.usagers.antai.gouv.fr/demarches/saisienumero?lang=fr",
       };
 }
+
+/**
+ * Civilité d'appel selon les bons usages de la correspondance administrative.
+ * Destinataire inconnu ou collectif (OMP / service) → formule neutre
+ * « Madame, Monsieur, ». Le préfet, lorsqu'identifié, peut recevoir une
+ * formule propre (voir formatage par type), mais par défaut la formule neutre
+ * reste la plus largement acceptée.
+ */
+export function formuleAppel(): string {
+  return "Madame, Monsieur,";
+}
+
+/** Formule de politesse finale, alignée sur la formule d'appel neutre. */
+export function formulePolitesse(): string {
+  return "Je vous prie d'agréer, Madame, Monsieur, l'expression de ma considération distinguée.";
+}
+
+/**
+ * Objet normalisé de la lettre, type-aware :
+ * - AMENDE    → « Contestation de l'avis de contravention n° X du D »
+ * - SUSPENSION → « Recours contre la décision de suspension n° X du D »
+ * La référence et la date ne sont ajoutées que si réellement disponibles
+ * (aucune valeur fabriquée).
+ */
+export function objetLettre(opts: {
+  type: InfractionType;
+  numRef?: string | null;
+  dateRef?: string | null;
+}): string {
+  const ref = opts.numRef ? ` n° ${opts.numRef}` : "";
+  const date = opts.dateRef ? ` du ${opts.dateRef}` : "";
+  return opts.type === "SUSPENSION"
+    ? `Recours contre la décision de suspension${ref}${date}`
+    : `Contestation de l'avis de contravention${ref}${date}`;
+}
+
+/**
+ * Habillage professionnel de la lettre générée : en-tête (Objet, mention des
+ * pièces jointes), formule d'appel « Madame, Monsieur, », corps validé par
+ * l'admin puis formule de politesse finale. La signature est ajoutée à part
+ * lors de l'apposition (PDF). Idempotent : si la lettre a déjà été habillée
+ * (commence par « Objet : »), elle est retournée telle quelle.
+ */
+export function formaterLettreOfficielle(opts: {
+  type: InfractionType;
+  corps: string;
+  numRef?: string | null;
+  dateRef?: string | null;
+  piecesJointes?: string[];
+}): string {
+  const corps = opts.corps.trim();
+  if (!corps) return "";
+  if (corps.startsWith("Objet :")) return corps;
+
+  const lignes: string[] = [];
+  lignes.push(`Objet : ${objetLettre(opts)}`);
+  if (opts.piecesJointes && opts.piecesJointes.length > 0) {
+    lignes.push(`P.J. : ${opts.piecesJointes.join(" · ")}`);
+  }
+  lignes.push("");
+  lignes.push(formuleAppel());
+  lignes.push("");
+  lignes.push(corps);
+  lignes.push("");
+  lignes.push(formulePolitesse());
+  return lignes.join("\n");
+}

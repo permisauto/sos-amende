@@ -472,6 +472,12 @@ export async function lettreAvecPiecesVersees(
   lettre: string | null,
 ): Promise<string> {
   if (!lettre || !lettre.trim()) return lettre ?? "";
+  // Idempotent : une lettre déjà garnie ne doit jamais être re-garnie
+  // (doublon du paragraphe « Pièces versées » sinon — validerDossier/appelé
+  // plusieurs fois sur la même lettre).
+  if (lettre.includes("Pièces versées à l'appui de la contestation")) {
+    return lettre;
+  }
   const pieces = await lirePiecesJointesPourDossierId(dep, dossierId);
   if (!pieces.length) return lettre;
   return lettre + paragraphePiecesVersees(pieces);

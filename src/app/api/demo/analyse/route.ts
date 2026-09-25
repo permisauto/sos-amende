@@ -8,6 +8,7 @@ import {
 } from "@/lib/moteur";
 import { extrairePv, getOcrProvider, normaliserPv } from "@/lib/ocr";
 import { consommerCreneau } from "@/lib/rate-limit";
+import { formaterLettreOfficielle } from "@/lib/envoi";
 import type { JurisprudenceRef } from "@/lib/catalogue-sources";
 
 /**
@@ -323,7 +324,12 @@ export async function POST(req: Request) {
       ? faillesDb.find((f) => f.id === resultats[0].id) ?? null
       : null;
     const lettre = faillePrincipale
-      ? remplirTemplate(faillePrincipale.templateLettre, data)
+      ? formaterLettreOfficielle({
+          type,
+          corps: remplirTemplate(faillePrincipale.templateLettre, data),
+          numRef: data.num_pv,
+          dateRef: data.date,
+        })
       : null;
 
     return new Response(

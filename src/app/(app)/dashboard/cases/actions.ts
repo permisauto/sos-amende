@@ -17,6 +17,7 @@ import {
 import { generateLettrePdf } from "@/lib/lettre-pdf";
 import { extrairePv, normaliserPv } from "@/lib/ocr";
 import { notifierStatut } from "@/lib/notifications";
+import { formaterLettreOfficielle } from "@/lib/envoi";
 import {
   lettreAvecPiecesVersees,
   listePiecesJointes,
@@ -309,10 +310,18 @@ export async function analyserDossier(
   // Pièces versées : les preuves réellement récupérées sont citées par écrit
   // dans le corps de la lettre (inventaire factuel, jamais de texte inventé).
   const lettreVersee = await lettreAvecPiecesVersees(prisma, dossier.id, lettre);
-  if (lettreVersee !== lettre) {
+  // Habillage professionnel (Objet, Madame, Monsieur, politesse) — voir
+  // formaterLettreOfficielle ; idempotent, laisse l'argumentation intacte.
+  const lettreFinale = formaterLettreOfficielle({
+    type: dossier.type,
+    corps: lettreVersee,
+    numRef: data.num_pv,
+    dateRef: data.date,
+  });
+  if (lettreFinale !== lettre) {
     await prisma.dossier.update({
       where: { id: dossier.id },
-      data: { lettreGeneree: lettreVersee },
+      data: { lettreGeneree: lettreFinale },
     });
   }
 

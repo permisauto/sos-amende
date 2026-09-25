@@ -4,9 +4,13 @@ import {
   dateRefLibelle,
   delaiLibelle,
   destinataireLrar,
+  formuleAppel,
+  formulePolitesse,
+  formaterLettreOfficielle,
   libelleCanal,
   libelleCanalDepuisStockage,
   numeroRefLibelle,
+  objetLettre,
   organismeEnvoi,
   pieceAJoindre,
   portailEnLigne,
@@ -71,5 +75,63 @@ describe("envoi — libellés par type d'infraction", () => {
     expect(libelleCanalDepuisStockage("LRAR", "AMENDE")).toContain("recommandé");
     expect(libelleCanalDepuisStockage(null, "AMENDE")).toContain("ANTAI");
     expect(libelleCanalDepuisStockage("", "SUSPENSION")).toContain("Télérecours");
+  });
+});
+
+describe("envoi — formalisme de la lettre", () => {
+  it("formule d'appel neutre « Madame, Monsieur, » pour les deux types", () => {
+    expect(formuleAppel()).toBe("Madame, Monsieur,");
+  });
+
+  it("formule de politesse professionnelle en clôture", () => {
+    expect(formulePolitesse()).toContain("considération distinguée");
+  });
+
+  it("objet type-aware : avis de contravention vs décision de suspension", () => {
+    expect(
+      objetLettre({ type: "AMENDE", numRef: "123", dateRef: "2026-05-10" }),
+    ).toBe("Contestation de l'avis de contravention n° 123 du 2026-05-10");
+    expect(
+      objetLettre({ type: "SUSPENSION", numRef: "456", dateRef: "2026-07-01" }),
+    ).toBe("Recours contre la décision de suspension n° 456 du 2026-07-01");
+  });
+
+  it("objet sans numéro ni date : pas de valeur fabriquée", () => {
+    expect(objetLettre({ type: "AMENDE" })).toBe(
+      "Contestation de l'avis de contravention",
+    );
+  });
+
+  it("habillage complet : Objet, P.J., Madame Monsieur, corps, politesse", () => {
+    const lettre = formaterLettreOfficielle({
+      type: "AMENDE",
+      corps: "Je soussigné(e) DUPONT, conteste le PV 123.",
+      numRef: "123",
+      dateRef: "2026-05-10",
+      piecesJointes: ["Copie de l'avis de contravention", "Bulletin météo"],
+    });
+    expect(lettre.startsWith("Objet : Contestation de l'avis de contravention n° 123")).toBe(true);
+    expect(lettre).toContain("P.J. : Copie de l'avis de contravention · Bulletin météo");
+    expect(lettre).toContain("Madame, Monsieur,");
+    expect(lettre).toContain("Je soussigné(e) DUPONT, conteste le PV 123.");
+    expect(lettre.endsWith(formulePolitesse())).toBe(true);
+  });
+
+  it("idempotent : une lettre déjà habillée n'est pas re-habillée", () => {
+    const uneFois = formaterLettreOfficielle({
+      type: "AMENDE",
+      corps: "Je conteste le PV 123.",
+    });
+    const deuxFois = formaterLettreOfficielle({
+      type: "AMENDE",
+      corps: uneFois,
+    });
+    expect(deuxFois).toBe(uneFois);
+    const nbObjets = deuxFois.split(/^Objet :/m).length - 1;
+    expect(nbObjets).toBe(1);
+  });
+
+  it("retourne une chaîne vide quand le corps est vide", () => {
+    expect(formaterLettreOfficielle({ type: "AMENDE", corps: "  " })).toBe("");
   });
 });

@@ -16,7 +16,7 @@ import { storageRead, storageWrite } from "@/lib/storage";
 import { generateLettrePdf } from "@/lib/lettre-pdf";
 import { soumettreDossier } from "@/lib/antai";
 import { generatePreuvePdf } from "@/lib/preuve-pdf";
-import { destinataireLrar, canauxEnvoi, organismeEnvoi, type CanalEnvoi } from "@/lib/envoi";
+import { destinataireLrar, canauxEnvoi, formaterLettreOfficielle, organismeEnvoi, type CanalEnvoi } from "@/lib/envoi";
 import { setDemoLettre } from "@/lib/demo-lettres";
 import { lettreAvecPiecesVersees, listePiecesJointes, recupererPreuvesPourDossierId } from "@/lib/preuves-api";
 
@@ -252,12 +252,18 @@ export async function validerDossier(
 
   // La lettre validée cite par écrit les pièces réellement versées (mention
   // des preuves récupérées) — y compris pour les dossiers analysés avant cette
-  // évolution ; le PDF signé reprend ce même texte.
-  const lettreFinale = await lettreAvecPiecesVersees(
-    prisma,
-    dossier.id,
-    dossier.lettreGeneree,
-  );
+  // évolution ; le PDF signé reprend ce même texte. Habillage professionnel
+  // (Objet, Madame, Monsieur, politesse) appliqué aussi aux anciennes lettres.
+  const lettreFinale = formaterLettreOfficielle({
+    type: dossier.type,
+    corps: await lettreAvecPiecesVersees(
+      prisma,
+      dossier.id,
+      dossier.lettreGeneree,
+    ),
+    numRef: typeof dataExt["num_pv"] === "string" ? (dataExt["num_pv"] as string) : null,
+    dateRef: typeof dataExt["date"] === "string" ? (dataExt["date"] as string) : null,
+  });
 
   const courrier = dossier.courriers[dossier.courriers.length - 1];
   const dejaSigne = !!courrier?.pdfUrl;
@@ -667,10 +673,17 @@ export async function relancerVerificationPoussee(
     dossier.id,
     lettre,
   );
-  if (lettreAvecPieces !== lettre) {
+  const docVerif = (dossier.extractedData ?? {}) as Record<string, unknown>;
+  const lettreOfficielleVerif = formaterLettreOfficielle({
+    type: dossier.type,
+    corps: lettreAvecPieces,
+    numRef: typeof docVerif["num_pv"] === "string" ? (docVerif["num_pv"] as string) : null,
+    dateRef: typeof docVerif["date"] === "string" ? (docVerif["date"] as string) : null,
+  });
+  if (lettreOfficielleVerif !== lettre) {
     await prisma.dossier.update({
       where: { id: dossier.id },
-      data: { lettreGeneree: lettreAvecPieces },
+      data: { lettreGeneree: lettreOfficielleVerif },
     });
   }
 
@@ -999,10 +1012,17 @@ export async function confirmerFaille(
     dossier.id,
     lettre,
   );
-  if (lettreAvecPieces !== lettre) {
+  const docConfirme = (dossier.extractedData ?? {}) as Record<string, unknown>;
+  const lettreOfficielle = formaterLettreOfficielle({
+    type: dossier.type,
+    corps: lettreAvecPieces,
+    numRef: typeof docConfirme["num_pv"] === "string" ? (docConfirme["num_pv"] as string) : null,
+    dateRef: typeof docConfirme["date"] === "string" ? (docConfirme["date"] as string) : null,
+  });
+  if (lettreOfficielle !== lettre) {
     await prisma.dossier.update({
       where: { id: dossier.id },
-      data: { lettreGeneree: lettreAvecPieces },
+      data: { lettreGeneree: lettreOfficielle },
     });
   }
 
