@@ -19,7 +19,8 @@ export type TypePreuveExterne = "METEO" | "RADAR" | "TRAVAUX";
  * dossier la rend pertinente (mapping faille → types de preuves). Hors
  * mapping, aucune preuve d'un type donné n'est cherchée — une preuve hors-sujet
  * ne serait jamais versée ni citée dans la lettre. La relance manuelle du
- * juriste (recupererPreuvesApi) reste libre de tout récupérer.
+ * juriste (recupererPreuvesApi) vérifie l'existant : une preuve déjà
+ * identifiée n'est pas re-créée (anti-redondance).
  */
 const PREUVES_PAR_FAILLE: Record<string, TypePreuveExterne[]> = {
   "faille-certificat-etalonnage": ["RADAR"],
@@ -491,25 +492,43 @@ export async function lettreAvecPiecesVersees(
  * obtenues. `dep` accepte prisma ou une transaction Prisma. `opts.types`
  * restreint la recherche aux types pertinents (voir PREUVES_PAR_FAILLE) ; sans
  * `types`, tous les types sont cherchés (relance manuelle du juriste).
+ *
+ * Anti-redondance : vérifie d'abord les preuves déjà présentes — une preuve
+ * déjà identifiée n'est jamais ré-ajoutée (doublons impossibles). `verifiees`
+ * liste les types déjà couverts (revérifiés sans ajout) ; `ajoutees` ne
+ * contient QUE les preuves non encore identifiées.
  */
 export async function recupererPreuvesPourDossierId(
   dep: Pick<PrismaClient, "dossier" | "preuve">,
   dossierId: string,
   opts?: { types?: Set<TypePreuveExterne> },
-): Promise<{ ajoutees: string[] }> {
+): Promise<{ ajoutees: string[]; verifiees: string[] }> {
   const ajoutees: string[] = [];
+  const verifiees: string[] = [];
   const besoins = opts?.types;
   const besoin = (t: TypePreuveExterne) => !besoins || besoins.has(t);
   try {
     const dossier = await dep.dossier.findUnique({ where: { id: dossierId } });
-    if (!dossier) return { ajoutees };
+    if (!dossier) return { ajoutees, verifiees };
     if (
       dossier.statut === "REJETE" ||
       dossier.statut === "RESOLU" ||
       dossier.statut === "ANNULE"
     ) {
-      return { ajoutees };
+      return { ajoutees, verifiees };
     }
+
+    // Preuves déjà répertoriées : un type déjà couvert est seulement revérifié,
+    // jamais re-créé (bouton « Vérifier les preuves » = non redondant).
+    const existantes = await dep.preuve.findMany({
+      where: { dossierId },
+      select: { type: true, nom: true },
+    });
+    const dejaIdentifiee = (type: TypePreuveExterne) =>
+      existantes.some((p) => p.type === type);
+    const nomsTravauxExistants = new Set(
+      existantes.filter((p) => p.type === "TRAVAUX").map((p) => p.nom),
+    );
 
     const data = (dossier.extractedData ?? {}) as Record<string, unknown>;
     const date =
@@ -554,45 +573,58 @@ export async function recupererPreuvesPourDossierId(
 
     if (date && latitude !== null && longitude !== null) {
       if (besoin("METEO")) {
-        const resume = await preuveMeteo({
-          latitude,
-          longitude,
-          date,
-        });
-        if (resume) {
-          await dep.preuve
-            .create({
-              data: {
-                dossierId,
-                nom: "Bulletin météo historique",
-                type: "METEO",
-                url: "",
-              },
-            })
-            .catch(() => {});
-          await dep.dossier
-            .update({ where: { id: dossierId }, data: { conditions_meteo: resume } })
-            .catch(() => {});
-          ajoutees.push(`météo (${resume})`);
+        if (dejaIdentifiee("METEO")) {
+          verifiees.push("météo déjà identifiée (revérifiée)");
+        } else {
+          const resume = await preuveMeteo({
+            latitude,
+            longitude,
+            date,
+          });
+          if (resume) {
+            await dep.preuve
+              .create({
+                data: {
+                  dossierId,
+                  nom: "Bulletin météo historique",
+                  type: "METEO",
+                  url: "",
+                },
+              })
+              .catch(() => {});
+            await dep.dossier
+              .update({ where: { id: dossierId }, data: { conditions_meteo: resume } })
+              .catch(() => {});
+            ajoutees.push(`météo (${resume})`);
+          }
         }
       }
 
       if (besoin("TRAVAUX")) {
-        const chantiers = await rechercherTravaux({ latitude, longitude, date });
-        for (const c of chantiers.slice(0, 5)) {
-          await dep.preuve
-            .create({
-              data: {
-                dossierId,
-                nom: `Travaux — ${c.localisation}`,
-                type: "TRAVAUX",
-                url: "",
-              },
-            })
-            .catch(() => {});
-        }
-        if (chantiers.length) {
-          ajoutees.push(`travaux (${chantiers.length} chantier${chantiers.length > 1 ? "s" : ""})`);
+        if (dejaIdentifiee("TRAVAUX")) {
+          verifiees.push("travaux déjà identifiés (revérifiés)");
+        } else {
+          const chantiers = await rechercherTravaux({ latitude, longitude, date });
+          const nouveaux = chantiers.filter(
+            (c) => !nomsTravauxExistants.has(`Travaux — ${c.localisation}`),
+          );
+          for (const c of nouveaux.slice(0, 5)) {
+            await dep.preuve
+              .create({
+                data: {
+                  dossierId,
+                  nom: `Travaux — ${c.localisation}`,
+                  type: "TRAVAUX",
+                  url: "",
+                },
+              })
+              .catch(() => {});
+          }
+          if (nouveaux.length) {
+            ajoutees.push(
+              `travaux (${nouveaux.length} chantier${nouveaux.length > 1 ? "s" : ""} non identifié${nouveaux.length > 1 ? "s" : ""})`,
+            );
+          }
         }
       }
     }
@@ -605,23 +637,27 @@ export async function recupererPreuvesPourDossierId(
       besoin("RADAR") &&
       (radarId || (latitude !== null && longitude !== null))
     ) {
-      const radar = await rechercherRadar({ radarId, latitude, longitude });
-      if (radar) {
-        await dep.preuve
-          .create({
-            data: {
-              dossierId,
-              nom: `Fiche radar — ${radar.type}${radar.route ? ` (${radar.route})` : ""}`,
-              type: "RADAR",
-              url: "",
-            },
-          })
-          .catch(() => {});
-        ajoutees.push(`radar (${radar.type})`);
+      if (dejaIdentifiee("RADAR")) {
+        verifiees.push("radar déjà identifié (revérifié)");
+      } else {
+        const radar = await rechercherRadar({ radarId, latitude, longitude });
+        if (radar) {
+          await dep.preuve
+            .create({
+              data: {
+                dossierId,
+                nom: `Fiche radar — ${radar.type}${radar.route ? ` (${radar.route})` : ""}`,
+                type: "RADAR",
+                url: "",
+              },
+            })
+            .catch(() => {});
+          ajoutees.push(`radar (${radar.type})`);
+        }
       }
     }
   } catch {
     // best-effort : ne bloque jamais un flux.
   }
-  return { ajoutees };
+  return { ajoutees, verifiees };
 }

@@ -1133,19 +1133,25 @@ export async function traiterDemandeAvocat(
   return undefined;
 }
 
-export type PreuvesApiState = { ok?: boolean; error?: string; ajoutees?: string[] };
+export type PreuvesApiState = {
+  ok?: boolean;
+  error?: string;
+  ajoutees?: string[];
+  verifiees?: string[];
+};
 
 /**
- * Récupération des preuves externes (météo, fiche radar, travaux) pour un
- * dossier, depuis les sources publiques. Best-effort : n'ajoute que des
- * preuves réellement obtenues, et ne fait jamais échouer le flux.
+ * Vérification des preuves externes (météo, fiche radar, travaux) pour un
+ * dossier, depuis les sources publiques. Anti-redondance : les preuves déjà
+ * identifiées sont revérifiées mais jamais re-créées — seules les preuves non
+ * encore répertoriées sont ajoutées. Best-effort.
  */
 export async function recupererPreuvesApi(
   dossierId: string,
 ): Promise<PreuvesApiState> {
   await requireJuristeRedacteur();
 
-  if (isDemoId(dossierId)) return { ok: true, ajoutees: [] };
+  if (isDemoId(dossierId)) return { ok: true, ajoutees: [], verifiees: [] };
 
   const dossier = await prisma.dossier.findUnique({
     where: { id: dossierId },
@@ -1153,8 +1159,11 @@ export async function recupererPreuvesApi(
   });
   if (!dossier) return { error: "Dossier introuvable." };
 
-  const { ajoutees } = await recupererPreuvesPourDossierId(prisma, dossierId);
+  const { ajoutees, verifiees } = await recupererPreuvesPourDossierId(
+    prisma,
+    dossierId,
+  );
   revalidatePath(`/dashboard/juriste/${dossierId}`);
   revalidatePath(`/dashboard/cases/${dossierId}`);
-  return { ok: true, ajoutees };
+  return { ok: true, ajoutees, verifiees };
 }

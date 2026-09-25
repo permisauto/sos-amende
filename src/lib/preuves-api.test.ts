@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi, afterEach } from "vitest";
 import {
   listePiecesJointes,
   paragraphePiecesVersees,
   typesPreuvesPourFailles,
   faillesPourTypePreuve,
+  recupererPreuvesPourDossierId,
 } from "./preuves-api";
 
 describe("listePiecesJointes — inventaire des pièces jointes de la contestation", () => {
@@ -146,5 +147,112 @@ describe("faillesPourTypePreuve — inverse : preuve externe → failles pertine
     // Aucune faille « prescription » ou « plaque » ne déclenche de preuve.
     expect(radarFailles).not.toContain("faille-prescription-1-an");
     expect(radarFailles).not.toContain("faille-erreur-plaque");
+  });
+});
+
+describe("recupererPreuvesPourDossierId — anti-redondance (vérification, pas re-récupération)", () => {
+  const dossierSansPreuve = {
+    id: "d1",
+    statut: "EN_ATTENTE_VALIDATION",
+    type: "AMENDE",
+    conditions_meteo: null,
+    extractedData: {
+      date: "2026-05-10",
+      latitude: 48.8,
+      longitude: 2.3,
+      radarId: "7576",
+      adresse: "12 rue de la Paix 75001 PARIS",
+    },
+  };
+
+  function mockFetch() {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("archive-api.open-meteo.com")) {
+        return new Response(
+          JSON.stringify({
+            daily: {
+              weathercode: [61],
+              temperature_2m_max: [12],
+              temperature_2m_min: [8],
+              precipitation_sum: [5],
+            },
+          }),
+        );
+      }
+      if (url.includes("radars.csv")) {
+        return new Response(
+          [
+            "id,departement,latitude,longitude,type,route,emplacement,date_installation",
+            "7576,75,48.8,2.3,radar fixe,A6,km 42,2020-01-01",
+          ].join("\n"),
+        );
+      }
+      if (url.includes("data.sarthe.fr")) {
+        return new Response(
+          JSON.stringify({
+            results: [
+              {
+                loc_txt: "RD 100",
+                nature_trvx: "Chaussée",
+                date_debut: "2026-01-01",
+                date_fin: "2026-12-31",
+              },
+            ],
+          }),
+        );
+      }
+      return new Response("{}", { status: 404 });
+    }));
+  }
+
+  function depAvecExistant(existantes: Array<{ type: string; nom: string }>) {
+    const creates: Array<{ type: string; nom: string }> = [];
+    return {
+      dossier: {
+        findUnique: vi.fn(async () => dossierSansPreuve),
+        update: vi.fn(async () => ({})),
+      },
+      preuve: {
+        findMany: vi.fn(async () => existantes),
+        create: vi.fn(async (args: { data: { type: string; nom: string } }) => {
+          creates.push({ type: args.data.type, nom: args.data.nom });
+          return args.data;
+        }),
+      },
+      __creates: creates,
+    };
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("ajoute chaque preuve non encore identifiée (météo, radar, travaux)", async () => {
+    mockFetch();
+    const dep = depAvecExistant([]);
+    const res = await recupererPreuvesPourDossierId(dep as never, "d1");
+    expect(res.verifiees).toEqual([]);
+    expect(res.ajoutees.some((a) => a.startsWith("météo"))).toBe(true);
+    expect(res.ajoutees.some((a) => a.startsWith("radar"))).toBe(true);
+    expect(res.ajoutees.some((a) => a.startsWith("travaux"))).toBe(true);
+    const types = dep.__creates.map((c) => c.type);
+    expect(types).toContain("METEO");
+    expect(types).toContain("RADAR");
+    expect(types).toContain("TRAVAUX");
+  });
+
+  it("ne recrée JAMAIS une preuve déjà identifiée : révision seulement", async () => {
+    mockFetch();
+    const dep = depAvecExistant([
+      { type: "METEO", nom: "Bulletin météo historique" },
+      { type: "TRAVAUX", nom: "Travaux — RD 100" },
+    ]);
+    const res = await recupererPreuvesPourDossierId(dep as never, "d1");
+    // La météo et les travaux existent déjà : rien de changé pour eux.
+    expect(dep.__creates.map((c) => c.type)).toEqual(["RADAR"]);
+    expect(res.ajoutees.map((a) => a)).toEqual(["radar (radar fixe)"]);
+    expect(res.verifiees).toContain("météo déjà identifiée (revérifiée)");
+    expect(res.verifiees).toContain("travaux déjà identifiés (revérifiés)");
   });
 });
