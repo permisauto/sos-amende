@@ -26,7 +26,7 @@ import {
   type ExtractedData,
 } from "@/lib/moteur";
 import { organismeEnvoi, destinataireLrar, libelleCanalDepuisStockage } from "@/lib/envoi";
-import { listePiecesJointes } from "@/lib/preuves-api";
+import { faillesPourTypePreuve, listePiecesJointes } from "@/lib/preuves-api";
 import { FilMessages, type MessageDto } from "@/components/messages";
 import {
   FilEquipe,
@@ -304,6 +304,25 @@ export default async function JuristeCasePage(
       url: (await storageUrl(p.url)) ?? p.url,
     })),
   );
+  // Lien preuve externe ↔ faille détectée : le juriste voit pourquoi chaque
+  // preuve « Récupérée » a été suggérée (mapping PREUVES_PAR_FAILLE).
+  const faillesRetenuesContexte = (item.faillesRetenues ?? []).filter(
+    (df) => df.statut === "CANDIDATE" || df.statut === "CONFIRMEE",
+  );
+  const contexteParType: Record<string, string | null> = {
+    METEO: null,
+    RADAR: null,
+    TRAVAUX: null,
+  };
+  for (const type of Object.keys(contexteParType) as Array<"METEO" | "RADAR" | "TRAVAUX">) {
+    const faille = faillesRetenuesContexte.find((df) =>
+      faillesPourTypePreuve(type).includes(df.faille.id),
+    );
+    if (faille) {
+      contexteParType[type] =
+        `Suggérée pour la faille : ${faille.faille.titreFaille}`;
+    }
+  }
   const preuvesDto: PreuveDto[] = preuves.map((p) => ({
     id: p.id,
     nom: p.nom,
@@ -311,6 +330,7 @@ export default async function JuristeCasePage(
     url: p.url,
     createdAt: p.createdAt,
     userId: p.userId,
+    contexte: contexteParType[p.type] ?? null,
   }));
 
   const messagesDto: MessageDto[] = (item.messages ?? []).map((m) => ({
@@ -964,6 +984,7 @@ export default async function JuristeCasePage(
             dossierId={item.id}
             preuves={preuvesDto}
             currentUserId={null}
+            canDeleteAll={!lectureSeule}
           />
 
           <PreuvesApiBlock

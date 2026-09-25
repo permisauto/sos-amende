@@ -3,6 +3,7 @@ import {
   listePiecesJointes,
   paragraphePiecesVersees,
   typesPreuvesPourFailles,
+  faillesPourTypePreuve,
 } from "./preuves-api";
 
 describe("listePiecesJointes — inventaire des pièces jointes de la contestation", () => {
@@ -127,5 +128,23 @@ describe("typesPreuvesPourFailles — pertinence faille → preuves externes", (
     expect(types.has("RADAR")).toBe(true);
     expect(types.has("TRAVAUX")).toBe(true);
     expect(types.has("METEO")).toBe(false);
+  });
+});
+
+describe("faillesPourTypePreuve — inverse : preuve externe → failles pertinentes", () => {
+  it("reste vide pour un type sans faille associée", () => {
+    // Il n'existe pas de mapping TELEMETRE… : on teste un type courant qui
+    // n'apparaît dans aucun mapping (aucune chance de faux positifs).
+    expect(faillesPourTypePreuve("METEO")).toContain("faille-meteo-visibilite");
+    expect(faillesPourTypePreuve("RADAR")).toContain("faille-certificat-etalonnage");
+    expect(faillesPourTypePreuve("TRAVAUX")).toContain("faille-travaux-signalisation");
+  });
+
+  it("correspond aux failles qui pointent réellement vers le type", () => {
+    const radarFailles = faillesPourTypePreuve("RADAR");
+    expect(radarFailles).toContain("faille-homologation-radar");
+    // Aucune faille « prescription » ou « plaque » ne déclenche de preuve.
+    expect(radarFailles).not.toContain("faille-prescription-1-an");
+    expect(radarFailles).not.toContain("faille-erreur-plaque");
   });
 });

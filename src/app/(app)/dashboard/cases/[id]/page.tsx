@@ -9,6 +9,7 @@ import { SignaturePad } from "./signature-pad";
 import { EnvoiSuivi } from "./envoi-suivi";
 import { AvocatRequest } from "./avocat-request";
 import { Preuves, type PreuveDto } from "@/components/preuves";
+import { faillesPourTypePreuve } from "@/lib/preuves-api";
 import { DossierTimeline, type TimelineEvent } from "@/components/dossier-timeline";
 import { FilMessages, type MessageDto } from "@/components/messages";
 import { marquerMessagesLus } from "../../messages/actions";
@@ -50,6 +51,10 @@ type CaseDetail = {
     url: string;
     createdAt: Date;
     userId: string | null;
+  }>;
+  faillesRetenues: Array<{
+    statut: string;
+    faille: { id: string; titreFaille: string };
   }>;
   evenements: Array<{ type: string; detail: string | null; createdAt: Date }>;
   lawyerMatch: {
@@ -126,6 +131,7 @@ function demoDossier(id: string, userId: string): CaseDetail | null {
           ]
         : [],
     preuves: [],
+    faillesRetenues: [],
     evenements: [{ type: "CREATION", detail: "Dossier de démo", createdAt: new Date() }],
     messages: [],
     lawyerMatch: null,
@@ -160,6 +166,7 @@ export default async function CaseDetailPage(
         failleJuridique: true,
         lawyerMatch: true,
         preuves: { orderBy: { createdAt: "asc" } },
+        faillesRetenues: { include: { faille: true }, orderBy: { createdAt: "asc" } },
         evenements: { orderBy: { createdAt: "asc" } },
         messages: {
           orderBy: { createdAt: "asc" },
@@ -176,6 +183,7 @@ export default async function CaseDetailPage(
           failleJuridique: true,
           lawyerMatch: true,
           preuves: { orderBy: { createdAt: "asc" } },
+          faillesRetenues: { include: { faille: true }, orderBy: { createdAt: "asc" } },
           evenements: { orderBy: { createdAt: "asc" } },
           messages: {
             orderBy: { createdAt: "asc" },
@@ -212,6 +220,26 @@ export default async function CaseDetailPage(
       url: (await storageUrl(p.url)) ?? p.url,
     })),
   );
+  // Lien preuve externe ↔ faille détectée : chaque preuve « Récupérée »
+  // (METEO/RADAR/TRAVAUX) est expliquée au client par la faille qui la rend
+  // pertinente (mapping PREUVES_PAR_FAILLE) — transparence de la suggestion.
+  const faillesRetenues = (item.faillesRetenues ?? []).filter(
+    (df) => df.statut === "CANDIDATE" || df.statut === "CONFIRMEE",
+  );
+  const contexteParType: Record<string, string | null> = {
+    METEO: null,
+    RADAR: null,
+    TRAVAUX: null,
+  };
+  for (const type of Object.keys(contexteParType) as Array<"METEO" | "RADAR" | "TRAVAUX">) {
+    const faille = faillesRetenues.find((df) =>
+      faillesPourTypePreuve(type).includes(df.faille.id),
+    );
+    if (faille) {
+      contexteParType[type] =
+        `Suggérée automatiquement pour la faille détectée : ${faille.faille.titreFaille}`;
+    }
+  }
   const preuvesDto: PreuveDto[] = preuves.map((p) => ({
     id: p.id,
     nom: p.nom,
@@ -219,6 +247,7 @@ export default async function CaseDetailPage(
     url: p.url,
     createdAt: p.createdAt,
     userId: p.userId,
+    contexte: contexteParType[p.type] ?? null,
   }));
 
   const messagesDto: MessageDto[] = (item.messages ?? []).map((m) => ({

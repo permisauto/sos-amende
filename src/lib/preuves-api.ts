@@ -42,6 +42,20 @@ export function typesPreuvesPourFailles(faillesIds: Iterable<string>): Set<TypeP
   return types;
 }
 
+/**
+ * Failles qui rendent pertinente une preuve externe du type donné (inverse de
+ * PREUVES_PAR_FAILLE) — sert à expliquer au client pourquoi une preuve
+ * « Récupérée » a été apportée (lien preuve externe ↔ faille détectée).
+ * Fonction pure, testée.
+ */
+export function faillesPourTypePreuve(type: TypePreuveExterne): string[] {
+  const ids: string[] = [];
+  for (const [failleId, types] of Object.entries(PREUVES_PAR_FAILLE)) {
+    if (types.includes(type)) ids.push(failleId);
+  }
+  return ids;
+}
+
 const BAN_ENDPOINT = "https://api-adresse.data.gouv.fr/search/";
 const OPENMETEO_ENDPOINT = "https://archive-api.open-meteo.com/v1/archive";
 const RADARS_CSV_URL =

@@ -10,6 +10,7 @@ export type PreuveDto = {
   url: string;
   createdAt: Date;
   userId: string | null;
+  contexte?: string | null;
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -35,10 +36,12 @@ export function Preuves({
   dossierId,
   preuves,
   currentUserId,
+  canDeleteAll = false,
 }: {
   dossierId: string;
   preuves: PreuveDto[];
   currentUserId: string | null;
+  canDeleteAll?: boolean;
 }) {
   const [state, action, pending] = useActionState(ajouterPreuve, undefined);
   const [delState, delAction, delPending] = useActionState(
@@ -79,6 +82,11 @@ export function Preuves({
                   {TYPE_LABELS[p.type] ?? p.type} ·{" "}
                   {p.createdAt.toLocaleDateString("fr-FR")}
                 </p>
+                {p.contexte && (
+                  <p className="mt-1 text-xs text-emerald-700">
+                    {p.contexte}
+                  </p>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 {p.url ? (
@@ -95,7 +103,7 @@ export function Preuves({
                     Récupérée
                   </span>
                 )}
-                {currentUserId && p.userId === currentUserId && (
+                {(canDeleteAll || (currentUserId && p.userId === currentUserId)) && (
                   <form action={delAction}>
                     <input type="hidden" name="preuveId" value={p.id} />
                     <button
