@@ -1,4 +1,5 @@
 import { expect, test, type Browser } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 import { analyserDossier, createDossier, loginAs } from "./helpers";
 
 async function signerLettre(page: import("@playwright/test").Page) {
@@ -98,6 +99,21 @@ test("synchronisation : pipeline juriste, lettres proposées, signature visible 
   await expect(
     pj2.getByText("Signature du client déjà apposée", { exact: true }),
   ).toBeVisible();
+  // Le PDF téléchargé (aperçu affiché, POST lettre) contient bien l'image de
+  // signature — et pas le libellé « lettre non signée ».
+  const [download] = await Promise.all([
+    pj2.waitForEvent("download", { timeout: 10_000 }).catch(() => null),
+    pj2
+      .getByRole("button", { name: "Télécharger la lettre affichée (PDF)" })
+      .click()
+      .catch(() => null),
+  ]);
+  if (download) {
+    const path = await download.path();
+    const buf = await readFile(path!);
+    expect(buf.toString("utf8")).toContain("/Subtype /Image");
+    expect(buf.toString("utf8")).not.toContain("lettre non signée");
+  }
   // Récap « Envoi de la contestation » : canal LRAR retenu + pièces jointes
   await expect(
     pj2.getByText("Envoi de la contestation", { exact: true }),

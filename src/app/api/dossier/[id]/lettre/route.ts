@@ -9,37 +9,38 @@ async function buildPdf(
   id: string,
   overrideLettre?: string | null,
 ): Promise<{ lettre: string | null; signatureDataUrl: string | null; piecesJointes: string[] }> {
-  let lettre: string | null = overrideLettre ?? null;
+  const demoLettre = getDemoLettre(id);
+  let lettre: string | null = overrideLettre ?? demoLettre ?? null;
   let signatureDataUrl: string | null = null;
   let piecesJointes: string[] = [];
-
-  const demoLettre = getDemoLettre(id);
-  if (demoLettre || overrideLettre) {
-    // Priorité : lettre postée (aperçu), sinon lettre démo mémorisée
-    lettre = overrideLettre ?? demoLettre ?? null;
-    try {
-      const sig = await storageRead("/uploads/demo-signature.png");
-      if (sig) signatureDataUrl = `data:image/png;base64,${sig.toString("base64")}`;
-    } catch {}
-    if (lettre) return { lettre, signatureDataUrl, piecesJointes };
-  }
 
   const dossier = await prisma.dossier.findUnique({
     where: { id },
     include: { courriers: { orderBy: { createdAt: "asc" } } },
   });
-  if (!dossier?.lettreGeneree) {
-    return { lettre: null, signatureDataUrl: null, piecesJointes };
-  }
-  lettre = overrideLettre ?? dossier.lettreGeneree;
-  piecesJointes = await lirePiecesJointesPourDossierId(prisma, id);
-  const courrier = dossier.courriers[dossier.courriers.length - 1];
-  if (courrier?.signatureUrl) {
+
+  if (dossier?.lettreGeneree) {
+    // Dossier réel : la lettre postée (aperçu modifié) prime, sinon la lettre
+    // en base. La signature du dernier courrier est TOUJOURS relue — y compris
+    // quand un aperçu (overrideLettre) est demandé, car le PDF doit rester
+    // fidèle à l'écran (signature au bas de la lettre).
+    lettre = overrideLettre ?? dossier.lettreGeneree;
+    piecesJointes = await lirePiecesJointesPourDossierId(prisma, id);
+    const courrier = dossier.courriers[dossier.courriers.length - 1];
+    if (courrier?.signatureUrl) {
+      try {
+        const sig = await storageRead(courrier.signatureUrl);
+        if (sig) signatureDataUrl = `data:image/png;base64,${sig.toString("base64")}`;
+      } catch {}
+    }
+  } else if (demoLettre) {
+    // Lettre démo mémorisée (aucun dossier en base) : signature démo jointe.
     try {
-      const sig = await storageRead(courrier.signatureUrl);
+      const sig = await storageRead("/uploads/demo-signature.png");
       if (sig) signatureDataUrl = `data:image/png;base64,${sig.toString("base64")}`;
     } catch {}
   }
+
   return { lettre, signatureDataUrl, piecesJointes };
 }
 
