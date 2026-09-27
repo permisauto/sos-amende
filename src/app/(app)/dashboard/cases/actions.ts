@@ -15,7 +15,7 @@ import {
   type RegleDetection,
 } from "@/lib/moteur";
 import { generateLettrePdf } from "@/lib/lettre-pdf";
-import { extrairePv, normaliserPv } from "@/lib/ocr";
+import { extrairePv, getOcrProvider, normaliserPv } from "@/lib/ocr";
 import { notifierStatut } from "@/lib/notifications";
 import { formaterLettreOfficielle } from "@/lib/envoi";
 import {
@@ -66,6 +66,15 @@ export async function createDossier(
   // jamais l'analyse finale — un humain vérifie puis soumet.
   const prefill: Record<string, string> = {};
   const ocr = await extrairePv(buffer);
+  if (!ocr) {
+    // Diagnostic prod : un OCR sans résultat laisse le dossier sans texte ni
+    // pré-remplissage — le scan/scoring semble « ne rien détecter ». La cause
+    // la plus fréquente est un provider non configuré (getOcrProvider →
+    // "aucun") ou une clé API manquante/épuisée.
+    console.error(
+      `createDossier: OCR sans résultat (provider=${getOcrProvider()}, type=${file.type})`,
+    );
+  }
   if (ocr) {
     // Gemini renvoie des champs structurés (plus fiables que les regex) ;
     // sinon on applique normaliserPv sur le texte brut (providers classiques).
