@@ -28,12 +28,10 @@ export function GenerateurLettre({
   dossierId,
   variantes,
   lectureSeule = false,
-  suggerees = false,
 }: {
   dossierId: string;
   variantes: VarianteLettre[];
   lectureSeule?: boolean;
-  suggerees?: boolean;
 }) {
   const [ouvert, setOuvert] = useState(false);
   const [selection, setSelection] = useState<string>(variantes[0]?.cle ?? "");
@@ -88,16 +86,14 @@ export function GenerateurLettre({
           setConfirmed(false);
         }}
         className={
-          suggerees
-            ? "inline-flex items-center gap-2 rounded-full bg-violet-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-700"
-            : "rounded-full border border-violet-300 px-4 py-2 text-sm font-medium text-violet-700 transition hover:bg-violet-50"
+          "inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:from-violet-700 hover:to-fuchsia-700 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-violet-300"
         }
         title="Générer une autre version de la lettre depuis la base juridique"
       >
         <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden>
-          <path d="M4.5 2A1.5 1.5 0 003 3.5v13A1.5 1.5 0 004.5 18h11a1.5 1.5 0 001.5-1.5V7.914a1.5 1.5 0 00-.44-1.06l-3.914-3.914A1.5 1.5 0 0011.586 2H4.5zm7.5 1.5v4a.5.5 0 01-.5.5h-4a.5.5 0 010-1h4v-3.5h.5zM7.5 9.5h5v1h-5v-1zm0 3h5v1h-5v-1zm0 3h3v1h-3v-1z" />
+          <path d="M9.653 16.915l-.005-.003-.019-.01a5.759 5.759 0 01-.576-.34 10.375 10.375 0 01-1.842-1.521c-.972-1.054-2.12-2.58-2.421-4.594C4.32 7.637 5.6 5.804 7.8 5.523c1.88-.24 3.27.678 4.54 1.3a9.987 9.987 0 011.53.889.5.5 0 01.682.047c.187.18.368.366.54.556A10.03 10.03 0 0116.5 10c.31 1.65.098 3.415-.347 5.333-.082.354-.19.714-.32 1.054-.206.543-.508.745-1.044.628-.108-.024-.226-.041-.344-.052a15.39 15.39 0 00-2.311.125c-1.2.169-2.164.511-2.665.874a.5.5 0 01-.816-.047zM6.119 6.38l-.121.84c-.029.217 0 .437.085.633a2.436 2.436 0 003.083 1.185c1.009-.42 1.957-1.006 2.454-1.624a.503.503 0 01-.005-.02 8.94 8.94 0 00-1.28-.864c-1.083-.565-2.47-1.113-4.216-1.15zM8.47 5.57l.658 1.575a1.86 1.86 0 001.03.996c.126.052.259.073.394.06l1.634-.243-.74-1.26-.465-.484a8.94 8.94 0 00-.939-.794 1.928 1.928 0 01-.572.15zM10.21 2.504a.5.5 0 01.89-.32c.279.289.537.596.773.921.22.302.418.62.594.95.12.224.165.421.129.598a.696.696 0 01.07.217c.016.052.027.107.035.163a.5.5 0 01-.989.133.952.952 0 00-.065-.178.696.696 0 00-.152-.247l-.066-.063.098-.294c-.113-.178-.232-.359-.356-.546a10.736 10.736 0 01-.54-.79.5.5 0 01.39-.757z" />
         </svg>
-        Récrire la lettre
+        Réécrire la lettre
       </button>
 
       {ouvert && (
