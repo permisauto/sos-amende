@@ -68,6 +68,20 @@ const RADARS_CSV_URL =
 const TRAVAUX_OPENDATA_BASE =
   process.env.TRAVAUX_OPENDATA_BASE ??
   "https://data.sarthe.fr/api/explore/v2.1/catalog/datasets/227200029_chantiers_routiers";
+
+/**
+ * Bases OpendataSoft des chantiers routiers interrogées. `TRAVAUX_OPENDATA_BASES`
+ * (séparateur virgule) permet de surveiller plusieurs départements à la fois ;
+ * à défaut, `TRAVAUX_OPENDATA_BASE` (défaut : Sarthe) est utilisé seul.
+ */
+function basesTravaux(): string[] {
+  const multi = process.env.TRAVAUX_OPENDATA_BASES;
+  if (multi?.trim()) {
+    return multi.split(",").map((s) => s.trim()).filter(Boolean);
+  }
+  const single = TRAVAUX_OPENDATA_BASE.trim();
+  return single ? [single] : [];
+}
 const TRAVAUX_RAYON_M = 20_000;
 const RADARS_TTL_MS = 6 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 10_000;
@@ -115,7 +129,45 @@ export async function geocoderAdresse(
 
 /* --------------------------------- Météo --------------------------------- */
 
-function resumerMeteo(data: unknown): string | null {
+const WEATHER_CODES: Record<number, string> = {
+  0: "Ciel dégagé",
+  1: "Principalement clair",
+  2: "Partiellement nuageux",
+  3: "Couvert",
+  45: "Brouillard",
+  48: "Brouillard givrant",
+  51: "Bruine légère",
+  53: "Bruine modérée",
+  55: "Bruine dense",
+  56: "Bruine verglaçante légère",
+  57: "Bruine verglaçante dense",
+  61: "Pluie légère",
+  63: "Pluie modérée",
+  65: "Pluie forte",
+  66: "Pluie verglaçante légère",
+  67: "Pluie verglaçante forte",
+  71: "Neige légère",
+  73: "Neige modérée",
+  75: "Neige forte",
+  77: "Grains de neige",
+  80: "Averses de pluie légères",
+  81: "Averses de pluie modérées",
+  82: "Averses de pluie violentes",
+  85: "Averses de neige légères",
+  86: "Averses de neige fortes",
+  95: "Orages",
+  96: "Orages avec grêle légère",
+  99: "Orages avec grêle forte",
+};
+
+/**
+ * Résume les conditions météo récupérées. Sans `heure`, résumé journalier
+ * (min/max, précipitations, vent). Avec `heure` (0-23), résumé à l'heure près
+ * (horaire Open-Meteo indexé sur l'heure locale du jour de l'infraction) —
+ * condition défavorable au moment exact du PV : pluie sur la seule heure de
+ * l'infraction alors que la journée était globalement clémente, ou le contraire.
+ */
+function resumerMeteo(data: unknown, heure?: number | null): string | null {
   const d = data as {
     daily?: {
       weathercode?: number[];
@@ -127,8 +179,34 @@ function resumerMeteo(data: unknown): string | null {
       windspeed_10m_max?: number[];
       windgusts_10m_max?: number[];
     };
+    hourly?: {
+      weathercode?: number[];
+      temperature_2m?: number[];
+      precipitation?: number[];
+    };
   };
-  if (!d?.daily?.weathercode?.length) return null;
+  if (!d) return null;
+
+  if (
+    heure != null &&
+    Number.isInteger(heure) &&
+    heure >= 0 &&
+    heure <= 23 &&
+    d.hourly?.weathercode?.length
+  ) {
+    const idx = heure;
+    const code = d.hourly.weathercode[idx];
+    if (code === undefined) return null;
+    const temp = d.hourly.temperature_2m?.[idx];
+    const precip = d.hourly.precipitation?.[idx] ?? 0;
+    const desc = WEATHER_CODES[code] ?? `Code météo ${code}`;
+    const parts = [`${heure}h`, desc];
+    if (temp !== undefined) parts.push(`${Math.round(temp)}°C`);
+    if (precip > 0) parts.push(`Précip: ${precip} mm`);
+    return parts.join(" • ");
+  }
+
+  if (!d.daily?.weathercode?.length) return null;
 
   const idx = 0;
   const code = d.daily.weathercode?.[idx];
@@ -140,38 +218,7 @@ function resumerMeteo(data: unknown): string | null {
   const windMax = d.daily.windspeed_10m_max?.[idx];
   const gustMax = d.daily.windgusts_10m_max?.[idx];
 
-  const weatherCodes: Record<number, string> = {
-    0: "Ciel dégagé",
-    1: "Principalement clair",
-    2: "Partiellement nuageux",
-    3: "Couvert",
-    45: "Brouillard",
-    48: "Brouillard givrant",
-    51: "Bruine légère",
-    53: "Bruine modérée",
-    55: "Bruine dense",
-    56: "Bruine verglaçante légère",
-    57: "Bruine verglaçante dense",
-    61: "Pluie légère",
-    63: "Pluie modérée",
-    65: "Pluie forte",
-    66: "Pluie verglaçante légère",
-    67: "Pluie verglaçante forte",
-    71: "Neige légère",
-    73: "Neige modérée",
-    75: "Neige forte",
-    77: "Grains de neige",
-    80: "Averses de pluie légères",
-    81: "Averses de pluie modérées",
-    82: "Averses de pluie violentes",
-    85: "Averses de neige légères",
-    86: "Averses de neige fortes",
-    95: "Orages",
-    96: "Orages avec grêle légère",
-    99: "Orages avec grêle forte",
-  };
-
-  const desc = weatherCodes[code ?? -1] ?? `Code météo ${code}`;
+  const desc = WEATHER_CODES[code ?? -1] ?? `Code météo ${code}`;
   const parts = [desc];
   if (tempMax !== undefined && tempMin !== undefined) {
     parts.push(`${Math.round(tempMin)}°/${Math.round(tempMax)}°C`);
@@ -188,12 +235,17 @@ export async function preuveMeteo(opts: {
   latitude: number;
   longitude: number;
   date: string;
+  heure?: number | null;
 }): Promise<string | null> {
   try {
-    const url = `${OPENMETEO_ENDPOINT}?latitude=${opts.latitude}&longitude=${opts.longitude}&start_date=${opts.date}&end_date=${opts.date}&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,rain_sum,snowfall_sum,windspeed_10m_max,windgusts_10m_max&timezone=Europe/Paris`;
+    const hourly =
+      opts.heure != null && opts.heure >= 0 && opts.heure <= 23
+        ? "&hourly=weathercode,temperature_2m,precipitation"
+        : "";
+    const url = `${OPENMETEO_ENDPOINT}?latitude=${opts.latitude}&longitude=${opts.longitude}&start_date=${opts.date}&end_date=${opts.date}&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,rain_sum,snowfall_sum,windspeed_10m_max,windgusts_10m_max${hourly}&timezone=Europe/Paris`;
     const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
     if (!res.ok) return null;
-    return resumerMeteo(await res.json());
+    return resumerMeteo(await res.json(), opts.heure ?? null);
   } catch {
     return null;
   }
@@ -210,6 +262,9 @@ type RadarCsvRow = {
   route: string;
   emplacement: string;
   dateInstallation: string;
+  direction?: string;
+  equipement?: string;
+  vitesseVehiculesLegers?: string;
 };
 
 let radarsCache: { at: number; rows: RadarCsvRow[] } | null = null;
@@ -238,6 +293,9 @@ async function chargerRadars(): Promise<RadarCsvRow[]> {
       route: idx("route"),
       emplacement: idx("emplacement"),
       dateInst: idx("date_installation"),
+      direction: idx("direction"),
+      equipement: idx("equipement"),
+      vitesse: idx("vitesse_vehicules_legers_kmh"),
     };
     const rows: RadarCsvRow[] = [];
     for (let k = 1; k < lignes.length; k++) {
@@ -253,6 +311,10 @@ async function chargerRadars(): Promise<RadarCsvRow[]> {
         route: cols[i.route]?.trim() ?? "",
         emplacement: cols[i.emplacement]?.trim() ?? "",
         dateInstallation: cols[i.dateInst]?.trim() ?? "",
+        direction: cols[i.direction]?.trim() || undefined,
+        equipement: cols[i.equipement]?.trim() || undefined,
+        vitesseVehiculesLegers:
+          cols[i.vitesse]?.trim() || undefined,
       });
     }
     radarsCache = { at: now, rows };
@@ -282,9 +344,18 @@ export type FicheRadar = {
   latitude: number;
   longitude: number;
   dateInstallation: string;
+  /** Sens de circulation couvert (ex. « Tout sens ») quand la colonne existe. */
+  direction?: string;
+  /** Modèle de l'équipement (ex. « MESTA 210C ») quand la colonne existe. */
+  equipement?: string;
+  /** Limite réglementaire VL (km/h) quand la colonne existe. */
+  vitesseVehiculesLegers?: number | null;
 };
 
 function toFiche(r: RadarCsvRow): FicheRadar {
+  const vitesse = r.vitesseVehiculesLegers
+    ? Number(r.vitesseVehiculesLegers)
+    : NaN;
   return {
     id: r.id,
     type: r.type,
@@ -294,6 +365,9 @@ function toFiche(r: RadarCsvRow): FicheRadar {
     latitude: Number(r.latitude),
     longitude: Number(r.longitude),
     dateInstallation: r.dateInstallation,
+    direction: r.direction,
+    equipement: r.equipement,
+    vitesseVehiculesLegers: Number.isFinite(vitesse) ? vitesse : null,
   };
 }
 
@@ -347,42 +421,53 @@ export async function rechercherTravaux(opts: {
   longitude: number;
   date: string;
 }): Promise<ChantierTrouve[]> {
-  const base = (TRAVAUX_OPENDATA_BASE || "").replace(/\/+$/, "");
-  if (!base) return [];
-  try {
-    const where = encodeURIComponent(
-      `date_debut <= "${opts.date}" AND date_fin >= "${opts.date}"`,
-    );
-    const url = `${base}/records?where=${where}&geofilter.distance=${opts.latitude},${opts.longitude},${TRAVAUX_RAYON_M}&limit=10`;
-    const res = await fetch(url, {
-      headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
-    if (!res.ok) return [];
-    const data = (await res.json()) as {
-      results?: Array<Record<string, unknown>>;
-    };
-    let source = base;
+  const bases = basesTravaux();
+  if (!bases.length) return [];
+  const vus = new Set<string>();
+  const resultats: ChantierTrouve[] = [];
+  for (const base of bases) {
+    const sansSlash = base.replace(/\/+$/, "");
     try {
-      source = new URL(base).hostname;
-    } catch {
-      /* url malformée : on garde la base */
-    }
-    return (data.results ?? [])
-      .map((r) => ({
-        localisation: String(
+      const where = encodeURIComponent(
+        `date_debut <= "${opts.date}" AND date_fin >= "${opts.date}"`,
+      );
+      const url = `${sansSlash}/records?where=${where}&geofilter.distance=${opts.latitude},${opts.longitude},${TRAVAUX_RAYON_M}&limit=10`;
+      const res = await fetch(url, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      if (!res.ok) continue;
+      const data = (await res.json()) as {
+        results?: Array<Record<string, unknown>>;
+      };
+      let source = sansSlash;
+      try {
+        source = new URL(sansSlash).hostname;
+      } catch {
+        /* url malformée : on garde la base */
+      }
+      for (const r of data.results ?? []) {
+        const localisation = String(
           r["loc_txt"] ?? r["libelle"] ?? r["localisation"] ?? "Chantier",
-        ),
-        nature: String(r["nature_trvx"] ?? r["nature"] ?? r["objet"] ?? ""),
-        maitreOuvrage: String(r["maitre_ouvrage"] ?? ""),
-        dateDebut: String(r["date_debut"] ?? ""),
-        dateFin: String(r["date_fin"] ?? ""),
-        source,
-      }))
-      .filter((c) => c.localisation.trim().length > 0);
-  } catch {
-    return [];
+        ).trim();
+        // Déduplication entre bases : un même chantier localisé dans plusieurs
+        // jeux de données n'est jamais ajouté deux fois.
+        if (!localisation || vus.has(localisation)) continue;
+        vus.add(localisation);
+        resultats.push({
+          localisation,
+          nature: String(r["nature_trvx"] ?? r["nature"] ?? r["objet"] ?? ""),
+          maitreOuvrage: String(r["maitre_ouvrage"] ?? ""),
+          dateDebut: String(r["date_debut"] ?? ""),
+          dateFin: String(r["date_fin"] ?? ""),
+          source,
+        });
+      }
+    } catch {
+      continue;
+    }
   }
+  return resultats;
 }
 
 /* ------------------- Pièces jointes de la contestation -------------------- */
@@ -501,6 +586,14 @@ export async function recupererPreuvesPourDossierId(
       /^\d{4}-\d{2}-\d{2}$/.test(data["date"])
         ? (data["date"] as string)
         : null;
+    // Heure de l'infraction (« 14h32 ») : permet une météo relevée à l'heure
+    // près (preuve visibilité quand la condition défavorable s'est produite à
+    // l'heure exacte du PV, même si la journée était globalement clémente).
+    let heure: number | null = null;
+    if (typeof data["heure"] === "string") {
+      const m = (data["heure"] as string).match(/^(\d{1,2})h/);
+      if (m) heure = Math.min(23, Number(m[1]));
+    }
     let latitude =
       typeof data["latitude"] === "number" ? (data["latitude"] as number) : null;
     let longitude =
@@ -545,6 +638,7 @@ export async function recupererPreuvesPourDossierId(
             latitude,
             longitude,
             date,
+            heure,
           });
           // La preuve météo ne caractérise la faille « visibilité » QUE si les
           // conditions récupérées sont réellement défavorables (pluie, neige,
@@ -619,7 +713,7 @@ export async function recupererPreuvesPourDossierId(
             .create({
               data: {
                 dossierId,
-                nom: `Fiche radar — ${radar.type}${radar.route ? ` (${radar.route})` : ""}`,
+                nom: `Fiche radar — ${radar.equipement || radar.type}${radar.route ? ` (${radar.route})` : ""}`,
                 type: "RADAR",
                 url: "",
               },

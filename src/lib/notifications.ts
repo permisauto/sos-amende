@@ -106,6 +106,53 @@ export async function notifierMessage(
 }
 
 /**
+ * Notifie l'équipe administrative (veille juridique) : une nouvelle édition du
+ * Journal officiel a été détectée par le cron quotidien. La veille n'invente
+ * rien — elle demande seulement aux admins de vérifier si un texte récent
+ * modifie une faille applicable (les propositions du catalogue restent à leur
+ * validation). Défensif : sans AUTH_RESEND_KEY, aucun envoi.
+ */
+export async function notifierNouvellesPropositions(opts: {
+  editionJorf: { fichier: string; dateEdition: string; heureEdition: string };
+  lienJorf: string;
+}): Promise<boolean> {
+  if (!resend) return false;
+  const { dateEdition, heureEdition } = opts.editionJorf;
+  const dateLisible =
+    `${dateEdition.slice(6, 8)}/${dateEdition.slice(4, 6)}/${dateEdition.slice(0, 4)}` +
+    ` à ${heureEdition.slice(0, 2)}h${heureEdition.slice(2, 4)}`;
+  try {
+    const admins = await prisma.user.findMany({
+      where: { role: "ADMIN" },
+      select: { email: true, name: true },
+    });
+    let envoyes = 0;
+    for (const admin of admins) {
+      await resend.emails.send({
+        from: EMAIL_FROM,
+        to: admin.email,
+        subject: "SOS Amende — veille juridique : nouvelle édition du JORF détectée",
+        html: `
+          <p>Bonjour ${admin.name ?? "administrateur"},</p>
+          <p>La veille juridique quotidienne a détecté une <strong>nouvelle édition
+          du Journal officiel du ${dateLisible}</strong> (${opts.editionJorf.fichier}).</p>
+          <p>Veuillez vérifier si un texte récent (code de la route, jurisprudence,
+          procédure de contestation…) modifie une faille applicable : les
+          propositions de la bibliothèque juridique restent en attente de votre
+          validation.</p>
+          <p><a href="${opts.lienJorf}">Consulter le Journal officiel</a> ·
+          <a href="${process.env.NEXT_PUBLIC_APP_URL ?? "https://recours-permis-pv.com"}/dashboard/juriste/failles">Bibliothèque juridique</a></p>
+          <p style="color:#888;font-size:0.85em">Cette alerte est générée automatiquement par l'auto-alimentation quotidienne.</p>`,
+      });
+      envoyes += 1;
+    }
+    return envoyes > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Notifie le client d'un changement de statut de son dossier (défensif :
  * sans AUTH_RESEND_KEY, aucun e-mail n'est envoyé et la fonction renvoie
  * false sans jamais lever d'erreur). Complète les rappels J10/J3/J0.

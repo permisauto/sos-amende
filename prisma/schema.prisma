@@ -291,6 +291,24 @@ model LawyerMatch {
 }
 
 // ---------------------------------------------------------------------------
+// Trace de l'auto-alimentation (cron quotidien) : journal de chaque passage —
+// catalogue synchronisé et veille juridique externe (JORF). Permet de voir la
+// dernière exécution, son statut et le nombre de nouveautés détectées.
+// ---------------------------------------------------------------------------
+
+model AutoAlimentationTrace {
+  id        String   @id @default(cuid())
+  campagne  String // "catalogue" | "veille-jorf"
+  statut    String // "OK" | "ECHEC"
+  traitees  Int      @default(0)
+  nouvelles Int      @default(0)
+  detail    String?  @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([campagne, createdAt])
+}
+
+// ---------------------------------------------------------------------------
 // Paiements par virement bancaire (inscription inversée, remboursements sect. 9)
 // ---------------------------------------------------------------------------
 

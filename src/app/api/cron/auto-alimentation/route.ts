@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { synchroniserCatalogue } from "@/lib/auto-alimentation";
+import { executerAutoAlimentation } from "@/lib/auto-alimentation";
 
 /**
  * Auto-alimentation automatique de la base juridique : synchronise la table
  * `FailleJuridique` avec le catalogue sourcé (FAILLES.md §H) en statut
- * PROPOSEE. À appeler périodiquement (ex. Vercel Cron / GitHub Actions) — les
- * propositions arrivent alors automatiquement ; l'admin ne fait que valider.
+ * PROPOSEE, trace chaque passage, puis exécute la veille juridique externe
+ * (détection des nouvelles éditions du JORF + alerte admin). À appeler
+ * quotidiennement (Vercel Cron : `0 2 * * *`). Les propositions arrivent
+ * automatiquement ; l'admin ne fait que valider.
  * Hors dev, CRON_SECRET est requis (header `Authorization: Bearer <secret>`).
  */
 export async function GET(req: Request) {
@@ -24,12 +26,16 @@ export async function GET(req: Request) {
     }
   }
 
-  const count = await synchroniserCatalogue();
+  const res = await executerAutoAlimentation();
   revalidatePath("/dashboard/juriste/failles");
   return NextResponse.json({
     ok: true,
-    synchronisees: count,
-    message: `${count} proposition(s) du catalogue en attente de validation admin.`,
+    synchronisees: res.catalogue,
+    veille: {
+      edition: res.veilleEdition,
+      nouvelle: res.veilleNouvelle,
+    },
+    message: `${res.catalogue} proposition(s) du catalogue en attente de validation admin.`,
   });
 }
 

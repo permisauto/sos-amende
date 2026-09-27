@@ -159,8 +159,8 @@ describe("recupererPreuvesPourDossierId — anti-redondance (vérification, pas 
       if (url.includes("radars.csv")) {
         return new Response(
           [
-            "id,departement,latitude,longitude,type,route,emplacement,date_installation",
-            "7576,75,48.8,2.3,radar fixe,A6,km 42,2020-01-01",
+            "id,departement,latitude,longitude,type,route,emplacement,date_installation,direction,equipement,vitesse_vehicules_legers_kmh",
+            "7576,75,48.8,2.3,radar fixe,A6,km 42,2020-01-01,Tout sens,MESTA 210C,90",
           ].join("\n"),
         );
       }
@@ -202,6 +202,7 @@ describe("recupererPreuvesPourDossierId — anti-redondance (vérification, pas 
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 
   it("ajoute chaque preuve non encore identifiée (météo, radar, travaux)", async () => {
@@ -216,6 +217,59 @@ describe("recupererPreuvesPourDossierId — anti-redondance (vérification, pas 
     expect(types).toContain("METEO");
     expect(types).toContain("RADAR");
     expect(types).toContain("TRAVAUX");
+  });
+
+  it("fiche radar enrichie : équipement et limite VL issus du CSV officiel", async () => {
+    mockFetch();
+    const dep = depAvecExistant([]);
+    await recupererPreuvesPourDossierId(dep as never, "d1");
+    const radar = dep.__creates.find((c) => c.type === "RADAR");
+    expect(radar?.nom).toContain("MESTA 210C");
+    expect(radar?.nom).toContain("A6");
+  });
+
+  it("météo à l'heure de l'infraction : relevé horaire quand la journée était clémente", async () => {
+    // Heure de l'infraction = 14h32 ; à 14h pluie (code 61) alors que le
+    // journalier est clair (code 0). La preuve est versée car la condition
+    // défavorable a eu lieu à l'heure exacte du PV.
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("archive-api.open-meteo.com")) {
+        const hourlyCode = Array(24).fill(0);
+        hourlyCode[14] = 61;
+        return new Response(
+          JSON.stringify({
+            daily: { weathercode: [0], temperature_2m_max: [18], temperature_2m_min: [10] },
+            hourly: {
+              weathercode: hourlyCode,
+              temperature_2m: Array(24).fill(15).map((_, i) => (i === 14 ? 14 : 15)),
+              precipitation: Array(24).fill(0).map((_, i) => (i === 14 ? 5 : 0)),
+            },
+          }),
+        );
+      }
+      if (url.includes("radars.csv")) {
+        return new Response(
+          [
+            "id,departement,latitude,longitude,type,route,emplacement,date_installation",
+            "7576,75,48.8,2.3,radar fixe,A6,km 42,2020-01-01",
+          ].join("\n"),
+        );
+      }
+      return new Response("{}", { status: 404 });
+    }));
+    const dep = depAvecExistant([]);
+    dep.dossier.findUnique.mockImplementation(async () => ({
+      ...dossierSansPreuve,
+      extractedData: { ...dossierSansPreuve.extractedData, heure: "14h32" },
+    }));
+    const res = await recupererPreuvesPourDossierId(dep as never, "d1");
+    const meteo = dep.__creates.find((c) => c.type === "METEO");
+    expect(meteo).toBeDefined();
+    expect(res.ajoutees.some((a) => a.startsWith("météo (14h"))).toBe(true);
+    expect(
+      res.verifiees.some((v) => v.includes("conditions non défavorables")),
+    ).toBe(false);
   });
 
   it("ne recrée JAMAIS une preuve déjà identifiée : révision seulement", async () => {
@@ -243,5 +297,57 @@ describe("recupererPreuvesPourDossierId — anti-redondance (vérification, pas 
     expect(
       res.verifiees.some((v) => v.includes("conditions non défavorables")),
     ).toBe(true);
+  });
+
+  it("travaux multi-départements : interroge plusieurs bases et déduplique", async () => {
+    // Deux bases OpendataSoft listent le même chantier « RD 100 » : il ne doit
+    // être créé qu'une seule fois, les autres étant ajoutés.
+    vi.stubEnv(
+      "TRAVAUX_OPENDATA_BASES",
+      "https://data.sarthe.fr/api/explore/v2.1/catalog/datasets/sarthe,https://data.angers.fr/api/explore/v2.1/catalog/datasets/angers",
+    );
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("archive-api.open-meteo.com")) {
+        return new Response(
+          JSON.stringify({
+            daily: { weathercode: [0], temperature_2m_max: [12], temperature_2m_min: [8] },
+          }),
+        );
+      }
+      if (url.includes("radars.csv")) {
+        return new Response(
+          [
+            "id,departement,latitude,longitude,type,route,emplacement,date_installation",
+            "7576,75,48.8,2.3,radar fixe,A6,km 42,2020-01-01",
+          ].join("\n"),
+        );
+      }
+      if (url.includes("data.angers.fr")) {
+        return new Response(
+          JSON.stringify({
+            results: [
+              { loc_txt: "RD 100", nature_trvx: "Chaussée" },
+              { loc_txt: "BF 45", nature_trvx: "Grue" },
+            ],
+          }),
+        );
+      }
+      if (url.includes("data.sarthe.fr")) {
+        return new Response(
+          JSON.stringify({
+            results: [{ loc_txt: "RD 100", nature_trvx: "Chaussée" }],
+          }),
+        );
+      }
+      return new Response("{}", { status: 404 });
+    }));
+    const dep = depAvecExistant([]);
+    const res = await recupererPreuvesPourDossierId(dep as never, "d1");
+    const travaux = dep.__creates.filter((c) => c.type === "TRAVAUX");
+    expect(travaux).toHaveLength(2);
+    expect(travaux.map((t) => t.nom)).toContain("Travaux — RD 100");
+    expect(travaux.map((t) => t.nom)).toContain("Travaux — BF 45");
+    expect(res.ajoutees.some((a) => a.startsWith("travaux (2"))).toBe(true);
   });
 });

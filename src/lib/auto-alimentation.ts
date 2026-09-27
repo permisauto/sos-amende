@@ -8,6 +8,8 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
 import { CATALOGUE_SOURCES } from "@/lib/catalogue-sources";
+import { synchroniserVeilleJorf } from "@/lib/veille-juridique";
+import { notifierNouvellesPropositions } from "@/lib/notifications";
 
 /**
  * Synchronise la base juridique avec le catalogue sourcé. Toutes les entrées
@@ -64,4 +66,79 @@ export async function synchroniserCatalogue(): Promise<number> {
     return 0;
   }
   return count;
+}
+
+/**
+ * Enregistre une trace d'une exécution de l'auto-alimentation (campagne
+ * « catalogue » ou « veille-jorf ») dans `AutoAlimentationTrace`. Best-effort :
+ * jamais bloquant.
+ */
+export async function enregistrerTraceAutoAlimentation(opts: {
+  campagne: string;
+  statut: string;
+  traitees?: number;
+  nouvelles?: number;
+  detail?: string;
+}): Promise<void> {
+  try {
+    await prisma.autoAlimentationTrace.create({
+      data: {
+        campagne: opts.campagne,
+        statut: opts.statut,
+        traitees: opts.traitees ?? 0,
+        nouvelles: opts.nouvelles ?? 0,
+        detail: opts.detail ?? null,
+      },
+    });
+  } catch {
+    /* trace best-effort : ne bloque jamais le cron */
+  }
+}
+
+/**
+ * Exécution quotidienne complète de l'auto-alimentation (Vercel Cron
+ * `/api/cron/auto-alimentation`) :
+ *  1. synchronise le catalogue sourcé en statut PROPOSEE (validation admin
+ *     seule, jamais ACTIVE automatiquement) et trace le passage ;
+ *  2. veille juridique externe : détecte les nouvelles éditions du JORF et
+ *     alerte l'équipe (admin) afin qu'elle vérifie si un texte récent modifie
+ *     les failles — la veille ne fabrique jamais de contenu juridique.
+ * Retourne un résumé exploitable par la route cron.
+ */
+export async function executerAutoAlimentation(): Promise<{
+  catalogue: number;
+  veilleEdition: string | null;
+  veilleNouvelle: boolean;
+}> {
+  let catalogue = 0;
+  try {
+    catalogue = await synchroniserCatalogue();
+    await enregistrerTraceAutoAlimentation({
+      campagne: "catalogue",
+      statut: "OK",
+      traitees: catalogue,
+      detail: `${catalogue} entrée(s) du catalogue synchronisée(s) en PROPOSEE.`,
+    });
+  } catch (e) {
+    console.error("executerAutoAlimentation: échec synchronisation catalogue", e);
+    await enregistrerTraceAutoAlimentation({
+      campagne: "catalogue",
+      statut: "ECHEC",
+      detail: "erreur pendant la synchronisation du catalogue",
+    });
+  }
+
+  const veille = await synchroniserVeilleJorf();
+  if (veille.nouvelle && veille.edition) {
+    await notifierNouvellesPropositions({
+      editionJorf: veille.edition,
+      lienJorf: "https://www.legifrance.gouv.fr/jorf",
+    });
+  }
+
+  return {
+    catalogue,
+    veilleEdition: veille.edition ? veille.edition.fichier : null,
+    veilleNouvelle: veille.nouvelle,
+  };
 }
