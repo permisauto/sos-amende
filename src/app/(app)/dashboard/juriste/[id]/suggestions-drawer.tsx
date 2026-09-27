@@ -129,7 +129,7 @@ export function SuggestionsDrawer({
                 <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-emerald-800">
-                      Lettre combinée (toutes les failles confirmer)
+                      Lettre combinée (toutes les failles confirmées)
                     </p>
                     <button
                       type="button"

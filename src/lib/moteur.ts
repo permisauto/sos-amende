@@ -321,7 +321,8 @@ export function nettoyerLettre(texte: string): string {
     .replace(/\bn°\s*([,.])/g, "$1")
     .replace(/\bn°\s+(?=\.|,|$)/g, "")
     .replace(/[ \t]{2,}/g, " ")
-    .replace(/\s+([,.;:!?])/g, "$1")
+    .replace(/\s+([,.])/g, "$1")
+    .replace(/[ \t]+([:;!?])/g, " $1")
     .replace(/\n{3,}/g, "\n\n")
     .replace(/^\s+|\s+$/g, "");
 }
@@ -334,15 +335,16 @@ export type FailleLettre = {
 };
 
 /**
- * Lettre de contestation multi-arguments : juxtapose toutes les failles
- * détectées/confirmées en une seule lettre (chacune apporte un argument
- * distinct). Seules les sources validées par l'admin sont utilisées — les
- * modèles `templateLettre` tels quels, jamais de texte inventé.
+ * Lettre de contestation multi-arguments : fond toutes les failles
+ * détectées/confirmées en une seule lettre fluide, rédigée comme un courrier
+ * professionnel — identification une seule fois, puis chacun des arguments
+ * s'enchaîne paragraphiquement (aucune étiquette « Argument n° 1, 2… », aucun
+ * sous-titre), et une seule conclusion finale portant la demande. Seules les
+ * sources validées par l'admin sont utilisées — les modèles `templateLettre`
+ * tels quels, jamais de texte inventé.
  *
- * La première section porte l'en-tête complète (identification du titulaire,
- * objet de la contestation) ; les suivantes n'en gardent que l'argumentation
- * sous un sous-titre. Une seule faille → comportement identique à
- * remplirTemplate (aucune régression sur les lettres existantes).
+ * Une seule faille → comportement identique à remplirTemplate (aucune
+ * régression sur les lettres existantes).
  */
 export function remplirLettreMulti(
   failles: FailleLettre[],
@@ -353,22 +355,52 @@ export function remplirLettreMulti(
     return remplirTemplate(failles[0].templateLettre, data);
   }
 
-  const sections: string[] = [];
+  const decouper = (corps: string) =>
+    corps
+      .split(/\n\s*\n/)
+      .map((p) => p.trim())
+      .filter(Boolean);
+
+  // Paragraphe purement conclusif (demande finale) : il ne doit apparaître
+  // qu'une seule fois, en clôture de la lettre. Les paragraphes d'argumentation
+  // qui se terminent par une demande (ex. « … et m'exonérer du paiement »)
+  // restent intégrés au corps, sans être dupliqués en conclusion.
+  const estConclusionSeule = (p: string) =>
+    /^\s*(En conséquence,|Cette contestation est dès lors fondée|Par conséquent,|Je vous demande en conséquence|Je vous prie dès lors)/i.test(
+      p,
+    );
+  const estIdentification = (p: string) => /^\s*Je soussigné/i.test(p);
+
+  const blocs: string[] = [];
+  let conclusionFinale: string | null = null;
+
   failles.forEach((faille, i) => {
-    const corps = remplirTemplate(faille.templateLettre, data).trim();
-    const sousTitre = `Argument n° ${i + 1} — ${faille.titreFaille}${
-      faille.articleLoi ? ` (${faille.articleLoi})` : ""
-    }`;
+    const paragraphes = decouper(remplirTemplate(faille.templateLettre, data));
+    const corps = paragraphes.filter((p) => !estConclusionSeule(p));
+    const conclusionSeule = paragraphes.find(estConclusionSeule) ?? null;
+    if (!conclusionFinale && conclusionSeule) conclusionFinale = conclusionSeule;
+
     if (i === 0) {
-      sections.push(`${sousTitre}\n\n${corps}`);
+      // La première faille porte l'identification complète + son argumentation.
+      blocs.push(...corps);
       return;
     }
-    // L'en-tête (premier paragraphe : identification) est déjà porté par la
-    // première section — on ne répète que l'argumentation propre à la faille.
-    const sansEnTete = corps.split(/\n\s*\n/).slice(1).join("\n\n").trim();
-    sections.push(`${sousTitre}\n\n${sansEnTete || corps}`);
+    // Les suivantes ne répètent ni l'identification (premier paragraphe), ni
+    // la conclusion. Seule l'argumentation propre est conservée ; une section
+    // ne doit jamais être vidée (faille monopharagraphique → texte entier).
+    const premiere = paragraphes[0];
+    const sansIdentification = estIdentification(premiere)
+      ? corps.slice(1)
+      : corps;
+    const sansConclusion = sansIdentification.filter(
+      (p) => p !== conclusionSeule,
+    );
+    const conserve = sansConclusion.length > 0 ? sansConclusion : sansIdentification;
+    if (conserve.some((p) => p)) blocs.push(...conserve);
   });
-  return sections.join("\n\n");
+
+  if (conclusionFinale) blocs.push(conclusionFinale);
+  return blocs.join("\n\n");
 }
 
 /**

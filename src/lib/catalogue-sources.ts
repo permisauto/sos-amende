@@ -115,9 +115,11 @@ En conséquence, je vous demande de bien vouloir constater la nullité de l'avis
     jurisprudence: [],
     templateLettre: `Je soussigné(e) {nom}, titulaire du certificat d'immatriculation du véhicule immatriculé {plaque}, conteste l'avis de contravention n° {num_pv} qui m'a été notifié le {date}.
 
-Cet avis ne comporte pas l'ensemble des mentions obligatoires prescrites par les articles A. 37-1 et A. 37-4 du Code de procédure pénale — à savoir l'identification de l'infraction, le montant de l'amende, le délai et les voies de recours —, notamment la mention relative aux voies de recours et au délai de contestation.
+Cet avis ne comporte pas l'ensemble des mentions obligatoires prescrites par les articles A. 37-1 et A. 37-4 du Code de procédure pénale, en particulier la mention relative aux voies de recours et au délai de contestation.
 
-Cette omission constitue un vice de forme qui entache la régularité de la procédure d'amende forfaitaire. En conséquence, je vous demande de bien vouloir annuler la contravention n° {num_pv} et m'exonérer du paiement de l'amende de {montant} qui m'est réclamée.`,
+Cette omission constitue un vice de forme qui entache la régularité de la procédure d'amende forfaitaire.
+
+En conséquence, je vous demande de bien vouloir annuler la contravention n° {num_pv} et m'exonérer du paiement de l'amende de {montant} qui m'est réclamée.`,
   },
   {
     id: "faille-exoneration-vol-usurpation",

@@ -230,6 +230,16 @@ describe("remplirTemplate", () => {
       "Texte avec des espaces.",
     );
   });
+
+  it("préserve la typographie française (espace avant « : » « ; » « ! » « ? »)", () => {
+    const lettre = remplirTemplate(
+      "infraction : celui-ci ne m'a pas été notifié ; l'amende est, dès lors, inopposable !",
+      {},
+    );
+    expect(lettre).toContain("infraction : celui-ci");
+    expect(lettre).toContain("notifié ; l'amende");
+    expect(lettre).toContain("inopposable !");
+  });
 });
 
 describe("remplirLettreMulti", () => {
@@ -259,18 +269,19 @@ describe("remplirLettreMulti", () => {
     );
   });
 
-  it("juxtapose toutes les failles sans répéter l'en-tête", () => {
+  it("fond toutes les failles en une lettre fluide, sans étiquette ni répétition de l'identification", () => {
     const lettreOk = remplirLettreMulti([prescription, erreurPlaque], data)!;
-    expect(lettreOk).toContain(
-      "Argument n° 1 — Prescription de l'action publique (Art. 9 CPP)",
-    );
-    expect(lettreOk).toContain(
-      "Argument n° 2 — Erreur de plaque (Art. 530-1 CPP)",
-    );
-    // la 2e section ne répète pas l'identification (première section)
-    expect(lettreOk).not.toContain("véhicule AB-123-CD");
-    // la 1re section porte l'en-tête complète + argument
+    expect(lettreOk).not.toContain("Argument n°");
+    // pas de sous-titre « — titre (article) »
+    expect(lettreOk).not.toContain("Prescription de l'action publique");
+    expect(lettreOk).not.toContain("Erreur de plaque");
+    // identification portée une seule fois (première faille)
     expect(lettreOk).toContain("Je soussigné DUPONT, conteste le PV 123.");
+    // la 2e faille ne répète pas l'identification (« véhicule AB-123-CD »)
+    expect(lettreOk).not.toContain("véhicule AB-123-CD");
+    // ses arguments s'enchaînent naturellement
+    expect(lettreOk).toContain("La prescription est acquise après un an.");
+    expect(lettreOk).toContain("Je demande l'annulation.");
     expect(lettreOk).toContain("La plaque ne correspond pas à mon véhicule.");
   });
 
@@ -282,8 +293,29 @@ describe("remplirLettreMulti", () => {
       templateLettre: "En-tête de {nom}.",
     };
     const lettre = remplirLettreMulti([prescription, une], data)!;
-    expect(lettre).toContain("Argument n° 2 — Faille X");
+    expect(lettre).not.toContain("Argument n°");
     expect(lettre).toContain("En-tête de DUPONT.");
+  });
+
+  it("ne conclut qu'une seule fois : les conclusions redondantes des autres failles sont retirées", () => {
+    const conclusionDeux = {
+      id: "faille-y",
+      titreFaille: "Faille Y",
+      articleLoi: "Art. X",
+      templateLettre:
+        "Je soussigné {nom}, conteste aussi le PV {num_pv}.\n\nLe lieu est imprécis.\n\nEn conséquence, je vous demande de bien vouloir annuler la contravention.",
+    };
+    const lettre = remplirLettreMulti([prescription, conclusionDeux], data)!;
+    // l'argument des deux failles est présent
+    expect(lettre).toContain("Le lieu est imprécis.");
+    expect(lettre).toContain("La prescription est acquise après un an.");
+    // une seule conclusion finale (celle retenue), jamais répétée au milieu
+    const occurrencesEnConsequence =
+      lettre.split("En conséquence").length - 1;
+    expect(occurrencesEnConsequence).toBe(1);
+    expect(lettre.trim().endsWith("En conséquence, je vous demande de bien vouloir annuler la contravention.")).toBe(
+      true,
+    );
   });
 
   it("retourne null sans faille", () => {
