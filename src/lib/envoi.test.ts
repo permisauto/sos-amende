@@ -79,12 +79,14 @@ describe("envoi — libellés par type d'infraction", () => {
 });
 
 describe("envoi — formalisme de la lettre", () => {
-  it("formule d'appel neutre « Madame, Monsieur, » pour les deux types", () => {
-    expect(formuleAppel()).toBe("Madame, Monsieur,");
+  it("formule d'appel type-aware : neutre (amende) vs Monsieur le Préfet (suspension)", () => {
+    expect(formuleAppel("AMENDE")).toBe("Madame, Monsieur,");
+    expect(formuleAppel("SUSPENSION")).toBe("Monsieur le Préfet,");
   });
 
-  it("formule de politesse professionnelle en clôture", () => {
-    expect(formulePolitesse()).toContain("considération distinguée");
+  it("formule de politesse professionnelle en clôture, alignée sur le destinataire", () => {
+    expect(formulePolitesse("AMENDE")).toContain("considération distinguée");
+    expect(formulePolitesse("SUSPENSION")).toContain("Monsieur le Préfet");
   });
 
   it("objet type-aware : avis de contravention vs décision de suspension", () => {
@@ -122,7 +124,7 @@ describe("envoi — formalisme de la lettre", () => {
     expect(lettre).not.toContain("P.J.");
     expect(lettre).toContain("Madame, Monsieur,");
     expect(lettre).toContain("Je soussigné(e) DUPONT, conteste le PV 123.");
-    expect(lettre.endsWith(formulePolitesse())).toBe(true);
+    expect(lettre.endsWith(formulePolitesse("AMENDE"))).toBe(true);
   });
 
   it("idempotent : une lettre déjà habillée n'est pas re-habillée", () => {
@@ -137,7 +139,7 @@ describe("envoi — formalisme de la lettre", () => {
     expect(deuxFois).toBe(uneFois);
     const nbObjets = deuxFois.split(/^Objet :/m).length - 1;
     expect(nbObjets).toBe(1);
-    const nbPolitesses = deuxFois.split(formulePolitesse()).length - 1;
+    const nbPolitesses = deuxFois.split(formulePolitesse("AMENDE")).length - 1;
     expect(nbPolitesses).toBe(1);
   });
 

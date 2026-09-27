@@ -18,6 +18,17 @@ const prisma = new PrismaClient({
  * failles ACTIVE) ne générerait aucune lettre sur une base fraîche.
  * Le catalogue (PROPOSEE) propose les versions enrichies en doublon — l'admin
  * peut écarter ces propositions ou les garder comme variantes.
+ *
+ * CHARTE D'ÉCRITURE DES LETTRES (formalisme commun à toutes les failles) :
+ * 1. Identification — premier paragraphe : le requérant et l'acte contesté
+ *    (avis de contravention ou décision, n°, date) ;
+ * 2. Faits — exposé sobre et factuel au présent, sans emphase ;
+ * 3. Droit — fondement légal (articles) puis jurisprudence, articulés en une
+ *    phrase maîtrisée ;
+ * 4. Conclusion — demande précise, à la première personne du singulier,
+ *    formulée « En conséquence, je vous demande de bien vouloir … ».
+ * Style soutenu ; ni crochets, ni promesse de pièce jointe non garantie, ni
+ * formulation vague. La date {date} est écrite en toutes lettres au remplissage.
  */
 const FAILLES_HISTORIQUES = [
   {
@@ -29,11 +40,11 @@ const FAILLES_HISTORIQUES = [
     regle:
       "L'action publique pour une contravention se prescrit par une année révolue à compter du jour où l'infraction a été commise (art. 9 CPP) : un avis notifié plus d'un an après les faits porte sur une infraction prescrite, l'amende doit être annulée.",
     reglesDetection: [{ type: "datePrescrite" }],
-    templateLettre: `Je soussigné(e) {nom}, titulaire du certificat d'immatriculation du véhicule portant la plaque {plaque}, conteste l'avis de contravention n° {num_pv} qui m'a été notifié.
+    templateLettre: `Je soussigné(e) {nom}, titulaire du certificat d'immatriculation du véhicule immatriculé {plaque}, conteste l'avis de contravention n° {num_pv} qui m'a été notifié.
 
-En application de l'article 9 du Code de procédure pénale, l'action publique pour une contravention se prescrit par une année révolue à compter du jour où l'infraction a été commise. Or, plus d'un an s'est écoulé entre la date de l'infraction et la notification du présent avis.
+En application de l'article 9 du Code de procédure pénale, l'action publique pour une contravention se prescrit par une année révolue à compter du jour où l'infraction a été commise. Plus d'un an s'étant écoulé entre la date de l'infraction et la notification du présent avis, l'action publique est éteinte.
 
-L'infraction est donc prescrite. Je demande en conséquence l'annulation de l'amende qui m'est réclamée.`,
+Cette contestation est dès lors fondée. En conséquence, je vous demande de bien vouloir annuler la contravention n° {num_pv} et m'exonérer du paiement de l'amende réclamée.`,
   },
   {
     id: "faille-mentions-obligatoires",
@@ -47,11 +58,11 @@ L'infraction est donc prescrite. Je demande en conséquence l'annulation de l'am
       { type: "champAbsent", champ: "numTelePaiement" },
       { type: "champAbsent", champ: "cle" },
     ],
-    templateLettre: `Je soussigné(e) {nom}, titulaire du certificat d'immatriculation du véhicule portant la plaque {plaque}, conteste l'avis de contravention n° {num_pv}.
+    templateLettre: `Je soussigné(e) {nom}, titulaire du certificat d'immatriculation du véhicule immatriculé {plaque}, conteste l'avis de contravention n° {num_pv} qui m'a été notifié.
 
-Cet avis ne comporte pas l'ensemble des mentions obligatoires prévues par le Code de la route (notamment la signature de l'agent verbalisateur, l'heure de constatation et le matricule de l'agent). Le titre exécutoire est ainsi entaché d'une irrégularité.
+Cet avis ne comporte pas l'ensemble des mentions obligatoires prescrites par les articles R. 246-1 et suivants du Code de la route, notamment la signature de l'agent verbalisateur, l'heure de constatation et le matricule de celui-ci. Cette omission entache la procédure d'une irrégularité substantielle.
 
-Je demande en conséquence l'annulation de l'amende qui m'est réclamée.`,
+En conséquence, je vous demande de bien vouloir annuler la contravention n° {num_pv} et m'exonérer du paiement de l'amende réclamée.`,
   },
   {
     id: "faille-erreur-plaque",
@@ -62,11 +73,11 @@ Je demande en conséquence l'annulation de l'amende qui m'est réclamée.`,
     regle:
       "L'erreur de plaque d'immatriculation sur l'avis de contravention (identification du véhicule ou de son titulaire) permet au titulaire qui n'est pas l'auteur de l'infraction d'obtenir l'exonération (art. 530-1 CPP).",
     reglesDetection: [{ type: "plaqueIncorrecte" }],
-    templateLettre: `Je soussigné(e) {nom}, conteste l'avis de contravention n° {num_pv}.
+    templateLettre: `Je soussigné(e) {nom}, conteste l'avis de contravention n° {num_pv} qui m'a été notifié.
 
-Conformément à l'article 530-1 du Code de procédure pénale, je demande l'exonération de l'amende au motif que je ne suis pas l'auteur de l'infraction : la plaque {plaque} mentionnée sur l'avis de contravention ne correspond pas à mon véhicule.
+La plaque {plaque} mentionnée sur cet avis de contravention ne correspond pas au véhicule dont je suis titulaire ; je ne suis dès lors pas l'auteur de l'infraction qui m'est reprochée.
 
-Je demande en conséquence l'annulation de l'amende qui m'est réclamée.`,
+En application de l'article 530-1 du Code de procédure pénale, je demande à être exonéré de l'amende encourue. Je vous demande en conséquence de bien vouloir annuler la contravention n° {num_pv} et m'exonérer du paiement de l'amende réclamée.`,
   },
   {
     id: "faille-certificat-etalonnage",
@@ -79,9 +90,11 @@ Je demande en conséquence l'annulation de l'amende qui m'est réclamée.`,
     regle:
       "La mesure de vitesse doit être effectuée par un appareil dûment étalonné (art. L. 130-3 CR, arrêté du 27 mars 2007) : le certificat d'étalonnage valable à la date de l'infraction doit être communiqué sur demande, à défaut l'amende est annulée.",
     reglesDetection: [{ type: "etalonnageExpire" }],
-    templateLettre: `Je soussigné(e) {nom}, titulaire du certificat d'immatriculation du véhicule portant la plaque {plaque}, conteste l'avis de contravention n° {num_pv} établi au moyen d'un cinémomètre.
+    templateLettre: `Je soussigné(e) {nom}, titulaire du certificat d'immatriculation du véhicule immatriculé {plaque}, conteste l'avis de contravention n° {num_pv} établi d'après une mesure de vitesse réalisée par un cinémomètre.
 
-En application de l'article L. 130-3 du Code de la route et de l'arrêté du 27 mars 2007 relatif aux conditions de l'étalonnage des cinémomètres, la mesure doit être effectuée par un appareil dûment étalonné. Je demande la communication du certificat d'étalonnage de l'appareil utilisé, valable à la date de l'infraction, sous un délai de 30 jours. À défaut de production de ce certificat, l'amende doit être annulée.`,
+En application de l'article L. 130-3 du Code de la route et de l'arrêté du 27 mars 2007 relatif aux conditions de l'étalonnage des cinémomètres, la mesure de vitesse doit être effectuée au moyen d'un appareil dûment étalonné. Je demande en conséquence la communication du certificat d'étalonnage du cinémomètre utilisé, valable à la date de l'infraction, dans un délai de trente jours.
+
+À défaut de production de ce certificat dans le délai imparti, la mesure doit être regardée comme irrégulière et la contravention annulée. Je vous prie dès lors de bien vouloir m'exonérer du paiement de l'amende réclamée.`,
   },
 ];
 

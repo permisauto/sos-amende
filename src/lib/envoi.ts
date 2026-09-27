@@ -100,19 +100,25 @@ export function portailEnLigne(type: InfractionType): {
 }
 
 /**
- * Civilité d'appel selon les bons usages de la correspondance administrative.
- * Destinataire inconnu ou collectif (OMP / service) → formule neutre
- * « Madame, Monsieur, ». Le préfet, lorsqu'identifié, peut recevoir une
- * formule propre (voir formatage par type), mais par défaut la formule neutre
- * reste la plus largement acceptée.
+ * Civilité d'appel selon le destinataire (type-aware) :
+ * - AMENDE (OMP / service)     → formule neutre « Madame, Monsieur, »
+ * - SUSPENSION (le préfet)     → « Monsieur le Préfet, »
+ * La formule neutre reste la plus largement acceptée lorsque le destinataire
+ * est un service ou reste indéterminé.
  */
-export function formuleAppel(): string {
-  return "Madame, Monsieur,";
+export function formuleAppel(type: InfractionType): string {
+  return type === "SUSPENSION" ? "Monsieur le Préfet," : "Madame, Monsieur,";
 }
 
-/** Formule de politesse finale, alignée sur la formule d'appel neutre. */
-export function formulePolitesse(): string {
-  return "Je vous prie d'agréer, Madame, Monsieur, l'expression de ma considération distinguée.";
+/**
+ * Formule de politesse finale, alignée sur la formule d'appel du destinataire.
+ * Le préfet reçoit la civilité propre (« Monsieur le Préfet »), l'OMP ou un
+ * service la formule neutre.
+ */
+export function formulePolitesse(type: InfractionType): string {
+  return type === "SUSPENSION"
+    ? "Je vous prie d'agréer, Monsieur le Préfet, l'expression de ma considération distinguée."
+    : "Je vous prie d'agréer, Madame, Monsieur, l'expression de ma considération distinguée.";
 }
 
 const MOIS_FR = [
@@ -207,8 +213,10 @@ export function enTeteLettre(opts: {
 /**
  * Habillage professionnel de la lettre générée : en-tête administrative
  * (coordonnées requérant si connues, destinataire type-aware, date de
- * rédaction en toutes lettres), Objet, formule d'appel « Madame, Monsieur, »,
- * corps validé par l'admin puis formule de politesse finale. La liste des
+ * rédaction en toutes lettres), Objet, formule d'appel type-aware
+ * (« Madame, Monsieur, » à l'OMP / « Monsieur le Préfet » en suspension),
+ * corps validé par l'admin puis formule de politesse finale alignée sur le
+ * destinataire. La liste des
  * pièces jointes figure UNE seule fois, sous la signature, dans le PDF signé
  * (voir generateLettrePdf) — jamais doublée dans le corps. Pure : chaque bloc
  * n'apparaît que si sa donnée existe réellement (aucune valeur fabriquée).
@@ -227,7 +235,14 @@ export function formaterLettreOfficielle(opts: {
 }): string {
   const corps = opts.corps.trim();
   if (!corps) return "";
-  if (corps.includes(formulePolitesse())) return corps;
+  // Idempotent : une lettre déjà habillée (formule de politesse du type ou la
+  // forme neutre historique) est retournée telle quelle — aucune re-formulation.
+  if (
+    corps.includes(formulePolitesse(opts.type)) ||
+    corps.includes(formulePolitesse("AMENDE"))
+  ) {
+    return corps;
+  }
 
   const lignes: string[] = [];
   lignes.push(...enTeteLettre({
@@ -238,10 +253,10 @@ export function formaterLettreOfficielle(opts: {
   }));
   lignes.push(`Objet : ${objetLettre(opts)}`);
   lignes.push("");
-  lignes.push(formuleAppel());
+  lignes.push(formuleAppel(opts.type));
   lignes.push("");
   lignes.push(corps);
   lignes.push("");
-  lignes.push(formulePolitesse());
+  lignes.push(formulePolitesse(opts.type));
   return lignes.join("\n");
 }

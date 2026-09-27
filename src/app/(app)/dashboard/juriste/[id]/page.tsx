@@ -26,7 +26,12 @@ import {
   remplirTemplate,
   type ExtractedData,
 } from "@/lib/moteur";
-import { organismeEnvoi, destinataireLrar, libelleCanalDepuisStockage } from "@/lib/envoi";
+import {
+  formaterLettreOfficielle,
+  organismeEnvoi,
+  destinataireLrar,
+  libelleCanalDepuisStockage,
+} from "@/lib/envoi";
 import { faillesPourTypePreuve, listePiecesJointes } from "@/lib/preuves-api";
 import { FilMessages, type MessageDto } from "@/components/messages";
 import {
@@ -373,6 +378,18 @@ export default async function JuristeCasePage(
   const data = item.extractedData as Record<string, unknown> | null;
 
   const dataLettres = (item.extractedData ?? {}) as ExtractedData;
+  // Habillage professionnel des propositions (en-tête, Objet, Madame/Monsieur,
+  // formule de politesse) identique à la lettre stockée — cohérence de style.
+  const habiller = (corps: string) =>
+    formaterLettreOfficielle({
+      type: item.type,
+      corps,
+      numRef: dataLettres.num_pv ?? null,
+      dateRef: dataLettres.date ?? null,
+      nom: item.user?.name ?? null,
+      adresse: dataLettres.adresse ?? null,
+      date: new Date().toISOString().slice(0, 10),
+    });
   const faillesActivesAvecTemplate = item.faillesRetenues
     .filter((df) => df.faille.statut === "ACTIVE" && df.faille.templateLettre)
     .map((df) => df.faille);
@@ -380,17 +397,20 @@ export default async function JuristeCasePage(
     failleId: f.id,
     titreFaille: f.titreFaille,
     articleLoi: f.articleLoi ?? "",
-    lettre: remplirTemplate(f.templateLettre!, dataLettres),
+    lettre: habiller(remplirTemplate(f.templateLettre!, dataLettres)),
   }));
-  const lettreCombine = remplirLettreMulti(
-    faillesActivesAvecTemplate.map((f) => ({
-      id: f.id,
-      titreFaille: f.titreFaille,
-      articleLoi: f.articleLoi ?? "",
-      templateLettre: f.templateLettre!,
-    })),
-    dataLettres,
-  );
+  const lettreCombine = (() => {
+    const brute = remplirLettreMulti(
+      faillesActivesAvecTemplate.map((f) => ({
+        id: f.id,
+        titreFaille: f.titreFaille,
+        articleLoi: f.articleLoi ?? "",
+        templateLettre: f.templateLettre!,
+      })),
+      dataLettres,
+    );
+    return brute ? habiller(brute) : null;
+  })();
   // Variantes du générateur de lettre : une combinaison possible par sous-ensemble
   // (toutes les failles actives, ou chacune seule) — le juriste choisit celle
   // qu'il souhaite appliquer, avec résumé avant application.
@@ -415,7 +435,7 @@ export default async function JuristeCasePage(
           titre: `Faille seule : ${f.titreFaille}`,
           failleIds: [f.id],
           fondements: [{ titre: f.titreFaille, article: f.articleLoi ?? "" }],
-          lettre: remplirTemplate(f.templateLettre!, dataLettres),
+          lettre: habiller(remplirTemplate(f.templateLettre!, dataLettres)),
         })),
       ]
     : [];
