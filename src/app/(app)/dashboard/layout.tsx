@@ -1,11 +1,28 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/dal";
+import { prisma } from "@/lib/prisma";
 import { signOutAction } from "./actions";
 
 export default async function DashboardLayout({
   children,
 }: LayoutProps<"/dashboard">) {
   const user = await getCurrentUser();
+
+  // Comptes clients : la création d'un mot de passe est obligatoire après la
+  // première connexion par lien. Tant que le compte n'a pas de mot de passe,
+  // on ramène sur /login/mot-de-passe (ne concerne pas les juristes/admins,
+  // provisionnés avec un mot de passe par l'admin).
+  if (user) {
+    const dbUser = user
+      ? await prisma.user
+          .findUnique({ where: { id: user.id }, select: { passwordHash: true } })
+          .catch(() => null)
+      : null;
+    if (dbUser && !dbUser.passwordHash) {
+      redirect("/login/mot-de-passe");
+    }
+  }
 
   return (
     <div className="flex min-h-screen flex-col">

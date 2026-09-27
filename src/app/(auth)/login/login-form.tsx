@@ -5,6 +5,7 @@ import { useActionState } from "react";
 import {
   loginWithPassword,
   loginWithEmail,
+  motDePasseOublie,
   recupererLienDev,
   type LoginState,
   type LoginPasswordState,
@@ -16,13 +17,18 @@ const passwordInitialState: LoginPasswordState = {};
 export function LoginForm() {
   // Deux modes de connexion sur la même page :
   //  - « Se connecter » → credentials (juristes/administrateurs, mot de passe) ;
-  //  - « Recevoir mon lien de connexion » → magic-link (clients).
+  //  - « Recevoir mon lien de connexion » → magic-link (clients) ;
+  //  - « Mot de passe oublié ? » → lien de réinitialisation (mode=redefinir).
   const [passwordState, passwordFormAction, passwordPending] = useActionState(
     loginWithPassword,
     passwordInitialState,
   );
   const [state, formAction, pending] = useActionState(
     loginWithEmail,
+    initialState,
+  );
+  const [oubliState, oubliFormAction, oubliPending] = useActionState(
+    motDePasseOublie,
     initialState,
   );
   const [hasSubmitted, setHasSubmitted] = useState(false);
@@ -32,14 +38,17 @@ export function LoginForm() {
   const emailRef = useRef("");
 
   useEffect(() => {
-    // Après l'envoi du magic-link : en mode démo (sans AUTH_RESEND_KEY) on
-    // l'affiche directement dans le navigateur ; sinon on confirme l'envoi.
-    // On ne déclenche ce polling QUE pour le magic-link (jamais pour le mot
-    // de passe, qui redirige côté serveur en cas de succès).
+    // Après l'envoi du magic-link (connexion OU réinitialisation) : en mode
+    // démo (sans AUTH_RESEND_KEY) on l'affiche directement dans le navigateur ;
+    // sinon on confirme l'envoi. On ne déclenche ce polling QUE pour le
+    // magic-link (jamais pour le mot de passe, qui redirige côté serveur en
+    // cas de succès).
     if (
       !hasSubmitted ||
       pending ||
+      oubliPending ||
       state?.error ||
+      oubliState?.error ||
       devUrl ||
       devError ||
       emailSent
@@ -68,7 +77,16 @@ export function LoginForm() {
     return () => {
       cancelled = true;
     };
-  }, [hasSubmitted, pending, state?.error, devUrl, devError, emailSent]);
+  }, [
+    hasSubmitted,
+    pending,
+    oubliPending,
+    state?.error,
+    oubliState?.error,
+    devUrl,
+    devError,
+    emailSent,
+  ]);
 
   const showDevLink = hasSubmitted && !state?.error;
 
@@ -130,11 +148,26 @@ export function LoginForm() {
         )}
       </div>
 
-      <p className="text-center text-xs text-zinc-500">
-        Comptes internes (juristes &amp; administrateurs) : connectez-vous avec
-        votre e-mail et votre mot de passe. Les clients reçoivent un lien
-        sécurisé par e-mail.
-      </p>
+      <div className="flex items-center justify-between text-xs text-zinc-500">
+        <span>
+          Comptes internes (juristes &amp; administrateurs) : mot de passe.
+          Les clients reçoivent un lien sécurisé par e-mail.
+        </span>
+        <button
+          type="submit"
+          name="oublie"
+          formAction={oubliFormAction}
+          disabled={oubliPending}
+          className="whitespace-nowrap font-medium text-emerald-700 hover:underline disabled:opacity-50"
+        >
+          Mot de passe oublié ?
+        </button>
+      </div>
+      {oubliState?.error && (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          {oubliState.error}
+        </p>
+      )}
 
       <button
         type="submit"

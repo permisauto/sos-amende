@@ -37,6 +37,16 @@ const { Client } = require("pg");
       'UPDATE "User" SET credits = $1 WHERE email = $2',
       [50, "e2e-client@test.local"],
     );
+    // Garde-fou « mot de passe obligatoire » (création après le magic-link) :
+    // les comptes E2E reçoivent un hash par défaut pour que les specs qui se
+    // connectent par magic-link ne soient pas redirigées vers la page de
+    // création de mot de passe. (merci de le maintenir identique au seed)
+    const e2ePwd =
+      "scrypt$32768$8$1$f05734780417c278f0efd0dddd8cbcbd$2a6d4e183029e4b0cc51f69aa1810bb55ad06874af2055cbf1730f6e612a45bf9c1800d930a8a128d0edca11a2b26cf8ade73b4752390ceb7b88a0871c2f8212";
+    await client.query(
+      'UPDATE "User" SET "passwordHash" = $1 WHERE email IN ($2,$3,$4)',
+      [e2ePwd, "e2e-client@test.local", "e2e-juriste@test.local", "e2e-admin@test.local"],
+    );
     // Remise à zéro de la signature du client : une fois signé, P2 réutilise la
     // signature enregistrée (le canvas disparaît au profit de la case
     // « réutiliser ») — chaque suite doit repartir d'un état déterministe.

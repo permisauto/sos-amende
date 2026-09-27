@@ -4,9 +4,54 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/dal";
 import { storageDelete } from "@/lib/storage";
+import { hashPassword, verifyPassword } from "@/lib/password";
 import { signOut } from "@/auth";
 
 export type SuppressionState = { error?: string } | undefined;
+
+export type ChangerMotDePasseState = { ok?: boolean; error?: string } | undefined;
+
+/**
+ * Changement de mot de passe (client OU juriste/administrateur). Vérifie le
+ * mot de passe actuel en base (scrypt) avant de définir le nouveau — le
+ * compte est connecté par la session, seule la preuve du mot de passe courant
+ * autorise la modification.
+ */
+export async function changerMotDePasse(
+  _prev: ChangerMotDePasseState,
+  formData: FormData,
+): Promise<ChangerMotDePasseState> {
+  const user = await requireUser();
+
+  const actuel = String(formData.get("actuel") ?? "");
+  const nouveau = String(formData.get("nouveau") ?? "");
+  const confirmation = String(formData.get("confirmation") ?? "");
+
+  if (nouveau.length < 8) {
+    return { error: "Le nouveau mot de passe doit contenir au moins 8 caractères." };
+  }
+  if (nouveau !== confirmation) {
+    return { error: "Les deux nouveaux mots de passe ne correspondent pas." };
+  }
+
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { passwordHash: true },
+  });
+  if (!dbUser?.passwordHash || !verifyPassword(actuel, dbUser.passwordHash)) {
+    return { error: "Mot de passe actuel incorrect." };
+  }
+
+  try {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash: hashPassword(nouveau) },
+    });
+  } catch {
+    return { error: "Impossible de mettre à jour le mot de passe. Réessayez." };
+  }
+  return { ok: true };
+}
 
 /**
  * Effacement RGPD (art. 17) : supprime le compte, tous les dossiers,

@@ -58,7 +58,7 @@ test("synchronisation : pipeline juriste, lettres proposées, signature visible 
 
   // Générateur de lettre : si la lettre ne convient pas, le juriste choisit
   // une variante (combinaison de failles) avec résumé avant application.
-  await pj.getByRole("button", { name: "Récrire la lettre" }).click();
+  await pj.getByRole("button", { name: "Réécrire la lettre" }).click();
   await expect(
     pj.getByRole("heading", { name: "Générateur de lettre" }),
   ).toBeVisible();
@@ -72,7 +72,7 @@ test("synchronisation : pipeline juriste, lettres proposées, signature visible 
   await pj.getByRole("button", { name: "Appliquer cette variante" }).click();
   await expect(pj.getByRole("heading", { name: "Générateur de lettre" })).toBeHidden();
   await expect(
-    pj.getByRole("button", { name: "Récrire la lettre" }),
+    pj.getByRole("button", { name: "Réécrire la lettre" }),
   ).toBeVisible();
 
   await pj.getByLabel("Canal d'envoi de la contestation").selectOption("LRAR");

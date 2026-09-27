@@ -2,6 +2,7 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, Role, Prisma } from "../src/generated/prisma/client";
 import { CATALOGUE_SOURCES } from "../src/lib/catalogue-sources";
+import { hashPassword } from "../src/lib/password";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({
@@ -166,6 +167,12 @@ async function main() {
     console.log("Seed utilisateurs E2E : ignoré (production).");
     return;
   }
+  // Le guard du dashboard exige un mot de passe pour les comptes sans hash
+  // (création obligatoire — cf. (app)/dashboard/layout.tsx) : on en donne un
+  // par défaut aux comptes E2E (haché en scrypt) pour conserver la connexion
+  // par magic-link des specs existantes. Inconnu du test — seule la présence
+  // d'un hash déverrouille le dashboard.
+  const e2ePwd = hashPassword("MdpE2e2026!");
   const e2eUsers = [
     { email: "e2e-client@test.local", name: "Client E2E", role: Role.CLIENT, credits: 50 },
     { email: "e2e-juriste@test.local", name: "Juriste E2E", role: Role.JURISTE, credits: 0 },
@@ -174,8 +181,20 @@ async function main() {
   for (const u of e2eUsers) {
     await prisma.user.upsert({
       where: { email: u.email },
-      update: { name: u.name, role: u.role, credits: u.credits },
-      create: { email: u.email, name: u.name, role: u.role, credits: u.credits },
+      update: {
+        name: u.name,
+        role: u.role,
+        credits: u.credits,
+        // Réactive le hash s'il a été retiré en base (ex. après un reset).
+        passwordHash: e2ePwd,
+      },
+      create: {
+        email: u.email,
+        name: u.name,
+        role: u.role,
+        credits: u.credits,
+        passwordHash: e2ePwd,
+      },
     });
   }
   console.log(`Seed utilisateurs E2E : ${e2eUsers.length} comptes prêts.`);

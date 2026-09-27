@@ -87,6 +87,18 @@ export async function loginAs(page: Page, email: string): Promise<void> {
     await page.goto(url);
     await page.goto("/dashboard");
     try {
+      // Compte sans mot de passe (1re connexion) : le dashboard redirige vers
+      // la création d'un mot de passe — on la complète avec un mot de passe de
+      // test (comme le seed/global-setup) pour accéder à l'espace.
+      if (page.url().includes("/login/mot-de-passe")) {
+        await page.getByLabel("Mot de passe", { exact: true }).fill("MdpE2e2026!");
+        await page
+          .getByLabel("Confirmez le mot de passe", { exact: true })
+          .fill("MdpE2e2026!");
+        await page
+          .getByRole("button", { name: "Créer mon mot de passe" })
+          .click();
+      }
       await expect(page).toHaveURL(/\/dashboard/, { timeout: 5_000 });
       return;
     } catch {

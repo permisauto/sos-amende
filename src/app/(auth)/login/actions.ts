@@ -159,3 +159,52 @@ export async function recupererLienDev(email: string): Promise<{
     return { enDemo: true };
   }
 }
+
+/**
+ * Connexion par lien envoyé pour un mot de passe oublié : le lien expédié par
+ * Resend redirigera vers la page de redéfinition du mot de passe (celle-ci
+ * est ouverte aux comptes déjà pourvus d'un mot de passe via ?mode=redefinir).
+ */
+export async function motDePasseOublie(
+  _prev: LoginState,
+  formData: FormData,
+): Promise<LoginState> {
+  const parsed = loginSchema.safeParse({
+    email: formData.get("email"),
+  });
+  if (!parsed.success) {
+    return { error: "Veuillez saisir une adresse e-mail valide." };
+  }
+
+  // Même anti-abus que le magic-link de connexion (l'envoi a un coût réel en
+  // prod — Resend est requis pour déclencher la garde, comme loginWithEmail).
+  if (process.env.AUTH_RESEND_KEY) {
+    const email = parsed.data.email.toLowerCase();
+    const ip = await ipClient();
+    if (
+      consommerCreneau(`login:${email}`, MAX_EMAIL, FENETRE_MS) === 0 ||
+      consommerCreneau(`login:ip:${ip}`, MAX_IP, FENETRE_MS) === 0
+    ) {
+      return {
+        error:
+          "Trop de demandes. Attendez quelques minutes avant de réessayer.",
+      };
+    }
+  }
+
+  try {
+    await signIn("resend", {
+      email: parsed.data.email,
+      redirect: false,
+      redirectTo: "/login/mot-de-passe?mode=redefinir",
+    } as never);
+    return {};
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return {
+        error: "Une erreur est survenue lors de l'envoi du lien de réinitialisation.",
+      };
+    }
+    throw error;
+  }
+}

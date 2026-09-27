@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/dal";
 import { SuppressionCompte } from "./suppression-compte";
+import { ChangerMotDePasse } from "./changer-mot-de-passe";
 
 export default async function ParametresPage() {
   const user = await requireUser();
@@ -51,6 +52,17 @@ export default async function ParametresPage() {
         >
           Télécharger mes données (JSON)
         </a>
+      </div>
+
+      <div className="mt-6 rounded-2xl border border-zinc-200 bg-white p-6">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
+          Sécurité
+        </h2>
+        <p className="mt-1 text-sm text-zinc-600">
+          Connectez-vous à tout moment avec votre e-mail et votre mot de
+          passe, sans recevoir de nouveau lien.
+        </p>
+        <ChangerMotDePasse />
       </div>
 
       <div className="mt-6 rounded-2xl border border-red-200 bg-white p-6">
