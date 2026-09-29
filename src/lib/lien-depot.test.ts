@@ -163,6 +163,70 @@ describe("verifierLienDepot", () => {
     const res = await verifierLienDepot(MOCK_TOKEN);
     expect(res?.dossier.statut).toBe("EN_ATTENTE_PRE_SIGNATURE");
   });
+
+  it("expose les fichiers téléchargeables : lettre signée, PV et preuves (courtiers triés, URL vides exclues)", async () => {
+    (prisma.lienDepot.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...lienEnBase,
+      dossier: {
+        id: "dossier-1",
+        type: "AMENDE",
+        statut: "PRET",
+        pvUrl: "/uploads/pv.png",
+        extractedData: { num_pv: "PC123" },
+        user: { name: "Alex" },
+        courriers: [
+          {
+            id: "c1",
+            dossierId: "dossier-1",
+            pdfUrl: "/uploads/lettre-avant.png",
+            signatureUrl: null,
+            preuveDepotUrl: null,
+            createdAt: new Date(Date.now() - 10 * 60 * 1000),
+          },
+          {
+            id: "c2",
+            dossierId: "dossier-1",
+            pdfUrl: "/uploads/lettre-soumise.pdf",
+            signatureUrl: "/uploads/sig.png",
+            preuveDepotUrl: null,
+            createdAt: new Date(),
+          },
+        ],
+        preuves: [
+          { id: "p1", dossierId: "dossier-1", url: "/uploads/carte-grise.png", nom: "Carte grise", type: "CARTE_GRISE", createdAt: new Date() },
+          { id: "p2", dossierId: "dossier-1", url: "", nom: "Météo", type: "METEO", createdAt: new Date() },
+        ],
+      },
+    });
+
+    const res = await verifierLienDepot(MOCK_TOKEN);
+    expect(res?.dossier.fichiers.lettrePdf).toBe("/uploads/lettre-soumise.pdf");
+    expect(res?.dossier.fichiers.pv).toBe("/uploads/pv.png");
+    expect(res?.dossier.fichiers.preuves).toEqual([
+      { id: "p1", nom: "Carte grise", type: "CARTE_GRISE" },
+    ]);
+  });
+
+  it("ne renvoie aucune preuve quand aucune n'a de fichier stocké", async () => {
+    (prisma.lienDepot.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...lienEnBase,
+      dossier: {
+        id: "dossier-1",
+        type: "AMENDE",
+        statut: "PRET",
+        extractedData: {},
+        user: { name: "Alex" },
+        preuves: [
+          { id: "p2", dossierId: "dossier-1", url: "", nom: "Météo", type: "METEO", createdAt: new Date() },
+        ],
+      },
+    });
+
+    const res = await verifierLienDepot(MOCK_TOKEN);
+    expect(res?.dossier.fichiers.preuves).toEqual([]);
+    expect(res?.dossier.fichiers.lettrePdf).toBeNull();
+    expect(res?.dossier.fichiers.pv).toBeNull();
+  });
 });
 
 describe("confirmerDepotSurPortail", () => {

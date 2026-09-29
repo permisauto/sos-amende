@@ -39,6 +39,13 @@ export default async function FinaliserPage(props: {
   const dejaTransmis =
     dossier.statut === "ENVOYE" || dossier.statut === "RESOLU";
 
+  const fichiers = dossier.fichiers;
+  const aDesFichiers =
+    Boolean(fichiers.lettrePdf) || Boolean(fichiers.pv) || fichiers.preuves.length > 0;
+  const hrefFichier = (doc: string, preuveId?: string) =>
+    `/api/recours/finaliser/fichier?token=${encodeURIComponent(token)}&doc=${doc}` +
+    (preuveId ? `&preuveId=${encodeURIComponent(preuveId)}` : "");
+
   return (
     <div className="mx-auto max-w-2xl px-6 py-10">
       <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -100,6 +107,53 @@ export default async function FinaliserPage(props: {
             </dl>
           </div>
 
+          {aDesFichiers && (
+            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-5">
+              <h2 className="font-semibold text-emerald-900">
+                Télécharger les pièces à joindre au dépôt
+              </h2>
+              <p className="mt-1 text-sm text-emerald-800">
+                Votre dossier est prêt. Téléchargez ces pièces puis joignez-les
+                au dépôt sur le portail officiel.
+              </p>
+              <ul className="mt-3 space-y-2 text-sm">
+                {fichiers.lettrePdf && (
+                  <li>
+                    <a
+                      href={hrefFichier("lettre")}
+                      className="inline-flex items-center gap-1.5 font-medium text-emerald-800 underline hover:text-emerald-950"
+                    >
+                      Télécharger la lettre signée (PDF)
+                    </a>
+                  </li>
+                )}
+                {fichiers.pv && (
+                  <li>
+                    <a
+                      href={hrefFichier("pv")}
+                      className="inline-flex items-center gap-1.5 font-medium text-emerald-800 underline hover:text-emerald-950"
+                    >
+                      Télécharger la{" "}
+                      {dossier.type === "SUSPENSION"
+                        ? "décision de suspension"
+                        : "copie de l'avis de contravention"}
+                    </a>
+                  </li>
+                )}
+                {fichiers.preuves.map((p) => (
+                  <li key={p.id}>
+                    <a
+                      href={hrefFichier("preuve", p.id)}
+                      className="inline-flex items-center gap-1.5 font-medium text-emerald-800 underline hover:text-emerald-950"
+                    >
+                      Télécharger la pièce : {p.nom}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {dossier.radar && dossier.type === "AMENDE" && (
             <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               <strong>Mise en garde :</strong> pour une infraction relevée par
@@ -122,8 +176,9 @@ export default async function FinaliserPage(props: {
                 <strong>{dossier.plaque}</strong> si demandé).
               </li>
               <li>
-                Déposez votre lettre et les pièces jointes. La consignation, si
-                elle est exigée, se règle directement sur le portail.
+                Téléchargez votre lettre et vos pièces (bloc au-dessus de ce
+                guide), puis joignez-les au dépôt. La consignation, si elle est
+                exigée, se règle directement sur le portail.
               </li>
               <li>
                 Revenez sur cette page et cliquez sur « J’ai déposé ma

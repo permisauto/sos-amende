@@ -62,7 +62,9 @@ export async function notifierLienDepot(opts: {
         est à déposer sur le portail officiel <strong>${canal}</strong>.</p>
         <p><strong>Cliquez sur le lien ci-dessous</strong> : la page vous
         indique exactement la démarche à suivre (numéro à saisir, pièces à
-        joindre) — le dépôt se fait sur le site officiel, pas chez nous.</p>
+        joindre — votre lettre signée et vos justificatifs y sont
+        téléchargeables) et le dépôt se fait sur le site officiel, pas chez
+        nous.</p>
         <p><a href="${opts.url}" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">Déposer ma contestation (${canal})</a></p>
         <p style="font-size:0.85em;color:#64748b">Ce lien est valable jusqu'au
         ${expiration} et est personnel à votre dossier. ${etapes}</p>

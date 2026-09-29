@@ -62,6 +62,12 @@ export async function creerLienDepot(opts: {
  * de dépôt ; EN_ATTENTE_PRE_SIGNATURE → inviter à signer ; ENVOYE/RESOLU →
  * déjà transmis). Side-serveur uniquement.
  */
+export type FichierDepot = {
+  id: string;
+  nom: string;
+  type: string;
+};
+
 export async function verifierLienDepot(token: string): Promise<{
   dossier: {
     id: string;
@@ -73,13 +79,26 @@ export async function verifierLienDepot(token: string): Promise<{
     montant: number;
     radar: boolean;
     nomClient: string;
+    fichiers: {
+      lettrePdf: string | null;
+      pv: string | null;
+      preuves: FichierDepot[];
+    };
   };
   expireLe: Date;
 } | null> {
   if (!token) return null;
   const lien = await prisma.lienDepot.findUnique({
     where: { tokenHash: hashToken(token) },
-    include: { dossier: { include: { user: { select: { name: true } } } } },
+    include: {
+      dossier: {
+        include: {
+          user: { select: { name: true } },
+          courriers: { orderBy: { createdAt: "asc" } },
+          preuves: { orderBy: { createdAt: "asc" } },
+        },
+      },
+    },
   });
   if (!lien) return null;
   if (lien.consommeLe) return null;
@@ -94,6 +113,8 @@ export async function verifierLienDepot(token: string): Promise<{
         : "—";
   const plaque = typeof ex["plaque"] === "string" ? ex["plaque"] : "—";
   const montant = Number(ex["montant"] ?? 0);
+  const courriers = lien.dossier.courriers ?? [];
+  const dernierCourrier = courriers[courriers.length - 1];
 
   return {
     dossier: {
@@ -106,6 +127,13 @@ export async function verifierLienDepot(token: string): Promise<{
       montant,
       radar: lien.dossier.type === "AMENDE" && Boolean(ex["radarId"] || ex["typeRadar"]),
       nomClient: lien.dossier.user.name ?? "Client",
+      fichiers: {
+        lettrePdf: dernierCourrier?.pdfUrl ?? null,
+        pv: lien.dossier.pvUrl ?? null,
+        preuves: (lien.dossier.preuves ?? [])
+          .filter((p) => p.url && p.url.trim() !== "")
+          .map((p) => ({ id: p.id, nom: p.nom, type: p.type })),
+      },
     },
     expireLe: lien.expireLe,
   };
