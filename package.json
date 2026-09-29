@@ -11,6 +11,8 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "seed:mock": "tsx scripts/seed-test-dossiers.ts",
+    "demo-recours": "node server.js",
+    "test:recours": "node scripts/test-recours.js",
     "creer-compte": "tsx scripts/creer-compte.ts",
     "postinstall": "prisma generate"
   },
@@ -45,6 +47,7 @@
     "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "16.3.0",
+    "express": "^5.2.1",
     "prisma": "^7.9.1",
     "tailwindcss": "^4",
     "tsx": "^4.23.12",

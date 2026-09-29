@@ -37,6 +37,8 @@ const eslintConfig = defineConfig([
     "agentRedacteur.js",
     "pipelineContestation.js",
     "scripts/veilleJuridique.js",
+    "server.js",
+    "scripts/test-recours.js",
   ]),
 ]);
 

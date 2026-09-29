@@ -1,4 +1,5 @@
 import type { Dossier } from "@/generated/prisma/client";
+import { baseUrlApp } from "./base-url";
 import { organismeEnvoi } from "./envoi";
 
 export type SoumissionResult =
@@ -27,7 +28,7 @@ async function soumettreDossierMock(
   preuves?: { nom: string }[],
 ): Promise<SoumissionResult> {
   const data = (dossier.extractedData ?? {}) as Record<string, string | undefined>;
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const baseUrl = await baseUrlApp();
 
   try {
     const res = await fetch(`${baseUrl}/api/antai/mock`, {

@@ -65,7 +65,7 @@ export function JuristeActions({
               Lettre déjà validée.{" "}
               {canalEnvoi === "LRAR"
                 ? "Canal retenu : lettre recommandée — SOS Amende envoie la lettre par nos soins. Vous pouvez basculer vers un envoi en ligne (ANTAI/Télérecours)."
-                : "Choisissez le canal d'envoi ci-dessus, puis relancez l'envoi en ligne ou envoyez la lettre recommandée (SOS Amende)."}
+                : "Canal retenu : dépôt en ligne — le client reçoit un lien de dépôt assisté et dépose lui-même sa contestation sur le portail officiel. Relancez le lien ou basculez en lettre recommandée."}
             </p>
           </>
         ) : (
@@ -102,8 +102,8 @@ export function JuristeActions({
                 {validePending
                   ? "Validation…"
                   : showCanal
-                    ? "Valider et Envoyer"
-                    : "Valider et envoyer la contestation"}
+                    ? "Valider la lettre"
+                    : "Valider la lettre et déclencher l'envoi"}
               </button>
               {valideState?.error && (
                 <p className="rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700">
@@ -235,17 +235,23 @@ export function EnvoyerContestationForm({
           ? "Envoi…"
           : canal === "LRAR"
             ? "Envoyer la lettre recommandée (SOS Amende)"
-            : `Envoyer la contestation à ${organisme} (lettre + preuves)`}
+            : `Envoyer le lien de dépôt au client (${organisme})`}
       </button>
       {state?.error && (
         <p className="rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700">
           {state.error}
         </p>
       )}
-      {canal === "LRAR" && (
+      {canal === "LRAR" ? (
         <p className="text-xs text-zinc-500">
           SOS Amende expédie la lettre en recommandé avec accusé de réception
           pour le compte du client : aucune action de sa part.
+        </p>
+      ) : (
+        <p className="text-xs text-zinc-500">
+          Le client reçoit par e-mail un lien de dépôt assisté : il dépose
+          lui-même sa contestation sur le portail officiel {organisme} (jamais
+          de soumission automatique).
         </p>
       )}
     </form>

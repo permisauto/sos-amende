@@ -7,6 +7,7 @@ import { storageRead, storageUrl } from "@/lib/storage";
 import { AnalyseForm } from "./analyse-form";
 import { SignaturePad } from "./signature-pad";
 import { EnvoiSuivi } from "./envoi-suivi";
+import { DepotAssiste } from "./depot-assiste";
 import { AvocatRequest } from "./avocat-request";
 import { Preuves, type PreuveDto } from "@/components/preuves";
 import { faillesPourTypePreuve } from "@/lib/preuves-api";
@@ -34,6 +35,7 @@ type CaseDetail = {
   userId: string;
   type: "AMENDE" | "SUSPENSION";
   statut: string;
+  canalEnvoi: string | null;
   pvUrl: string | null;
   pvTexte: string | null;
   extractedData: Record<string, unknown> | null;
@@ -114,6 +116,12 @@ function demoDossier(id: string, userId: string): CaseDetail | null {
     userId,
     type: mock.type,
     statut: mock.statut,
+    canalEnvoi:
+      mock.statut === "PRET" || mock.statut === "ENVOYE" || mock.statut === "RESOLU"
+        ? mock.type === "SUSPENSION"
+          ? "TELERECOURS"
+          : "ANTAI"
+        : null,
     pvUrl: "/uploads/demo-pv.jpg",
     pvTexte: mock.pvTexte,
     extractedData: mock.extractedData,
@@ -351,6 +359,14 @@ export default async function CaseDetailPage(
           {statusLabels[item.statut] ?? item.statut}
         </span>
       </div>
+
+      {searchParams.lien === "envoye" && (
+        <div className="mt-4 rounded-xl bg-sky-50 px-4 py-3 text-sm text-sky-800">
+          Le lien de dépôt assisté vient de vous être envoyé. Déposez votre
+          contestation sur le portail officiel puis marquez le dossier dans la
+          section ci-dessous.
+        </div>
+      )}
 
       {searchParams.envoye === "ok" && (
         <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
@@ -751,19 +767,47 @@ export default async function CaseDetailPage(
         )
       ) : item.statut === "PRET" && item.courriers.length > 0 ? (
         item.valideLe ? (
-          <>
-            <EnvoiSuivi
-              dateLimite={item.dateLimite}
-              type={item.type}
-            />
-            {pdfUrl && (
-              <div className="mt-6">
-                <a href={pdfUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100">
-                  Télécharger la lettre signée (PDF)
-                </a>
-              </div>
-            )}
-          </>
+          item.canalEnvoi === "ANTAI" || item.canalEnvoi === "TELERECOURS" ? (
+            <>
+              <DepotAssiste
+                dossierId={item.id}
+                canal={item.canalEnvoi}
+                type={item.type}
+                numRef={
+                  typeof item.extractedData?.num_pv === "string"
+                    ? item.extractedData.num_pv
+                    : null
+                }
+                plaque={
+                  typeof item.extractedData?.plaque === "string"
+                    ? item.extractedData.plaque
+                    : null
+                }
+                dateLimite={item.dateLimite}
+              />
+              {pdfUrl && (
+                <div className="mt-6">
+                  <a href={pdfUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100">
+                    Télécharger la lettre signée (PDF)
+                  </a>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <EnvoiSuivi
+                dateLimite={item.dateLimite}
+                type={item.type}
+              />
+              {pdfUrl && (
+                <div className="mt-6">
+                  <a href={pdfUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100">
+                    Télécharger la lettre signée (PDF)
+                  </a>
+                </div>
+              )}
+            </>
+          )
         ) : (
           <div className="mt-8 rounded-2xl border border-zinc-200 bg-white p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">

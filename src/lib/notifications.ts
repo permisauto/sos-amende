@@ -17,6 +17,64 @@ const ROLES_LABEL: Record<string, string> = {
 };
 
 /**
+ * Envoie au client l'e-mail avec le lien de dépôt assisté après validation de
+ * la lettre par le juriste sur un canal en ligne (ANTAI/Télérecours). Le lien
+ * mène à /recours/finaliser?token=... (Option 2, zéro iframe du portail
+ * officiel) : le client dépose lui-même la contestation puis marque son
+ * dossier. Défensif : sans AUTH_RESEND_KEY, aucun envoi (retourne false sans
+ * lever d'erreur). Le lien reste créé quoi qu'il arrive.
+ */
+export async function notifierLienDepot(opts: {
+  dossierId: string;
+  url: string;
+  expireLe: Date;
+}): Promise<boolean> {
+  if (!resend) return false;
+
+  const dossier = await prisma.dossier.findUnique({
+    where: { id: opts.dossierId },
+    select: {
+      type: true,
+      canalEnvoi: true,
+      extractedData: true,
+      user: { select: { email: true, name: true } },
+    },
+  });
+  if (!dossier?.user.email) return false;
+
+  const data = (dossier.extractedData ?? {}) as { num_pv?: string };
+  const ref = data.num_pv ? ` n° ${data.num_pv}` : "";
+  const prenom = dossier.user.name ?? "Client";
+  const canal = dossier.canalEnvoi === "TELERECOURS" ? "Télérecours" : "ANTAI";
+  const expiration = opts.expireLe.toLocaleDateString("fr-FR");
+  const etapes = dossier.type === "SUSPENSION"
+    ? "connectez-vous à Télérecours citoyens puis suivez le guide qui s'affiche (FranceConnect)."
+    : "ouvrez la page ANTAI « Désigner ou contester en ligne » puis suivez le guide qui s'affiche.";
+
+  try {
+    await resend.emails.send({
+      from: EMAIL_FROM,
+      to: dossier.user.email,
+      subject: `SOS Amende — votre contestation${ref} est prête à déposer`,
+      html: `
+        <p>Bonjour ${prenom},</p>
+        <p>Votre lettre de contestation${ref} a été validée par notre juriste et
+        est à déposer sur le portail officiel <strong>${canal}</strong>.</p>
+        <p><strong>Cliquez sur le lien ci-dessous</strong> : la page vous
+        indique exactement la démarche à suivre (numéro à saisir, pièces à
+        joindre) — le dépôt se fait sur le site officiel, pas chez nous.</p>
+        <p><a href="${opts.url}" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">Déposer ma contestation (${canal})</a></p>
+        <p style="font-size:0.85em;color:#64748b">Ce lien est valable jusqu'au
+        ${expiration} et est personnel à votre dossier. ${etapes}</p>
+        ${ACCUEIL}`,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * E-mail de bienvenue / notification à la création d'un compte (client,
  * juriste ou admin). Défensif : sans AUTH_RESEND_KEY, aucun envoi.
  */

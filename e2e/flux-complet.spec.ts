@@ -25,9 +25,11 @@ async function signerLettre(page: import("@playwright/test").Page) {
   await page
     .getByRole("button", { name: "Signer et générer le PDF" })
     .click();
-  // Signature validée par le juriste → envoi automatique à ANTAI (mock)
+  // Lettre validée par le juriste + signée → dépôt assisté : le dossier reste
+  // PRET, le client dépose sa contestation sur le portail officiel puis la
+  // marque comme déposée (plus d'envoi automatique).
   await expect(
-    page.getByRole("heading", { name: "Contestation envoyée" }),
+    page.getByRole("button", { name: /déposé ma contestation/ }).first(),
   ).toBeVisible();
 }
 
@@ -44,7 +46,7 @@ async function approuverLettre(browser: Browser, dossierId: string) {
     .getByLabel("Canal d'envoi de la contestation")
     .selectOption("ANTAI");
   await page
-    .getByRole("button", { name: "Valider et Envoyer" })
+    .getByRole("button", { name: "Valider la lettre" })
     .click();
   // Lettre validée (sans signature) → en attente de la signature du client
   await expect(
@@ -100,7 +102,7 @@ async function decisionOmpJuriste(browser: Browser, dossierId: string) {
   await ctx.close();
 }
 
-test("flux complet : dépôt → analyse → validation juriste → signature → envoi automatique ANTAI → décision OMP", async ({
+test("flux complet : dépôt → analyse → validation juriste → signature → dépôt assisté client → décision OMP", async ({
   page,
   browser,
 }) => {
@@ -120,17 +122,28 @@ test("flux complet : dépôt → analyse → validation juriste → signature �
   await approuverLettre(browser, dossierId);
   await page.goto(`/dashboard/cases/${dossierId}`);
 
-  // Le client signe → la lettre validée est transmise automatiquement à ANTAI
-  // (mock). Si la lettre a déjà été signée via la signature du profil (Cas A),
-  // l'envoi a déjà eu lieu et le canvas n'est pas affiché.
+  // Le client signe (si le canvas est affiché). Si la lettre a déjà été
+  // signée via la signature du profil (Cas A), le bloc dépôt assisté est déjà
+  // affiché.
   if (await page.locator("canvas").first().isVisible().catch(() => false)) {
     await signerLettre(page);
   }
 
-  // Côté client : la contestation est envoyée, la lettre est révélée
+  // Dépôt assisté : le client dépose sa contestation sur le portail officiel
+  // puis la marque comme déposée — le dossier passe ENVOYE (plus d'envoi
+  // automatique côté juriste).
+  await page
+    .getByRole("button", { name: /déposé ma contestation/ })
+    .first()
+    .click();
   await expect(
-    page.getByText("Envoyé à ANTAI", { exact: false }).first(),
+    page.getByRole("heading", { name: "Contestation envoyée" }),
   ).toBeVisible();
+  await expect(
+    page.getByText("déposée par le client", { exact: false }).first(),
+  ).toBeVisible();
+
+  // Côté client : la lettre est révélée
   await expect(
     page.getByRole("heading", { name: "Votre lettre de contestation" }),
   ).toBeVisible();
@@ -150,7 +163,7 @@ test("flux complet : dépôt → analyse → validation juriste → signature �
     ),
   ).toBeVisible();
   await expect(
-    page.getByText("Envoyé à ANTAI", { exact: false }).first(),
+    page.getByText("déposée par le client", { exact: false }).first(),
   ).toBeVisible();
   await expect(
     page.getByText("Décision OMP enregistrée", { exact: false }),

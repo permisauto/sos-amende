@@ -531,8 +531,7 @@ export default async function JuristeCasePage(
     item.statut === "EN_ATTENTE_VALIDATION"
       ? "Lettre générée par le moteur, à relire. Corrigez, lancez une vérification poussée si nécessaire, puis approuvez — la contestation sera transmise au canal choisi."
       : item.statut === "EN_ATTENTE_PRE_SIGNATURE"
-        ? "Lettre validée par vos soins : le client doit maintenant la signer. Une fois signée, la contestation sera transmise à " +
-          `${organismeEnvoi(item.type)} automatiquement (sauf canal LRAR, envoyé par SOS Amende).`
+        ? "Lettre validée par vos soins : le client doit maintenant la signer. Une fois signée, il recevra le lien de dépôt assisté pour transmettre sa contestation sur le portail officiel (sauf canal LRAR, envoyé par SOS Amende)."
         : item.statut === "A_VERIFIER"
           ? "Lettre générée par le moteur, à relire et corriger avant la signature du client."
           : item.statut === "PRET"
@@ -585,44 +584,42 @@ export default async function JuristeCasePage(
       </div>
 
       {searchParams.valide === "ok" &&
-        (searchParams.envoye === "ok" ? (
+        (searchParams.lien === "envoye" ? (
           <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-            Lettre validée et contestation envoyée à{" "}
-            {organismeEnvoi(item.type)} (lettre + pièces jointes). Accusé de
-            dépôt enregistré.
-          </div>
-        ) : searchParams.envoi === "echec" ? (
-          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            Lettre validée, mais l&apos;envoi à {organismeEnvoi(item.type)} a
-            échoué. Relancez l&apos;envoi ci-dessous ou choisissez le canal
-            lettre recommandée — SOS Amende envoie la lettre par nos soins.
+            Lettre validée — le lien de dépôt assisté a été envoyé au client
+            (e-mail). Il dépose sa contestation sur le portail officiel et le
+            dossier passera « Envoyé » à sa confirmation.
           </div>
         ) : item.statut === "EN_ATTENTE_PRE_SIGNATURE" ? (
           <div className="mt-4 rounded-xl bg-indigo-50 px-4 py-3 text-sm text-indigo-800">
             Lettre validée — le client est notifié et doit maintenant la
-            signer. Dès sa signature, la contestation sera transmise
-            automatiquement (sauf canal LRAR, envoyé par SOS Amende).
+            signer. Dès sa signature, il recevra le lien de dépôt pour
+            transmettre sa contestation sur le portail officiel (sauf canal
+            LRAR, envoyé par SOS Amende).
           </div>
         ) : (
           <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-            Lettre validée — SOS Amende transmet la contestation. Vous pouvez
-            relancer l&apos;envoi en ligne ou l&apos;envoyer en lettre
-            recommandée (par nos soins).
+            Lettre validée — SOS Amende transmet la contestation par nos soins
+            (canal lettre recommandée) : le dépôt est enregistré par le
+            juriste. Vous pouvez aussi réenvoyer le lien de dépôt au client.
           </div>
         ))}
 
       {(searchParams.envoye === "ok" && searchParams.valide !== "ok") ||
+      (searchParams.lien === "envoye" && searchParams.valide !== "ok") ||
       searchParams.retourne === "ok" ||
       searchParams.rejete === "ok" ||
       searchParams.decision === "ok" ? (
         <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           {searchParams.envoye === "ok" && searchParams.valide !== "ok"
             ? `Contestation envoyée à ${organismeEnvoi(item.type)} (lettre + pièces jointes).`
-            : searchParams.retourne === "ok"
-              ? "Dossier retourné pour nouvelle analyse."
-              : searchParams.rejete === "ok"
-                ? "Dossier rejeté, le client est informé du motif."
-                : "Décision OMP enregistrée, dossier résolu."}
+            : searchParams.lien === "envoye" && searchParams.valide !== "ok"
+              ? "Lien de dépôt assisté réenvoyé au client (e-mail). Il dépose sa contestation sur le portail officiel puis le dossier passera « Envoyé »."
+              : searchParams.retourne === "ok"
+                ? "Dossier retourné pour nouvelle analyse."
+                : searchParams.rejete === "ok"
+                  ? "Dossier rejeté, le client est informé du motif."
+                  : "Décision OMP enregistrée, dossier résolu."}
         </div>
       ) : null}
 

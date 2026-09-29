@@ -23,7 +23,11 @@ import {
   recupererPreuvesPourDossierId,
   typesPreuvesPourFailles,
 } from "@/lib/preuves-api";
-import { soumettreEtMarquerEnvoye } from "../juriste/actions";
+import {
+  activerDepotEnLigne,
+  marquerDepotEnvoye,
+  peutActiverDepotEnLigne,
+} from "@/lib/lien-depot";
 
 const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
 const MAX_SIZE = 8 * 1024 * 1024; // 8 Mo
@@ -447,17 +451,19 @@ export async function signerDossier(
   revalidatePath("/dashboard/juriste");
   revalidatePath(`/dashboard/juriste/${dossier.id}`);
 
-  // Signature du client = feu vert à l'envoi (dossier déjà validé par le
-  // juriste) : soumission immédiate au portail (ANTAI / Télérecours), sauf si
-  // le canal LRAR a été choisi (SOS Amende envoie la lettre par nos soins — le
-  // juriste déclenche le dépôt). Un dossier hérité en A_VERIFIER (jamais
-  // validé) reste en PRET : le juriste le validera avant tout envoi.
-  if (dossier.canalEnvoi === "LRAR" || !dossier.valideLe) {
-    redirect(`/dashboard/cases/${dossier.id}?signe=ok`);
-  }
-  const envoi = await soumettreEtMarquerEnvoye(dossier.id);
-  if (envoi.ok) {
-    redirect(`/dashboard/cases/${dossier.id}?envoye=ok`);
+  // Signature du client = feu vert au dépôt : pour un canal en ligne validé
+  // (ANTAI/Télérecours), le lien de dépôt assisté est émis maintenant (le
+  // dossier est PRET) — le client dépose sa contestation sur le portail
+  // officiel puis marque le dossier comme déposé. Canal LRAR : SOS Amende
+  // envoie par nos soins (le juriste déclenche le dépôt). Un dossier hérité en
+  // A_VERIFIER (jamais validé) reste en PRET : le juriste le validera avant
+  // tout dépôt.
+  if (peutActiverDepotEnLigne(dossier.canalEnvoi) && dossier.valideLe) {
+    await activerDepotEnLigne({
+      dossierId: dossier.id,
+      canal: dossier.canalEnvoi,
+    }).catch(() => null);
+    redirect(`/dashboard/cases/${dossier.id}?signe=ok&lien=envoye`);
   }
   redirect(`/dashboard/cases/${dossier.id}?signe=ok`);
 }
@@ -502,4 +508,44 @@ export async function demanderAvocat(
 
   revalidatePath(`/dashboard/cases/${dossier.id}`);
   return undefined;
+}
+
+export type DepotAssisteState = { ok?: boolean; error?: string } | undefined;
+
+/**
+ * Dépôt assisté depuis l'espace client (bouton « J'ai déposé ») : le client
+ * authentifié confirme avoir déposé sa contestation sur le portail officiel
+ * (ANTAI/Télérecours). Garde-fous : propriété du dossier, canal en ligne
+ * validé, lettre prête (PRET) — le passage ENVOYE est atomique (delta
+ * commun avec la page /recours/finaliser via `marquerDepotEnvoye`).
+ */
+export async function confirmerDepotClient(
+  _prev: DepotAssisteState,
+  formData: FormData,
+): Promise<DepotAssisteState> {
+  const user = await requireUser();
+
+  const dossierId = String(formData.get("dossierId") ?? "");
+  const dossier = await prisma.dossier.findFirst({
+    where: { id: dossierId, userId: user.id },
+  });
+  if (!dossier) {
+    return { error: "Dossier introuvable." };
+  }
+  if (!peutActiverDepotEnLigne(dossier.canalEnvoi)) {
+    return { error: "Ce dossier est transmis par lettre recommandée, pas en ligne." };
+  }
+
+  const res = await marquerDepotEnvoye({
+    dossierId: dossier.id,
+    canal: dossier.canalEnvoi,
+    statut: dossier.statut,
+  });
+  if (!res.ok) return res;
+
+  revalidatePath(`/dashboard/cases/${dossier.id}`);
+  revalidatePath("/dashboard/juriste");
+  revalidatePath(`/dashboard/juriste/${dossier.id}`);
+  revalidatePath("/dashboard/admin/dossiers");
+  return { ok: true };
 }

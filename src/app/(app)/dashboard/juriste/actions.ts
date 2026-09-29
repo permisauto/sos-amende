@@ -12,6 +12,7 @@ import {
   type RegleDetection,
 } from "@/lib/moteur";
 import { notifierStatut } from "@/lib/notifications";
+import { activerDepotEnLigne, peutActiverDepotEnLigne } from "@/lib/lien-depot";
 import { storageRead, storageWrite } from "@/lib/storage";
 import { generateLettrePdf } from "@/lib/lettre-pdf";
 import { soumettreDossier } from "@/lib/antai";
@@ -267,8 +268,9 @@ export async function validerDossier(
   const signatureProfil = dossier.user?.signatureUrl ?? null;
 
   // Cas A : la signature capturée au dépôt (User.signatureUrl) permet de
-  // produire directement la lettre signée — l'envoi suit immédiatement après
-  // validation, sans repasser par la signature du client.
+  // produire directement la lettre signée — le dossier est PRET à la
+  // validation et le lien de dépôt assisté est émis aussitôt (canal en ligne),
+  // sans repasser par la signature du client.
   let pdfSigne: { pdfUrl: string; signatureUrl: string } | null = null;
   if (!dejaSigne && signatureProfil) {
     const sig = await storageRead(signatureProfil);
@@ -319,6 +321,22 @@ export async function validerDossier(
     }),
   ]);
 
+  // Canal en ligne (ANTAI/Télérecours) : le client dépose lui-même sa
+  // contestation sur le portail officiel via le lien de dépôt assisté
+  // (Option 2, zéro iframe). Plus aucun envoi automatique au portail : le
+  // dossier passe ENVOYE à la confirmation du dépôt par le client (page
+  // /recours/finaliser ou bouton « J'ai déposé » de son espace client). Le
+  // lien est émis dès que la lettre est prête à déposer :
+  // — Cas A (déjà signé → PRET) : émis ici, à la validation ;
+  // — Cas B (à signer → EN_ATTENTE_PRE_SIGNATURE) : émis dans `signerDossier`
+  //   dès la signature du client (pas de lien avant que le dossier soit PRET).
+  if (peutActiverDepotEnLigne(canal) && estSigne) {
+    await activerDepotEnLigne({ dossierId: dossier.id, canal }).catch((e) => {
+      console.error("validerDossier: échec création du lien de dépôt", e);
+      return null;
+    });
+  }
+
   // Notification (défensive : sans AUTH_RESEND_KEY, aucun e-mail envoyé).
   await notifierStatut(dossier.id).catch(() => false);
 
@@ -327,28 +345,21 @@ export async function validerDossier(
   revalidatePath(`/dashboard/cases/${dossier.id}`);
   revalidatePath("/dashboard/admin/dossiers");
 
-  // Cas B : la lettre validée attend la signature du client.
+  // Cas B : la lettre validée attend la signature du client (le lien de dépôt
+  // sera émis à sa signature).
   if (!estSigne) {
     redirect(`/dashboard/juriste/${dossier.id}?valide=ok`);
   }
 
-  // Lettre déjà signée : envoi immédiat (sauf canal LRAR → SOS Amende envoie
-  // la lettre par nos soins ; le juriste déclenche le dépôt via
-  // `envoyerContestation`).
+  // Canal LRAR : SOS Amende envoie la lettre par nos soins ; le juriste
+  // déclenche le dépôt via `envoyerContestation`.
   if (canal === "LRAR") {
     redirect(`/dashboard/juriste/${dossier.id}?valide=ok`);
   }
 
-  const envoi = await soumettreEtMarquerEnvoye(dossier.id);
-
-  revalidatePath("/dashboard/juriste");
-  revalidatePath(`/dashboard/juriste/${dossier.id}`);
-  revalidatePath(`/dashboard/cases/${dossier.id}`);
-  revalidatePath("/dashboard/admin/dossiers");
-  if (envoi.ok) {
-    redirect(`/dashboard/juriste/${dossier.id}?valide=ok&envoye=ok`);
-  }
-  redirect(`/dashboard/juriste/${dossier.id}?valide=ok&envoi=echec`);
+  // Cas A en ligne : le lien de dépôt assisté vient d'être envoyé au client —
+  // il dépose sa contestation sur le portail officiel puis marque le dossier.
+  redirect(`/dashboard/juriste/${dossier.id}?valide=ok&lien=envoye`);
 }
 
 /**
@@ -356,7 +367,8 @@ export async function validerDossier(
  * enregistrée (dossier PRET + validé, jamais ENVOYE). Pour le canal LRAR,
  * l'envoi est fait par nos soins (SOS Amende expédie la lettre recommandée) :
  * le juriste enregistre le dépôt et le numéro de recommandé. Pour un canal en
- * ligne (ANTAI / Télérecours), la soumission passe par le portail mock.
+ * ligne (ANTAI / Télérecours), le lien de dépôt assisté est (ré)envoyé au
+ * client — pas de soumission automatique.
  */
 export async function envoyerContestation(
   _prev: ValidationState,
@@ -427,16 +439,20 @@ export async function envoyerContestation(
     data: { canalEnvoi: canal },
   });
 
-  const envoi = await soumettreEtMarquerEnvoye(dossierId);
+  // Canal en ligne : le lien de dépôt assisté est (ré)envoyé au client — il
+  // dépose lui-même sa contestation sur le portail officiel puis marque le
+  // dossier (page /recours/finaliser ou bouton « J'ai déposé » de son espace
+  // client). Pas de soumission automatique.
+  await activerDepotEnLigne({ dossierId: dossier.id, canal }).catch((e) => {
+    console.error("envoyerContestation: échec (ré)émission du lien de dépôt", e);
+    return null;
+  });
 
   revalidatePath("/dashboard/juriste");
   revalidatePath(`/dashboard/juriste/${dossier.id}`);
   revalidatePath(`/dashboard/cases/${dossier.id}`);
   revalidatePath("/dashboard/admin/dossiers");
-  if (envoi.ok) {
-    redirect(`/dashboard/juriste/${dossier.id}?envoye=ok`);
-  }
-  return { error: envoi.error };
+  redirect(`/dashboard/juriste/${dossier.id}?lien=envoye`);
 }
 
 /**

@@ -125,6 +125,7 @@ model Dossier {
   payments         Payment[]
   messages         Message[]
   messageInternes  MessageInterne[]
+  lienDepot        LienDepot? // lien de dépôt assisté envoyé au client (canal ANTAI/Télérecours)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -329,6 +330,26 @@ model Payment {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Lien de dépôt assisté envoyé au client quand le juriste valide la lettre
+// avec un canal en ligne (ANTAI ou Télérecours) : le client accède à la page
+// /recours/finaliser?token=... (Option 2, zéro iframe) qui l'aide à déposer sa
+// contestation sur le portail officiel, puis marque son dossier ENVOYE.
+// Le token est stocké HACHÉ (sha256) — jamais en clair. Expire après
+// LienDepot.dureeValiditeJours (7 j). RGPD : supprimé avec le dossier.
+model LienDepot {
+  id         String   @id @default(cuid())
+  dossierId  String   @unique
+  tokenHash  String   @unique // sha256 du token envoyé par e-mail
+  canal      String // ANTAI | TELERECOURS
+  expireLe   DateTime
+  consommeLe DateTime?
+  createdAt  DateTime @default(now())
+
+  dossier Dossier @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+
+  @@index([expireLe])
 }
 
 // ---------------------------------------------------------------------------

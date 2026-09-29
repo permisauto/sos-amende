@@ -85,7 +85,7 @@ test("synchronisation : pipeline juriste, lettres proposées, signature visible 
       .getByLabel("Canal d'envoi de la contestation")
       .locator('option[value="TELERECOURS"]'),
   ).toHaveCount(0);
-  await pj.getByRole("button", { name: "Valider et Envoyer" }).click();
+  await pj.getByRole("button", { name: "Valider la lettre" }).click();
   await expect(
     pj.getByText("Validation par le juriste", { exact: true }),
   ).toBeVisible();
