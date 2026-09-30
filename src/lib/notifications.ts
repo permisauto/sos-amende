@@ -213,6 +213,50 @@ export async function notifierNouvellesPropositions(opts: {
 }
 
 /**
+ * Alerte l'équipe (juristes + admins) des dossiers transmis en lettre
+ * recommandée dont la décision est attendue depuis longtemps (> 45 j). Pas de
+ * portail pour ce canal : seul un humain peut clore (résumé chiffré, un seul
+ * e-mail). Défensif : sans AUTH_RESEND_KEY, aucun envoi.
+ */
+export async function notifierDecisionsEnAttente(
+  items: Array<{ id: string; numRef: string | null }>,
+): Promise<boolean> {
+  if (!resend) return false;
+  const equipe = await prisma.user.findMany({
+    where: { role: { in: ["JURISTE", "ADMIN"] } },
+    select: { email: true, name: true },
+  });
+  if (equipe.length === 0) return false;
+  const lignes = items
+    .map(
+      (d) =>
+        `<li>Dossier <code>${d.id}</code>${d.numRef ? ` (PV n° ${d.numRef})` : ""} — décision LRAR attendue.</li>`,
+    )
+    .join("");
+  let envoyes = 0;
+  for (const membre of equipe) {
+    try {
+      await resend.emails.send({
+        from: EMAIL_FROM,
+        to: membre.email,
+        subject: `SOS Amende — ${items.length} décision${items.length > 1 ? "s" : ""} LRAR en attente`,
+        html: `
+          <p>Bonjour ${membre.name ?? "membre de l'équipe"},</p>
+          <p><strong>${items.length} dossier(s)</strong> transmis en lettre recommandée n'a/ont pas encore de réponse de l'administration (au-delà du délai attendu) :</p>
+          <ul>${lignes}</ul>
+          <p>Si le client a reçu la décision, enregistrez-la pour clore le dossier (statut « Résolu »).</p>
+          <p><a href="${process.env.NEXT_PUBLIC_APP_URL ?? "https://recours-permis-pv.com"}/dashboard/juriste">Ouvrir le suivi des dossiers</a></p>
+          <p style="color:#888;font-size:0.85em">Alerte générée automatiquement par le suivi quotidien des décisions.</p>`,
+      });
+      envoyes += 1;
+    } catch {
+      // défensif : un échec d'envoi n'interrompt pas le cron
+    }
+  }
+  return envoyes > 0;
+}
+
+/**
  * Notifie le client d'un changement de statut de son dossier (défensif :
  * sans AUTH_RESEND_KEY, aucun e-mail n'est envoyé et la fonction renvoie
  * false sans jamais lever d'erreur). Complète les rappels J10/J3/J0.

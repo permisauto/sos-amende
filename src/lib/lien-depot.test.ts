@@ -242,7 +242,11 @@ describe("confirmerDepotSurPortail", () => {
 
     expect(prisma.dossier.update).toHaveBeenCalledWith({
       where: { id: "dossier-1" },
-      data: { statut: "ENVOYE", updatedAt: expect.any(Date) },
+      data: {
+        statut: "ENVOYE",
+        decisionAttendueLe: expect.any(Date),
+        updatedAt: expect.any(Date),
+      },
     });
     expect(prisma.dossierEvent.create).toHaveBeenCalledWith({
       data: {

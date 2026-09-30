@@ -27,10 +27,12 @@ async function signerLettre(page: import("@playwright/test").Page) {
     .click();
   // Lettre validée par le juriste + signée → dépôt assisté : le dossier reste
   // PRET, le client dépose sa contestation sur le portail officiel puis la
-  // marque comme déposée (plus d'envoi automatique).
+  // marque comme déposée (plus d'envoi automatique). Patience large : la
+  // génération du PDF s'ajoute à la charge des specs parallèles sur le même
+  // compte client (production de plusieurs signatures simultanées).
   await expect(
     page.getByRole("button", { name: /déposé ma contestation/ }).first(),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 20_000 });
 }
 
 async function approuverLettre(browser: Browser, dossierId: string) {
@@ -48,14 +50,9 @@ async function approuverLettre(browser: Browser, dossierId: string) {
   await page
     .getByRole("button", { name: "Valider la lettre" })
     .click();
-  // Lettre validée (sans signature) → en attente de la signature du client
-  await expect(
-    page.getByText("en attente de la signature du client", {
-      exact: false,
-    }),
-  ).toBeVisible();
-  // La timeline juriste retrace la validation (l'envoi viendra après la
-  // signature du client)
+  // Lettre validée : en attente de la signature du client (Cas B) ou déjà
+  // signée via la signature du profil (Cas A, dossier PRET). Le libellé stable
+  // (timeline juriste) apparaît dans les deux cas.
   await expect(
     page.getByText("Validation par le juriste", { exact: true }),
   ).toBeVisible();
@@ -118,7 +115,8 @@ test("flux complet : dépôt → analyse → validation juriste → signature �
     page.getByText("En attente de validation du juriste", { exact: false }),
   ).toBeVisible();
 
-  // Le juriste approuve la lettre → en attente de la signature du client
+  // Le juriste approuve la lettre → signature du client (Cas B) ou dossier
+  // déjà PRET (Cas A, signature du profil réutilisée)
   await approuverLettre(browser, dossierId);
   await page.goto(`/dashboard/cases/${dossierId}`);
 

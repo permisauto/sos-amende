@@ -175,6 +175,10 @@ async function main() {
   const e2ePwd = hashPassword("MdpE2e2026!");
   const e2eUsers = [
     { email: "e2e-client@test.local", name: "Client E2E", role: Role.CLIENT, credits: 50 },
+    // Compte dédié au suivi de décision (e2e/suivi-decision.spec.ts) : isolé du
+    // client principal pour que sa signature de profil (pré-posée par
+    // global-setup, Cas A) n'interfère pas avec les autres specs.
+    { email: "e2e-client-suivi@test.local", name: "Client Suivi E2E", role: Role.CLIENT, credits: 50 },
     { email: "e2e-juriste@test.local", name: "Juriste E2E", role: Role.JURISTE, credits: 0 },
     { email: "e2e-admin@test.local", name: "Admin E2E", role: Role.ADMIN, credits: 0 },
   ];

@@ -108,6 +108,13 @@ model Dossier {
   motifRejet       String? @db.Text // raison du rejet juriste (statut REJETE)
   decisionOmp      String? // décision OMP après envoi : ACCEPTE | REJETE
   decisionDetail   String? @db.Text // note du juriste sur la décision OMP
+  // Suivi automatique des décisions (cron /api/cron/recuperations-decisions) :
+  // le numéro de dépôt portail, la mise en attente de décision, l'horodatage de
+  // la décision récupérée automatiquement et le statut brut lu sur le portail.
+  numeroDepot        String? // n° de dépôt portail (ANTAI/TELER) ou LRAR
+  decisionAttendueLe DateTime? // posé au passage ENVOYE (début de la fenêtre de suivi)
+  decisionRecupereeLe DateTime? // décision lue sur le portail par le robot (récupération auto)
+  reponsePortail     String? @db.Text // statut brut tel que lu sur le portail (traçabilité RGPD)
   valideLe         DateTime? // validation de la lettre par le juriste (kit envoi)
   canalEnvoi       String?   // canal d'envoi choisi par le juriste : ANTAI | TELERECOURS | LRAR
   remarquesJuriste String?   @db.Text // remarques de la vérification poussée (relance du moteur)
@@ -129,6 +136,7 @@ model Dossier {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([numeroDepot])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

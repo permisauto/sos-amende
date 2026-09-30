@@ -82,7 +82,7 @@ export async function soumettreEtMarquerEnvoye(dossierId: string) {
   // en PRET (lettre validée, relançable).
   const verrou = await prisma.dossier.updateMany({
     where: { id: dossier.id, statut: "PRET" },
-    data: { statut: "ENVOYE" },
+    data: { statut: "ENVOYE", decisionAttendueLe: new Date() },
   });
   if (verrou.count === 0) {
     return { ok: false as const, error: "Dossier déjà envoyé." };
@@ -113,6 +113,11 @@ export async function soumettreEtMarquerEnvoye(dossierId: string) {
 
   const courrier = dossier.courriers[dossier.courriers.length - 1];
   await prisma.$transaction([
+    // Suivi des décisions : n° de dépôt portail + début de la fenêtre d'attente.
+    prisma.dossier.update({
+      where: { id: dossier.id },
+      data: { numeroDepot: result.numeroDepot, decisionAttendueLe: new Date() },
+    }),
     ...(courrier
       ? [
           prisma.courrier.update({
@@ -480,9 +485,15 @@ export async function envoyerParLrar(
     };
   }
 
+  const numero = opts.numeroRecommandé || `LRAR-${Date.now().toString(36).toUpperCase()}`;
+
   const verrou = await prisma.dossier.updateMany({
     where: { id: dossier.id, statut: "PRET" },
-    data: { statut: "ENVOYE" },
+    data: {
+      statut: "ENVOYE",
+      numeroDepot: numero,
+      decisionAttendueLe: new Date(),
+    },
   });
   if (verrou.count === 0) {
     return { ok: false as const, error: "Dossier déjà envoyé." };
@@ -496,7 +507,6 @@ export async function envoyerParLrar(
     preuves: dossier.preuves.map((p) => ({ nom: p.nom, type: p.type, url: p.url })),
   });
 
-  const numero = opts.numeroRecommandé || `LRAR-${Date.now().toString(36).toUpperCase()}`;
   const dateDepot = new Date().toISOString();
   let preuveUrl: string | null = null;
   try {

@@ -154,6 +154,8 @@ type JuristeCaseDetail = {
   motifRejet: string | null;
   decisionOmp: "ACCEPTE" | "REJETE" | null;
   decisionDetail: string | null;
+  decisionAttendueLe?: Date | null;
+  decisionRecupereeLe?: Date | null;
   valideLe: Date | null;
   user: { name: string | null; email: string | null; signatureUrl: string | null };
   messages: Array<{
@@ -915,6 +917,16 @@ export default async function JuristeCasePage(
                 </p>
               )}
 
+              {item.decisionAttendueLe && !item.decisionRecupereeLe && (
+                <p className="mt-3 rounded-xl bg-white px-4 py-2.5 text-xs text-emerald-700">
+                  Décision suivie automatiquement : SOS Amende interroge le
+                  portail (déposé le{" "}
+                  {item.decisionAttendueLe.toLocaleDateString("fr-FR")}). Le
+                  dossier passera « Résolu » dès que la réponse est lue — sinon
+                  enregistrez-la manuellement.
+                </p>
+              )}
+
               {accuseUrl && (
                 <a
                   href={accuseUrl}
@@ -960,6 +972,12 @@ export default async function JuristeCasePage(
               {item.decisionDetail && (
                 <p className="mt-2 text-sm text-emerald-800">
                   {item.decisionDetail}
+                </p>
+              )}
+              {item.decisionRecupereeLe && (
+                <p className="mt-2 text-xs text-emerald-700">
+                  Décision récupérée automatiquement par SOS Amende (portail
+                  officiel) le {item.decisionRecupereeLe.toLocaleDateString("fr-FR")}.
                 </p>
               )}
             </section>

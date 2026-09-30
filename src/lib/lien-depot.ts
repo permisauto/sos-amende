@@ -165,7 +165,7 @@ export async function marquerDepotEnvoye(opts: {
   await prisma.$transaction([
     prisma.dossier.update({
       where: { id: opts.dossierId },
-      data: { statut: "ENVOYE", updatedAt: new Date() },
+      data: { statut: "ENVOYE", decisionAttendueLe: new Date(), updatedAt: new Date() },
     }),
     prisma.dossierEvent.create({
       data: {

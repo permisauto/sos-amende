@@ -27,6 +27,10 @@ export default defineConfig({
       ANTAI_MOCK: "1",
       ANTAI_MOCK_TOKEN: "dev-antai-mock",
       AUTH_DEV_FILE: "1",
+      // Suivi automatique des décisions (E2E) : seuil 0 j pour éligibilité
+      // immédiate + secret nécessaire au cron/recuperations-decisions.
+      DECISION_WAIT_JOURS: "0",
+      CRON_SECRET: "e2e-cron-secret",
       NODE_TLS_REJECT_UNAUTHORIZED: "0",
       // .env.local (généré par Vercel CLI) contient des placeholders
       // "[SENSITIVE]" qui écrasent .env. On force les vraies valeurs locales

@@ -2,6 +2,12 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireJuriste } from "@/lib/dal";
 
+const JOUR_MS = 24 * 60 * 60 * 1000;
+
+function joursDepuis(date: Date): number {
+  return Math.max(0, Math.floor((Date.now() - date.getTime()) / JOUR_MS));
+}
+
 const statusLabels: Record<string, string> = {
   BROUILLON: "Brouillon",
   EN_ANALYSE: "En analyse",
@@ -110,6 +116,8 @@ export default async function JuristePage(
     statut: string;
     extractedData: unknown;
     createdAt: Date;
+    decisionAttendueLe: Date | null;
+    decisionRecupereeLe: Date | null;
     user: { name: string | null; email: string | null };
     failleJuridique: { titreFaille: string } | null;
   }> = [];
@@ -208,6 +216,13 @@ export default async function JuristePage(
           >
             {statusLabels[item.statut] ?? item.statut}
           </span>
+          {item.statut === "ENVOYE" &&
+            item.decisionAttendueLe &&
+            !item.decisionRecupereeLe && (
+              <span className="mt-1 flex text-[11px] font-medium text-emerald-600">
+                Décision attendue depuis {joursDepuis(item.decisionAttendueLe)} j
+              </span>
+            )}
         </td>
         <td className="px-4 py-3 text-zinc-500">
           {item.createdAt.toLocaleDateString("fr-FR")}

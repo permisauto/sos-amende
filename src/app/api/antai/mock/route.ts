@@ -13,10 +13,13 @@ const DEV_TOKEN =
 
 /**
  * Portail ANTAI MOCK (développement/E2E uniquement — garde-fou produit).
- * Simule la réception d'une requête en exonération et émet un accusé de dépôt.
+ * - POST : simule la réception d'une requête en exonération (accusé de dépôt).
+ * - GET /decision : décision OMP déterministe (voir mock/decision/route.ts),
+ *   utilisée par le cron /api/cron/recuperations-decisions.
  * Ne jamais brancher ce mock sur le portail réel. Inaccessible en production
- * sauf opt-in explicite ANTAI_MOCK=1 (réservé aux tests E2E).
+ * sauf opt-in explicite ANTAI_MOCK=1 (réservé aux E2E).
  */
+
 export async function POST(req: Request) {
   if (!MOCK_ACTIF) {
     return NextResponse.json(

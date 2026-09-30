@@ -28,7 +28,11 @@ async function soumettreDossierMock(
   preuves?: { nom: string }[],
 ): Promise<SoumissionResult> {
   const data = (dossier.extractedData ?? {}) as Record<string, string | undefined>;
-  const baseUrl = await baseUrlApp();
+  // En build prod local (E2E), baseUrlApp déduit https par défaut — le mock est
+  // toujours servi en HTTP : on privilégie NEXT_PUBLIC_APP_URL (http en E2E).
+  const baseUrl =
+    (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "") ||
+    (await baseUrlApp("http://localhost:3200")).replace(/\/$/, "");
 
   try {
     const res = await fetch(`${baseUrl}/api/antai/mock`, {

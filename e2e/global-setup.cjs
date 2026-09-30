@@ -33,16 +33,47 @@ const { Client } = require("pg");
   const client = new Client({ connectionString: url });
   await client.connect();
   try {
-    await client.query(
-      'UPDATE "User" SET credits = $1 WHERE email = $2',
-      [50, "e2e-client@test.local"],
-    );
     // Garde-fou « mot de passe obligatoire » (création après le magic-link) :
     // les comptes E2E reçoivent un hash par défaut pour que les specs qui se
     // connectent par magic-link ne soient pas redirigées vers la page de
     // création de mot de passe. (merci de le maintenir identique au seed)
     const e2ePwd =
       "scrypt$32768$8$1$f05734780417c278f0efd0dddd8cbcbd$2a6d4e183029e4b0cc51f69aa1810bb55ad06874af2055cbf1730f6e612a45bf9c1800d930a8a128d0edca11a2b26cf8ade73b4752390ceb7b88a0871c2f8212";
+    // Compte dédié au suivi de décision (e2e/suivi-decision.spec.ts) : créé
+    // (sur les bases fraîches) puis rechargé — isolé du client principal pour
+    // que sa signature de profil (Cas A) n'interfère pas avec les autres specs.
+    const sigPath = path.join(
+      process.cwd(),
+      "public",
+      "uploads",
+      "sigs",
+      "e2e-suivi-signature.png",
+    );
+    fs.mkdirSync(path.dirname(sigPath), { recursive: true });
+    // Fichier PNG minimal valide (1×1) : suffisant pour que la lettre soit
+    // « signée » via la signature du profil sans repasser par le canvas.
+    fs.writeFileSync(
+      sigPath,
+      Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+        "base64",
+      ),
+    );
+    await client.query(
+      `
+      INSERT INTO "User" (id, email, name, role, credits, "emailVerified", "passwordHash", "signatureUrl", "updatedAt")
+      VALUES (gen_random_uuid(), $1, 'Client Suivi E2E', 'CLIENT', $2, now(), $3, $4, now())
+      ON CONFLICT (email) DO UPDATE SET
+        "passwordHash" = EXCLUDED."passwordHash",
+        "signatureUrl" = EXCLUDED."signatureUrl",
+        credits = EXCLUDED.credits
+      `,
+      ["e2e-client-suivi@test.local", 50, e2ePwd, "/uploads/sigs/e2e-suivi-signature.png"],
+    );
+    await client.query(
+      'UPDATE "User" SET credits = $1 WHERE email = $2',
+      [50, "e2e-client@test.local"],
+    );
     await client.query(
       'UPDATE "User" SET "passwordHash" = $1 WHERE email IN ($2,$3,$4)',
       [e2ePwd, "e2e-client@test.local", "e2e-juriste@test.local", "e2e-admin@test.local"],

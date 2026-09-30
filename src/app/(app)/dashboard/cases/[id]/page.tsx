@@ -73,6 +73,7 @@ type CaseDetail = {
   motifRejet: string | null;
   decisionOmp: "ACCEPTE" | "REJETE" | null;
   decisionDetail: string | null;
+  decisionRecupereeLe?: Date | null;
   valideLe: Date | null;
   messages: Array<{
     id: string;
@@ -438,6 +439,12 @@ export default async function CaseDetailPage(
           {item.decisionDetail && (
             <p className="mt-3 rounded-xl bg-white px-4 py-3 text-sm text-zinc-700">
               {item.decisionDetail}
+            </p>
+          )}
+          {item.decisionRecupereeLe && (
+            <p className="mt-2 text-xs text-zinc-500">
+              La décision a été récupérée automatiquement par SOS Amende depuis
+              le portail officiel.
             </p>
           )}
         </div>
