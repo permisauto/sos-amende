@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/dal";
 import { joursRestants } from "@/lib/moteur";
+import { PRIX_AMENDE, PRIX_SUSPENSION, PRIX_OPTION_LRAR } from "@/lib/tarifs";
 
 const MOCK_NOW = new Date("2026-07-15T12:00:00Z").getTime();
 
@@ -88,7 +89,7 @@ export default async function DashboardPage() {
           vous signez, nous la vérifions — vous l&apos;envoyez.
         </p>
         <p className="mt-3 max-w-xl text-xs text-emerald-100/90">
-          Analyse gratuite : déposez votre PV, scan + scoring offerts. Vous ne payez (39&nbsp;€ / 59&nbsp;€, par virement bancaire) que si une faille est validée.
+          Analyse gratuite : déposez votre PV, scan + scoring offerts. Vous ne payez ({PRIX_AMENDE}&nbsp;€ / {PRIX_SUSPENSION}&nbsp;€, par virement bancaire, option lettre recommandée +{PRIX_OPTION_LRAR}&nbsp;€) que si une faille est validée.
         </p>
 
         <div className="mt-6 flex flex-wrap gap-3">

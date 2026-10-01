@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { prisma } from "@/lib/prisma";
+import { prixBase } from "@/lib/tarifs";
 
 const cleanKey = process.env.AUTH_RESEND_KEY?.replace(/^\uFEFF/, "").trim();
 const resend = cleanKey ? new Resend(cleanKey) : null;
@@ -165,59 +166,6 @@ export async function notifierMessage(
   }
 }
 
-/**
- * Notifie l'équipe administrative (veille juridique) : une nouvelle édition du
- * Journal officiel a été détectée par le cron quotidien. La veille n'invente
- * rien — elle demande seulement aux admins de vérifier si un texte récent
- * modifie une faille applicable (les propositions du catalogue restent à leur
- * validation). Défensif : sans AUTH_RESEND_KEY, aucun envoi.
- */
-export async function notifierNouvellesPropositions(opts: {
-  editionJorf: { fichier: string; dateEdition: string; heureEdition: string };
-  lienJorf: string;
-}): Promise<boolean> {
-  if (!resend) return false;
-  const { dateEdition, heureEdition } = opts.editionJorf;
-  const dateLisible =
-    `${dateEdition.slice(6, 8)}/${dateEdition.slice(4, 6)}/${dateEdition.slice(0, 4)}` +
-    ` à ${heureEdition.slice(0, 2)}h${heureEdition.slice(2, 4)}`;
-  try {
-    const admins = await prisma.user.findMany({
-      where: { role: "ADMIN" },
-      select: { email: true, name: true },
-    });
-    let envoyes = 0;
-    for (const admin of admins) {
-      await resend.emails.send({
-        from: EMAIL_FROM,
-        to: admin.email,
-        subject: "SOS Amende — veille juridique : nouvelle édition du JORF détectée",
-        html: `
-          <p>Bonjour ${admin.name ?? "administrateur"},</p>
-          <p>La veille juridique quotidienne a détecté une <strong>nouvelle édition
-          du Journal officiel du ${dateLisible}</strong> (${opts.editionJorf.fichier}).</p>
-          <p>Veuillez vérifier si un texte récent (code de la route, jurisprudence,
-          procédure de contestation…) modifie une faille applicable : les
-          propositions de la bibliothèque juridique restent en attente de votre
-          validation.</p>
-          <p><a href="${opts.lienJorf}">Consulter le Journal officiel</a> ·
-          <a href="${process.env.NEXT_PUBLIC_APP_URL ?? "https://recours-permis-pv.com"}/dashboard/juriste/failles">Bibliothèque juridique</a></p>
-          <p style="color:#888;font-size:0.85em">Cette alerte est générée automatiquement par l'auto-alimentation quotidienne.</p>`,
-      });
-      envoyes += 1;
-    }
-    return envoyes > 0;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Alerte l'équipe (juristes + admins) des dossiers transmis en lettre
- * recommandée dont la décision est attendue depuis longtemps (> 45 j). Pas de
- * portail pour ce canal : seul un humain peut clore (résumé chiffré, un seul
- * e-mail). Défensif : sans AUTH_RESEND_KEY, aucun envoi.
- */
 export async function notifierDecisionsEnAttente(
   items: Array<{ id: string; numRef: string | null }>,
 ): Promise<boolean> {
@@ -275,6 +223,7 @@ export async function notifierStatut(dossierId: string): Promise<boolean> {
       decisionOmp: true,
       decisionDetail: true,
       prix: true,
+      type: true,
       user: { select: { email: true, name: true } },
     },
   });
@@ -283,7 +232,7 @@ export async function notifierStatut(dossierId: string): Promise<boolean> {
   const data = (dossier.extractedData ?? {}) as { num_pv?: string };
   const ref = data.num_pv ? ` (PV n° ${data.num_pv})` : "";
   const prenom = dossier.user.name ?? "Client";
-  const montant = dossier.prix ? `${dossier.prix} €` : "39 €";
+  const montant = dossier.prix ? `${dossier.prix} €` : `${prixBase(dossier.type)} €`;
 
   let subject = "";
   let html = "";
@@ -384,6 +333,81 @@ export async function notifierStatut(dossierId: string): Promise<boolean> {
       html,
     });
     return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Échappe le HTML — le texte vient des publications officielles. */
+function echapper(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
+ * Digest hebdomadaire de la veille juridique (auto-alimentation §H).
+ *
+ * Remplace l'alerte quotidienne « nouvelle édition du JORF » : un seul e-mail
+ * par semaine, récapitulatif, envoyé aux juristes et administrateurs — et
+ * seulement s'il y a des sources nouvelles à lire. Rien n'est décidé ici : la
+ * liste sert à orienter la lecture, la promotion en faille reste humaine.
+ *
+ * Défensif : sans `AUTH_RESEND_KEY` ne fait rien et retourne false.
+ */
+export async function notifierDigestVeille(opts: {
+  lignes: {
+    titre: string;
+    source: string;
+    score: number;
+    resume: string;
+    url: string | null;
+  }[];
+  jours: number;
+}): Promise<boolean> {
+  if (!resend || opts.lignes.length === 0) return false;
+  const lienVeille = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://recours-permis-pv.com"}/dashboard/juriste/veille`;
+
+  const items = opts.lignes
+    .slice(0, 25)
+    .map(
+      (l) => `<li>
+        <strong>${echapper(l.titre)}</strong>
+        <em>(${echapper(l.source)} — score ${l.score})</em><br/>
+        ${echapper(l.resume)}${l.url ? `<br/><a href="${l.url}">Lire la source sur Légifrance</a>` : ""}
+      </li>`,
+    )
+    .join("\n");
+
+  try {
+    const equipe = await prisma.user.findMany({
+      where: { role: { in: ["JURISTE", "ADMIN"] } },
+      select: { email: true, name: true },
+    });
+    let envoyes = 0;
+    for (const membre of equipe) {
+      await resend.emails.send({
+        from: EMAIL_FROM,
+        to: membre.email,
+        subject: `SOS Amende — veille juridique : ${opts.lignes.length} publication(s) à lire`,
+        html: `
+          <p>Bonjour ${echapper(membre.name ?? "")},</p>
+          <p>La veille automatique a relevé <strong>${opts.lignes.length} publication(s)
+          officielle(s) potentiellement pertinente(s)</strong> sur les
+          ${opts.jours} derniers jours, sur les sources officielles DILA
+          (jurisprudence administrative, Cour de cassation, Journal officiel).</p>
+          <p>Ces publications sont <em>des sources</em>, pas des failles : lisez-les,
+          puis promotez-en une en proposition si elle justifie un nouveau fondement.
+          La règle et la lettre restent rédigées à la main.</p>
+          <ul>${items}</ul>
+          <p><a href="${lienVeille}">Ouvrir la veille juridique</a></p>
+          <p style="color:#888;font-size:0.85em">Relevé automatique, une fois par semaine.</p>`,
+      });
+      envoyes += 1;
+    }
+    return envoyes > 0;
   } catch {
     return false;
   }

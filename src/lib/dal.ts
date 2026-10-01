@@ -17,9 +17,10 @@ export const getCurrentUser = cache(async () => {
       if (user) return user;
     } catch {}
   }
-  // Bypass dev STRICT — uniquement en développement ET avec cookie dev_login signé
-  // En production, ce bloc est entièrement désactivé.
-  if (process.env.NODE_ENV === "development") {
+  // Bypass dev STRICT — développement + opt-in explicite ENABLE_DEV_LOGIN=1
+  // ET cookie dev_login posé par /api/dev/login (lui-même gardé par le même
+  // opt-in). En production, ce bloc est entièrement désactivé.
+  if (process.env.NODE_ENV === "development" && process.env.ENABLE_DEV_LOGIN === "1") {
     try {
       const cookieStore = await cookies();
       const devCookie = cookieStore.get("dev_login")?.value;

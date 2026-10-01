@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { PaiementPublicClient } from "./paiement-client";
+import { libelleMontant } from "@/lib/tarifs";
 
 export const metadata: Metadata = { title: "Paiement — finaliser votre dossier" };
 
@@ -8,7 +9,7 @@ export default async function PaiementPublicPage(props: { searchParams: Promise<
   const type = sp.type === "SUSPENSION" ? "SUSPENSION" : "AMENDE";
   return (
     <div className="mx-auto max-w-2xl px-6 py-12">
-      <h1 className="text-2xl font-bold">Paiement — {type === "AMENDE" ? "39 € / amende" : "59 € / suspension"}</h1>
+      <h1 className="text-2xl font-bold">Paiement — {type === "AMENDE" ? `${libelleMontant("AMENDE")} / amende` : `${libelleMontant("SUSPENSION")} / suspension`}</h1>
       <p className="mt-2 text-sm text-zinc-600">Renseignez vos informations personnelles pour obtenir le RIB et effectuer votre virement. Le scan et le scoring étaient gratuits.</p>
       <div className="mt-8">
         <PaiementPublicClient initialType={type} />

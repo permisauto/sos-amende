@@ -86,19 +86,15 @@ const { Client } = require("pg");
       ["e2e-client@test.local"],
     );
     // Le test suspension.spec.ts vérifie le garde-fou « aucune faille
-    // SUSPENSION validée → examen par un juriste » : on remet les 3
-    // propositions SUSPENSION en PROPOSEE (les validations manuelles en
-    // admin ne doivent pas casser ce test).
+    // SUSPENSION validée → examen par un juriste ».
+    //
+    // On réinitialise TOUTES les failles SUSPENSION, sans liste d'ids en dur :
+    // le catalogue en compte 10 et continuera d'en gagner (auto-alimentation
+    // veille). Une liste figée oubliait les nouvelles, et une seule d'entre
+    // elles activée en admin faisait échouer suspension.spec.ts.
     await client.query(
-      'UPDATE "FailleJuridique" SET statut = $1 WHERE id = ANY($2)',
-      [
-        "PROPOSEE",
-        [
-          "faille-suspension-sans-contradictoire",
-          "faille-suspension-marge-erreur-ethylometre",
-          "faille-suspension-notification-irreguliere",
-        ],
-      ],
+      'UPDATE "FailleJuridique" SET statut = $1 WHERE "typeInfraction" = $2',
+      ["PROPOSEE", "SUSPENSION"],
     );
   } finally {
     await client.end();

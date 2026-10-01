@@ -44,6 +44,58 @@ export async function extrairePv(buffer: Buffer): Promise<OcrResult | null> {
   return null;
 }
 
+/**
+ * Erreur HTTP portant son statut, pour distinguer un échec transitoire
+ * (503 « high demand » de Gemini, 429 quota, 502/504 réseau) d'une erreur
+ * permanente (400 requête invalide, 401/403 clé).
+ */
+class ErreurHttp extends Error {
+  constructor(
+    readonly status: number,
+    readonly detail: string,
+  ) {
+    super(`HTTP ${status}`);
+    this.name = "ErreurHttp";
+  }
+}
+
+/** Statuts qu'on retente : surcharge amont, quota, réseau. */
+const STATUTS_TRANSITOIRES = new Set([408, 425, 429, 500, 502, 503, 504]);
+
+export function estTransitoire(status: number): boolean {
+  return STATUTS_TRANSITOIRES.has(status);
+}
+
+const attendre = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Réessaie un appel sur échec transitoire, avec backoff exponentiel.
+ * Google renvoie couramment « 503 … high demand, temporary » sur le modèle
+ * Flash : sans nouvelle tentative, un upload client se retrouve sans OCR
+ * pré-rempli alors que le service était juste saturé à l'instant T.
+ */
+async function avecRetry<T>(
+  op: (essai: number) => Promise<T>,
+  tentatives = 3,
+): Promise<T> {
+  let dernier: unknown;
+  for (let essai = 1; essai <= tentatives; essai++) {
+    try {
+      return await op(essai);
+    } catch (err) {
+      dernier = err;
+      if (!(err instanceof ErreurHttp) || !estTransitoire(err.status)) break;
+      if (essai === tentatives) break;
+      const pause = 400 * 2 ** (essai - 1); // 400 ms puis 800 ms
+      console.error(
+        `[ocr] échec transitoire HTTP ${err.status} — nouvelle tentative ${essai + 1}/${tentatives} dans ${pause} ms`,
+      );
+      await attendre(pause);
+    }
+  }
+  throw dernier;
+}
+
 /** Détection du MIME par magie-bytes (Gemini exige le bon type inline_data). */
 function detecterMime(buffer: Buffer): string {
   if (buffer[0] === 0xff && buffer[1] === 0xd8) return "image/jpeg";
@@ -63,7 +115,24 @@ function detecterMime(buffer: Buffer): string {
  * champs structurés (numéro PV, plaque, dates…), pré-remplissage bien plus
  * fiable que les regex de normaliserPv — la saisie humaine reste obligatoire.
  */
+/**
+ * Point d'entrée Gemini : réessaie les échecs transitoires (503 « high
+ * demand », 429 quota, 502/504) puis abandonne en renvoyant null — jamais
+ * d'exception : un OCR en échec laisse le client saisir à la main.
+ */
 async function geminiFlashOcr(buffer: Buffer): Promise<OcrResult | null> {
+  try {
+    return await avecRetry(() => geminiFlashOcrUnEssai(buffer));
+  } catch (err) {
+    console.error(
+      "[ocr:gemini] échec final :",
+      err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    );
+    return null;
+  }
+}
+
+async function geminiFlashOcrUnEssai(buffer: Buffer): Promise<OcrResult | null> {
   try {
     const model = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
     const mime = detecterMime(buffer);
@@ -103,7 +172,9 @@ async function geminiFlashOcr(buffer: Buffer): Promise<OcrResult | null> {
       },
     );
     if (!res.ok) {
-      console.error("[ocr:gemini] generateContent HTTP", res.status, await res.text());
+      const detail = await res.text();
+      console.error("[ocr:gemini] generateContent HTTP", res.status, detail);
+      if (estTransitoire(res.status)) throw new ErreurHttp(res.status, detail);
       return null;
     }
 
@@ -150,6 +221,9 @@ async function geminiFlashOcr(buffer: Buffer): Promise<OcrResult | null> {
     }
     return { texte, extrait: Object.keys(extrait).length ? extrait : undefined };
   } catch (err) {
+    // Les échecs transitoires doivent remonter à avecRetry : c'est exactement
+    // le cas à réessayer (503 « high demand »). Les autres renvoient null.
+    if (err instanceof ErreurHttp) throw err;
     console.error("[ocr:gemini] échec :", err instanceof Error ? `${err.name}: ${err.message}` : String(err));
     return null;
   }
@@ -208,7 +282,9 @@ async function geminiUploadFile(buffer: Buffer, mime: string): Promise<string | 
     }),
   });
   if (!start.ok) {
-    console.error("[ocr:gemini] upload start HTTP", start.status, await start.text());
+    const detail = await start.text();
+    console.error("[ocr:gemini] upload start HTTP", start.status, detail);
+    if (estTransitoire(start.status)) throw new ErreurHttp(start.status, detail);
     return null;
   }
   const uploadUrl = start.headers.get("x-goog-upload-url");
@@ -228,7 +304,9 @@ async function geminiUploadFile(buffer: Buffer, mime: string): Promise<string | 
     body: Buffer.from(buffer),
   });
   if (!upload.ok) {
-    console.error("[ocr:gemini] upload push HTTP", upload.status, await upload.text());
+    const detail = await upload.text();
+    console.error("[ocr:gemini] upload push HTTP", upload.status, detail);
+    if (estTransitoire(upload.status)) throw new ErreurHttp(upload.status, detail);
     return null;
   }
   const meta = (await upload.json()) as { file?: { uri?: string } };
@@ -438,14 +516,48 @@ export function normaliserPv(texte: string): Partial<ExtractedData> {
   }
   if (lieu) result.lieu = lieu.trim().slice(0, 120);
 
-  // SUSPENSION : motif / préfecture / durée
-  if (/suspension|pr[eé]fet/i.test(texte)) {
-    const motifM = texte.match(/(?:alcool|stup[eé]fiant|vitesse|excès|points)/i);
+  // SUSPENSION : motif / préfecture / durée.
+  // Décision de suspension, notification de rétention, lettre 48/48s : on ne
+  // retient que des libellés explicites, et jamais on n'écrase un champ déjà
+  // renseigné (l'humain reste maître — human-in-the-loop).
+  if (
+    /suspension|r[eé]tention|pr[eé]fet|48\s*(?:h|heures)|examen/i.test(texte)
+  ) {
+    const motifM = texte.match(
+      /(?:alcool[eé]mie|stup[eé]fiants?|vitesse|exc[eè]s de vitesse|points? invalid[ée]s?|refus de souffle|d[eé]lits? de conduite)/i,
+    );
     if (motifM) result.motif = motifM[0].toLowerCase();
-    const dureeM = texte.match(/(\d+\s*(?:mois|jours|ans))/i);
-    if (dureeM) result.duree = dureeM[1];
-    const prefM = texte.match(/pr[eé]fecture[^\n]{0,40}/i);
-    if (prefM) result.prefecture = prefM[0].trim().slice(0, 80);
+
+    // Durée : uniquement si libellée, sinon n'importe quel nombre du texte.
+    const dureeM = texte.match(
+      /dur[ée]e[^0-9]{0,20}(\d+\s*(?:mois|jours?|ans?))/i,
+    ) ?? texte.match(
+      /(\d+\s*(?:mois|jours?|ans?))\s+de\s+(?:suspension|r[eé]tention)/i,
+    );
+    if (dureeM) result.duree = dureeM[1].replace(/\s+/g, " ");
+
+    // Préfecture : on isole le nom du service, pas la ligne entière.
+    // 1) on capture la queue de ligne (le département commence souvent par un
+    //    article minuscule — « de la Gironde » — qu'une regex exigeant une
+    //    majuscule manquerait) ;
+    // 2) on tronque aux premiers séparateurs de rubric : un tiret **entouré
+    //    d'espaces** (« Préfecture du Rhône - Date 01/07 » → « Rhône »), mais
+    //    pas le trait d'union interne d'un nom de département
+    //    (« Bouches-du-Rhône » doit rester entier).
+    const prefM = texte.match(/(?:sous-)?pr[eé]fecture[^\S\n]*([^\n]{1,60})/iu);
+    if (prefM?.[1]) {
+      const nom = prefM[1]
+        .replace(/^(?:de|du|des|la|le|les)\s+/iu, "")
+        .split(
+          // séparateurs de rubric : tiret ENTOURÉ d'espaces, ponctuation,
+          // ou mot-clé précédé d'un espace. Le mot-clé doit être précédé d'une
+          // espace sinon « Bouches-du-Rhône » serait coupé sur son « du ».
+          /\s+[-–—]\s+|[,;:|()]|\s+(?:du|de|des|dès|date|motif|adresse)\b|\s+n[°º]/iu,
+        )[0]
+        .replace(/\s+/g, " ")
+        .trim();
+      if (nom) result.prefecture = nom.slice(0, 80);
+    }
   }
 
   return result;

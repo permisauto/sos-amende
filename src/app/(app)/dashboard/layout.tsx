@@ -50,6 +50,12 @@ export default async function DashboardLayout({
               {(user?.role === "JURISTE" || user?.role === "ADMIN") && (
                 <>
                   <Link
+                    href="/dashboard/juriste/veille"
+                    className="hover:text-zinc-900"
+                  >
+                    Veille juridique
+                  </Link>
+                  <Link
                     href="/dashboard/juriste/failles"
                     className="hover:text-zinc-900"
                   >

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/dal";
 import { joursRestants } from "@/lib/moteur";
+import { libelleMontant } from "@/lib/tarifs";
 import { storageRead, storageUrl } from "@/lib/storage";
 import { AnalyseForm } from "./analyse-form";
 import { SignaturePad } from "./signature-pad";
@@ -379,6 +380,18 @@ export default async function CaseDetailPage(
         </div>
       )}
 
+      {searchParams.ocr === "echec" && (
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="font-semibold">
+            Nous n&apos;avons pas pu lire automatiquement votre document.
+          </p>
+          <p className="mt-1 text-amber-800">
+            Son fichier est bien enregistré. Complétez le formulaire ci-dessous à
+            la main — un juriste vérifiera chaque information avant l&apos;envoi.
+          </p>
+        </div>
+      )}
+
       {isDemo && (
         <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
           Dossier de démonstration — aperçu sans stockage. Créez un vrai dossier pour tester le flux complet (paiement virement puis signature).
@@ -706,7 +719,7 @@ export default async function CaseDetailPage(
           <p className="mt-2 text-sm text-emerald-800">
             Le scan et le scoring de votre dossier sont terminés. Pour débloquer
             la lettre et la faire valider par un juriste, réglez votre dossier
-            ({item.type === "AMENDE" ? "39 €" : "59 €"}) par virement bancaire.
+            ({libelleMontant(item.type === "SUSPENSION" ? "SUSPENSION" : "AMENDE")}) par virement bancaire.
           </p>
           <Link href={`/dashboard/paiement/${item.id}`} className="mt-4 inline-block rounded-full bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700">
             Payer — virement bancaire

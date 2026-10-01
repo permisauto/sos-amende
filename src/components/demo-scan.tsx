@@ -236,7 +236,10 @@ export function DemoScan() {
         </div>
       )}
 
-      {phase === "resultats" && (
+      {/* Le panneau de résultats reste affiché pendant la phase lettre :
+          sinon le score et la liste des failles disparaissent dès que la
+          lettre s'affiche. */}
+      {(phase === "resultats" || phase === "lettre") && (
         <div className="mt-4 flex flex-col gap-4">
           {reponse?.message && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">

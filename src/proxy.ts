@@ -21,10 +21,12 @@ export default auth((req) => {
   }
 
   // Bypass dev RÉSERVÉ aux environnements non-prod (dev/E2E) : déploie une
-  // identité locale selon la route (/admin → ADMIN). En production, le param
-  // `?dev=1` et le cookie `dev_login` sont ignorés — accès uniquement par le
-  // magic-link Resend réel.
-  const isDevEnv = process.env.NODE_ENV !== "production";
+  // identité locale selon la route (/admin → ADMIN). Inactif par défaut —
+  // opt-in explicite ENABLE_DEV_LOGIN=1 (cf. src/lib/dev-access.ts). En
+  // production, le param `?dev=1` et le cookie `dev_login` sont ignorés —
+  // accès uniquement par le magic-link Resend réel.
+  const isDevEnv =
+    process.env.NODE_ENV !== "production" && process.env.ENABLE_DEV_LOGIN === "1";
   const hasDevParam = isDevEnv && nextUrl.searchParams.get("dev") === "1";
   const hasDevCookie = isDevEnv && !!req.cookies.get("dev_login")?.value;
   const isDevBypass = hasDevParam || hasDevCookie;

@@ -2,8 +2,9 @@
 
 import { useActionState } from "react";
 import { validerVirement, refuserVirement } from "../actions";
+import { PRIX_OPTION_LRAR } from "@/lib/tarifs";
 
-type Paiement = { id: string; userId: string; amount: unknown; kind: string; status: string; createdAt: Date; preuveUrl?: string | null; preuveNom?: string | null; preuveUploadedAt?: Date | null; user: { email: string; name: string | null } };
+type Paiement = { id: string; userId: string; amount: unknown; kind: string; status: string; createdAt: Date; preuveUrl?: string | null; preuveNom?: string | null; preuveUploadedAt?: Date | null; optionLrar?: boolean; user: { email: string; name: string | null } };
 
 export function PaiementsAdmin({ paiements }: { paiements: Paiement[] }) {
   const [valState, valAction, valPending] = useActionState(validerVirement, undefined);
@@ -22,7 +23,7 @@ export function PaiementsAdmin({ paiements }: { paiements: Paiement[] }) {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="font-medium">{p.user.name ?? p.user.email} — {p.user.email}</p>
-              <p className="text-sm text-zinc-600">{p.kind} — {String(p.amount)} € — {new Date(p.createdAt).toLocaleString("fr-FR")}</p>
+              <p className="text-sm text-zinc-600">{p.kind} — {String(p.amount)} € {p.optionLrar ? `— option LRAR +${PRIX_OPTION_LRAR} €` : ""} — {new Date(p.createdAt).toLocaleString("fr-FR")}</p>
               <p className="font-mono text-xs text-zinc-500">ID: {p.id.slice(0, 8)}</p>
             </div>
             <div className="flex gap-2">

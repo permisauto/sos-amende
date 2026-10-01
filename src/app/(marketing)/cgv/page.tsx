@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { LegalPage } from "@/components/legal-page";
+import { PRIX_AMENDE, PRIX_SUSPENSION, PRIX_OPTION_LRAR } from "@/lib/tarifs";
 
 export const metadata: Metadata = {
   title: "Conditions générales de vente",
@@ -105,9 +106,16 @@ export default function CgvPage() {
 
       <h2 className="text-lg font-semibold text-zinc-900">Article 5. Prix</h2>
       <p>
-        Le prix du Service est de <strong>39 €</strong> TTC pour la contestation
-        d'une amende forfaitaire et de <strong>59 €</strong> TTC pour le
-        traitement d'une décision de suspension ou d'invalidation du permis.
+        Le prix du Service est de <strong>{PRIX_AMENDE} €</strong> TTC pour la contestation
+        d&apos;amende forfaitaire et de <strong>{PRIX_SUSPENSION} €</strong> TTC pour le
+        traitement d&apos;une décision de suspension ou d&apos;invalidation du permis.
+      </p>
+      <p>
+        Le Client peut souscrire, en complément du tarif de base, une{" "}
+        <strong>option d&apos;envoi en lettre recommandée avec accusé de réception</strong>{" "}
+        facturée <strong>{PRIX_OPTION_LRAR} €</strong> TTC, qui s&apos;ajoute au tarif de
+        base correspondant. À défaut, la contestation est transmise en ligne via
+        le dépôt assisté sur le portail officiel.
       </p>
       <p>
         Les prix sont indiqués en euros, toutes taxes comprises. Le Service étant

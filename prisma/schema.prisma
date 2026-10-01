@@ -155,9 +155,67 @@ model FailleJuridique {
 
   dossiers       Dossier[]
   faillesRetenues DossierFaille[]
+  sources        SourceJuridique[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Veille juridique automatique (auto-alimentation §H) — sources DILA
+// ---------------------------------------------------------------------------
+
+/// Une publication officielle ingérée par le cron de veille.
+///
+/// Invariant central : ce modèle ne contient que de la **matière sourcée**
+/// (ECLI, numéro, date, URL Légifrance, citations littérales) et un brouillon
+/// de règle *assemblé* dont le champ d'articulation reste vide. La promotion
+/// en `FailleJuridique` est toujours une décision humaine.
+model SourceJuridique {
+  id           String @id @default(cuid())
+  /// Clé de dédup : ECLI de la décision, sinon identifiant DILA du texte.
+  cle          String @unique
+  /// Identifiant DILA (JURITEXT…, CETATEXT…, JORFTEXT…).
+  idDila       String
+  /// JADE | CASS | JORF
+  source       String
+  /// ARRET, LOI, DECRET, ARRETE… tel que publié.
+  nature       String
+  titre        String
+  juridiction  String?
+  /// yyyy-mm-dd (date de la décision ou du texte).
+  dateSource   DateTime? @db.Date
+  /// n° d'affaire, ou NOR pour un texte.
+  reference    String?
+  ecli         String?
+  /// URL pérenne Légifrance (ELI pour un texte, /juri/id/ pour une décision).
+  url          String?
+  /// Texte intégral normalisé, conservé pour la lecture en base.
+  contenu      String   @db.Text
+  /// Passages retenus, **verbatim**, porteurs d'un terme métier.
+  citations    Json?
+  /// Termes qui qualifient le domaine (MOTS_CLES_CORE).
+  matchsCore   Json?
+  /// Termes de procédure d'appui (MOTS_CLES_APPUI).
+  matchsAppui  Json?
+  score        Int      @default(0)
+  /// Brouillon assemblé : métadonnées + citations, articulation à rédiger.
+  brouillonRegle String? @db.Text
+  statut       SourceJuridiqueStatut @default(NOUVEAU)
+  /// Faille créée à partir de cette source, le cas échéant.
+  failleId     String?
+  /// Archive DILA d'origine (CASS_20260914-210916.tar.gz).
+  archive      String?
+
+  faille FailleJuridique? @relation(fields: [failleId], references: [id])
+
+  createdAt  DateTime  @default(now())
+  reviewedAt DateTime?
+  reviewedBy String?
+
+  @@index([statut, score])
+  @@index([source, dateSource])
+  @@index([createdAt])
 }
 
 // Failles identifiées automatiquement pour un dossier (détection par scan du
@@ -329,6 +387,7 @@ model Payment {
   currency         String    @default("EUR")
   status           String
   kind             String    @default("AMENDE") // AMENDE | SUSPENSION
+  optionLrar       Boolean   @default(false) // +10 € lettre recommandée avec accusé de réception
   preuveUrl        String? // /uploads/... — preuve du virement téléversée par le client
   preuveNom        String? // nom du fichier d'origine
   preuveUploadedAt DateTime?
@@ -394,6 +453,17 @@ enum FailleStatut {
   ACTIVE
   INACTIVE
   PROPOSEE // proposition issue de l'auto-alimentation (source publique) — jamais utilisée par le moteur tant que l'admin ne l'a pas validée
+}
+
+// Publications officielles DILA (JADE, CASS, JORF) remontées par la veille
+// automatique. Ce sont des **sources**, pas des failles : le juriste les lit,
+// les écarte, ou promeut l'une d'elles en proposition de faille. Aucun contenu
+// juridique n'est fabriqué ici — on ne conserve que des métadonnées sourcées et
+// des citations littérales du texte publié.
+enum SourceJuridiqueStatut {
+  NOUVEAU // détectée par le cron, pas encore lue
+  PROMU // le juriste en a fait une proposition de faille (failleId renseigné)
+  ECARTE // hors sujet, écartée définitivement
 }
 
 enum DossierFailleStatut {

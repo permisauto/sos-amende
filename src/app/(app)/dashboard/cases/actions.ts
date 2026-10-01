@@ -17,6 +17,7 @@ import {
 import { generateLettrePdf } from "@/lib/lettre-pdf";
 import { extrairePv, getOcrProvider, normaliserPv } from "@/lib/ocr";
 import { notifierStatut } from "@/lib/notifications";
+import { prixBase } from "@/lib/tarifs";
 import { formaterLettreOfficielle } from "@/lib/envoi";
 import {
   listePiecesJointes,
@@ -90,7 +91,7 @@ export async function createDossier(
     }
   }
 
-  const prix = parsedType.data === "AMENDE" ? 39 : 59;
+  const prix = prixBase(parsedType.data);
 
   // Signature du client capturée au dépôt : stockée une fois sur le profil,
   // réutilisée pour chaque lettre (plus besoin de la retracer par dossier).
@@ -135,7 +136,14 @@ export async function createDossier(
   });
 
   revalidatePath("/dashboard");
-  redirect(`/dashboard/cases/${dossier.id}`);
+  // Échec OCR signalé au client (bannière sur la page du dossier) : sans cela,
+  // le formulaire s'affiche vide sans explication, car le pré-remplissage
+  // n'est qu'un confort — la saisie manuelle reste le chemin principal.
+  redirect(
+    ocr
+      ? `/dashboard/cases/${dossier.id}`
+      : `/dashboard/cases/${dossier.id}?ocr=echec`,
+  );
 }
 
 const analyseSchema = z.object({
@@ -183,6 +191,10 @@ export async function analyserDossier(
     return { error: "Ce dossier n'est plus en attente d'analyse." };
   }
 
+  const failles = await prisma.failleJuridique.findMany({
+    where: { statut: "ACTIVE", typeInfraction: dossier.type },
+  });
+
   const data: ExtractedData = {
     ...parsed.data,
     plaqueIncorrecte: formData.get("plaqueIncorrecte") === "on",
@@ -197,10 +209,6 @@ export async function analyserDossier(
         ? "Pluie"
         : undefined,
   };
-
-  const failles = await prisma.failleJuridique.findMany({
-    where: { statut: "ACTIVE", typeInfraction: dossier.type },
-  });
 
   // Contexte étalonnage : si un radar est connu, sa date d'expiration permet
   // au moteur de détecter la faille « certificat d'étalonnage » avec preuve.

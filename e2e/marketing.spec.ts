@@ -48,8 +48,14 @@ test("la démo simule un PV amende : scan → score global → lettre générée
     page.getByText("Validée par un juriste", { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByText(/ne constitue pas un avis juridique/i),
+    page.getByText(/le scan détecte des failles par règles automatiques/i),
   ).toBeVisible();
+  // Deux bandeaux distincts et volontairement cumulés (résultats + lettre) :
+  // chacun contient la mention « ne constitue pas un avis juridique ».
+  await expect(
+    page.getByText(/ne constitue pas un avis juridique/i).first(),
+  ).toBeVisible();
+  await expect(page.getByText(/Lettre de démonstration/i)).toBeVisible();
 });
 
 test("la démo simule une lettre de suspension : scan → score global → lettre", async ({
@@ -67,6 +73,9 @@ test("la démo simule une lettre de suspension : scan → score global → lettr
   ).toBeVisible({ timeout: 20000 });
   await expect(page.getByText(/Validée/i).first()).toBeVisible({ timeout: 20000 });
   await expect(
-    page.getByText(/ne constitue pas un avis juridique/i),
+    page.getByText(/le scan détecte des failles par règles automatiques/i),
   ).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText(/Lettre de démonstration/i)).toBeVisible({
+    timeout: 15000,
+  });
 });

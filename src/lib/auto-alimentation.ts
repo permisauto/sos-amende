@@ -9,7 +9,6 @@ import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
 import { CATALOGUE_SOURCES } from "@/lib/catalogue-sources";
 import { synchroniserVeilleJorf } from "@/lib/veille-juridique";
-import { notifierNouvellesPropositions } from "@/lib/notifications";
 
 /**
  * Synchronise la base juridique avec le catalogue sourcé. Toutes les entrées
@@ -96,13 +95,18 @@ export async function enregistrerTraceAutoAlimentation(opts: {
 }
 
 /**
- * Exécution quotidienne complète de l'auto-alimentation (Vercel Cron
+ * Exécution quotidienne de l'auto-alimentation (Vercel Cron
  * `/api/cron/auto-alimentation`) :
  *  1. synchronise le catalogue sourcé en statut PROPOSEE (validation admin
  *     seule, jamais ACTIVE automatiquement) et trace le passage ;
- *  2. veille juridique externe : détecte les nouvelles éditions du JORF et
- *     alerte l'équipe (admin) afin qu'elle vérifie si un texte récent modifie
- *     les failles — la veille ne fabrique jamais de contenu juridique.
+ *  2. veille juridique : détecte les nouvelles éditions du JORF et les trace.
+ *
+ * L'ingestion du **contenu** des publications (décisions, textes) est une
+ * étape distincte : voir `executerVeilleDila` / `/api/cron/veille-dila`, et le
+ * digest hebdomadaire `/api/cron/digest-veille`. L'ancien e-mail quotidien
+ * « nouvelle édition du JORF » a été supprimé : le JORF paraît tous les jours,
+ * l'alerte quotidienne n'était pas actionnable.
+ *
  * Retourne un résumé exploitable par la route cron.
  */
 export async function executerAutoAlimentation(): Promise<{
@@ -129,12 +133,6 @@ export async function executerAutoAlimentation(): Promise<{
   }
 
   const veille = await synchroniserVeilleJorf();
-  if (veille.nouvelle && veille.edition) {
-    await notifierNouvellesPropositions({
-      editionJorf: veille.edition,
-      lienJorf: "https://www.legifrance.gouv.fr/jorf",
-    });
-  }
 
   return {
     catalogue,

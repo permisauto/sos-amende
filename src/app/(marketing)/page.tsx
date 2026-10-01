@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { DemoScan } from "@/components/demo-scan";
+import { PRIX_AMENDE, PRIX_SUSPENSION, PRIX_OPTION_LRAR } from "@/lib/tarifs";
 
 export default function HomePage() {
   return (
@@ -135,7 +136,7 @@ export default function HomePage() {
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-zinc-400">
             La démo ci-dessus est <span className="font-semibold text-white">gratuite et sans stockage</span> — aucun fichier requis.
-            Pour déposer votre vrai dossier (PV réel, lettre validée par un juriste), un crédit est requis : 39&nbsp;€ par amende, 59&nbsp;€ par suspension. Paiement à l&apos;acte, sans abonnement.
+            Pour déposer votre vrai dossier (PV réel, lettre validée par un juriste), un crédit est requis : {PRIX_AMENDE}&nbsp;€ par amende, {PRIX_SUSPENSION}&nbsp;€ par suspension (option envoi en lettre recommandée&nbsp;: +{PRIX_OPTION_LRAR}&nbsp;€). Paiement à l&apos;acte, sans abonnement.
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link

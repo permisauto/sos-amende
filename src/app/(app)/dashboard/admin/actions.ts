@@ -9,6 +9,7 @@ import type { RegleDetection } from "@/lib/moteur";
 import type { JurisprudenceRef } from "@/lib/catalogue-sources";
 import { synchroniserCatalogue } from "@/lib/auto-alimentation";
 import { validateMockFaille } from "@/lib/mock-failles";
+import { messageActivationBloquee, estActivable } from "@/lib/failles";
 
 export type FailleState =
   | { error?: string; ok?: boolean; count?: number; statut?: "ACTIVE" | "INACTIVE" }
@@ -190,6 +191,11 @@ const PROPOSEE_ACTIONS = ["ACTIVE", "INACTIVE"] as const;
  * Validation d'une proposition (auto-alimentation) par l'admin :
  *  - ACTIVE : la faille est retenue et utilisée par le moteur.
  *  - INACTIVE : la proposition est écartée (jurisprudence non confirmée, etc.).
+ *
+ * Garde-fou : une proposition issue de la veille juridique est créée avec une
+ * règle et un template **vides** (seule la référence de la source est
+ * pré-remplie). On refuse donc de l'activer tant qu'elle est incomplète —
+ * sans quoi le moteur générerait une lettre vide.
  */
 export async function validerPropositionFaille(
   _prev: FailleState,
@@ -206,6 +212,10 @@ export async function validerPropositionFaille(
     if (!faille) return { error: "Faille introuvable." };
     if (faille.statut !== "PROPOSEE") {
       return { error: "Seule une proposition peut être validée ainsi." };
+    }
+    if (action === "ACTIVE") {
+      const bloque = messageActivationBloquee(faille);
+      if (bloque) return { error: bloque };
     }
 
     await prisma.failleJuridique.update({
@@ -440,17 +450,31 @@ export async function activerToutesPropositions(
   try {
     const proposees = await prisma.failleJuridique.findMany({
       where: { statut: "PROPOSEE" },
-      select: { id: true },
+      select: { id: true, regle: true, templateLettre: true },
     });
 
     if (proposees.length === 0) {
       return { error: "Aucune proposition à activer." };
     }
 
-    await prisma.failleJuridique.updateMany({
-      where: { statut: "PROPOSEE" },
-      data: { statut: "ACTIVE" },
-    });
+    // Même garde-fou que la validation unitaire : on n'active que les
+    // propositions complètes. Une proposition issue de la veille arrive vide
+    // (règle + template à rédiger) et ne doit pas passer en masse.
+    const activables = proposees.filter((f) => estActivable(f));
+    const ignoriees = proposees.length - activables.length;
+
+    if (activables.length > 0) {
+      await prisma.failleJuridique.updateMany({
+        where: { id: { in: activables.map((f) => f.id) } },
+        data: { statut: "ACTIVE" },
+      });
+    }
+    if (ignoriees > 0) {
+      return {
+        error: `${activables.length} proposition(s) activée(s), ${ignoriees} laissée(s) en proposition : règle dégagée ou template de lettre manquant. Complétez-les puis validez-les une par une.`,
+      };
+    }
+    return { ok: true, count: activables.length };
   } catch (e) {
     console.error("activerToutesPropositions: DB indisponible, fallback mock", e);
     // Fallback mock : on active toutes les PROPOSEE du catalogue

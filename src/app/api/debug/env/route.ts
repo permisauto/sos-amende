@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
+import { devAccessEnabled } from "@/lib/dev-access";
 
 /**
- * OUTIL DE DÉBOGAGE — réservé aux environnements non-production.
- * Expose le host et une URL de base masquée (jamais le mot de passe).
- * En production, toujours 404 : éviter toute fuite d'infrastructure.
+ * OUTIL DE DÉBOGAGE — réservé aux environnements non-production AVEC opt-in
+ * explicite (ENABLE_DEV_LOGIN=1). Expose le host et une URL de base masquée
+ * (jamais le mot de passe). En production ou sans opt-in, toujours 404 :
+ * éviter toute fuite d'infrastructure.
  */
 export async function GET() {
-  if (process.env.NODE_ENV === "production") {
+  if (!devAccessEnabled()) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 

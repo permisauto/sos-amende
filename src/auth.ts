@@ -72,9 +72,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           // Mode dev (E2E) : le lien est écrit dans un fichier par email au
           // lieu d'être envoyé. En production, l'absence de clé Resend est une
           // erreur de configuration — on refuse d'expédier un magic-link, sauf
-          // opt-in explicite AUTH_DEV_FILE=1 (réservé aux E2E en build prod).
-          const devFile = process.env.AUTH_DEV_FILE === "1";
-          if (process.env.NODE_ENV === "production" && !devFile) {
+          // opt-in E2E explicite (AUTH_DEV_FILE=1 ET ANTAI_MOCK=1, réservé aux
+          // suites Playwright locales) : un AUTH_DEV_FILE seul ne suffit jamais
+          // sur une vraie production/Vercel.
+          const e2eOptIn = process.env.AUTH_DEV_FILE === "1" && process.env.ANTAI_MOCK === "1";
+          if (process.env.NODE_ENV === "production" && !e2eOptIn) {
             throw new Error(
               "AUTH_RESEND_KEY manquante : impossible d'envoyer le lien de connexion en production.",
             );

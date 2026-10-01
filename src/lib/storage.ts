@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { isRealProduction } from "@/lib/dev-access";
 
 /**
  * Stockage des pièces (PV, signatures, PDF).
@@ -18,11 +19,11 @@ export function isStorageS3(): boolean {
 }
 
 /**
- * Production réelle = NODE_ENV production SANS l'opt-in E2E.
- * (Les E2E tournent en build prod avec AUTH_DEV_FILE=1.)
+ * Production réelle = NODE_ENV production SANS l'opt-in E2E
+ * (AUTH_DEV_FILE=1 ET ANTAI_MOCK=1, cf. src/lib/dev-access.ts).
  */
 function estProdReelle(): boolean {
-  return process.env.NODE_ENV === "production" && process.env.AUTH_DEV_FILE !== "1";
+  return isRealProduction();
 }
 
 /**

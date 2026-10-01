@@ -42,7 +42,8 @@ faille n'est retenue et le dossier passe en attente (le juriste décide).
 
 Signaux du questionnaire ciblé (formulaire d'analyse). Ils ne génèrent
 **aucune lettre** : ils sont transmis au juriste comme contexte (aucun article
-inventé). Le juriste décide du fondement ou rejette.
+inventé). Le juriste décide du fondement ou rejette. Affichage :
+`juriste/[id]/page.tsx` (« Contexte (questionnaire) »).
 
 | Signal (`extractedData`) | Libellé client | Comportement |
 |---|---|---|
@@ -50,6 +51,24 @@ inventé). Le juriste décide du fondement ou rejette.
 | `vehiculeCede` | Véhicule cédé avant l'infraction | Transmis au juriste |
 | `vehiculeVole` | Véhicule volé / plaque usurpée | Transmis au juriste |
 | `conducteurDifferent` | Un autre conducteur était au volant | Transmis au juriste |
+| `plaqueIncorrecte` | Plaque du PV différente de la mienne | Transmis au juriste **et** détecté par la règle `plaqueIncorrecte` |
+
+> ⚠️ **Ne pas transformer ces signaux en règles de détection.** Une case
+> cochée ne doit jamais générer un fondement : le client coche, le juriste
+> décide. C'est le garde-fou anti-hallucination. État vérifié le 2026-10-01 :
+> sur les 20 failles `AMENDE` `ACTIVE`, **seules** `numTelePaiement` et `cle`
+> (`champAbsent`) et `plaqueIncorrecte` lisent un champ du formulaire ; les
+> 4 autres signaux sont **volontairement** hors moteur.
+
+> ⚠️ **Questionnaire dynamique : supprimé (2026-10-01).** Un générateur
+> (`src/lib/questionnaire.ts` + `/api/questionnaire`) transformait les règles
+> `ACTIVE` en cases affichées au client. Il a été retiré : en pratique la base
+> ne contient que des règles `texteContient`/`texteAbsent`/`datePrescrite`/
+> `etalonnageExpire`/`champAbsent`/`plaqueIncorrecte`, donc le bloc rendu était
+> **vide à l'écran** (toutes les questions candidates étaient des `champAbsent`,
+> filtrés). Du code vert mais inerte. Si l'on veut le refaire, il faut d'abord
+> des règles `champPresent` reliant les signaux ci-dessus à une faille — et ce
+> serait une décision de **fond juridique**, pas du code.
 
 ---
 

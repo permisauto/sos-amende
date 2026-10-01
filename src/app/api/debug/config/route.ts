@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isRealProduction, devLoginEnabled } from "@/lib/dev-access";
 
 /** Jamais de cache : cette route lit les variables ENVIRONNEMENT au moment de
  * la requête (les GET App Router sont sinon prégénérées au build). */
@@ -6,10 +7,11 @@ export const dynamic = "force-dynamic";
 
 /**
  * OUTIL DE DIAGNOSTIC CONFIG — ne révèle AUCUNE valeur secrète, uniquement
- * des booléens/mode. Répond 404 hors production réelle pour limiter l'usure.
+ * des booléens/mode. Répond uniquement sur la vraie production (pas les
+ * previews ni les builds E2E) ET avec l'opt-in explicite ENABLE_DEV_LOGIN=1.
  */
 export async function GET() {
-  const real = process.env.NODE_ENV === "production" && process.env.AUTH_DEV_FILE !== "1";
+  const real = isRealProduction() && devLoginEnabled();
   if (!real) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }

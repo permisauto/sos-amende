@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/dal";
 import { PayerCta } from "@/components/payer-cta";
+import { PRIX_AMENDE } from "@/lib/tarifs";
 
 const statusLabels: Record<string, string> = {
   BROUILLON: "Brouillon",
@@ -79,7 +80,7 @@ export default async function CasesPage() {
             Nouveau dossier
           </Link>
         ) : isClient ? (
-          <PayerCta label="Payer un dossier (39 €)" />
+          <PayerCta label={`Payer un dossier (${PRIX_AMENDE} €)`} />
         ) : null}
       </div>
 

@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { devAccessEnabled } from "@/lib/dev-access";
 
 // Accès provisoire simple pour vérification dashboards (dev/E2E uniquement)
 // GET /api/dev/login?email=e2e-juriste@test.local -> redirige vers dashboard avec session
-// En production, cette route est entièrement désactivée (faille de sécurité).
+// Désactivée par défaut : opt-in explicite ENABLE_DEV_LOGIN=1 (cf. dev-access.ts).
 export async function GET(req: Request) {
-  if (process.env.NODE_ENV === "production") {
-    return NextResponse.json({ error: "Dev login désactivé en production" }, { status: 403 });
+  if (!devAccessEnabled()) {
+    return NextResponse.json({ error: "Dev login désactivé (opt-in ENABLE_DEV_LOGIN requis en hors-prod)" }, { status: 403 });
   }
   const { searchParams } = new URL(req.url);
   const email = searchParams.get("email");
