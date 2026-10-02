@@ -161,7 +161,7 @@ export function DemoScan() {
       </div>
       <p className="mt-1 text-sm text-zinc-600">
         La démo simule le téléversement de {LIBELLES[type]}, la numérisation sécurisée,
-        l&apos;identification des failles, le score de réussite estimé puis la
+        l&apos;identification des failles, l&apos;indice de corroboration des motifs puis la
         génération de la lettre de recours — rien n&apos;est stocké, aucun
         fichier n&apos;est requis.
       </p>

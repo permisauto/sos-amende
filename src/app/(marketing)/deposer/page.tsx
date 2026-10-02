@@ -10,7 +10,7 @@ export default async function DeposerPage(props: { searchParams: Promise<{ type?
     <div className="mx-auto max-w-3xl px-6 py-12">
       <h1 className="text-3xl font-bold">Déposer votre {type === "AMENDE" ? "avis de contravention" : "décision de suspension"}</h1>
       <p className="mt-2 text-sm text-zinc-600">
-        Aucun email demandé à cette étape. Téléversez votre document, renseignez les infos utiles, lancez le scan : le scoring détecte les failles et affiche le pourcentage de succès. Vous ne payez qu'ensuite.
+        Aucun email demandé à cette étape. Téléversez votre document, renseignez les infos utiles, lancez le scan : le scoring détecte les failles et affiche l&apos;indice de corroboration des motifs. Vous ne payez qu&apos;ensuite.
       </p>
       <div className="mt-8">
         <DeposerClient initialType={type} />
