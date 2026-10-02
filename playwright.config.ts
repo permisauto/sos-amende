@@ -3,7 +3,11 @@ import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
-  retries: 0,
+  // Toutes les specs partagent UN serveur Next et un seul compte client : la
+  // concurrence produit des échecs "toBeVisible" aléatoires (les échecs
+  // changent d'un run à l'autre et les tests passent en isolation). Un retry
+  // absorbe cette contention sans masquer une vraie régression.
+  retries: 1,
   reporter: "list",
   globalSetup: "./e2e/global-setup.cjs",
   use: {

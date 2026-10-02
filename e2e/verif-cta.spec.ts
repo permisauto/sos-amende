@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
-import { analyserDossier, createDossier, loginAs } from "./helpers";
+﻿import { expect, test } from "@playwright/test";
+import { analyserDossier, createDossier, loginAs, PV_PNG } from "./helpers";
 
 // Suite de vérification exhaustive des boutons / CTA / liens.
 // Chaque test clique un bouton OU vérifie la présence d'un lien et son href.
@@ -110,7 +110,7 @@ test.describe("Client — dossiers", () => {
     ).toBeVisible();
   });
 
-  test("cases/new : le select type + bouton Lancer le dossier", async ({
+  test("cases/new : le select type + bouton Lancer l'analyse", async ({
     page,
   }) => {
     await loginAs(page, "e2e-client@test.local");
@@ -119,8 +119,72 @@ test.describe("Client — dossiers", () => {
     await expect(select).toBeVisible();
     await select.selectOption({ label: "Suspension de permis" });
     // Le bouton submit est désactivé sans fichier
-    const btn = page.getByRole("button", { name: "Lancer le dossier" });
+    const btn = page.getByRole("button", { name: /Lancer l'analyse/ });
     await expect(btn).toBeDisabled();
+    // La durée attendue est annoncée avant le clic, pas découverte pendant l'attente.
+    await expect(
+      page.getByText(/Analyse gratuite\. Comptez 1 à 2 minutes/),
+    ).toBeVisible();
+  });
+
+  test("cases/new : la signature déjà enregistrée évite de resigner", async ({
+    page,
+  }) => {
+    // Compte dédié e2e-client-suivi@test.local : global-setup.cjs lui pose une
+    // signature de profil à CHAQUE run. On ne peut donc pas tester ici la
+    // capture puis la réutilisation sur e2e-client@test.local — les autres
+    // specs signent ce compte en parallèle et rendent l'assertion instable.
+    await loginAs(page, "e2e-client-suivi@test.local");
+    await page.goto("/dashboard/cases/new");
+
+    // Signature existante affichée, pad de signature replié.
+    await expect(
+      page.getByRole("img", { name: "Votre signature enregistrée" }),
+    ).toBeVisible();
+    await expect(page.locator("canvas")).toHaveCount(0);
+    await expect(
+      page.getByText(/signature est déjà enregistrée/i),
+    ).toBeVisible();
+
+    // Le dépôt reste possible sans resigner (le pad n'est pas bloquant).
+    await page
+      .locator('input[type="file"]')
+      .setInputFiles({ name: "pv.png", mimeType: "image/png", buffer: PV_PNG });
+    await expect(page.getByRole("button", { name: /Lancer l'analyse/ })).toBeEnabled();
+
+    // Le pad reste accessible si le client veut remplacer sa signature.
+    await page.getByRole("button", { name: "Signer à nouveau" }).click();
+    await expect(page.locator("canvas")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Revenir à ma signature enregistrée" }),
+    ).toBeVisible();
+  });
+
+  test("dossier EN_ANALYSE : l'analyse est en haut, avant l'aperçu du PV", async ({
+    page,
+  }) => {
+    await loginAs(page, "e2e-client@test.local");
+    const id = await createDossier(page);
+    await page.goto(`/dashboard/cases/${id}`);
+
+    const bloc = page.getByTestId("analyse-en-tete");
+    await expect(bloc).toBeVisible();
+    await expect(
+      bloc.getByRole("button", { name: /Analyser et générer la lettre/ }),
+    ).toBeVisible();
+
+    // L'action attendue est avant le PV et avant la timeline.
+    const yAnalyse = (await bloc.boundingBox())!.y;
+    const yPv = (await page
+      .getByRole("heading", { name: "Avis de contravention" })
+      .first()
+      .boundingBox())!.y;
+    expect(yAnalyse).toBeLessThan(yPv);
+
+    // Les sections hors sujet sont repliées tant que le dossier est en analyse.
+    await expect(
+      page.getByRole("heading", { name: "Fil d'équipe" }),
+    ).toHaveCount(0);
   });
 
   test("parametres : lien export JSON + confidentialité + bouton suppression présent", async ({

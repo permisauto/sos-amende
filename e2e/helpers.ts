@@ -1,4 +1,4 @@
-import { readFile, unlink } from "node:fs/promises";
+﻿import { readFile, unlink } from "node:fs/promises";
 import path from "node:path";
 import { expect, type Page } from "@playwright/test";
 
@@ -24,7 +24,7 @@ export async function createDossier(page: Page): Promise<string> {
   await page
     .locator('input[type="file"]')
     .setInputFiles({ name: "pv.png", mimeType: "image/png", buffer: PV_PNG });
-  await page.getByRole("button", { name: "Lancer le dossier" }).click();
+  await page.getByRole("button", { name: /Lancer l'analyse/ }).click();
   await page.waitForURL(/\/dashboard\/cases\/(?!new$)[^/]+$/);
   return page.url().split("/").pop() as string;
 }

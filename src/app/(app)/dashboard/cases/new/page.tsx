@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/dal";
+import { storageUrl } from "@/lib/storage";
 import { UploadForm } from "./upload-form";
 import { PRIX_AMENDE, PRIX_SUSPENSION, PRIX_OPTION_LRAR } from "@/lib/tarifs";
 
@@ -30,7 +31,10 @@ export default async function NewCasePage(props: PageProps<"/dashboard/cases/new
         <p className="mt-2 text-xs text-emerald-700">Type pré-sélectionné : {typeParam === "AMENDE" ? "Amende" : "Suspension de permis"}</p>
       )}
       <div className="mt-8 rounded-2xl border border-zinc-200 bg-white p-6">
-        <UploadForm defaultType={typeParam} />
+        <UploadForm
+          defaultType={typeParam}
+          signatureExistante={await storageUrl(user.signatureUrl)}
+        />
       </div>
     </div>
   );

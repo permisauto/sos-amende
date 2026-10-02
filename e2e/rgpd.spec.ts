@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+﻿import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 import { loginAs, PV_PNG } from "./helpers";
 
@@ -30,7 +30,7 @@ test("RGPD : export des données (portabilité) puis effacement du compte", asyn
   await page
     .locator('input[type="file"]')
     .setInputFiles({ name: "pv.png", mimeType: "image/png", buffer: PV_PNG });
-  await page.getByRole("button", { name: "Lancer le dossier" }).click();
+  await page.getByRole("button", { name: /Lancer l'analyse/ }).click();
   await page.waitForURL(/\/dashboard\/cases\/(?!new$)[^/]+$/);
 
   // Portabilité : téléchargement JSON contenant profil + dossier.

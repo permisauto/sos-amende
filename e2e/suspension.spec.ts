@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+﻿import { expect, test } from "@playwright/test";
 import { loginAs, PV_PNG } from "./helpers";
 
 test("flux SUSPENSION (infra) : dépôt → analyse type-aware → attente juriste → rejet", async ({
@@ -14,7 +14,7 @@ test("flux SUSPENSION (infra) : dépôt → analyse type-aware → attente juris
   await page
     .locator('input[type="file"]')
     .setInputFiles({ name: "decision.png", mimeType: "image/png", buffer: PV_PNG });
-  await page.getByRole("button", { name: "Lancer le dossier" }).click();
+  await page.getByRole("button", { name: /Lancer l'analyse/ }).click();
   await page.waitForURL(/\/dashboard\/cases\/(?!new$)[^/]+$/);
   const dossierId = page.url().split("/").pop() as string;
 

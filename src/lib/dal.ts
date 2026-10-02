@@ -12,7 +12,7 @@ export const getCurrentUser = cache(async () => {
     try {
       const user = await prisma.user.findUnique({
         where: { id: session.user.id },
-        select: { id: true, name: true, email: true, role: true, credits: true },
+        select: { id: true, name: true, email: true, role: true, credits: true, signatureUrl: true },
       });
       if (user) return user;
     } catch {}
@@ -33,7 +33,7 @@ export const getCurrentUser = cache(async () => {
       try {
         const u = await prisma.user.findUnique({ 
           where: { email }, 
-          select: { id: true, name: true, email: true, role: true, credits: true } 
+          select: { id: true, name: true, email: true, role: true, credits: true, signatureUrl: true } 
         });
         if (u) return u;
       } catch {}
@@ -44,7 +44,8 @@ export const getCurrentUser = cache(async () => {
         name: email.split("@")[0], 
         email, 
         role, 
-        credits: 10 
+        credits: 10,
+        signatureUrl: null,
       } as unknown as Awaited<ReturnType<typeof prisma.user.findUnique>>;
     } catch {}
   }

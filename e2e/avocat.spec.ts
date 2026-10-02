@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+﻿import { expect, test } from "@playwright/test";
 import { loginAs, PV_PNG } from "./helpers";
 
 test("mise en relation avocat : demande client → affectation juriste → contact client", async ({
@@ -13,7 +13,7 @@ test("mise en relation avocat : demande client → affectation juriste → conta
   await page
     .locator('input[type="file"]')
     .setInputFiles({ name: "pv.png", mimeType: "image/png", buffer: PV_PNG });
-  await page.getByRole("button", { name: "Lancer le dossier" }).click();
+  await page.getByRole("button", { name: /Lancer l'analyse/ }).click();
   await page.waitForURL(/\/dashboard\/cases\/(?!new$)[^/]+$/);
   const dossierId = page.url().split("/").pop() as string;
 

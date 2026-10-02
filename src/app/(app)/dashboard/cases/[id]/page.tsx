@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/dal";
 import { joursRestants } from "@/lib/moteur";
+import { titreAnalyse } from "@/lib/envoi";
 import { libelleMontant } from "@/lib/tarifs";
 import { storageRead, storageUrl } from "@/lib/storage";
 import { AnalyseForm } from "./analyse-form";
@@ -342,6 +343,9 @@ export default async function CaseDetailPage(
     { statut: "RESOLU", label: "Réponse" },
   ];
   const currentIndex = STATUT_ETAPE[item.statut] ?? -1;
+  // En EN_ANALYSE, l'action attendue du client (saisir + analyser) est remontée
+  // en tête : timeline, preuves et messages sont vides ou hors sujet à ce stade.
+  const enAnalyse = item.statut === "EN_ANALYSE";
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -413,6 +417,56 @@ export default async function CaseDetailPage(
             </p>
           </div>
         )}
+
+      {enAnalyse && (
+        <section
+          id="analyse"
+          data-testid="analyse-en-tete"
+          className="mt-6 scroll-mt-6 rounded-2xl border-2 border-emerald-300 bg-white p-6"
+        >
+          <p className="inline-block rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-800">
+            Étape 1 sur 6 — à vous de jouer
+          </p>
+          <h2 className="mt-3 text-xl font-semibold">
+            Vérifiez les informations de votre {titreAnalyse(item.type)}
+          </h2>
+          <p className="mt-1 text-sm text-zinc-600">
+            Contrôlez les champs ci-dessous, corrigez ce qui ne correspond pas à
+            votre document, puis lancez l&apos;analyse. Le moteur recherche les
+            motifs de contestation, puis un juriste valide la lettre avant tout
+            envoi. C&apos;est gratuit : le paiement intervient seulement si une
+            faille est validée.
+          </p>
+          <div className="mt-6">
+            <AnalyseForm
+              dossierId={item.id}
+              type={item.type}
+              prefill={
+                item.extractedData as {
+                  nom?: string;
+                  plaque?: string;
+                  num_pv?: string;
+                  date?: string;
+                  heure?: string;
+                  montant?: string;
+                  numTelePaiement?: string;
+                  cle?: string;
+                  typeRadar?: string;
+                  radarId?: string;
+                  plaqueIncorrecte?: boolean;
+                  paiementDejaFait?: boolean;
+                  vehiculeCede?: boolean;
+                  vehiculeVole?: boolean;
+                  conducteurDifferent?: boolean;
+                  adresseIncorrecte?: boolean;
+                  travaux_présents?: boolean;
+                  conditions_meteo?: string;
+                } | null
+              }
+            />
+          </div>
+        </section>
+      )}
 
       {item.statut === "REJETE" && (
         <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-6">
@@ -600,29 +654,36 @@ export default async function CaseDetailPage(
         </div>
       </div>
 
-      {item.evenements.length > 0 && (
+      {item.evenements.length > 0 && !enAnalyse && (
         <div className="mt-8">
           <DossierTimeline events={evenements as TimelineEvent[]} />
         </div>
       )}
 
-      <div className="mt-8">
-        <Preuves
-          dossierId={item.id}
-          preuves={preuvesDto}
-          currentUserId={user.id}
-        />
-      </div>
+      {!enAnalyse && (
+        <div className="mt-8">
+          <Preuves
+            dossierId={item.id}
+            preuves={preuvesDto}
+            currentUserId={user.id}
+          />
+        </div>
+      )}
 
-      <div className="mt-8">
-        <FilMessages
-          dossierId={item.id}
-          messages={messagesDto}
-          currentUserId={user.id}
-          currentRole={user.role as "CLIENT" | "JURISTE" | "ADMIN"}
-        />
-      </div>
+      {!enAnalyse && (
+        <div className="mt-8">
+          <FilMessages
+            dossierId={item.id}
+            messages={messagesDto}
+            currentUserId={user.id}
+            currentRole={user.role as "CLIENT" | "JURISTE" | "ADMIN"}
+          />
+        </div>
+      )}
 
+      {/* La demande de mise en relation reste accessible à tout moment, y
+          compris pendant l'analyse : c'est une action du client, pas du
+          juriste, et la retirer reviendrait à casser une fonctionnalité. */}
       <div className="mt-8">
         <AvocatRequest
           dossierId={item.id}
@@ -641,47 +702,8 @@ export default async function CaseDetailPage(
         />
       </div>
 
-      {item.statut === "EN_ANALYSE" ? (
-        <div className="mt-8 rounded-2xl border border-zinc-200 bg-white p-6">
-          <h2 className="text-lg font-semibold">
-            Analyse de votre avis de contravention
-          </h2>
-          <p className="mt-1 text-sm text-zinc-600">
-            Saisissez les informations lues sur le PV. Le moteur détecte la
-            faille juridique et génère la lettre, qui sera ensuite validée par
-            un juriste.
-          </p>
-          <div className="mt-6">
-            <AnalyseForm
-              dossierId={item.id}
-              type={item.type}
-              prefill={
-                item.extractedData as {
-                  nom?: string;
-                  plaque?: string;
-                  num_pv?: string;
-                  date?: string;
-                  heure?: string;
-                  montant?: string;
-                  numTelePaiement?: string;
-                  cle?: string;
-                  typeRadar?: string;
-                  radarId?: string;
-                  plaqueIncorrecte?: boolean;
-                  paiementDejaFait?: boolean;
-                  vehiculeCede?: boolean;
-                  vehiculeVole?: boolean;
-                  conducteurDifferent?: boolean;
-                  adresseIncorrecte?: boolean;
-                  travaux_présents?: boolean;
-                  conditions_meteo?: string;
-                } | null
-              }
-            />
-          </div>
-        </div>
-      ) : (item.statut === "EN_ATTENTE_VALIDATION" ||
-          item.statut === "A_VERIFIER") &&
+      {(item.statut === "EN_ATTENTE_VALIDATION" ||
+        item.statut === "A_VERIFIER") &&
         !item.lettreGeneree ? (
         <div className="mt-8 rounded-2xl border border-zinc-200 bg-white p-6">
           <h2 className="text-lg font-semibold">
