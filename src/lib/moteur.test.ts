@@ -339,17 +339,33 @@ describe("scoreFaille", () => {
     ).toBeNull();
   });
 
-  it("score 100% si la seule règle matche", () => {
+  it("plafonne une faille de catalogue à score non calibré", () => {
+    // Une règle unique prouve la candidature, pas la réussite : pas de 98 %.
     expect(
       scoreFaille(
         { id: "faille-x", reglesDetection: [{ type: "champAbsent", champ: "cle" }] },
         {},
         null,
       ),
-    ).toEqual({ matchees: 1, total: 1, score: 98 });
+    ).toEqual({ matchees: 1, total: 1, score: 45, calibree: false });
   });
 
-  it("score proportionnel au nombre de règles matchées", () => {
+  it("respecte la calibration d'une faille calibrée à règle unique", () => {
+    // Étalonnage : base 82 + 13 (certificat expiré) = 95, calibration juriste.
+    expect(
+      scoreFaille(
+        {
+          id: FAILLE_IDS.etalonnage,
+          reglesDetection: [{ type: "etalonnageExpire" }],
+        },
+        { radarId: "1248", date: "2026-07-01" },
+        null,
+        { dateExpirationEtalonnage: "2020-01-01" },
+      ),
+    ).toMatchObject({ matchees: 1, total: 1, score: 95, calibree: true });
+  });
+
+  it("plafonne à 45 une faille de catalogue même avec une règle sur deux", () => {
     expect(
       scoreFaille(
         {
@@ -362,7 +378,39 @@ describe("scoreFaille", () => {
         {},
         "excès de vitesse constaté",
       ),
-    ).toEqual({ matchees: 1, total: 2, score: 50 });
+    ).toEqual({ matchees: 1, total: 2, score: 45, calibree: false });
+  });
+
+  it("une faille calibrée à 1 règle sur 2 reste plafonnée à 60", () => {
+    expect(
+      scoreFaille(
+        {
+          id: FAILLE_IDS.mentions,
+          reglesDetection: [
+            { type: "texteContient", motif: "vitesse" },
+            { type: "texteContient", motif: "introuvable" },
+          ],
+        },
+        {},
+        "excès de vitesse constaté",
+      ),
+    ).toEqual({ matchees: 1, total: 2, score: 60, calibree: true });
+  });
+
+  it("deux règles corroborantes débloquent le plafond de 98", () => {
+    expect(
+      scoreFaille(
+        {
+          id: FAILLE_IDS.mentions,
+          reglesDetection: [
+            { type: "texteContient", motif: "vitesse" },
+            { type: "texteContient", motif: "constat" },
+          ],
+        },
+        {},
+        "excès de vitesse constaté sur le radar",
+      ),
+    ).toEqual({ matchees: 2, total: 2, score: 92, calibree: true });
   });
 
   it("évalue le prédicat hérité pour une faille connue sans règles", () => {
@@ -372,6 +420,6 @@ describe("scoreFaille", () => {
         { date: "2020-01-01" },
         null,
       ),
-    ).toEqual({ matchees: 1, total: 1, score: 88 });
+    ).toEqual({ matchees: 1, total: 1, score: 88, calibree: true });
   });
 });

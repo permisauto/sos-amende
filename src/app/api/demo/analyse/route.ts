@@ -41,9 +41,14 @@ Véhicule : AB-123-CD
 Infraction commise le 01/07/2026.`,
 };
 
-// En mode simulation, la démo présente des scores de réussite favorables
-// (chances estimées de succès), sans jamais être un avis juridique. Plancher
-// de confiance pour que la démo montre toujours un résultat encourageant.
+/**
+ * Plancher de la démo publique SEULEMENT : la démo est une vitrine et ne doit
+ * pas afficher un dossier sans perspective. Les scores de la vraie analyse
+ * (`analyserDossier`) ne passent pas par ce plancher — ils utilisent le score
+ * de corroboration, plafonné selon le niveau de calibration (cf. scoreFaille).
+ * Ne jamais présenter ce nombre comme une chance de succès : l'OMP statue au
+ * fond et dispose d'un large pouvoir d'appréciation.
+ */
 const SCORE_MIN_DEMO = 82;
 
 type ResultatDemo = {
@@ -53,6 +58,8 @@ type ResultatDemo = {
   source: string | null;
   jurisprudence: JurisprudenceRef[];
   score: number;
+  /** Faille dont la confiance a été validée par un juriste (base 100). */
+  calibree: boolean;
   reglesMatchées: number;
   reglesTotal: number;
   statut: string | null;
@@ -73,7 +80,7 @@ type FailleDb = {
 
 function construireResultat(
   faille: FailleDb | null,
-  score: { matchees: number; total: number; score: number } | null,
+  score: { matchees: number; total: number; score: number; calibree: boolean } | null,
   texte: string,
   demo: boolean,
 ): ResultatDemo {
@@ -96,6 +103,7 @@ function construireResultat(
     source: faille?.source ?? null,
     jurisprudence: (faille?.jurisprudence as JurisprudenceRef[] | null) ?? [],
     score: demo ? Math.max(scoreBrut, SCORE_MIN_DEMO) : scoreBrut,
+    calibree: score?.calibree ?? false,
     reglesMatchées: score?.matchees ?? 0,
     reglesTotal: score?.total ?? 0,
     statut: faille?.statut ?? null,
@@ -305,21 +313,28 @@ export async function POST(req: Request) {
             data,
             texte,
             { dateExpirationEtalonnage },
-          ) ?? { matchees: 1, total: 1, score: Math.max(62, SCORE_MIN_DEMO - 10 + (Object.keys(data).length % 7)) };
+          ) ?? { matchees: 1, total: 1, score: Math.max(62, SCORE_MIN_DEMO - 10 + (Object.keys(data).length % 7)), calibree: false };
           return construireResultat(faille, sc, texte ?? "", true);
         });
       }
     }
 
-    // Score global pointu : pondéré par questionnaire + preuves
-    // Top1 70% + top2 30% si 2 failles, sinon max. Questionnaire affine déjà chaque score.
+    // Score global — MESURE DE CORROBORATION, jamais une probabilité de
+    // succès. Un dossier peut être rejeté malgré un score élevé : l'OMP
+    // dispose d'un large pouvoir d'appréciation.
     let scoreGlobal = 0;
     if (resultats.length > 0) {
       const sorted = [...resultats].sort((a, b) => b.score - a.score);
       if (sorted.length === 1) scoreGlobal = sorted[0].score;
       else scoreGlobal = Math.round(sorted[0].score * 0.7 + sorted[1].score * 0.3);
-      // Bonus si 2 failles >60% (dossier très solide)
-      if (sorted.length >= 2 && sorted[0].score >= 70 && sorted[1].score >= 60) scoreGlobal = Math.min(98, scoreGlobal + 4);
+      // Deux failles solides et calibrées : corroboration croisée.
+      const croisee =
+        sorted.length >= 2 &&
+        sorted[0].score >= 70 &&
+        sorted[1].score >= 60 &&
+        sorted[0].calibree &&
+        sorted[1].calibree;
+      if (croisee) scoreGlobal = Math.min(98, scoreGlobal + 4);
     }
 
     // Lettre de recours (démo) : générée depuis le template de la faille

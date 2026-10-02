@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+﻿import { expect, test } from "@playwright/test";
 
 test("la landing affiche la promesse produit", async ({ page }) => {
   await page.goto("/");
@@ -29,7 +29,7 @@ test("la démo simule un PV amende : scan → score global → lettre générée
   await page.goto("/");
   await page.getByRole("button", { name: /lancer la démo/i }).click();
   await expect(
-    page.getByText("Score de réussite estimé", { exact: true }),
+    page.getByText("Indice de corroboration des motifs", { exact: true }),
   ).toBeVisible({ timeout: 15000 });
   await expect(page.getByText(/%/).first()).toBeVisible();
   await expect(page.getByText(/faille.*identifiée/i).first()).toBeVisible();
@@ -65,7 +65,7 @@ test("la démo simule une lettre de suspension : scan → score global → lettr
   await page.getByLabel("Document simulé").selectOption("SUSPENSION");
   await page.getByRole("button", { name: /lancer la démo/i }).click();
   await expect(
-    page.getByText("Score de réussite estimé", { exact: true }),
+    page.getByText("Indice de corroboration des motifs", { exact: true }),
   ).toBeVisible({ timeout: 15000 });
   await expect(page.getByText(/%/).first()).toBeVisible({ timeout: 15000 });
   await expect(

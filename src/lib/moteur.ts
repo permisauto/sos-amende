@@ -404,9 +404,31 @@ export function remplirLettreMulti(
 }
 
 /**
- * Score pointu par faille — pondéré par faille + preuves + questionnaire.
- * Le questionnaire affine : chaque réponse complémentaire qui matche renforce
- * le score (ex: plaqueIncorrecte + adresseIncorrecte + travaux).
+ * Failles dont la confiance a été calibrée juridiquement (base de 100 >= 1 règle
+ * corroborante). Toute autre faille reste « à analyser » : une règle unique qui
+ * matche prouve au mieux que la faille est CANDIDATE, pas qu'elle aboutira.
+ * L'identifiant est la clé de calibration — l'ajouter ici est un acte
+ * juridique (validation juriste), jamais une conséquence technique.
+ */
+const FAILLES_CALIBREES = new Set<string>(Object.values(FAILLE_IDS));
+
+/** Plafond d'un score non calibré : on dit « à analyser », jamais « réussi ». */
+export const SCORE_NON_CALIBRE = 45;
+
+/** Un dossier n'est « solide » qu'avec au moins deux règles corroborantes. */
+export const SEUIL_SOLIDE = 2;
+
+/**
+ * Score d'une faille — pondéré par faille + preuves + questionnaire.
+ *
+ * IMPORTANT — ce score n'est PAS une probabilité de succès. Il mesure la
+ * corroboration documentaire d'un motif. Un dossier contesté peut être rejeté
+ * malgré un score élevé : l'OMP dispose d'un large pouvoir d'appréciation.
+ *
+ * `calibree` distingue les failles validées par un juriste des failles de
+ * catalogue : une règle unique qui matche sur une faille non calibrée plafonne
+ * à SCORE_NON_CALIBRE, car une seule condition remplie ne prouve pas le motif.
+ *
  * Retourne null si non candidate. Ne constitue pas un avis juridique.
  */
 export function scoreFaille(
@@ -414,7 +436,7 @@ export function scoreFaille(
   data: ExtractedData,
   texte: string | null | undefined,
   contexte?: { dateExpirationEtalonnage?: Date | string | null },
-): { matchees: number; total: number; score: number } | null {
+): { matchees: number; total: number; score: number; calibree: boolean } | null {
   const regles = faille.reglesDetection ?? [];
   let matchees = 0;
   let total = 0;
@@ -428,6 +450,7 @@ export function scoreFaille(
     if (predicatHerite(faille.id, data, texte, contexte)) matchees = 1;
   }
   if (matchees === 0) return null;
+  const calibree = FAILLES_CALIBREES.has(faille.id);
   let base = Math.round((matchees / total) * 100);
 
   // Pondération pointue par faille + preuves + questionnaire
@@ -494,6 +517,18 @@ export function scoreFaille(
   // Preuve textuelle renforce
   if (texte && d.adresse && texte.toLowerCase().includes(String(d.adresse).toLowerCase().slice(0, 8))) bonus += 4;
 
-  const score = Math.max(0, Math.min(98, base + bonus - malus));
-  return { matchees, total, score };
+  // Plafond de corroboration — jamais un % de réussite.
+  // - faille non calibrée : une règle unique prouvait un ratio de 100 puis un
+  //   plafond à 98, d'où un score fabriqué. Plafond à SCORE_NON_CALIBRE.
+  // - faille calibrée dont la base a été fixée à la main (switch ci-dessus) :
+  //   on respecte la calibration juriste existante.
+  // - faille calibrée multi-règles dont une seule matche : corroboration
+  //   insuffisante, on plafonne à 60 (« à analyser »).
+  const plafond = !calibree
+    ? SCORE_NON_CALIBRE
+    : total >= SEUIL_SOLIDE && matchees < SEUIL_SOLIDE
+      ? 60
+      : 98;
+  const score = Math.max(0, Math.min(plafond, base + bonus - malus));
+  return { matchees, total, score, calibree };
 }

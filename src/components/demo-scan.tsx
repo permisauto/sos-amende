@@ -285,12 +285,15 @@ export function DemoScan() {
             >
               <div>
                 <p className="text-sm font-semibold text-zinc-800">
-                  Score de réussite estimé
+                  Indice de corroboration des motifs
                 </p>
                 <p className="mt-0.5 text-xs text-zinc-500">
                   {reponse.scoreGlobal >= 50
-                    ? "Des motifs solides semblent présents — à confirmer par un juriste."
+                    ? "Plusieurs éléments concordent dans votre dossier — un juriste confirmera les motifs retenus."
                     : "Peu de motifs détectés pour cette démo — un juriste examinerait tout de même le dossier."}
+                  <span className="mt-1 block text-xs text-zinc-500">
+                    Cet indice ne prédit pas la décision de l&apos;administration.
+                  </span>
                 </p>
               </div>
               <span
