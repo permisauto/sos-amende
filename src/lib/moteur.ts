@@ -104,17 +104,25 @@ export function etalonnageExpire(
   return pv.getTime() > exp.getTime();
 }
 
+/** Rafales (km/h) à partir desquelles le résumé météo est retenu : seuil
+ * opérationnel d'aide à la décision, pas un seuil juridique. */
+const RAFales_KMH_RETENUES = 70;
+
 /**
  * Conditions météo « défavorables » au sens de la faille visibilité : pluie,
- * neige, brouillard, verglas ou orage. Règle partagée par le moteur (détection)
- * et les preuves (une preuve météo n'est versée que si elle caractérise
- * réellement cette faille — jamais une simple journée ensoleillée).
+ * bruine, neige, brouillard, verglas, grêle, orage ou tempête — ou, à défaut
+ * d'un mot-clé, des rafales fortes (`Rafales: 75 km/h`). Règle partagée par le
+ * moteur (détection) et les preuves (une preuve météo n'est versée que si elle
+ * caractérise réellement cette faille — jamais une simple journée clémente).
  */
 export function meteoDefavorable(conditions?: string | null): boolean {
-  return (
-    !!conditions &&
-    /pluie|neige|brouillard|verglas|orage/i.test(String(conditions))
-  );
+  if (!conditions) return false;
+  const texte = String(conditions);
+  if (/pluie|bruine|neige|brouillard|verglas|grêle|orage|tempête/i.test(texte)) {
+    return true;
+  }
+  const rafales = texte.match(/rafales:\s*(\d+)/i);
+  return !!rafales && Number(rafales[1]) >= RAFales_KMH_RETENUES;
 }
 
 export function detecterFaille(

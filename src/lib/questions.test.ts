@@ -6,6 +6,7 @@ import {
   naturesPv,
   preuvesPourReponses,
   questionsPour,
+  suggestionsPreuvesClient,
 } from "./questions";
 
 describe("naturesPv — nature du document détectée dans le texte scanné", () => {
@@ -162,6 +163,56 @@ describe("preuvesPourReponses — preuves externes déclenchées (N2)", () => {
     expect(
       preuvesPourReponses({ paiementDejaFait: true }).size,
     ).toBe(0);
+  });
+});
+
+describe("suggestionsPreuvesClient — pièces attendues du client", () => {
+  it("une réponse cochée appelle la pièce qui la corrobore", () => {
+    expect(suggestionsPreuvesClient({ paiementDejaFait: true })).toEqual([
+      { type: "RELEVE_PAIEMENT", raison: "J'ai déjà payé cette amende" },
+    ]);
+    expect(suggestionsPreuvesClient({ vehiculeCede: true })[0]?.type).toBe(
+      "ATTESTATION_CESSION",
+    );
+    expect(suggestionsPreuvesClient({ vehiculeVole: true })[0]?.type).toBe(
+      "ATTESTATION_VOL",
+    );
+  });
+
+  it("rien de coché → aucune suggestion", () => {
+    expect(suggestionsPreuvesClient({})).toEqual([]);
+    expect(suggestionsPreuvesClient(null)).toEqual([]);
+    expect(suggestionsPreuvesClient(undefined)).toEqual([]);
+    expect(suggestionsPreuvesClient({ conditions_meteo: "Pluie" })).toEqual([]);
+    // Une preuve externe (N2) ne fabrique pas de pièce à téléverser.
+    expect(suggestionsPreuvesClient({ stationnementGene: true })).toEqual([]);
+  });
+
+  it("une pièce déjà versée au dossier n'est plus suggérée", () => {
+    expect(
+      suggestionsPreuvesClient({ paiementDejaFait: true }, ["RELEVE_PAIEMENT"]),
+    ).toEqual([]);
+    expect(
+      suggestionsPreuvesClient(
+        { paiementDejaFait: true, vehiculeCede: true },
+        ["ATTESTATION_CESSION"],
+      ),
+    ).toEqual([
+      { type: "RELEVE_PAIEMENT", raison: "J'ai déjà payé cette amende" },
+    ]);
+  });
+
+  it("ne propose jamais un type externe (météo/radar/travaux)", () => {
+    const suggestions = suggestionsPreuvesClient({
+      paiementDejaFait: true,
+      vehiculeCede: true,
+      vehiculeVole: true,
+    });
+    expect(suggestions.map((s) => s.type)).toEqual([
+      "RELEVE_PAIEMENT",
+      "ATTESTATION_CESSION",
+      "ATTESTATION_VOL",
+    ]);
   });
 });
 

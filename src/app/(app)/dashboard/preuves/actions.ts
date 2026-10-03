@@ -7,7 +7,18 @@ import { storageWrite } from "@/lib/storage";
 
 const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
 const MAX_SIZE = 8 * 1024 * 1024; // 8 Mo
-const TYPES = ["CARTE_GRISE", "PLAINTE", "PHOTO", "CERTIFICAT", "AUTRE"] as const;
+// Types téléversables par le client / le juriste. Les types METEO / RADAR /
+// TRAVAUX sont réservés aux preuves externes récupérées automatiquement.
+const TYPES = [
+  "CARTE_GRISE",
+  "PLAINTE",
+  "PHOTO",
+  "CERTIFICAT",
+  "RELEVE_PAIEMENT",
+  "ATTESTATION_CESSION",
+  "ATTESTATION_VOL",
+  "AUTRE",
+] as const;
 
 export type PreuveState = { error?: string; ok?: boolean } | undefined;
 

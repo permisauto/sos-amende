@@ -26,7 +26,7 @@ import {
   remplirTemplate,
   type ExtractedData,
 } from "@/lib/moteur";
-import { LIBELLES_REPONSES } from "@/lib/questions";
+import { LIBELLES_REPONSES, suggestionsPreuvesClient } from "@/lib/questions";
 import {
   formaterLettreOfficielle,
   organismeEnvoi,
@@ -341,6 +341,12 @@ export default async function JuristeCasePage(
     userId: p.userId,
     contexte: contexteParType[p.type] ?? null,
   }));
+  // Pièces attendues d'après les réponses du client (capteur de fait) : le
+  // juriste voit ce qui reste à joindre, sans que la pièce devienne un fondement.
+  const suggestionsPreuves = suggestionsPreuvesClient(
+    item.extractedData,
+    preuves.map((p) => p.type),
+  );
 
   const messagesDto: MessageDto[] = (item.messages ?? []).map((m) => ({
     id: m.id,
@@ -1075,6 +1081,7 @@ export default async function JuristeCasePage(
             preuves={preuvesDto}
             currentUserId={null}
             canDeleteAll={!lectureSeule}
+            suggestions={suggestionsPreuves}
           />
 
           <PreuvesApiBlock

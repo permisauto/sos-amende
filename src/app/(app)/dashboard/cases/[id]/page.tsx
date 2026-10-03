@@ -13,6 +13,7 @@ import { DepotAssiste } from "./depot-assiste";
 import { AvocatRequest } from "./avocat-request";
 import { Preuves, type PreuveDto } from "@/components/preuves";
 import { faillesPourTypePreuve } from "@/lib/preuves-api";
+import { suggestionsPreuvesClient } from "@/lib/questions";
 import { DossierTimeline, type TimelineEvent } from "@/components/dossier-timeline";
 import { FilMessages, type MessageDto } from "@/components/messages";
 import { marquerMessagesLus } from "../../messages/actions";
@@ -260,6 +261,12 @@ export default async function CaseDetailPage(
     userId: p.userId,
     contexte: contexteParType[p.type] ?? null,
   }));
+  // Pièces suggérées d'après les réponses cochées (capteur de fait) : une
+  // pièce déjà versée au dossier n'est plus proposée.
+  const suggestionsPreuves = suggestionsPreuvesClient(
+    item.extractedData,
+    preuves.map((p) => p.type),
+  );
 
   const messagesDto: MessageDto[] = (item.messages ?? []).map((m) => ({
     id: m.id,
@@ -678,6 +685,7 @@ export default async function CaseDetailPage(
             dossierId={item.id}
             preuves={preuvesDto}
             currentUserId={user.id}
+            suggestions={suggestionsPreuves}
           />
         </div>
       )}

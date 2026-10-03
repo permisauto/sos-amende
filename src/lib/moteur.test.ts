@@ -7,6 +7,7 @@ import {
   detecterFailles,
   etalonnageExpire,
   joursRestants,
+  meteoDefavorable,
   remplirLettreMulti,
   remplirTemplate,
   scoreFaille,
@@ -190,6 +191,40 @@ describe("etalonnageExpire", () => {
     expect(etalonnageExpire(null, "2026-06-15")).toBe(false);
     expect(etalonnageExpire("2026-01-01", undefined)).toBe(false);
     expect(etalonnageExpire("pas-une-date", "2026-06-15")).toBe(false);
+  });
+});
+
+describe("meteoDefavorable", () => {
+  it("retient les conditions connues pour nuire à la visibilité", () => {
+    expect(meteoDefavorable("Pluie forte • 8/12°C")).toBe(true);
+    expect(meteoDefavorable("Bruine modérée")).toBe(true);
+    expect(meteoDefavorable("Brouillard • 3/6°C")).toBe(true);
+    expect(meteoDefavorable("Neige modérée")).toBe(true);
+    expect(meteoDefavorable("Verglas")).toBe(true);
+    expect(meteoDefavorable("Averses de pluie modérées")).toBe(true);
+    expect(meteoDefavorable("Orages avec grêle légère")).toBe(true);
+    expect(meteoDefavorable("Tempête")).toBe(true);
+  });
+
+  it("retient des rafales fortes même sans mot-clé de condition", () => {
+    expect(meteoDefavorable("Ciel dégagé • 9/15°C • Rafales: 80 km/h")).toBe(
+      true,
+    );
+    expect(meteoDefavorable("Rafales: 70 km/h")).toBe(true);
+  });
+
+  it("écarte une journée clémente ou de simples rafales faibles", () => {
+    expect(meteoDefavorable("Ciel dégagé • 9/15°C")).toBe(false);
+    expect(meteoDefavorable("Partiellement nuageux • 12/18°C • Rafales: 25 km/h")).toBe(
+      false,
+    );
+    expect(meteoDefavorable("Principalement clair")).toBe(false);
+  });
+
+  it("refuse une valeur absente", () => {
+    expect(meteoDefavorable(null)).toBe(false);
+    expect(meteoDefavorable(undefined)).toBe(false);
+    expect(meteoDefavorable("")).toBe(false);
   });
 });
 

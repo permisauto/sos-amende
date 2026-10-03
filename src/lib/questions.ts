@@ -18,6 +18,9 @@ import type { TypePreuveExterne } from "./preuves-api";
 /** Preuves externes que la réponse peut rendre pertinentes (N2). */
 export type PreuveCible = TypePreuveExterne;
 
+/** Pièces que le **client** peut apporter lui-même quand la réponse est cochée. */
+export type PreuveClient = "RELEVE_PAIEMENT" | "ATTESTATION_CESSION" | "ATTESTATION_VOL";
+
 /** Nature du document détectée dans le texte scanné. */
 export type Nature = "stationnement" | "travaux" | "radar" | "visibilite" | "alcool";
 
@@ -56,6 +59,8 @@ export type QuestionCiblee = {
   natures?: readonly Nature[];
   /** La réponse rend pertinente ce type de preuve externe (N2). */
   preuve?: PreuveCible;
+  /** La réponse appelle une pièce que le **client** ajoute lui-même. */
+  preuveClient?: PreuveClient;
 };
 
 export const QUESTIONS_CIBLEES: readonly QuestionCiblee[] = [
@@ -66,6 +71,7 @@ export const QUESTIONS_CIBLEES: readonly QuestionCiblee[] = [
     libelle: "J'ai déjà payé cette amende",
     groupe: "Contexte (questionnaire ciblé)",
     types: ["AMENDE"],
+    preuveClient: "RELEVE_PAIEMENT",
   },
   {
     cle: "vehiculeCede",
@@ -73,6 +79,7 @@ export const QUESTIONS_CIBLEES: readonly QuestionCiblee[] = [
     libelle: "Mon véhicule a été cédé avant la date de l'infraction",
     groupe: "Contexte (questionnaire ciblé)",
     types: ["AMENDE"],
+    preuveClient: "ATTESTATION_CESSION",
   },
   {
     cle: "vehiculeVole",
@@ -80,6 +87,7 @@ export const QUESTIONS_CIBLEES: readonly QuestionCiblee[] = [
     libelle: "Mon véhicule était volé ou sa plaque usurpée à cette date",
     groupe: "Contexte (questionnaire ciblé)",
     types: ["AMENDE"],
+    preuveClient: "ATTESTATION_VOL",
   },
   {
     cle: "conducteurDifferent",
@@ -296,4 +304,33 @@ export function preuvesPourReponses(
     }
   }
   return types;
+}
+
+export type PreuveSuggestionClient = { type: PreuveClient; raison: string };
+
+/**
+ * Pièces suggérées au client d'après ses réponses cochées — la réponse appelle
+ * la pièce qui la corrobore (règle capteur de fait : une suggestion n'est
+ * jamais un fondement). `typesPresents` masque une pièce déjà versée au
+ * dossier. Fonction pure, testée.
+ */
+export function suggestionsPreuvesClient(
+  reponses: Partial<ExtractedData> | Record<string, unknown> | null | undefined,
+  typesPresents?: Iterable<string>,
+): PreuveSuggestionClient[] {
+  if (!reponses) return [];
+  const presents = new Set(typesPresents ?? []);
+  const vus = new Set<PreuveClient>();
+  const suggestions: PreuveSuggestionClient[] = [];
+  for (const q of QUESTIONS_CIBLEES) {
+    if (!q.preuveClient) continue;
+    const valeur = reponses[q.champ];
+    if (!(valeur === true || (typeof valeur === "string" && valeur !== ""))) {
+      continue;
+    }
+    if (presents.has(q.preuveClient) || vus.has(q.preuveClient)) continue;
+    vus.add(q.preuveClient);
+    suggestions.push({ type: q.preuveClient, raison: q.libelle });
+  }
+  return suggestions;
 }

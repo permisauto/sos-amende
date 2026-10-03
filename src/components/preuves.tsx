@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { ajouterPreuve, supprimerPreuve } from "@/app/(app)/dashboard/preuves/actions";
+import type { PreuveSuggestionClient } from "@/lib/questions";
 
 export type PreuveDto = {
   id: string;
@@ -18,11 +19,19 @@ const TYPE_LABELS: Record<string, string> = {
   PLAINTE: "Récépissé de plainte",
   PHOTO: "Photo du véhicule",
   CERTIFICAT: "Certificat",
+  RELEVE_PAIEMENT: "Relevé de paiement",
+  ATTESTATION_CESSION: "Attestation de cession",
+  ATTESTATION_VOL: "Attestation de vol",
   AUTRE: "Autre pièce",
   METEO: "Météo (source externe)",
   RADAR: "Fiche radar (donnée officielle)",
   TRAVAUX: "Travaux (source OpenData)",
 };
+
+/** Types toujours proposés dans le sélecteur. Les pièces suggérées par le
+ * questionnaire (relevé de paiement, cession, vol) n'y figurent que si une
+ * réponse les appelle — le sélecteur reste court. */
+const TYPES_TELEVERSABLES = ["CARTE_GRISE", "PLAINTE", "PHOTO", "CERTIFICAT", "AUTRE"];
 
 const inputCls =
   "rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100";
@@ -37,11 +46,14 @@ export function Preuves({
   preuves,
   currentUserId,
   canDeleteAll = false,
+  suggestions = [],
 }: {
   dossierId: string;
   preuves: PreuveDto[];
   currentUserId: string | null;
   canDeleteAll?: boolean;
+  /** Pièces attendues d'après les réponses du questionnaire (capteur de fait). */
+  suggestions?: PreuveSuggestionClient[];
 }) {
   const [state, action, pending] = useActionState(ajouterPreuve, undefined);
   const [delState, delAction, delPending] = useActionState(
@@ -49,6 +61,10 @@ export function Preuves({
     undefined,
   );
   const [opened, setOpened] = useState(false);
+  const [typeChoisi, setTypeChoisi] = useState<string>("AUTRE");
+  const optionsTypes = Array.from(
+    new Set([...TYPES_TELEVERSABLES, ...suggestions.map((s) => s.type)]),
+  );
 
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white p-6">
@@ -66,6 +82,36 @@ export function Preuves({
         Carte grise, récépissé de plainte, photos du véhicule, certificat… Les
         pièces jointes étayent la contestation.
       </p>
+
+      {suggestions.length > 0 && (
+        <ul className="mt-4 flex flex-col gap-2">
+          {suggestions.map((s) => (
+            <li
+              key={s.type}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3"
+            >
+              <div>
+                <p className="text-sm font-semibold text-emerald-900">
+                  Pièce utile à joindre : {TYPE_LABELS[s.type] ?? s.type}
+                </p>
+                <p className="text-xs text-emerald-800">
+                  Réponse cochée : « {s.raison} »
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setTypeChoisi(s.type);
+                  setOpened(true);
+                }}
+                className="rounded-full bg-emerald-600 px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
+              >
+                Ajouter cette pièce
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {preuves.length === 0 ? (
         <p className="mt-4 text-sm text-zinc-500">Aucune pièce jointe.</p>
@@ -133,10 +179,15 @@ export function Preuves({
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-zinc-700">Type de pièce</span>
-              <select name="type" defaultValue="AUTRE" className={inputCls}>
-                {Object.entries(TYPE_LABELS).map(([value, label]) => (
+              <select
+                name="type"
+                value={typeChoisi}
+                onChange={(e) => setTypeChoisi(e.target.value)}
+                className={inputCls}
+              >
+                {optionsTypes.map((value) => (
                   <option key={value} value={value}>
-                    {label}
+                    {TYPE_LABELS[value] ?? value}
                   </option>
                 ))}
               </select>
