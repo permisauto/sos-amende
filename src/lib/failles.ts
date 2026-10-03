@@ -1,5 +1,5 @@
 /**
- * Règles d'activation d'une faille — logique pure, testée.
+ * Règles d'activation d'une faille — logique testée.
  *
  * Une `FailleJuridique` `ACTIVE` alimente deux choses sensibles :
  *   1. le moteur de détection (`detecterFailles`) ;
@@ -12,7 +12,13 @@
  * elles arrivent avec la référence de la source et ses citations, mais `regle` et
  * `templateLettre` sont volontairement vides (cf. `promouvoirSource`). Le juriste
  * doit les rédiger avant validation.
+ *
+ * La synchronisation manuelle de l'admin active d'office les propositions
+ * **complètes** (`activerPropositionsCompletes`) ; les incomplètes restent en
+ * PROPOSEE jusqu'à rédaction.
  */
+
+import type { PrismaClient } from "@/generated/prisma/client";
 
 export type ChampsActivation = {
   regle: string | null;
@@ -45,4 +51,43 @@ export function messageActivationBloquee(f: ChampsActivation): string | null {
     return "Règle dégagée absente : rédigez ce que la source impose avant d'activer.";
   }
   return "Template de lettre absent : rédigez la lettre avant d'activer la faille.";
+}
+
+export type BilanActivation = {
+  /** ids effectivement passés de PROPOSEE à ACTIVE. */
+  activees: string[];
+  /** propositions laissées en PROPOSEE (règle ou template à rédiger). */
+  ignorees: number;
+  /** propositions examinées (toutes celles en PROPOSEE). */
+  examinees: number;
+};
+
+/**
+ * Passe en ACTIVE **toutes** les propositions complètes (règle dégagée +
+ * template de lettre non vides) en un seul lot — c'est le cœur de la
+ * synchronisation manuelle de l'admin (« Synchroniser et activer »).
+ *
+ * Garde-fou conservé : une proposition incomplète (stationnement à sourcer,
+ * promotion de veille à rédiger) reste en PROPOSEE, faute de quoi le moteur
+ * générerait une lettre vide. `dep` accepte prisma ou une transaction Prisma.
+ */
+export async function activerPropositionsCompletes(
+  dep: Pick<PrismaClient, "failleJuridique">,
+): Promise<BilanActivation> {
+  const proposees = await dep.failleJuridique.findMany({
+    where: { statut: "PROPOSEE" },
+    select: { id: true, regle: true, templateLettre: true },
+  });
+  const activables = proposees.filter((f) => estActivable(f));
+  if (activables.length > 0) {
+    await dep.failleJuridique.updateMany({
+      where: { id: { in: activables.map((f) => f.id) } },
+      data: { statut: "ACTIVE" },
+    });
+  }
+  return {
+    activees: activables.map((f) => f.id),
+    ignorees: proposees.length - activables.length,
+    examinees: proposees.length,
+  };
 }

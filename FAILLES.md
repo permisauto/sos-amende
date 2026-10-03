@@ -177,10 +177,17 @@ motifs de fond (durée, proportionnalité).
 
 1. Une proposition sourcée (§H) arrive en `PROPOSEE` (auto-alimentation) et
    **n'est jamais utilisée par le moteur**.
-2. L'admin valide (`ACTIVE`) ou écarte (`INACTIVE`) via `validerPropositionFaille`.
-3. Une faille `INACTIVE` n'est jamais utilisée par le moteur.
-4. Seule une faille `ACTIVE` peut produire une lettre.
-5. Avant lancement public : **relecture des 8 templates AMENDE ACTIVE et des
+2. **Activation en masse** (bouton admin « Synchroniser et activer ») :
+   synchronisation du catalogue **puis** passage en `ACTIVE` de toutes les
+   propositions **complètes** (`estActivable` : règle dégagée + template non
+   vide) — l'admin ne les valide plus une par une. Les incomplètes (stationnement
+   à sourcer, promotion de veille à rédiger) restent en `PROPOSEE`.
+3. Sinon, validation unitaire : l'admin valide (`ACTIVE`) ou écarte
+   (`INACTIVE`) via `validerPropositionFaille`.
+4. Une faille `INACTIVE` n'est jamais utilisée par le moteur, et aucune
+   synchronisation ne la réactive.
+5. Seule une faille `ACTIVE` peut produire une lettre.
+6. Avant lancement public : **relecture des 8 templates AMENDE ACTIVE et des
    3 propositions SUSPENSION par un avocat** (risque n°4 du PLAN) — les
    jurisprudences `verifiee: false` doivent être confirmées sur Judilibre /
    Legifrance avant activation.
@@ -209,10 +216,14 @@ Flux :
      (`src/lib/catalogue-sources.ts::CATALOGUE_SOURCES`) se synchronise
      **automatiquement** (`src/lib/auto-alimentation.ts::synchroniserCatalogue`,
      idempotente, upsert en `PROPOSEE`, ne rétrograde jamais une faille
-     ACTIVE/INACTIVE) — déclenchée à l'ouverture de la page admin **et** par
-     `/api/cron/auto-alimentation` (GET/POST, `CRON_SECRET`). L'admin ne fait
-     que **valider** (`validerPropositionFaille` → `ACTIVE`, la faille devient
-     détectable) ou **écarter** (`INACTIVE`). Chaque proposition du catalogue
+     ACTIVE/INACTIVE) — déclenchée à l'ouverture de la page **et** par
+     `/api/cron/auto-alimentation` (GET/POST, `CRON_SECRET`) : ces deux chemins
+     **n'activent jamais**. Le bouton admin **« Synchroniser et activer »**
+     (`importerFaillesDepuisSources`) synchronise puis passe en `ACTIVE` toutes
+     les propositions complètes (`activerPropositionsCompletes`, garde-fou
+     `estActivable` — jamais de lettre vide) en un lot ; reste la validation
+     unitaire `validerPropositionFaille` pour les incomplètes et l'écart
+     (`INACTIVE`). Chaque proposition du catalogue
      porte déjà un `templateLettre` pré-rédigé (variables
      `{nom}`/`{plaque}`/`{num_pv}`/`{montant}`/`{radarId}`), que le juriste
      ajuste lors de la validation.

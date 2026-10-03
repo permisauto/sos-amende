@@ -13,10 +13,17 @@ import {
   synchroniserCatalogue,
 } from "@/lib/auto-alimentation";
 import { validateMockFaille } from "@/lib/mock-failles";
-import { messageActivationBloquee, estActivable } from "@/lib/failles";
+import { messageActivationBloquee, activerPropositionsCompletes } from "@/lib/failles";
 
 export type FailleState =
-  | { error?: string; ok?: boolean; count?: number; statut?: "ACTIVE" | "INACTIVE" }
+  | {
+      error?: string;
+      ok?: boolean;
+      count?: number;
+      activees?: number;
+      ignorees?: number;
+      statut?: "ACTIVE" | "INACTIVE";
+    }
   | undefined;
 
 const regleSchema = z.discriminatedUnion("type", [
@@ -171,11 +178,20 @@ export async function basculerFaille(
 }
 
 /**
- * Auto-alimentation de la base juridique : importe le catalogue issu de la
- * recherche documentaire sur sources publiques (FAILLES.md §H, CATALOGUE_SOURCES)
- * en statut PROPOSEE. Les propositions ne sont JAMAIS utilisées par le moteur
- * tant que l'admin ne les a pas validées (ACTIVE). La synchronisation est
- * aussi déclenchée automatiquement (ouverture de la page admin + cron).
+ * Auto-alimentation de la base juridique, bouton « Synchroniser et activer » :
+ * importe le catalogue issu de la recherche documentaire sur sources publiques
+ * (FAILLES.md §H, CATALOGUE_SOURCES) **puis** passe en ACTIVE d'office toutes
+ * les propositions complètes — l'admin n'a plus à les valider une par une.
+ *
+ * Garde-fous conservés : seule une proposition `estActivable` (règle dégagée +
+ * template de lettre non vides) change de statut ; les incomplètes (stationnement
+ * à sourcer, promotion de veille à rédiger) restent PROPOSEE, faute de quoi le
+ * moteur générerait une lettre vide. Les failles déjà ACTIVE ne sont pas
+ * rétrogradées et un écart (INACTIVE) n'est jamais réactivé.
+ *
+ * La synchronisation **automatique** (cron `/api/cron/auto-alimentation` et
+ * ouverture de la page bibliothèque) reste en PROPOSEE : seule l'action
+ * explicite de l'admin active.
  */
 export async function importerFaillesDepuisSources(
   _prev: FailleState,
@@ -184,9 +200,23 @@ export async function importerFaillesDepuisSources(
   await requireAdmin();
 
   const count = await synchroniserCatalogue();
+  const bilan = await activerPropositionsCompletes(prisma);
+
+  await enregistrerTraceAutoAlimentation({
+    campagne: "catalogue",
+    statut: "OK",
+    traitees: count,
+    nouvelles: bilan.activees.length,
+    detail: `Synchronisation manuelle admin : ${count} entrée(s) du catalogue, ${bilan.activees.length} faille(s) activée(s), ${bilan.ignorees} restée(s) en proposition (incomplète(s)).`,
+  });
 
   revalidatePath("/dashboard/juriste/failles");
-  return { ok: true, count };
+  return {
+    ok: true,
+    count,
+    activees: bilan.activees.length,
+    ignorees: bilan.ignorees,
+  };
 }
 
 const PROPOSEE_ACTIONS = ["ACTIVE", "INACTIVE"] as const;
@@ -515,33 +545,18 @@ export async function activerToutesPropositions(
   await requireAdmin();
 
   try {
-    const proposees = await prisma.failleJuridique.findMany({
-      where: { statut: "PROPOSEE" },
-      select: { id: true, regle: true, templateLettre: true },
-    });
+    const { activees, ignorees, examinees } = await activerPropositionsCompletes(prisma);
 
-    if (proposees.length === 0) {
+    if (examinees === 0) {
       return { error: "Aucune proposition à activer." };
     }
 
-    // Même garde-fou que la validation unitaire : on n'active que les
-    // propositions complètes. Une proposition issue de la veille arrive vide
-    // (règle + template à rédiger) et ne doit pas passer en masse.
-    const activables = proposees.filter((f) => estActivable(f));
-    const ignoriees = proposees.length - activables.length;
-
-    if (activables.length > 0) {
-      await prisma.failleJuridique.updateMany({
-        where: { id: { in: activables.map((f) => f.id) } },
-        data: { statut: "ACTIVE" },
-      });
-    }
-    if (ignoriees > 0) {
+    if (ignorees > 0) {
       return {
-        error: `${activables.length} proposition(s) activée(s), ${ignoriees} laissée(s) en proposition : règle dégagée ou template de lettre manquant. Complétez-les puis validez-les une par une.`,
+        error: `${activees.length} proposition(s) activée(s), ${ignorees} laissée(s) en proposition : règle dégagée ou template de lettre manquant. Complétez-les puis validez-les une par une.`,
       };
     }
-    return { ok: true, count: activables.length };
+    return { ok: true, count: activees.length };
   } catch (e) {
     console.error("activerToutesPropositions: DB indisponible, fallback mock", e);
     // Fallback mock : on active toutes les PROPOSEE du catalogue

@@ -104,9 +104,14 @@ export function FaillesAdmin({
               recherche documentaire (articles de loi + jurisprudences, sources
               publiques). Chaque proposition indique la règle dégagée, les
               articles de loi et l&apos;essentiel de chaque jurisprudence pour
-              une visibilité complète. Votre rôle : lire, vérifier, puis valider
-              (Active) ou écarter (Inactive) — le moteur n&apos;utilise jamais
-              une proposition tant qu&apos;elle n&apos;est pas Active.
+              une visibilité complète. Le bouton{" "}
+              <strong>« Synchroniser et activer »</strong> importe le catalogue
+              et fait passer en <strong>Active</strong>, en une seule fois, toutes
+              les propositions déjà complètes (règle + lettre) : elles deviennent
+              alors des failles utilisées par le moteur. Seules les propositions
+              incomplètes (lettre à rédiger) restent à valider une par une — le
+              moteur n&apos;utilise jamais une proposition tant qu&apos;elle
+              n&apos;est pas Active.
             </p>
           </div>
           <form action={sourcesAction}>
@@ -117,7 +122,7 @@ export function FaillesAdmin({
             >
               {sourcesPending
                 ? "Synchronisation…"
-                : "Synchroniser maintenant"}
+                : "Synchroniser et activer"}
             </button>
           </form>
           {nbProposees > 0 && (
@@ -139,7 +144,16 @@ export function FaillesAdmin({
         )}
         {sourcesState?.ok && (
           <p className="mt-3 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800">
-            {sourcesState.count ?? 0} proposition(s) en attente de validation.
+            {sourcesState.count ?? 0} entrée(s) du catalogue synchronisée(s) ·{" "}
+            {sourcesState.activees ?? 0} faille(s) activée(s)
+            {(sourcesState.ignorees ?? 0) > 0 && (
+              <>
+                {" "}
+                · {sourcesState.ignorees} laissée(s) en proposition (règle ou
+                lettre à rédiger)
+              </>
+            )}
+            .
           </p>
         )}
         {activerToutesState?.error && (

@@ -2,8 +2,18 @@
 // `FailleJuridique` avec le catalogue sourcé (recherche documentaire,
 // FAILLES.md §H). Idempotente et sans danger : elle insère / met à jour les
 // entrées du catalogue en statut PROPOSEE — jamais ACTIVE, jamais utilisée par
-// le moteur. L'admin ne fait que **valider** (ACTIVE) ou écarter (INACTIVE)
-// les propositions, c'est lui qui « clique pour valider la mise à jour ».
+// le moteur.
+//
+// Deux chemins :
+//   • **automatique** (cron `/api/cron/auto-alimentation`, ouverture de la page
+//     bibliothèque) : reste en PROPOSEE — aucune activation sans geste humain ;
+//   • **manuel admin** (bouton « Synchroniser et activer »,
+//     `importerFaillesDepuisSources`) : synchronise puis passe en ACTIVE toutes
+//     les propositions complètes via `activerPropositionsCompletes` — les
+//     incomplètes (règle ou lettre à rédiger) restent en PROPOSEE.
+//
+// Dans les deux cas : jamais de rétrogradation (un INACTIVE reste écarté, un
+// ACTIVE conserve son statut).
 
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
@@ -254,8 +264,9 @@ export async function enregistrerTraceAutoAlimentation(opts: {
 /**
  * Exécution quotidienne de l'auto-alimentation (Vercel Cron
  * `/api/cron/auto-alimentation`) :
- *  1. synchronise le catalogue sourcé en statut PROPOSEE (validation admin
- *     seule, jamais ACTIVE automatiquement) et trace le passage ;
+ *  1. synchronise le catalogue sourcé en statut PROPOSEE (le cron n'active
+ *     **jamais** : seule la synchronisation manuelle de l'admin, « Synchroniser
+ *     et activer », passe en ACTIVE) et trace le passage ;
  *  2. veille juridique : détecte les nouvelles éditions du JORF et les trace.
  *
  * L'ingestion du **contenu** des publications (décisions, textes) est une

@@ -291,7 +291,7 @@ test.describe("Admin — base & radars", () => {
     // Bibliothèque juridique : bouton synchroniser
     await page.getByRole("link", { name: "Bibliothèque juridique" }).click();
     await expect(page).toHaveURL(/\/dashboard\/juriste\/failles/);
-    const syncBtn = page.getByRole("button", { name: "Synchroniser maintenant" });
+    const syncBtn = page.getByRole("button", { name: "Synchroniser et activer" });
     await expect(syncBtn).toBeVisible();
 
     // Radars : formulaire + bouton enregistrer
