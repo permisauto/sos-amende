@@ -9,6 +9,7 @@ import { LettreEdition } from "./lettre-edition";
 import { GenerateurLettre } from "./generateur-lettre";
 import { AvocatTraitement } from "./avocat-traitement";
 import { SuggestionsDrawer } from "./suggestions-drawer";
+import { PiecesManquantes } from "../pieces-manquantes";
 import { PreuvesApiBlock } from "@/components/preuves-api";
 import { Preuves, type PreuveDto } from "@/components/preuves";
 import { SignatureApercu } from "@/components/signature-apercu";
@@ -347,6 +348,11 @@ export default async function JuristeCasePage(
     item.extractedData,
     preuves.map((p) => p.type),
   );
+  const numPvExtrait =
+    typeof item.extractedData === "object" && item.extractedData !== null
+      ? ((item.extractedData as Record<string, unknown>).num_pv as string) ??
+        null
+      : null;
 
   const messagesDto: MessageDto[] = (item.messages ?? []).map((m) => ({
     id: m.id,
@@ -1075,6 +1081,14 @@ export default async function JuristeCasePage(
                 </a>
               ))}
           </section>
+
+          {suggestionsPreuves.length > 0 && (
+            <PiecesManquantes
+              dossierId={item.id}
+              numPv={numPvExtrait}
+              pieces={suggestionsPreuves}
+            />
+          )}
 
           <Preuves
             dossierId={item.id}

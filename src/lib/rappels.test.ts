@@ -7,7 +7,14 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-import { RAPPEL_TYPES, rappelDue } from "./rappels";
+import { prisma } from "@/lib/prisma";
+import {
+  RAPPEL_TYPES,
+  rappelDue,
+  relancePreuvesDue,
+  chercherRappelsPreuves,
+  RAPPEL_TYPE_PREUVES,
+} from "./rappels";
 
 /** Date limite placée dans `jours` jours (positif = recours encore ouvert). */
 function limiteDans(jours: number): Date {
@@ -50,5 +57,78 @@ describe("rappelDue", () => {
       const dus = RAPPEL_TYPES.filter((t) => rappelDue(limiteDans(jours), t));
       expect(dus.length).toBeLessThanOrEqual(1);
     }
+  });
+});
+
+describe("relancePreuvesDue", () => {
+  it("due dès qu'une pièce manque et que le dossier est en cours", () => {
+    expect(relancePreuvesDue(1, "A_VERIFIER")).toBe(true);
+    expect(relancePreuvesDue(2, "EN_ANALYSE")).toBe(true);
+    expect(relancePreuvesDue(1, "PRET")).toBe(true);
+  });
+
+  it("pas due sans pièce manquante", () => {
+    expect(relancePreuvesDue(0, "A_VERIFIER")).toBe(false);
+  });
+
+  it("jamais sur un dossier déposé ou clôturé", () => {
+    for (const statut of [
+      "BROUILLON",
+      "ENVOYE",
+      "REJETE",
+      "ERREUR_TECHNIQUE",
+      "RESOLU",
+      "ANNULE",
+    ]) {
+      expect(relancePreuvesDue(1, statut)).toBe(false);
+    }
+  });
+});
+
+describe("chercherRappelsPreuves", () => {
+  function dossierAvec(extra: Record<string, unknown>) {
+    return {
+      id: "dos-1",
+      statut: "A_VERIFIER",
+      extractedData: { paiementDejaFait: true },
+      rappels: [],
+      user: { email: "client@test.local", name: "Client" },
+      preuves: [],
+      ...extra,
+    };
+  }
+
+  it("relance une fois quand une pièce suggérée manque (dédup via PREUVES)", async () => {
+    vi.mocked(prisma.dossier.findMany).mockResolvedValue([
+      dossierAvec({}),
+      dossierAvec({ id: "dos-2", rappels: [{ type: RAPPEL_TYPE_PREUVES }] }),
+      dossierAvec({ id: "dos-3", extractedData: {} }),
+      dossierAvec({ id: "dos-4", preuves: [{ type: "RELEVE_PAIEMENT" }] }),
+    ] as never);
+    vi.mocked(prisma.rappel.create).mockClear();
+
+    const resultats = await chercherRappelsPreuves();
+
+    expect(resultats).toHaveLength(1);
+    expect(resultats[0]).toMatchObject({
+      dossierId: "dos-1",
+      libelles: ["Relevé de paiement"],
+    });
+    expect(prisma.rappel.create).toHaveBeenCalledTimes(1);
+    expect(prisma.rappel.create).toHaveBeenCalledWith({
+      data: { dossierId: "dos-1", type: RAPPEL_TYPE_PREUVES },
+    });
+  });
+
+  it("ignore les dossiers déjà relancés, sans pièce manquante ou déposés", async () => {
+    vi.mocked(prisma.dossier.findMany).mockResolvedValue([
+      dossierAvec({ id: "dos-5", statut: "ENVOYE" }),
+      dossierAvec({ id: "dos-6", extractedData: {} }),
+      dossierAvec({ id: "dos-7", rappels: [{ type: RAPPEL_TYPE_PREUVES }] }),
+    ] as never);
+    vi.mocked(prisma.rappel.create).mockClear();
+
+    expect(await chercherRappelsPreuves()).toHaveLength(0);
+    expect(prisma.rappel.create).not.toHaveBeenCalled();
   });
 });

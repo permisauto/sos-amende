@@ -1,9 +1,15 @@
 import { Resend } from "resend";
 import { prisma } from "@/lib/prisma";
 import { joursRestants } from "@/lib/moteur";
+import { suggestionsPreuvesClient } from "@/lib/questions";
+import { libellePreuve } from "@/lib/preuve-labels";
 
 const cleanKey = process.env.AUTH_RESEND_KEY?.replace(/^\uFEFF/, "").trim();
 const resend = cleanKey ? new Resend(cleanKey) : null;
+const EMAIL_FROM = (process.env.EMAIL_FROM ?? "SOS Amende <onboarding@resend.dev>")
+  .replace(/^\uFEFF/, "")
+  .trim();
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://recours-permis-pv.com";
 
 export const RAPPEL_TYPES = ["J10", "J3", "J0"] as const;
 export type RappelType = (typeof RAPPEL_TYPES)[number];
@@ -102,6 +108,119 @@ export async function chercherRappels(): Promise<RappelResultat[]> {
         email: dossier.user.email,
       });
     }
+  }
+  return resultats;
+}
+
+// ── Relance des pièces manquantes (rappel « PREUVES ») ──────────────────────
+
+/** Type de rappel dédié : une seule relance par dossier (dédup en base). */
+export const RAPPEL_TYPE_PREUVES = "PREUVES";
+
+/** Statuts pour lesquels la pièce n'a plus d'intérêt (dépôt fait ou dossier
+ * clôturé) — la relance s'arrête d'elle-même. */
+export const STATUTS_HORS_RELANCE_PREUVES = [
+  "BROUILLON",
+  "ENVOYE",
+  "REJETE",
+  "ERREUR_TECHNIQUE",
+  "RESOLU",
+  "ANNULE",
+] as const;
+
+/**
+ * Fenêtre de la relance « pièces manquantes » : pure, testée. Une pièce
+ * manque ET le dossier est encore en cours côté client → relance due.
+ */
+export function relancePreuvesDue(
+  nbPiecesManquantes: number,
+  statut: string,
+): boolean {
+  return (
+    nbPiecesManquantes > 0 &&
+    !(STATUTS_HORS_RELANCE_PREUVES as readonly string[]).includes(statut)
+  );
+}
+
+async function envoyerRappelPreuves(opts: {
+  email: string;
+  nom?: string | null;
+  numPv?: string;
+  dossierId: string;
+  libelles: string[];
+}): Promise<boolean> {
+  if (!resend) return false;
+
+  await resend.emails.send({
+    from: EMAIL_FROM,
+    to: opts.email,
+    subject: "Une pièce manque dans votre dossier de contestation",
+    html: `
+      <p>Bonjour${opts.nom ? ` ${opts.nom}` : ""},</p>
+      <p>Votre questionnaire signale une pièce utile pour votre dossier${
+        opts.numPv ? ` n° ${opts.numPv}` : ""
+      } : <strong>${opts.libelles.join(", ")}</strong>.</p>
+      <p>Joignez-la depuis votre espace (bloc « Pièces justificatives ») —
+      c&apos;est facultatif : votre dossier n&apos;est pas bloqué sans elle,
+      mais elle renforce la contestation.</p>
+      <p><a href="${APP_URL}/dashboard/cases/${opts.dossierId}#preuves">Ouvrir mon dossier</a></p>
+    `,
+  });
+  return true;
+}
+
+export type RappelPreuvesResultat = {
+  dossierId: string;
+  envoye: boolean;
+  email: string;
+  libelles: string[];
+};
+
+/**
+ * Relance douce des pièces manquantes (cron quotidien, même route que
+ * J10/J3/J0) : une seule fois par dossier, dédupliquée via le type
+ * `PREUVES` (colonne `Rappel.type` en String + `@@unique([dossierId, type])`).
+ * Dès que la pièce est versée, plus aucune relance ; défensif sans
+ * `AUTH_RESEND_KEY` (relance enregistrée, `envoye = false`).
+ */
+export async function chercherRappelsPreuves(): Promise<RappelPreuvesResultat[]> {
+  const dossiers = await prisma.dossier.findMany({
+    where: { statut: { notIn: [...STATUTS_HORS_RELANCE_PREUVES] } },
+    include: {
+      rappels: { where: { type: RAPPEL_TYPE_PREUVES }, select: { type: true } },
+      user: { select: { email: true, name: true } },
+      preuves: { select: { type: true } },
+    },
+  });
+
+  const resultats: RappelPreuvesResultat[] = [];
+  for (const dossier of dossiers) {
+    if (dossier.rappels.length > 0) continue;
+    const manquantes = suggestionsPreuvesClient(
+      dossier.extractedData as Record<string, unknown> | null,
+      dossier.preuves.map((p) => p.type),
+    );
+    if (!relancePreuvesDue(manquantes.length, dossier.statut)) continue;
+
+    const libelles = manquantes.map((m) => libellePreuve(m.type));
+    const data = (dossier.extractedData ?? {}) as { num_pv?: string };
+    const envoye = await envoyerRappelPreuves({
+      email: dossier.user.email,
+      nom: dossier.user.name,
+      numPv: data.num_pv,
+      dossierId: dossier.id,
+      libelles,
+    });
+    await prisma.rappel
+      .create({ data: { dossierId: dossier.id, type: RAPPEL_TYPE_PREUVES } })
+      .catch(() => {});
+
+    resultats.push({
+      dossierId: dossier.id,
+      envoye,
+      email: dossier.user.email,
+      libelles,
+    });
   }
   return resultats;
 }

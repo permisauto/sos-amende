@@ -14,6 +14,7 @@ import { AvocatRequest } from "./avocat-request";
 import { Preuves, type PreuveDto } from "@/components/preuves";
 import { faillesPourTypePreuve } from "@/lib/preuves-api";
 import { suggestionsPreuvesClient } from "@/lib/questions";
+import { libellePreuve } from "@/lib/preuve-labels";
 import { DossierTimeline, type TimelineEvent } from "@/components/dossier-timeline";
 import { FilMessages, type MessageDto } from "@/components/messages";
 import { marquerMessagesLus } from "../../messages/actions";
@@ -673,6 +674,33 @@ export default async function CaseDetailPage(
         </div>
       </div>
 
+      {/* Pièces manquantes : rappel souple, jamais bloquant (le client peut
+          signer et déposer sans elles) — ancre vers le bloc de téléversement. */}
+      {!enAnalyse && suggestionsPreuves.length > 0 && (
+        <div className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
+          <div className="text-sm text-amber-900">
+            <p className="font-semibold">
+              Pièce{suggestionsPreuves.length > 1 ? "s" : ""} à joindre :{" "}
+              {suggestionsPreuves.map((s) => libellePreuve(s.type)).join(", ")}
+            </p>
+            <p className="mt-0.5 text-xs">
+              Réponse{suggestionsPreuves.length > 1 ? "s" : ""} cochée
+              {suggestionsPreuves.length > 1 ? "s" : ""} :{" "}
+              {suggestionsPreuves.map((s) => `« ${s.raison} »`).join(", ")} —
+              facultatif, votre dossier n&apos;est pas bloqué sans{" "}
+              {suggestionsPreuves.length > 1 ? "elles" : "elle"}, mais elle
+              renforce la contestation.
+            </p>
+          </div>
+          <a
+            href="#preuves"
+            className="rounded-full bg-amber-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-amber-700"
+          >
+            Joindre maintenant
+          </a>
+        </div>
+      )}
+
       {item.evenements.length > 0 && !enAnalyse && (
         <div className="mt-8">
           <DossierTimeline events={evenements as TimelineEvent[]} />
@@ -680,7 +708,7 @@ export default async function CaseDetailPage(
       )}
 
       {!enAnalyse && (
-        <div className="mt-8">
+        <div className="mt-8" id="preuves">
           <Preuves
             dossierId={item.id}
             preuves={preuvesDto}

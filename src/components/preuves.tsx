@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { ajouterPreuve, supprimerPreuve } from "@/app/(app)/dashboard/preuves/actions";
 import type { PreuveSuggestionClient } from "@/lib/questions";
+import { TYPE_LABELS } from "@/lib/preuve-labels";
 
 export type PreuveDto = {
   id: string;
@@ -12,20 +13,6 @@ export type PreuveDto = {
   createdAt: Date;
   userId: string | null;
   contexte?: string | null;
-};
-
-const TYPE_LABELS: Record<string, string> = {
-  CARTE_GRISE: "Carte grise",
-  PLAINTE: "Récépissé de plainte",
-  PHOTO: "Photo du véhicule",
-  CERTIFICAT: "Certificat",
-  RELEVE_PAIEMENT: "Relevé de paiement",
-  ATTESTATION_CESSION: "Attestation de cession",
-  ATTESTATION_VOL: "Attestation de vol",
-  AUTRE: "Autre pièce",
-  METEO: "Météo (source externe)",
-  RADAR: "Fiche radar (donnée officielle)",
-  TRAVAUX: "Travaux (source OpenData)",
 };
 
 /** Types toujours proposés dans le sélecteur. Les pièces suggérées par le

@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/dal";
 import { joursRestants } from "@/lib/moteur";
+import { suggestionsPreuvesClient } from "@/lib/questions";
+import { libellePreuve } from "@/lib/preuve-labels";
 import { PRIX_AMENDE, PRIX_SUSPENSION, PRIX_OPTION_LRAR } from "@/lib/tarifs";
 
 const MOCK_NOW = new Date("2026-07-15T12:00:00Z").getTime();
@@ -23,6 +25,9 @@ export default async function DashboardPage() {
   }
 
   let caseCount = 0, openCases = 0, dossiersProches: Array<{ id: string; type: string; dateLimite: Date | null }> = [], dernierDossier: { id: string; statut: string; type: string; createdAt: Date } | null = null;
+  // Dossiers en cours pour lesquels une pièce suggérée par le questionnaire
+  // n'a pas encore été téléversée (relance douce, jamais bloquante).
+  let piecesManquantes: Array<{ id: string; type: string; libelles: string[] }> = [];
   try {
     // En mode dev (?dev=1) avec mock user dev-..., on affiche les dossiers de e2e-client pour la démo
     const effectiveUserId = user.id.startsWith("dev-") ? (await prisma.user.findUnique({ where: { email: "e2e-client@test.local" }, select: { id: true } }))?.id ?? user.id : user.id;
@@ -32,6 +37,22 @@ export default async function DashboardPage() {
       prisma.dossier.findMany({ where: { userId: effectiveUserId, dateLimite: { not: null }, statut: { notIn: ["RESOLU", "ANNULE", "REJETE"] } }, orderBy: { dateLimite: "asc" }, take: 4 }),
       prisma.dossier.findFirst({ where: { userId: effectiveUserId }, orderBy: { createdAt: "desc" }, select: { id: true, statut: true, type: true, createdAt: true } }),
     ]);
+    const dossiersOuverts = await prisma.dossier.findMany({
+      where: { userId: effectiveUserId, statut: { notIn: ["RESOLU", "ANNULE", "REJETE", "ENVOYE", "ERREUR_TECHNIQUE"] } },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      select: { id: true, type: true, extractedData: true, preuves: { select: { type: true } } },
+    });
+    piecesManquantes = dossiersOuverts
+      .map((d) => ({
+        id: d.id,
+        type: d.type,
+        libelles: suggestionsPreuvesClient(
+          d.extractedData as Record<string, unknown> | null,
+          d.preuves.map((p) => p.type),
+        ).map((s) => libellePreuve(s.type)),
+      }))
+      .filter((d) => d.libelles.length > 0);
     // Si toujours 0 et qu'on est en dev, on force un fallback visuel avec les 7 dossiers inventés (comptés via count sans filtre)
     if (caseCount === 0 && user.id.startsWith("dev-")) {
       const total = await prisma.dossier.count().catch(() => 0);
@@ -228,6 +249,45 @@ export default async function DashboardPage() {
           ))}
         </ol>
       </section>
+
+      {/* Pièces à joindre : rappel douce côté espace client (non bloquant) */}
+      {piecesManquantes.length > 0 && (
+        <section className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-6">
+          <h2 className="font-semibold text-amber-900">Pièces à joindre</h2>
+          <p className="mt-1 text-sm text-amber-800">
+            Vos réponses appellent ces documents — joignez-les pour renforcer
+            votre dossier. Aucun blocage : vous pouvez avancer sans elles.
+          </p>
+          <ul className="mt-3 flex flex-col divide-y divide-amber-100">
+            {piecesManquantes.map((d) => (
+              <li
+                key={d.id}
+                className="flex flex-wrap items-center justify-between gap-4 py-3"
+              >
+                <div>
+                  <Link
+                    href={`/dashboard/cases/${d.id}`}
+                    className="font-medium text-zinc-900 hover:text-emerald-700"
+                  >
+                    {d.type === "AMENDE"
+                      ? "Contestation d'amende"
+                      : "Suspension de permis"}
+                  </Link>
+                  <p className="text-xs text-amber-800">
+                    Manquant : {d.libelles.join(", ")}
+                  </p>
+                </div>
+                <Link
+                  href={`/dashboard/cases/${d.id}#preuves`}
+                  className="rounded-full bg-amber-600 px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-amber-700"
+                >
+                  Joindre
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* Échéances proches */}
       <section className="mt-6 rounded-2xl border border-zinc-200 bg-white p-6">

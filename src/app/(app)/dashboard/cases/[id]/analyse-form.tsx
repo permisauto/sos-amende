@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { analyserDossier } from "../actions";
 import { questionsPour } from "@/lib/questions";
+import { libellePreuve } from "@/lib/preuve-labels";
 import {
   dateRefLibelle,
   numeroRefLibelle,
@@ -257,18 +258,26 @@ export function AnalyseForm({
             </p>
             <div className="mt-2 flex flex-col gap-2.5">
               {groupe.questions.map((q) => (
-                <label
-                  key={q.cle}
-                  className="flex items-start gap-2 text-sm text-zinc-700"
-                >
-                  <input
-                    type="checkbox"
-                    name={q.cle}
-                    defaultChecked={Boolean(prefill?.[q.champ])}
-                    className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500"
-                  />
-                  {q.libelle}
-                </label>
+                <div key={q.cle}>
+                  <label className="flex items-start gap-2 text-sm text-zinc-700">
+                    <input
+                      type="checkbox"
+                      name={q.cle}
+                      defaultChecked={Boolean(prefill?.[q.champ])}
+                      className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    {q.libelle}
+                  </label>
+                  {q.preuveClient && (
+                    <p className="ml-6 mt-1 text-xs text-amber-700">
+                      Cette réponse appelle un document :{" "}
+                      <strong>{libellePreuve(q.preuveClient)}</strong> — vous
+                      pourrez le joindre juste après l&apos;analyse, sur la
+                      fiche de votre dossier (facultatif : le dossier n&apos;est
+                      pas bloqué sans lui).
+                    </p>
+                  )}
+                </div>
               ))}
             </div>
           </div>
