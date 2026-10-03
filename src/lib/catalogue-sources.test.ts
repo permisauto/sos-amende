@@ -27,16 +27,41 @@ describe("catalogue-sources (garde-fou anti-hallucination)", () => {
     (_id, faille: FailleSourcee) => {
       expect(["AMENDE", "SUSPENSION"]).toContain(faille.typeInfraction);
       expect(faille.titreFaille.length).toBeGreaterThan(10);
-      expect(faille.articleLoi.length).toBeGreaterThan(3);
-      expect(faille.templateLettre.length).toBeGreaterThan(50);
       expect(faille.reglesDetection.length).toBeGreaterThan(0);
 
-      const variables = variablesDuTemplate(faille.templateLettre);
-      for (const v of variables) {
-        expect(VARIABLES_AUTORISEES).toContain(v);
+      if (faille.aCompleter) {
+        // Proposition incomplète : aucun fondement ni aucune jurisprudence
+        // inventés — bloquée à l'activation tant que l'admin n'a pas sourcé
+        // article et template.
+        expect(faille.articleLoi).toBe("");
+        expect(faille.templateLettre).toBe("");
+        expect(faille.jurisprudence).toHaveLength(0);
+        expect(faille.source).toContain("à sourcer");
+      } else {
+        expect(faille.articleLoi.length).toBeGreaterThan(3);
+        expect(faille.templateLettre.length).toBeGreaterThan(50);
+
+        const variables = variablesDuTemplate(faille.templateLettre);
+        for (const v of variables) {
+          expect(VARIABLES_AUTORISEES).toContain(v);
+        }
       }
     },
   );
+
+  it("les propositions incomplètes sont bien marquées et restent minoritaires", () => {
+    const incompletes = CATALOGUE_SOURCES.filter((f) => f.aCompleter);
+    expect(incompletes.length).toBeGreaterThanOrEqual(3);
+    expect(incompletes.map((f) => f.id)).toEqual(
+      expect.arrayContaining([
+        "faille-stationnement-panneau",
+        "faille-stationnement-travaux",
+        "faille-stationnement-lieu",
+      ]),
+    );
+    // Rien d'autre n'a le droit d'être vide.
+    expect(incompletes.length).toBeLessThan(CATALOGUE_SOURCES.length);
+  });
 
   it("chaque règle de détection est d'un type connu", () => {
     const types = new Set<RegleDetection["type"]>([

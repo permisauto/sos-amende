@@ -18,15 +18,15 @@ test("flux SUSPENSION (infra) : dépôt → analyse type-aware → attente juris
   await page.waitForURL(/\/dashboard\/cases\/(?!new$)[^/]+$/);
   const dossierId = page.url().split("/").pop() as string;
 
-  // L'analyse est type-aware : libellés SUSPENSION + questionnaire masqué
+  // L'analyse est type-aware : libellés SUSPENSION + questionnaire ciblé propre
+  // à la suspension (notification / recours), jamais les questions AMENDE.
   await expect(page.getByLabel("Numéro de décision", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Date de la décision", { exact: true })).toBeVisible();
   await expect(
-    page.getByText(
-      "Le questionnaire ciblé (paiement, cession, vol, conducteur)",
-      { exact: false },
-    ),
+    page.getByText("Notification de la décision", { exact: true }),
   ).toBeVisible();
+  await expect(page.getByText("Recours engagés", { exact: true })).toBeVisible();
+  await expect(page.getByText("J'ai déjà payé cette amende")).toHaveCount(0);
 
   await page.getByLabel("Nom", { exact: true }).fill("DUPONT");
   await page.getByLabel("Plaque (si mentionnée)", { exact: true }).fill("AB-123-CD");

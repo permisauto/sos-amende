@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { analyserDossier } from "../actions";
+import { questionsPour } from "@/lib/questions";
 import {
   dateRefLibelle,
   numeroRefLibelle,
@@ -33,22 +34,44 @@ export type AnalysePrefill = {
   adresseIncorrecte?: boolean;
   travaux_présents?: boolean;
   conditions_meteo?: string;
+  stationnementPanneau?: boolean;
+  stationnementGene?: boolean;
+  stationnementTicket?: boolean;
+  stationnementLieu?: boolean;
+  suspNotifIrreguliere?: boolean;
+  suspDelaiNotification?: boolean;
+  suspMotifsAbsents?: boolean;
+  suspObservations?: boolean;
+  suspEthylometreCarnet?: boolean;
+  suspSecondSouffle?: boolean;
+  suspRefereEngage?: boolean;
 };
 
 export function AnalyseForm({
   dossierId,
   prefill,
   type,
+  pvTexte,
 }: {
   dossierId: string;
   prefill?: AnalysePrefill | null;
   type: InfractionType;
+  pvTexte?: string | null;
 }) {
   const [state, formAction, pending] = useActionState(
     analyserDossier,
     undefined,
   );
   const hasPrefill = !!prefill && Object.keys(prefill).length > 0;
+  // Questions conditionnées à la nature du document scanné (et aux champs
+  // saisis : motif, lieu) — jamais aux règles des failles (groupe vide
+  // impossible).
+  const groupes = questionsPour({
+    type,
+    texte: [pvTexte, prefill?.motif, prefill?.lieu]
+      .filter(Boolean)
+      .join("\n"),
+  });
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
@@ -220,59 +243,36 @@ export function AnalyseForm({
 
       <div className="rounded-2xl border border-zinc-200 p-4">
         <p className="text-sm font-semibold text-zinc-700">
-          Contexte (questionnaire ciblé)
+          Questions sur votre situation
         </p>
         <p className="mt-0.5 text-xs text-zinc-500">
-          Ces informations aident le juriste à vérifier le bien-fondé du
-          recours. Elles sont transmises avec le dossier.
+          Les groupes affichés dépendent du contenu {titreAnalyse(type)} scanné
+          : ils apportent un contexte que le juriste vérifie. Aucune case
+          cochée ne fabrique un motif de contestation automatique.
         </p>
-        {type === "AMENDE" ? (
-          <div className="mt-3 flex flex-col gap-2.5">
-          <label className="flex items-start gap-2 text-sm text-zinc-700">
-            <input
-              type="checkbox"
-              name="paiementDejaFait"
-              defaultChecked={prefill?.paiementDejaFait}
-              className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500"
-            />
-            J'ai déjà payé cette amende
-          </label>
-          <label className="flex items-start gap-2 text-sm text-zinc-700">
-            <input
-              type="checkbox"
-              name="vehiculeCede"
-              defaultChecked={prefill?.vehiculeCede}
-              className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500"
-            />
-            Mon véhicule a été cédé avant la date de l'infraction
-          </label>
-          <label className="flex items-start gap-2 text-sm text-zinc-700">
-            <input
-              type="checkbox"
-              name="vehiculeVole"
-              defaultChecked={prefill?.vehiculeVole}
-              className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500"
-            />
-            Mon véhicule était volé ou sa plaque usurpée à cette date
-          </label>
-          <label className="flex items-start gap-2 text-sm text-zinc-700">
-            <input
-              type="checkbox"
-              name="conducteurDifferent"
-              defaultChecked={prefill?.conducteurDifferent}
-              className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500"
-            />
-            Un autre conducteur était au volant
-          </label>
-        </div>
-        ) : (
-          <p className="mt-3 text-xs text-zinc-600">
-            Le questionnaire ciblé (paiement, cession, vol, conducteur)
-            s&apos;applique aux amendes. Pour une suspension de permis, le
-            juriste examinera les motifs de la décision à partir des
-            informations saisies.
-          </p>
-        )}
+        {groupes.map((groupe) => (
+          <div key={groupe.groupe} className="mt-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              {groupe.groupe}
+            </p>
+            <div className="mt-2 flex flex-col gap-2.5">
+              {groupe.questions.map((q) => (
+                <label
+                  key={q.cle}
+                  className="flex items-start gap-2 text-sm text-zinc-700"
+                >
+                  <input
+                    type="checkbox"
+                    name={q.cle}
+                    defaultChecked={Boolean(prefill?.[q.champ])}
+                    className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  {q.libelle}
+                </label>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
 
       {state?.error && (

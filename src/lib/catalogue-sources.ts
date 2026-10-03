@@ -26,6 +26,14 @@ export type FailleSourcee = {
   jurisprudence: JurisprudenceRef[];
   templateLettre: string;
   regle: string; // règle dégagée : ce que l'article + la jurisprudence imposent
+  /**
+   * Proposition encore incomplète : `articleLoi` et `templateLettre` sont
+   * volontairement vides — **bloquant pour l'activation** (`validerPropositionFaille`
+   * refuse une faille sans article ni template ≥ 10 caractères). Aucune
+   * jurisprudence inventée : l'admin/juriste complète depuis une source
+   * primaire (Legifrance / Judilibre) avant de valider.
+   */
+  aCompleter?: true;
 };
 
 /**
@@ -588,6 +596,57 @@ L'exécution de cette décision me cause un préjudice grave et immédiat en me 
 
 En application de l'article L. 521-1 du Code de justice administrative, le juge des référés peut suspendre l'exécution d'une décision administrative lorsque l'urgence le justifie et qu'il existe un doute sérieux sur sa légalité.
 
-En conséquence, je vous demande de bien vouloir ordonner la suspension provisoire de la décision litigieuse, en m'engageant à accomplir dans le même temps les démarches médicales et psychotechniques préalables à la restitution de mon permis de conduire.`,
+En conséquence, je vous demande de bien vouloir ordonner la suspension provisoire de la décision litigieuse,   en m'engageant à accomplir dans le même temps les démarches médicales et psychotechniques préalables à la restitution de mon permis de conduire.`,
+  },
+  // --- Propositions stationnement (pistes à instruire, INCOMPLÈTES) --------
+  // Avis de contravention pour stationnement : trois pistes non encore sourcées.
+  // `articleLoi`/`templateLettre` restent vides ET `jurisprudence` vide :
+  // aucun fondement ni aucune décision ne sont inventés ici. Elles arrivent en
+  // PROPOSEE (inertes pour le moteur) et ne peuvent être activées qu'après
+  // complétion manuelle par l'admin/juriste depuis une source primaire.
+  {
+    id: "faille-stationnement-panneau",
+    typeInfraction: "AMENDE",
+    titreFaille:
+      "Stationnement : panneau d'interdiction non perceptible (masqué, illisible, fin de zone)",
+    articleLoi: "",
+    source:
+      "Piste interne — à sourcer avant validation (Legifrance, code de la route, arrêté municipal). À rapprocher de faille-panneau-non-conforme (angle opposabilité déjà sourcé).",
+    regle:
+      "Piste à instruire (non sourcée) : l'opposabilité du panneau suppose qu'il soit réellement perceptible le jour des faits — panneau masqué par la végétation, illisible, peinture effacée ou fin de zone non signalée. Vérifier le lieu, photographier le panneau et croiser avec l'arrêté municipal avant tout envoi de lettre.",
+    reglesDetection: [{ type: "texteContient", motif: "stationnement" }],
+    jurisprudence: [],
+    templateLettre: "",
+    aCompleter: true,
+  },
+  {
+    id: "faille-stationnement-travaux",
+    typeInfraction: "AMENDE",
+    titreFaille:
+      "Stationnement en zone de travaux : gêne imputable au chantier",
+    articleLoi: "",
+    source:
+      "Piste interne — à sourcer avant validation (Legifrance, code de la voirie, arrêté de chantier). À rapprocher de faille-travaux-signalisation (id FAILLE_IDS, à créer).",
+    regle:
+      "Piste à instruire (non sourcée) : en zone de travaux, la signalisation de chantier peut justifier le stationnement reproché ou rendre l'infraction inexigible. Vérifier les dates d'occupation de la voie et la signalisation en place (preuve TRAVAUX récupérée automatiquement à l'analyse) avant de retenir ce motif.",
+    reglesDetection: [{ type: "texteContient", motif: "travaux" }],
+    jurisprudence: [],
+    templateLettre: "",
+    aCompleter: true,
+  },
+  {
+    id: "faille-stationnement-lieu",
+    typeInfraction: "AMENDE",
+    titreFaille:
+      "Stationnement : place de stationnement non identifiée sur l'avis",
+    articleLoi: "",
+    source:
+      "Piste interne — à sourcer avant validation (Legifrance, code de procédure pénale, mentions de l'avis). À rapprocher de faille-lieu-imprecis (angle mentions déjà sourcé).",
+    regle:
+      "Piste à instruire (non sourcée) : l'avis doit permettre d'identifier la place et le lieu exact de l'infraction. Place non balisée, adresse absente ou lieu non repris sur l'avis = difficulté à vérifier le bien-fondé. Vérifier l'extraction du lieu (OCR) et décrire la place avant retenue.",
+    reglesDetection: [{ type: "champAbsent", champ: "lieu" }],
+    jurisprudence: [],
+    templateLettre: "",
+    aCompleter: true,
   },
 ];

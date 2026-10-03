@@ -184,7 +184,9 @@ export function BibliothequeJuriste({
                         : "Inactive"}
                   </span>
                 </div>
-                <p className="text-sm text-zinc-600">{f.articleLoi}</p>
+                <p className="text-sm text-zinc-600">
+                  {f.articleLoi || "Article à sourcer (proposition incomplète)"}
+                </p>
                 {f.regle && (
                   <p className="mt-1 text-sm leading-relaxed text-zinc-700">
                     <span className="font-semibold text-zinc-800">

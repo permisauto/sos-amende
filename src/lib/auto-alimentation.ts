@@ -40,6 +40,11 @@ export async function synchroniserCatalogue(): Promise<number> {
         }
         continue;
       }
+      // Proposition encore incomplète dans le catalogue (`aCompleter` : article
+      // et template vides) : si elle existe déjà en base, on ne réécrit JAMAIS
+      // son contenu — l'admin peut l'avoir complétée manuellement (sourcer
+      // l'article, rédiger le template) ; le catalogue vide l'écraserait.
+      if (existing && f.aCompleter) continue;
 
       const data = {
         typeInfraction: f.typeInfraction,
@@ -149,6 +154,10 @@ export function detecterMisesAJourCatalogue(
   for (const entree of catalogue) {
     const ligne = parId.get(entree.id);
     if (!ligne || ligne.statut === "INACTIVE") continue;
+    // Source incomplète : rien d'applicable (article/template vides) — signaler
+    // un écart proposant du vide reviendrait à inviter à écraser une complétion
+    // manuelle de l'admin.
+    if (entree.aCompleter) continue;
 
     const champs: ChampEcart[] = [];
     for (const nom of CHAMPS_TEXTUELS) {

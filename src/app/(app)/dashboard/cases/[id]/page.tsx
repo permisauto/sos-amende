@@ -441,6 +441,7 @@ export default async function CaseDetailPage(
             <AnalyseForm
               dossierId={item.id}
               type={item.type}
+              pvTexte={item.pvTexte}
               prefill={
                 item.extractedData as {
                   nom?: string;
@@ -461,6 +462,17 @@ export default async function CaseDetailPage(
                   adresseIncorrecte?: boolean;
                   travaux_présents?: boolean;
                   conditions_meteo?: string;
+                  stationnementPanneau?: boolean;
+                  stationnementGene?: boolean;
+                  stationnementTicket?: boolean;
+                  stationnementLieu?: boolean;
+                  suspNotifIrreguliere?: boolean;
+                  suspDelaiNotification?: boolean;
+                  suspMotifsAbsents?: boolean;
+                  suspObservations?: boolean;
+                  suspEthylometreCarnet?: boolean;
+                  suspSecondSouffle?: boolean;
+                  suspRefereEngage?: boolean;
                 } | null
               }
             />

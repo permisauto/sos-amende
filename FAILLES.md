@@ -53,22 +53,55 @@ inventé). Le juriste décide du fondement ou rejette. Affichage :
 | `conducteurDifferent` | Un autre conducteur était au volant | Transmis au juriste |
 | `plaqueIncorrecte` | Plaque du PV différente de la mienne | Transmis au juriste **et** détecté par la règle `plaqueIncorrecte` |
 
+### Questionnaire ciblé dynamique (N1 + N2) — en place depuis 2026-10-03
+
+Registre unique : **`src/lib/questions.ts`** (`QUESTIONS_CIBLEES`). Chaque
+question porte `cle` (champ du `FormData`), `champ` (`extractedData`),
+`libelle` (affiché tel quel au client **et** au juriste), `groupe`, `types`
+(AMENDE/SUSPENSION), `natures` (nature du document qui l'affiche) et `preuve`
+(N2).
+
+- **Affichage** : `questionsPour({ type, texte })` — les groupes affichés
+  dépendent de la **nature du document scanné** (`naturesPv()` sur
+  `Dossier.pvTexte`, motif et lieu saisis), **jamais des règles des failles** :
+  un groupe vide est impossible (voir l'échec du 2026-10-01 ci-dessous).
+  `plaqueIncorrecte` reste posée hors registre (case historique).
+- **Groupes** : AMENDE → *Contexte* (5 questions historiques) + *Stationnement*
+  + *Travaux et signalisation* + *Visibilité* ; SUSPENSION → *Notification de la
+  décision* + *Alcool / stupéfiants* (si le texte parle d'alcool) + *Recours
+  engagés*. Le questionnaire n'affiche **jamais** les questions de l'autre type.
+- **N1 — contexte juriste** : `lireReponses(formData)` n'écrit que les cases
+  cochées dans `extractedData` (jamais de `false` inutile), affichées dans
+  « Contexte (questionnaire) » de `juriste/[id]` (libellés partagés
+  `LIBELLES_REPONSES`).
+- **N2 — preuves externes** : `preuvesPourReponses(data)` s'ajoute aux types
+  déclenchés par les failles détectées (`typesPreuvesPourFailles`) dans
+  `analyserDossier` : `travaux_présents` / `stationnementGene` → `TRAVAUX`,
+  `conditions_meteo` → `METEO`. Best-effort, jamais bloquant.
+- **N3 — réponse → candidature de faille** : **pas encore** (décision du
+  2026-10-03). En attente du tableau d'arbitrage juridique : faille liée,
+  pièce de corroboration exigée, poids réel dans le score, quelles cases
+  restent de simples signaux. Aucune règle `champPresent` n'a été ajoutée.
+
 > ⚠️ **Ne pas transformer ces signaux en règles de détection.** Une case
 > cochée ne doit jamais générer un fondement : le client coche, le juriste
 > décide. C'est le garde-fou anti-hallucination. État vérifié le 2026-10-01 :
 > sur les 20 failles `AMENDE` `ACTIVE`, **seules** `numTelePaiement` et `cle`
 > (`champAbsent`) et `plaqueIncorrecte` lisent un champ du formulaire ; les
-> 4 autres signaux sont **volontairement** hors moteur.
+> autres signaux sont **volontairement** hors moteur. Les propositions de la
+> section C (stationnement) ne s'appuient que sur des règles **texte/OCR**,
+> jamais sur une case cochée : le lien « case → faille » est N3, en attente
+> d'arbitrage juridique.
 
-> ⚠️ **Questionnaire dynamique : supprimé (2026-10-01).** Un générateur
-> (`src/lib/questionnaire.ts` + `/api/questionnaire`) transformait les règles
-> `ACTIVE` en cases affichées au client. Il a été retiré : en pratique la base
-> ne contient que des règles `texteContient`/`texteAbsent`/`datePrescrite`/
-> `etalonnageExpire`/`champAbsent`/`plaqueIncorrecte`, donc le bloc rendu était
-> **vide à l'écran** (toutes les questions candidates étaient des `champAbsent`,
-> filtrés). Du code vert mais inerte. Si l'on veut le refaire, il faut d'abord
-> des règles `champPresent` reliant les signaux ci-dessus à une faille — et ce
-> serait une décision de **fond juridique**, pas du code.
+> ⚠️ **Questionnaire dynamique : supprimé (2026-10-01), refait autrement
+> (2026-10-03).** L'ancien générateur (`src/lib/questionnaire.ts` +
+> `/api/questionnaire`) transformait les règles `ACTIVE` en cases affichées au
+> client : en pratique la base ne contient que des `texteContient`/`texteAbsent`/
+> `datePrescrite`/`etalonnageExpire`/`champAbsent`/`plaqueIncorrecte`, donc le
+> bloc rendu était **vide à l'écran**. Le registre actuel (`src/lib/questions.ts`)
+> ne dépend **plus des failles** mais de la **nature du document** : le bloc ne
+> peut pas être vide. Le lien « réponse → faille » (l'ancien objectif
+> `champPresent`) reste une décision de **fond juridique** en attente (N3).
 
 ---
 
@@ -81,6 +114,33 @@ erreur matérielle, amnistie »). Les quatre premiers sont couverts par A ou B
 | Motif | Statut | Article | Template |
 |---|---|---|---|
 | Amnistie | **À saisir par un juriste** | À déterminer par le juriste | Vide — à rédiger |
+
+### Propositions stationnement — `aCompleter` (2026-10-03)
+
+Le catalogue (`src/lib/catalogue-sources.ts`) porte 3 pistes **incomplètes**,
+importées en `PROPOSEE` par l'auto-alimentation : `faille-stationnement-panneau`,
+`faille-stationnement-travaux`, `faille-stationnement-lieu`. Marquées
+`aCompleter: true` : `articleLoi` et `templateLettre` **vides**,
+`jurisprudence` vide — **aucun fondement ni aucune décision inventés** — et
+`source` « à sourcer ».
+
+| Piste | Règle de détection (texte/OCR uniquement) | À rapprocher de |
+|---|---|---|
+| Panneau d'interdiction non perceptible (masqué, illisible, fin de zone) | `texteContient "stationnement"` | `faille-panneau-non-conforme` (angle opposabilité, déjà sourcée) |
+| Stationnement en zone de travaux (gêne imputable au chantier) | `texteContient "travaux"` | `faille-travaux-signalisation` (`FAILLE_IDS.travaux`, à créer) |
+| Place de stationnement non identifiée sur l'avis | `champAbsent lieu` | `faille-lieu-imprecis` (angle mentions, déjà sourcée) |
+
+Garde-fous (couverts par les tests) : `estActivable` / `messageActivationBloquee`
+refusent l'activation sans `regle` **et** `templateLettre` ; `synchroniserCatalogue`
+ne réécrit **jamais** une proposition déjà en base (la complétion manuelle de
+l'admin n'est pas écrasée par les vides du catalogue) ; `detecterMisesAJourCatalogue`
+et `appliquerMiseAJourCatalogue` ignorent les entrées `aCompleter` ; la démo
+publique les exclut (jamais de lettre vide affichée) ; `activerToutesPropositions`
+et son fallback mock les ignorent.
+
+**Avant toute validation** : sourcer l'article (Legifrance / code de la route /
+arrêté municipal), rédiger le template, confirmer qu'aucune des trois ne double
+une faille déjà sourcée — sinon les écarter (INACTIVE).
 
 ---
 

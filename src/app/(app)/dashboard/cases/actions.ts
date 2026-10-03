@@ -24,6 +24,7 @@ import {
   recupererPreuvesPourDossierId,
   typesPreuvesPourFailles,
 } from "@/lib/preuves-api";
+import { lireReponses, preuvesPourReponses } from "@/lib/questions";
 import {
   activerDepotEnLigne,
   marquerDepotEnvoye,
@@ -209,17 +210,10 @@ export async function analyserDossier(
 
   const data: ExtractedData = {
     ...parsed.data,
+    // Questionnaire ciblé dynamique (registre `questions.ts`) : seules les
+    // cases cochées écrivent une clé — contexte juriste + preuves externes.
+    ...lireReponses(formData),
     plaqueIncorrecte: formData.get("plaqueIncorrecte") === "on",
-    paiementDejaFait: formData.get("paiementDejaFait") === "on",
-    vehiculeCede: formData.get("vehiculeCede") === "on",
-    vehiculeVole: formData.get("vehiculeVole") === "on",
-    conducteurDifferent: formData.get("conducteurDifferent") === "on",
-    adresseIncorrecte: formData.get("adresseIncorrecte") === "on",
-    travaux_présents: formData.get("travaux_présents") === "on",
-    conditions_meteo:
-      formData.get("conditions_meteo") === "on"
-        ? "Pluie"
-        : undefined,
   };
 
   // Contexte étalonnage : si un radar est connu, sa date d'expiration permet
@@ -332,9 +326,11 @@ export async function analyserDossier(
 
   // Preuves externes (météo, fiche radar, travaux) récupérées automatiquement
   // depuis les sources publiques, uniquement pour les types pertinents aux
-  // failles détectées (voir PREUVES_PAR_FAILLE) — pas de preuve hors-sujet.
-  // Best-effort : ne bloque jamais l'analyse.
+  // failles détectées (voir PREUVES_PAR_FAILLE) **et** aux réponses du
+  // questionnaire (N2) — pas de preuve hors-sujet. Best-effort : ne bloque
+  // jamais l'analyse.
   const typesPreuves = typesPreuvesPourFailles(candidats);
+  for (const t of preuvesPourReponses(data)) typesPreuves.add(t);
   await recupererPreuvesPourDossierId(prisma, dossier.id, {
     types: typesPreuves,
   }).catch(() => {});

@@ -26,6 +26,7 @@ import {
   remplirTemplate,
   type ExtractedData,
 } from "@/lib/moteur";
+import { LIBELLES_REPONSES } from "@/lib/questions";
 import {
   formaterLettreOfficielle,
   organismeEnvoi,
@@ -443,10 +444,9 @@ export default async function JuristeCasePage(
     : [];
   const questionnaire = data
     ? [
-        { cle: "paiementDejaFait", lib: "Amende déjà payée" },
-        { cle: "vehiculeCede", lib: "Véhicule cédé avant l'infraction" },
-        { cle: "vehiculeVole", lib: "Véhicule volé / plaque usurpée" },
-        { cle: "conducteurDifferent", lib: "Un autre conducteur était au volant" },
+        // Registre unique `lib/questions.ts` (mêmes libellés que le client) +
+        // la case plaque, posée hors groupes dans le formulaire.
+        ...LIBELLES_REPONSES,
         { cle: "plaqueIncorrecte", lib: "Plaque du PV différente de la mienne" },
       ]
         .filter((item) => data[item.cle] === true)

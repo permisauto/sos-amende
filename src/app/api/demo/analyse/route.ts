@@ -203,10 +203,15 @@ export async function POST(req: Request) {
     // Démo : failles ACTIVE/PROPOSEE — résilient si DB down : fallback mock avec 4 failles réelles (score évolue avec questionnaire)
     let faillesDb: FailleDb[] = [];
     try {
-      faillesDb = (await prisma.failleJuridique.findMany({
-        where: { typeInfraction: type, statut: { in: ["ACTIVE", "PROPOSEE"] } },
-        orderBy: { createdAt: "desc" },
-      })) as unknown as FailleDb[];
+      faillesDb = (
+        (await prisma.failleJuridique.findMany({
+          where: { typeInfraction: type, statut: { in: ["ACTIVE", "PROPOSEE"] } },
+          orderBy: { createdAt: "desc" },
+        })) as unknown as FailleDb[]
+      ).filter((f) => (f.templateLettre ?? "").trim().length > 0);
+      // Les propositions encore incomplètes (template vide, à sourcer) ne sont
+      // pas affichées ici : la démo génère une lettre, elle ne saurait en montrer
+      // une vide ni un fondement absent.
     } catch (e) {
       console.error("demo analyse: prisma fail, fallback mock", e);
       const mockAll: FailleDb[] = [

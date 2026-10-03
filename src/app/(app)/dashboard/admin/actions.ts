@@ -212,6 +212,12 @@ export async function appliquerMiseAJourCatalogue(
   const id = String(formData.get("id") ?? "");
   const entree = CATALOGUE_SOURCES.find((f) => f.id === id);
   if (!entree) return { error: "Cette faille n'existe plus dans le catalogue." };
+  if (entree.aCompleter) {
+    return {
+      error:
+        "Proposition encore à sourcer : complétez l'article et la lettre depuis une source primaire avant d'appliquer quoi que ce soit.",
+    };
+  }
 
   const faille = await prisma.failleJuridique.findUnique({
     where: { id },
@@ -555,6 +561,9 @@ export async function activerToutesPropositions(
       "faille-prescription-peine-3ans",
     ]);
     for (const f of CATALOGUE_SOURCES) {
+      // Même garde-fou qu'en base : une proposition incomplète (à sourcer)
+      // ne passe jamais en ACTIVE, même en fallback mock.
+      if (f.aCompleter) continue;
       if (!isHistorique.has(f.id)) {
         validateMockFaille(f.id, "ACTIVE");
       }

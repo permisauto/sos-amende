@@ -27,6 +27,19 @@ export type ExtractedData = {
   vehiculeCede?: boolean;
   vehiculeVole?: boolean;
   conducteurDifferent?: boolean;
+  // Questionnaire dynamique (registre `questions.ts`, écrit par `lireReponses`)
+  // — contexte juriste + preuves externes, jamais un fondement à lui seul.
+  stationnementPanneau?: boolean;
+  stationnementGene?: boolean;
+  stationnementTicket?: boolean;
+  stationnementLieu?: boolean;
+  suspNotifIrreguliere?: boolean;
+  suspDelaiNotification?: boolean;
+  suspMotifsAbsents?: boolean;
+  suspObservations?: boolean;
+  suspEthylometreCarnet?: boolean;
+  suspSecondSouffle?: boolean;
+  suspRefereEngage?: boolean;
 };
 
 export const FAILLE_IDS = {
