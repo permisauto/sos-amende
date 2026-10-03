@@ -12,6 +12,7 @@ import {
   RAPPEL_TYPES,
   rappelDue,
   relancePreuvesDue,
+  dateSeuilRelancePreuves,
   chercherRappelsPreuves,
   RAPPEL_TYPE_PREUVES,
 } from "./rappels";
@@ -82,6 +83,24 @@ describe("relancePreuvesDue", () => {
     ]) {
       expect(relancePreuvesDue(1, statut)).toBe(false);
     }
+  });
+});
+
+describe("dateSeuilRelancePreuves (démarrage progressif)", () => {
+  it("défaut : date de mise en service de la relance", () => {
+    const attendu = new Date("2026-10-03T00:00:00.000Z");
+    expect(dateSeuilRelancePreuves(undefined)).toEqual(attendu);
+    expect(dateSeuilRelancePreuves("")).toEqual(attendu);
+    expect(dateSeuilRelancePreuves("pas-une-date")).toEqual(attendu);
+  });
+
+  it("RAPPEL_PREUVES_DEPUIS étend ou restreint le périmètre", () => {
+    expect(dateSeuilRelancePreuves("2020-01-01")).toEqual(
+      new Date("2020-01-01T00:00:00.000Z"),
+    );
+    expect(dateSeuilRelancePreuves(" 2026-11-01 ")).toEqual(
+      new Date("2026-11-01T00:00:00.000Z"),
+    );
   });
 });
 

@@ -142,6 +142,26 @@ export function relancePreuvesDue(
   );
 }
 
+/** Démarrage progressif : date de mise en service de la relance (premier
+ * périmètre = seuls les dossiers créés à partir de cette date). */
+const SEUIL_PREUVES_DEFAUT = "2026-10-03";
+
+/**
+ * Seuil `createdAt` de la relance « pièces manquantes » — pure, testée.
+ * `RAPPEL_PREUVES_DEPUIS` (ISO `YYYY-MM-DD`) étend ou restreint le
+ * périmètre ; valeur absente ou invalide → seuil par défaut (démarrage
+ * progressif : pas de rappel aux dossiers antérieurs). Pour inclure tout
+ * le portefeuille, poser une date ancienne (ex. `2020-01-01`).
+ */
+export function dateSeuilRelancePreuves(
+  raw: string | undefined = process.env.RAPPEL_PREUVES_DEPUIS,
+): Date {
+  const cand = raw?.trim();
+  const parsed = cand ? new Date(cand) : null;
+  if (parsed && !Number.isNaN(parsed.getTime())) return parsed;
+  return new Date(`${SEUIL_PREUVES_DEFAUT}T00:00:00.000Z`);
+}
+
 async function envoyerRappelPreuves(opts: {
   email: string;
   nom?: string | null;
@@ -185,7 +205,12 @@ export type RappelPreuvesResultat = {
  */
 export async function chercherRappelsPreuves(): Promise<RappelPreuvesResultat[]> {
   const dossiers = await prisma.dossier.findMany({
-    where: { statut: { notIn: [...STATUTS_HORS_RELANCE_PREUVES] } },
+    where: {
+      statut: { notIn: [...STATUTS_HORS_RELANCE_PREUVES] },
+      // Démarrage progressif : les dossiers antérieurs au seuil ne sont
+      // jamais relancés (voir dateSeuilRelancePreuves).
+      createdAt: { gte: dateSeuilRelancePreuves() },
+    },
     include: {
       rappels: { where: { type: RAPPEL_TYPE_PREUVES }, select: { type: true } },
       user: { select: { email: true, name: true } },
