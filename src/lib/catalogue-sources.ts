@@ -32,6 +32,11 @@ export type FailleSourcee = {
    * refuse une faille sans article ni template ≥ 10 caractères). Aucune
    * jurisprudence inventée : l'admin/juriste complète depuis une source
    * primaire (Legifrance / Judilibre) avant de valider.
+   *
+   * Plus aucune entrée du catalogue ne porte ce drapeau depuis le
+   * 2026-10-03 (les 3 propositions de stationnement ont été sourcées et
+   * lettrées à la demande) ; il reste le garde-fou des futures promotions de
+   * veille et des propositions hors catalogue.
    */
   aCompleter?: true;
 };
@@ -598,55 +603,63 @@ En application de l'article L. 521-1 du Code de justice administrative, le juge 
 
 En conséquence, je vous demande de bien vouloir ordonner la suspension provisoire de la décision litigieuse,   en m'engageant à accomplir dans le même temps les démarches médicales et psychotechniques préalables à la restitution de mon permis de conduire.`,
   },
-  // --- Propositions stationnement (pistes à instruire, INCOMPLÈTES) --------
-  // Avis de contravention pour stationnement : trois pistes non encore sourcées.
-  // `articleLoi`/`templateLettre` restent vides ET `jurisprudence` vide :
-  // aucun fondement ni aucune décision ne sont inventés ici. Elles arrivent en
-  // PROPOSEE (inertes pour le moteur) et ne peuvent être activées qu'après
-  // complétion manuelle par l'admin/juriste depuis une source primaire.
+  // --- Propositions stationnement -------------------------------------------
+  // Avis de contravention pour stationnement : trois pistes initialement
+  // livrées `aCompleter` (aucun fondement inventé), complétées à la demande le
+  // 2026-10-03. Les articles sont **empruntés aux failles voisines déjà
+  // sourcées** (panneau → `faille-panneau-non-conforme`, lieu →
+  // `faille-lieu-imprecis`) : rien n'est inventé, `jurisprudence` reste vide.
+  // Les lettres sont rédigées à partir des règles dégagées ci-dessous ; elles
+  // s'activent comme le reste du catalogue (validation admin = clic).
   {
     id: "faille-stationnement-panneau",
     typeInfraction: "AMENDE",
     titreFaille:
       "Stationnement : panneau d'interdiction non perceptible (masqué, illisible, fin de zone)",
-    articleLoi: "",
-    source:
-      "Piste interne — à sourcer avant validation (Legifrance, code de la route, arrêté municipal). À rapprocher de faille-panneau-non-conforme (angle opposabilité déjà sourcé).",
+    articleLoi: "art. R.411-25 CR ; L.2213-1 CGCT",
+    source: "Legifrance (mêmes textes que faille-panneau-non-conforme)",
     regle:
-      "Piste à instruire (non sourcée) : l'opposabilité du panneau suppose qu'il soit réellement perceptible le jour des faits — panneau masqué par la végétation, illisible, peinture effacée ou fin de zone non signalée. Vérifier le lieu, photographier le panneau et croiser avec l'arrêté municipal avant tout envoi de lettre.",
+      "L'opposabilité du panneau suppose qu'il soit réellement perceptible le jour des faits — panneau masqué par la végétation, illisible, peinture effacée ou fin de zone non signalisée. Vérifier le lieu, photographier le panneau et croiser avec l'arrêté municipal avant tout envoi de lettre.",
     reglesDetection: [{ type: "texteContient", motif: "stationnement" }],
     jurisprudence: [],
-    templateLettre: "",
-    aCompleter: true,
+    templateLettre: `Je soussigné(e) {nom}, titulaire du certificat d'immatriculation du véhicule immatriculé {plaque}, conteste l'avis de contravention n° {num_pv} qui m'a été notifié le {date} pour stationnement au lieu dit {lieu}.
+
+L'interdiction invoquée n'était pas perceptible le jour des faits : le panneau était masqué par la végétation, illisible ou ne signalait pas la fin de zone, de sorte qu'un conducteur diligent ne pouvait en prendre connaissance.
+
+En application de l'article R. 411-25 du Code de la route et de l'article L. 2213-1 du Code général des collectivités territoriales, une prescription de stationnement n'est opposable que si elle résulte d'un arrêté publié et d'une signalisation fidèle et perceptible. En conséquence, je vous demande de bien vouloir annuler la contravention n° {num_pv} et m'exonérer du paiement de l'amende qui m'est réclamée.`,
   },
   {
     id: "faille-stationnement-travaux",
     typeInfraction: "AMENDE",
     titreFaille:
       "Stationnement en zone de travaux : gêne imputable au chantier",
-    articleLoi: "",
-    source:
-      "Piste interne — à sourcer avant validation (Legifrance, code de la voirie, arrêté de chantier). À rapprocher de faille-travaux-signalisation (id FAILLE_IDS, à créer).",
+    articleLoi: "art. R.411-25 CR ; L.2213-1 CGCT",
+    source: "Legifrance (mêmes textes que faille-panneau-non-conforme)",
     regle:
-      "Piste à instruire (non sourcée) : en zone de travaux, la signalisation de chantier peut justifier le stationnement reproché ou rendre l'infraction inexigible. Vérifier les dates d'occupation de la voie et la signalisation en place (preuve TRAVAUX récupérée automatiquement à l'analyse) avant de retenir ce motif.",
+      "En zone de travaux, la signalisation de chantier peut justifier le stationnement reproché ou rendre l'infraction inexigible. Vérifier les dates d'occupation de la voie et la signalisation en place (preuve TRAVAUX récupérée automatiquement à l'analyse) avant de retenir ce motif.",
     reglesDetection: [{ type: "texteContient", motif: "travaux" }],
     jurisprudence: [],
-    templateLettre: "",
-    aCompleter: true,
+    templateLettre: `Je soussigné(e) {nom}, titulaire du certificat d'immatriculation du véhicule immatriculé {plaque}, conteste l'avis de contravention n° {num_pv} qui m'a été notifié le {date} pour stationnement au lieu dit {lieu}.
+
+L'emplacement se trouvait en zone de travaux : l'occupation de la voie résultait du chantier en cours, et la signalisation en place ne comportait aucune interdiction de stationnement régulièrement matérialisée par un arrêté.
+
+En application de l'article R. 411-25 du Code de la route et de l'article L. 2213-1 du Code général des collectivités territoriales, une prescription de stationnement n'est opposable que si elle résulte d'un arrêté publié et d'une signalisation fidèle. En conséquence, je vous demande de bien vouloir annuler la contravention n° {num_pv} et m'exonérer du paiement de l'amende qui m'est réclamée.`,
   },
   {
     id: "faille-stationnement-lieu",
     typeInfraction: "AMENDE",
     titreFaille:
       "Stationnement : place de stationnement non identifiée sur l'avis",
-    articleLoi: "",
-    source:
-      "Piste interne — à sourcer avant validation (Legifrance, code de procédure pénale, mentions de l'avis). À rapprocher de faille-lieu-imprecis (angle mentions déjà sourcé).",
+    articleLoi: "art. 429, 537 et 43 CPP",
+    source: "Legifrance (mêmes textes que faille-lieu-imprecis)",
     regle:
-      "Piste à instruire (non sourcée) : l'avis doit permettre d'identifier la place et le lieu exact de l'infraction. Place non balisée, adresse absente ou lieu non repris sur l'avis = difficulté à vérifier le bien-fondé. Vérifier l'extraction du lieu (OCR) et décrire la place avant retenue.",
+      "L'avis doit permettre d'identifier la place et le lieu exact de l'infraction. Place non balisée, adresse absente ou lieu non repris sur l'avis = difficulté à vérifier le bien-fondé. Vérifier l'extraction du lieu (OCR) et décrire la place avant retenue.",
     reglesDetection: [{ type: "champAbsent", champ: "lieu" }],
     jurisprudence: [],
-    templateLettre: "",
-    aCompleter: true,
+    templateLettre: `Je soussigné(e) {nom}, conteste l'avis de contravention n° {num_pv} qui m'a été notifié.
+
+Le stationnement reproché n'est pas identifié avec une précision suffisante sur l'avis ({lieu}) : la place n'est pas balisée, l'adresse n'est pas mentionnée ou le lieu n'est pas repris, ce qui rend impossible la vérification de l'infraction alléguée.
+
+En application des articles 429, 537 et 43 du Code de procédure pénale, l'acte de poursuite doit mentionner les circonstances précises de l'infraction, au nombre desquelles le lieu exact de sa commission. En conséquence, je vous demande de bien vouloir annuler la contravention n° {num_pv} et m'exonérer du paiement de l'amende qui m'est réclamée.`,
   },
 ];

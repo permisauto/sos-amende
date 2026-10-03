@@ -115,32 +115,41 @@ erreur matérielle, amnistie »). Les quatre premiers sont couverts par A ou B
 |---|---|---|---|
 | Amnistie | **À saisir par un juriste** | À déterminer par le juriste | Vide — à rédiger |
 
-### Propositions stationnement — `aCompleter` (2026-10-03)
+### Propositions stationnement — sourcées et lettrées (2026-10-03)
 
-Le catalogue (`src/lib/catalogue-sources.ts`) porte 3 pistes **incomplètes**,
-importées en `PROPOSEE` par l'auto-alimentation : `faille-stationnement-panneau`,
-`faille-stationnement-travaux`, `faille-stationnement-lieu`. Marquées
-`aCompleter: true` : `articleLoi` et `templateLettre` **vides**,
-`jurisprudence` vide — **aucun fondement ni aucune décision inventés** — et
-`source` « à sourcer ».
+Le catalogue (`src/lib/catalogue-sources.ts`) porte 3 propositions de
+stationnement importées en `PROPOSEE` : `faille-stationnement-panneau`,
+`faille-stationnement-travaux`, `faille-stationnement-lieu`. Livrées
+initialement `aCompleter` (aucun fondement inventé), elles ont été **complétées
+à la demande** pour que « Synchroniser et activer » ne soit plus bloqué :
 
-| Piste | Règle de détection (texte/OCR uniquement) | À rapprocher de |
+- **articles empruntés aux failles voisines déjà sourcées** (panneau et travaux
+  → `art. R.411-25 CR ; L.2213-1 CGCT`, comme `faille-panneau-non-conforme` ;
+  lieu → `art. 429, 537 et 43 CPP`, comme `faille-lieu-imprecis`) — aucun
+  article nouveau n'est inventé ;
+- **lettres rédigées à partir des règles dégagées** (perceptibilité du panneau,
+  gêne imputable au chantier, lieu non identifiable) ;
+- `jurisprudence` reste **vide** : aucune décision n'est fabriquée (le drapeau
+  `verifiee` des autres entrées continue de s'appliquer).
+
+| Piste | Règle de détection (texte/OCR uniquement) | Fondement |
 |---|---|---|
-| Panneau d'interdiction non perceptible (masqué, illisible, fin de zone) | `texteContient "stationnement"` | `faille-panneau-non-conforme` (angle opposabilité, déjà sourcée) |
-| Stationnement en zone de travaux (gêne imputable au chantier) | `texteContient "travaux"` | `faille-travaux-signalisation` (`FAILLE_IDS.travaux`, à créer) |
-| Place de stationnement non identifiée sur l'avis | `champAbsent lieu` | `faille-lieu-imprecis` (angle mentions, déjà sourcée) |
+| Panneau d'interdiction non perceptible (masqué, illisible, fin de zone) | `texteContient "stationnement"` | `art. R.411-25 CR ; L.2213-1 CGCT` |
+| Stationnement en zone de travaux (gêne imputable au chantier) | `texteContient "travaux"` | `art. R.411-25 CR ; L.2213-1 CGCT` |
+| Place de stationnement non identifiée sur l'avis | `champAbsent lieu` | `art. 429, 537 et 43 CPP` |
 
-Garde-fous (couverts par les tests) : `estActivable` / `messageActivationBloquee`
-refusent l'activation sans `regle` **et** `templateLettre` ; `synchroniserCatalogue`
-ne réécrit **jamais** une proposition déjà en base (la complétion manuelle de
-l'admin n'est pas écrasée par les vides du catalogue) ; `detecterMisesAJourCatalogue`
-et `appliquerMiseAJourCatalogue` ignorent les entrées `aCompleter` ; la démo
-publique les exclut (jamais de lettre vide affichée) ; `activerToutesPropositions`
-et son fallback mock les ignorent.
+**Aucune entrée du catalogue ne porte plus `aCompleter`** (test
+`catalogue-sources.test.ts`) : le bouton « Synchroniser et activer » bascule
+donc toutes les propositions en `ACTIVE` en un clic. Les garde-fous restent en
+place pour les propositions hors catalogue (promotions de veille, créations
+manuelles) : `estActivable` / `messageActivationBloquee` refusent l'activation
+sans `regle` **et** `templateLettre`, `synchroniserCatalogue` ne réécrit jamais
+une proposition déjà en base marquée `aCompleter`, `detecterMisesAJourCatalogue`
+et `appliquerMiseAJourCatalogue` les ignorent, la démo publique les exclut.
 
-**Avant toute validation** : sourcer l'article (Legifrance / code de la route /
-arrêté municipal), rédiger le template, confirmer qu'aucune des trois ne double
-une faille déjà sourcée — sinon les écarter (INACTIVE).
+**Avant activation** : confirmer qu'aucune des trois ne double une faille déjà
+sourcée (angles distincts : opposabilité du panneau / gêne chantier / mentions
+de l'avis) — sinon l'écarter (INACTIVE).
 
 ---
 

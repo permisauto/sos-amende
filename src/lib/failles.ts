@@ -67,8 +67,8 @@ export type BilanActivation = {
  * template de lettre non vides) en un seul lot — c'est le cœur de la
  * synchronisation manuelle de l'admin (« Synchroniser et activer »).
  *
- * Garde-fou conservé : une proposition incomplète (stationnement à sourcer,
- * promotion de veille à rédiger) reste en PROPOSEE, faute de quoi le moteur
+ * Garde-fou conservé : une proposition incomplète (promotion de veille à
+ * rédiger, création hors catalogue) reste en PROPOSEE, faute de quoi le moteur
  * générerait une lettre vide. `dep` accepte prisma ou une transaction Prisma.
  */
 export async function activerPropositionsCompletes(

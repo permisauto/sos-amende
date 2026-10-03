@@ -163,7 +163,15 @@ export function FaillesAdmin({
         )}
         {activerToutesState?.ok && (
           <p className="mt-3 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800">
-            Toutes les propositions ont été activées.
+            {activerToutesState.count ?? 0} faille(s) activée(s)
+            {(activerToutesState.ignorees ?? 0) > 0 && (
+              <>
+                {" "}
+                · {activerToutesState.ignorees} restée(s) en proposition (règle
+                ou lettre à rédiger)
+              </>
+            )}
+            .
           </p>
         )}
       </section>

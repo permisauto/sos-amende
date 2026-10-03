@@ -184,9 +184,9 @@ export async function basculerFaille(
  * les propositions complètes — l'admin n'a plus à les valider une par une.
  *
  * Garde-fous conservés : seule une proposition `estActivable` (règle dégagée +
- * template de lettre non vides) change de statut ; les incomplètes (stationnement
- * à sourcer, promotion de veille à rédiger) restent PROPOSEE, faute de quoi le
- * moteur générerait une lettre vide. Les failles déjà ACTIVE ne sont pas
+ * template de lettre non vides) change de statut ; les incomplètes (promotion
+ * de veille à rédiger, création hors catalogue) restent PROPOSEE, faute de quoi
+ * le moteur générerait une lettre vide. Les failles déjà ACTIVE ne sont pas
  * rétrogradées et un écart (INACTIVE) n'est jamais réactivé.
  *
  * La synchronisation **automatique** (cron `/api/cron/auto-alimentation` et
@@ -551,9 +551,15 @@ export async function activerToutesPropositions(
       return { error: "Aucune proposition à activer." };
     }
 
+    // Activation partielle : ce n'est pas une erreur — on le signale en vert
+    // (l'UI affiche `count`/`ignorees`), seul le cas « rien d'activé » est un
+    // blocage à expliciter.
+    if (ignorees > 0 && activees.length > 0) {
+      return { ok: true, count: activees.length, ignorees };
+    }
     if (ignorees > 0) {
       return {
-        error: `${activees.length} proposition(s) activée(s), ${ignorees} laissée(s) en proposition : règle dégagée ou template de lettre manquant. Complétez-les puis validez-les une par une.`,
+        error: `${ignorees} proposition(s) incomplète(s) : règle dégagée ou template de lettre manquant. Rédigez-les (bibliothèque → « Modifier ») puis réactivez.`,
       };
     }
     return { ok: true, count: activees.length };

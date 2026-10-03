@@ -49,18 +49,29 @@ describe("catalogue-sources (garde-fou anti-hallucination)", () => {
     },
   );
 
-  it("les propositions incomplètes sont bien marquées et restent minoritaires", () => {
+  it("aucune entrée du catalogue n'est bloquée à l'activation", () => {
+    // Depuis le 2026-10-03, les 3 propositions de stationnement sont sourcées
+    // (articles empruntés aux failles voisines) et lettrées : plus rien n'est
+    // marqué `aCompleter` dans le catalogue, donc « Synchroniser et activer »
+    // peut tout passer en ACTIVE. Les promotions de veille restent vides —
+    // mais elles ne figurent pas dans CATALOGUE_SOURCES.
     const incompletes = CATALOGUE_SOURCES.filter((f) => f.aCompleter);
-    expect(incompletes.length).toBeGreaterThanOrEqual(3);
-    expect(incompletes.map((f) => f.id)).toEqual(
-      expect.arrayContaining([
-        "faille-stationnement-panneau",
-        "faille-stationnement-travaux",
-        "faille-stationnement-lieu",
-      ]),
-    );
-    // Rien d'autre n'a le droit d'être vide.
-    expect(incompletes.length).toBeLessThan(CATALOGUE_SOURCES.length);
+    expect(incompletes).toEqual([]);
+
+    // Et les trois propositions de stationnement sont bien complètes :
+    for (const id of [
+      "faille-stationnement-panneau",
+      "faille-stationnement-travaux",
+      "faille-stationnement-lieu",
+    ]) {
+      const f = CATALOGUE_SOURCES.find((e) => e.id === id);
+      expect(f, id).toBeDefined();
+      if (!f) continue;
+      expect(f.articleLoi.length).toBeGreaterThan(3);
+      expect(f.templateLettre.length).toBeGreaterThan(50);
+      expect(f.regle.length).toBeGreaterThan(20);
+      expect(f.jurisprudence).toHaveLength(0);
+    }
   });
 
   it("chaque règle de détection est d'un type connu", () => {
