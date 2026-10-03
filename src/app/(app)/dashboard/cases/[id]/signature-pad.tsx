@@ -23,19 +23,18 @@ export function SignaturePad({
   const [reutiliser, setReutiliser] = useState<boolean>(detecteSignature);
   const [signature, setSignature] = useState<string | null>(null);
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!reutiliser && !signature) return;
-    const fd = new FormData();
-    fd.set("dossierId", dossierId);
-    if (!reutiliser && signature) {
-      fd.set("signature", signature);
-    }
-    formAction(fd);
-  }
-
+  // Même piège qu'à l'upload : un `onSubmit` qui appelle `formAction(fd)`
+  // bloque la transition de React et `pending` ne passe jamais à true — le
+  // bouton reste figé sans « Génération du PDF… ». On laisse React gérer la
+  // soumission via `action` + champs nommés.
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <form action={formAction} className="flex flex-col gap-4">
+      <input type="hidden" name="dossierId" value={dossierId} />
+      <input
+        type="hidden"
+        name="signature"
+        value={!reutiliser && signature ? signature : ""}
+      />
       {detecteSignature ? (
         <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
           <label className="flex cursor-pointer items-start gap-3">

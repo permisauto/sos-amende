@@ -127,6 +127,36 @@ test.describe("Client — dossiers", () => {
     ).toBeVisible();
   });
 
+  test("cases/new : pendant l'envoi, le formulaire reste monté et dit que le traitement court", async ({
+    page,
+  }) => {
+    await loginAs(page, "e2e-client@test.local");
+    // Ralentit le POST du serveur pour observer l'état transitoire (avant : le
+    // formulaire était démonté puisque `if (pending) return` le remplaçait).
+    await page.route("**/dashboard/cases/new", async (route) => {
+      if (route.request().method() === "POST") {
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+      await route.continue();
+    });
+    await page.goto("/dashboard/cases/new");
+    await page
+      .locator('input[type="file"]')
+      .setInputFiles({ name: "pv.png", mimeType: "image/png", buffer: PV_PNG });
+    await page.getByRole("button", { name: /Lancer l'analyse/ }).click();
+
+    const panneau = page.getByTestId("traitement-en-cours");
+    await expect(panneau).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Traitement en cours…" }),
+    ).toBeDisabled();
+    // Le formulaire reste monté (état conservé) mais désactivé.
+    await expect(page.getByLabel("Type d'infraction")).toBeDisabled();
+
+    // Puis la navigation vers le dossier créé : l'état transitoire disparaît.
+    await expect(panneau).toBeHidden({ timeout: 20_000 });
+  });
+
   test("cases/new : la signature déjà enregistrée évite de resigner", async ({
     page,
   }) => {

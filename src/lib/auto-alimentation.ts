@@ -68,6 +68,154 @@ export async function synchroniserCatalogue(): Promise<number> {
 }
 
 /**
+ * Option B de l'auto-alimentation : détecter les **écarts** entre le contenu
+ * sourcé du catalogue et une faille déjà en base. `synchroniserCatalogue`
+ * ne met jamais à jour le contenu d'une faille ACTIVE (cela écraserait une
+ * validation admin) : les évolutions du catalogue restent donc invisibles.
+ * On les rend ici lisibles, et l'admin les applique **explicitement**.
+ *
+ * Jamais de rétrogradation : une faille écartée (INACTIVE) n'est jamais
+ * signalée comme « mise à jour disponible ».
+ */
+export type ChampEcart = { champ: string; actuel: string; propose: string };
+
+export type EcartCatalogue = {
+  id: string;
+  titreFaille: string;
+  typeInfraction: string;
+  statut: string;
+  champs: ChampEcart[];
+};
+
+/** Ligne de base minimale pour la comparaison. */
+export type LigneBase = {
+  id: string;
+  titreFaille: string;
+  articleLoi: string;
+  regle: string | null;
+  templateLettre: string;
+  source: string | null;
+  statut: string;
+  reglesDetection: unknown;
+  jurisprudence: unknown;
+};
+
+const CHAMPS_TEXTUELS = [
+  "titreFaille",
+  "articleLoi",
+  "regle",
+  "templateLettre",
+  "source",
+] as const;
+
+const CHAMPS_JSON = ["reglesDetection", "jurisprudence"] as const;
+
+const LIBELLES_CHAMPS: Record<string, string> = {
+  titreFaille: "Titre de la faille",
+  articleLoi: "Article de loi",
+  regle: "Règle dégagée",
+  templateLettre: "Template de lettre",
+  source: "Source",
+  reglesDetection: "Règles de détection",
+  jurisprudence: "Jurisprudence",
+};
+
+/** JSON canonicalisé (clés triées) : la lecture jsonb réordonne les clés. */
+function stable(valeur: unknown): unknown {
+  if (Array.isArray(valeur)) return valeur.map(stable);
+  if (valeur && typeof valeur === "object") {
+    return Object.fromEntries(
+      Object.keys(valeur as Record<string, unknown>)
+        .sort()
+        .map((k) => [k, stable((valeur as Record<string, unknown>)[k])]),
+    );
+  }
+  return valeur;
+}
+
+function canonique(valeur: unknown): string {
+  if (typeof valeur === "string") return valeur.trim();
+  if (valeur === null || valeur === undefined) return "";
+  return JSON.stringify(stable(valeur));
+}
+
+export function detecterMisesAJourCatalogue(
+  catalogue: readonly (typeof CATALOGUE_SOURCES)[number][],
+  lignes: readonly LigneBase[],
+): EcartCatalogue[] {
+  const parId = new Map(lignes.map((l) => [l.id, l]));
+  const ecarts: EcartCatalogue[] = [];
+
+  for (const entree of catalogue) {
+    const ligne = parId.get(entree.id);
+    if (!ligne || ligne.statut === "INACTIVE") continue;
+
+    const champs: ChampEcart[] = [];
+    for (const nom of CHAMPS_TEXTUELS) {
+      const actuel = canonique(ligne[nom]);
+      const propose = canonique(entree[nom]);
+      if (actuel !== propose) {
+        champs.push({
+          champ: LIBELLES_CHAMPS[nom] ?? nom,
+          actuel,
+          propose,
+        });
+      }
+    }
+    for (const nom of CHAMPS_JSON) {
+      const actuel = canonique(ligne[nom]);
+      const propose = canonique(entree[nom]);
+      if (actuel !== propose) {
+        champs.push({
+          champ: LIBELLES_CHAMPS[nom] ?? nom,
+          actuel,
+          propose,
+        });
+      }
+    }
+
+    if (champs.length > 0) {
+      ecarts.push({
+        id: entree.id,
+        titreFaille: entree.titreFaille,
+        typeInfraction: entree.typeInfraction,
+        statut: ligne.statut,
+        champs,
+      });
+    }
+  }
+
+  return ecarts;
+}
+
+/**
+ * Lit la base et retourne les failles du catalogue dont le contenu a évolué
+ * (vide si la DB est indisponible). À afficher à l'admin sur la bibliothèque.
+ */
+export async function listerMisesAJourCatalogue(): Promise<EcartCatalogue[]> {
+  try {
+    const lignes: LigneBase[] = await prisma.failleJuridique.findMany({
+      where: { id: { in: CATALOGUE_SOURCES.map((f) => f.id) } },
+      select: {
+        id: true,
+        titreFaille: true,
+        articleLoi: true,
+        regle: true,
+        templateLettre: true,
+        source: true,
+        statut: true,
+        reglesDetection: true,
+        jurisprudence: true,
+      },
+    });
+    return detecterMisesAJourCatalogue(CATALOGUE_SOURCES, lignes);
+  } catch (e) {
+    console.error("listerMisesAJourCatalogue: DB indisponible", e);
+    return [];
+  }
+}
+
+/**
  * Enregistre une trace d'une exécution de l'auto-alimentation (campagne
  * « catalogue » ou « veille-jorf ») dans `AutoAlimentationTrace`. Best-effort :
  * jamais bloquant.
@@ -117,11 +265,14 @@ export async function executerAutoAlimentation(): Promise<{
   let catalogue = 0;
   try {
     catalogue = await synchroniserCatalogue();
+    // Option B : on signale (sans rien appliquer) les failles dont le contenu
+    // source a évolué — l'admin les applique depuis la bibliothèque.
+    const misesAJour = await listerMisesAJourCatalogue();
     await enregistrerTraceAutoAlimentation({
       campagne: "catalogue",
       statut: "OK",
       traitees: catalogue,
-      detail: `${catalogue} entrée(s) du catalogue synchronisée(s) en PROPOSEE.`,
+      detail: `${catalogue} entrée(s) du catalogue synchronisée(s) en PROPOSEE ; ${misesAJour.length} mise(s) à jour disponible(s) en attente d'application manuelle.`,
     });
   } catch (e) {
     console.error("executerAutoAlimentation: échec synchronisation catalogue", e);

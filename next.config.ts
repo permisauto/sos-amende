@@ -31,7 +31,9 @@ const nextConfig: NextConfig = {
   // il doit rester un paquet externe (require() natif), sinon Next.js le
   // bundle et le chemin 'tesseract.js/src/worker-script/node/index.js' casse
   // au déploiement (Vercel) : « Cannot find module .../worker-script/... ».
-  serverExternalPackages: ["tesseract.js"],
+  // pdf-parse/pdfjs-dist embarquent des .mjs + wasm chargés dynamiquement —
+  // les externaliser évite qu'Next tente de les compiler (PDF du client).
+  serverExternalPackages: ["tesseract.js", "pdf-parse", "pdfjs-dist"],
   // Vercel trace la fonction et n'embarque que les fichiers atteignables par
   // analyse statique : le worker-script de tesseract.js est chargé via un
   // chemin dynamique (path.join(__dirname, ...)) donc invisible au traceur —
@@ -41,6 +43,8 @@ const nextConfig: NextConfig = {
     "/*": [
       "./node_modules/tesseract.js/**/*",
       "./node_modules/tesseract.js-core/**/*",
+      "./node_modules/pdf-parse/**/*",
+      "./node_modules/pdfjs-dist/**/*",
     ],
   },
   async headers() {

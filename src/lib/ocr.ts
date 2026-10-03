@@ -33,14 +33,118 @@ export function getOcrProvider(): OcrProvider {
  * OCR de l'avis de contravention. Le résultat n'est JAMAIS envoyé tel quel :
  * il pré-remplit le formulaire d'analyse soumis par un humain (garde-fou
  * human-in-the-loop). Sans provider configuré, renvoie null.
+ *
+ * PDF : les API d'OCR images (Google Vision `images:annotate`, Tesseract,
+ * Mistral) n'acceptent JAMAIS un PDF dans `image.content` — Google impose
+ * `files:asyncBatchAnnotate` + Cloud Storage. On lit donc la couche texte du
+ * PDF **en local** (pdf-parse) et, à défaut, on en extrait les images
+ * intégrées (scan) pour les passer à l'OCR image. Gemini garde son propre
+ * chemin Files API.
  */
 export async function extrairePv(buffer: Buffer): Promise<OcrResult | null> {
   const provider = getOcrProvider();
+  if (provider === "mock") return mockOcr();
+  if (provider === "aucun") return null;
+
+  if (detecterMime(buffer) === "application/pdf") {
+    if (provider === "gemini-flash") return geminiFlashOcr(buffer);
+    return lirePdfAvecProvider(buffer, provider);
+  }
+
+  if (provider === "gemini-flash") return geminiFlashOcr(buffer);
   if (provider === "google-vision") return googleVisionOcr(buffer);
   if (provider === "mistral-ocr") return mistralOcr(buffer);
-  if (provider === "gemini-flash") return geminiFlashOcr(buffer);
   if (provider === "tesseract") return tesseractOcr(buffer);
-  if (provider === "mock") return mockOcr();
+  return null;
+}
+
+/** Seuil sous lequel on considère qu'un PDF n'a pas de couche texte exploitable. */
+const SEUIL_TEXTE_PDF = 10; // mots
+/** Images intégrées maximales OCRisées dans un PDF scanné (1 par page en pratique). */
+const MAX_IMAGES_PDF = 4;
+
+type PdfParse = InstanceType<typeof import("pdf-parse").PDFParse>;
+
+/**
+ * Lit un PDF pour un provider image : d'abord la couche texte (local, gratuit,
+ * immédiat — le cas des courriers/suspensions), sinon les images intégrées
+ * (PDF scanné) passées à l'OCR image.
+ *
+ * Jamais d'exception propagée : un PDF illisible laisse le client saisir à la
+ * main et est journalisé.
+ */
+async function lirePdfAvecProvider(
+  buffer: Buffer,
+  provider: OcrProvider,
+): Promise<OcrResult | null> {
+  const debut = Date.now();
+  let parser: PdfParse | undefined;
+  try {
+    const { PDFParse } = await import("pdf-parse");
+    parser = new PDFParse({ data: new Uint8Array(buffer) });
+
+    const lu = await parser.getText();
+    const texte = (lu?.text ?? "").replace(/\r\n/g, "\n").trim();
+    const mots = texte ? texte.split(/\s+/).length : 0;
+    if (mots >= SEUIL_TEXTE_PDF) {
+      console.log(
+        JSON.stringify({ evt: "ocr:pdf", couche: "texte", provider, mots, pages: lu?.total ?? 0, ms: Date.now() - debut }),
+      );
+      return { texte };
+    }
+
+    const images = await imagesDepuisPdf(parser);
+    if (images.length === 0) {
+      console.error(
+        `[ocr:pdf] ni couche texte (${mots} mot(s)) ni image intégrée — PDF non exploitable par ${provider}`,
+      );
+      return null;
+    }
+    const textes: string[] = [];
+    for (const img of images) {
+      const r = await ocrImage(img, provider);
+      if (r?.texte) textes.push(r.texte.trim());
+    }
+    const concatene = textes.join("\n\n").trim();
+    console.log(
+      JSON.stringify({ evt: "ocr:pdf", couche: "images", provider, images: images.length, chars: concatene.length, ms: Date.now() - debut }),
+    );
+    return concatene ? { texte: concatene } : null;
+  } catch (err) {
+    console.error("[ocr:pdf] échec :", err instanceof Error ? `${err.name}: ${err.message}` : String(err));
+    return null;
+  } finally {
+    if (parser) await parser.destroy().catch(() => undefined);
+  }
+}
+
+/** Extrait les images JPEG/PNG/WebP intégrées (page par page, plafonné). */
+async function imagesDepuisPdf(parser: PdfParse): Promise<Buffer[]> {
+  const out: Buffer[] = [];
+  try {
+    const res = await parser.getImage();
+    for (const page of res?.pages ?? []) {
+      for (const img of page?.images ?? []) {
+        const raw = img?.dataUrl ?? "";
+        const m = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/.exec(raw);
+        if (!m) continue;
+        const octets = Buffer.from(m[2], "base64");
+        if (octets.length < 2_000) continue; // vignettes / icônes
+        out.push(octets);
+        if (out.length >= MAX_IMAGES_PDF) return out;
+      }
+    }
+  } catch (err) {
+    console.error("[ocr:pdf] lecture images impossible :", err instanceof Error ? err.message : String(err));
+  }
+  return out;
+}
+
+/** Route une image vers le provider d'images configuré. */
+async function ocrImage(buffer: Buffer, provider: OcrProvider): Promise<OcrResult | null> {
+  if (provider === "google-vision") return googleVisionOcr(buffer);
+  if (provider === "mistral-ocr") return mistralOcr(buffer);
+  if (provider === "tesseract") return tesseractOcr(buffer);
   return null;
 }
 
@@ -317,35 +421,82 @@ async function geminiUploadFile(buffer: Buffer, mime: string): Promise<string | 
   return meta.file.uri;
 }
 
+/**
+ * OCR Google Cloud Vision (`images:annotate`).
+ *
+ * ⚠ N'accepte des images **que** en `image.content` (base64) : un PDF doit
+ * passer par `files:asyncBatchAnnotate` + Cloud Storage — c'est pourquoi les
+ * PDF sont détournés vers `lirePdfAvecProvider` avant tout appel ici.
+ *
+ * Deux pièges traités :
+ *  - Google renvoie souvent HTTP 200 avec une erreur **dans** le corps
+ *    (`responses[0].error`) : `res.ok` est vrai, il faut lire le corps ;
+ *  - l'ancienne version renvoyait `null` sans rien journaliser, rendant
+ *    tout échec totalement invisible en production. Chaque refus est loggé.
+ */
 async function googleVisionOcr(buffer: Buffer): Promise<OcrResult | null> {
   try {
-    const res = await fetch(
-      `https://vision.googleapis.com/v1/images:annotate?key=${process.env.GOOGLE_VISION_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        cache: "no-store",
-        body: JSON.stringify({
-          requests: [
-            {
-              image: { content: buffer.toString("base64") },
-              features: [{ type: "TEXT_DETECTION" }],
-            },
-          ],
-        }),
-      },
+    return await avecRetry(() => googleVisionOcrUnEssai(buffer));
+  } catch (err) {
+    console.error(
+      "[ocr:vision] échec final :",
+      err instanceof Error ? `${err.name}: ${err.message}` : String(err),
     );
-    if (!res.ok) return null;
-    const body = (await res.json()) as {
-      responses?: { textAnnotations?: { description?: string }[] }[];
-    };
-    const annotation = body.responses?.[0]?.textAnnotations?.[0];
-    const texte = annotation?.description?.trim();
-    if (!texte) return null;
-    return { texte };
-  } catch {
     return null;
   }
+}
+
+async function googleVisionOcrUnEssai(buffer: Buffer): Promise<OcrResult | null> {
+  const mime = detecterMime(buffer);
+  if (mime !== "image/jpeg" && mime !== "image/png" && mime !== "image/webp") {
+    // Garde-fou : jamais de requête invalide envoyée (et jamais de PDF ici).
+    console.error(`[ocr:vision] format refusé (mime=${mime}) — requête non envoyée`);
+    return null;
+  }
+
+  const res = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${process.env.GOOGLE_VISION_KEY}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    cache: "no-store",
+    body: JSON.stringify({
+      requests: [
+        {
+          image: { content: buffer.toString("base64") },
+          // DOCUMENT_TEXT_DETECTION : optimisé pour les documents denses
+          // (un avis de contravention) ; TEXT_DETECTION renvoie moins bien.
+          features: [{ type: "DOCUMENT_TEXT_DETECTION" }],
+        },
+      ],
+    }),
+  });
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    console.error(`[ocr:vision] HTTP ${res.status}`, detail.slice(0, 300));
+    if (estTransitoire(res.status)) throw new ErreurHttp(res.status, detail);
+    return null;
+  }
+
+  const body = (await res.json().catch(() => null)) as {
+    responses?: { error?: { code?: number; message?: string }; fullTextAnnotation?: { text?: string }; textAnnotations?: { description?: string }[] }[];
+  } | null;
+  const rep = body?.responses?.[0];
+  if (rep?.error) {
+    const code = rep.error.code ?? 0;
+    const message = rep.error.message ?? "";
+    console.error(`[ocr:vision] erreur API ${code}`, message.slice(0, 300));
+    // Codes gRPC : 8 RESOURCE_EXHAUSTED (quota), 14 UNAVAILABLE (saturation).
+    const statut = code === 8 ? 429 : code === 14 ? 503 : 0;
+    if (statut) throw new ErreurHttp(statut, message);
+    return null;
+  }
+
+  const texte = (rep?.fullTextAnnotation?.text ?? rep?.textAnnotations?.[0]?.description ?? "").trim();
+  if (!texte) {
+    console.error("[ocr:vision] réponse sans texte", JSON.stringify(body).slice(0, 300));
+    return null;
+  }
+  return { texte };
 }
 
 /**
@@ -354,8 +505,13 @@ async function googleVisionOcr(buffer: Buffer): Promise<OcrResult | null> {
  * markdown des pages. Réf. : https://docs.mistral.ai/capabilities/document/.
  */
 async function mistralOcr(buffer: Buffer): Promise<OcrResult | null> {
+  const mime = detecterMime(buffer);
+  if (mime !== "image/jpeg" && mime !== "image/png" && mime !== "image/webp") {
+    console.error(`[ocr:mistral] format refusé (mime=${mime}) — requête non envoyée`);
+    return null;
+  }
   try {
-    const dataUrl = `data:image/png;base64,${buffer.toString("base64")}`;
+    const dataUrl = `data:${mime};base64,${buffer.toString("base64")}`;
     const res = await fetch("https://api.mistral.ai/v1/ocr", {
       method: "POST",
       headers: {

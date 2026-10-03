@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { requireJuriste } from "@/lib/dal";
 import { prisma } from "@/lib/prisma";
-import { synchroniserCatalogue } from "@/lib/auto-alimentation";
+import { synchroniserCatalogue, listerMisesAJourCatalogue } from "@/lib/auto-alimentation";
 import type { RegleDetection } from "@/lib/moteur";
 import type { JurisprudenceRef } from "@/lib/catalogue-sources";
 import { getMockFailles, getMockStats, getSuspensionActiveCount } from "@/lib/mock-failles";
 import { FaillesAdmin, type FailleDto } from "../../admin/failles/failles-admin";
+import { MisesAJourCatalogue } from "../../admin/failles/mises-a-jour-catalogue";
 import { FaillesList } from "./FaillesList";
 
 export default async function BibliothequeFaillesPage(
@@ -70,6 +71,9 @@ export default async function BibliothequeFaillesPage(
   const nbActives = stats.find((x) => x.statut === "ACTIVE")?._count ?? 0;
   const nbProposees = stats.find((x) => x.statut === "PROPOSEE")?._count ?? 0;
   const isAdmin = user.role === "ADMIN";
+  // Option B : écarts entre le catalogue sourcé et les failles déjà en base
+  // (vide si rien n'a changé ou si la DB est indisponible).
+  const ecartsCatalogue = isAdmin ? await listerMisesAJourCatalogue() : [];
 
   const dto: FailleDto[] = failles.map((f) => ({
     id: f.id,
@@ -164,6 +168,7 @@ export default async function BibliothequeFaillesPage(
               </p>
             </div>
           )}
+          <MisesAJourCatalogue ecarts={ecartsCatalogue} />
           <div className="mt-6">
             <FaillesAdmin failles={dto} filter={filter} />
           </div>

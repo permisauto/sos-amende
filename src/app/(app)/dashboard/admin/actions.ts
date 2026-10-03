@@ -7,7 +7,11 @@ import { requireAdmin } from "@/lib/dal";
 import { Prisma } from "@/generated/prisma/client";
 import type { RegleDetection } from "@/lib/moteur";
 import type { JurisprudenceRef } from "@/lib/catalogue-sources";
-import { synchroniserCatalogue } from "@/lib/auto-alimentation";
+import { CATALOGUE_SOURCES } from "@/lib/catalogue-sources";
+import {
+  enregistrerTraceAutoAlimentation,
+  synchroniserCatalogue,
+} from "@/lib/auto-alimentation";
 import { validateMockFaille } from "@/lib/mock-failles";
 import { messageActivationBloquee, estActivable } from "@/lib/failles";
 
@@ -186,6 +190,63 @@ export async function importerFaillesDepuisSources(
 }
 
 const PROPOSEE_ACTIONS = ["ACTIVE", "INACTIVE"] as const;
+
+/**
+ * Option B de l'auto-alimentation : applique **explicitement** à une faille
+ * déjà en base le contenu à jour du catalogue sourcé. Action admin, une faille
+ * à la fois (l'écart est affiché avec un diff avant/après sur la bibliothèque).
+ *
+ * Garde-fous :
+ *  - la faille doit appartenir au catalogue (aucune écriture hors source) ;
+ *  - une faille écartée (INACTIVE) n'est jamais réécrite (décision admin
+ *    antérieure respectée) ;
+ *  - le statut est **conservé** (une faille ACTIVE reste ACTIVE) : on ne
+ *    rétrograde ni ne valide à la place de l'admin.
+ */
+export async function appliquerMiseAJourCatalogue(
+  _prev: FailleState,
+  formData: FormData,
+): Promise<FailleState> {
+  await requireAdmin();
+
+  const id = String(formData.get("id") ?? "");
+  const entree = CATALOGUE_SOURCES.find((f) => f.id === id);
+  if (!entree) return { error: "Cette faille n'existe plus dans le catalogue." };
+
+  const faille = await prisma.failleJuridique.findUnique({
+    where: { id },
+    select: { statut: true },
+  });
+  if (!faille) return { error: "Faille introuvable." };
+  if (faille.statut === "INACTIVE") {
+    return { error: "Faille écartée : réactivez-la avant d'appliquer la mise à jour." };
+  }
+
+  await prisma.failleJuridique.update({
+    where: { id },
+    data: {
+      typeInfraction: entree.typeInfraction,
+      titreFaille: entree.titreFaille,
+      articleLoi: entree.articleLoi,
+      regle: entree.regle,
+      templateLettre: entree.templateLettre,
+      source: entree.source,
+      reglesDetection: entree.reglesDetection as Prisma.InputJsonValue,
+      jurisprudence: entree.jurisprudence as Prisma.InputJsonValue,
+      statut: faille.statut,
+    },
+  });
+
+  await enregistrerTraceAutoAlimentation({
+    campagne: "catalogue",
+    statut: "OK",
+    traitees: 1,
+    detail: `Mise à jour appliquée manuellement : ${id} (${faille.statut}).`,
+  });
+
+  revalidatePath("/dashboard/juriste/failles");
+  return { ok: true };
+}
 
 /**
  * Validation d'une proposition (auto-alimentation) par l'admin :

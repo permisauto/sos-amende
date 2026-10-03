@@ -70,7 +70,19 @@ export async function createDossier(
   // OCR (garde-fou human-in-the-loop) : pré-remplit le formulaire d'analyse,
   // jamais l'analyse finale — un humain vérifie puis soumet.
   const prefill: Record<string, string> = {};
+  const tOcr = Date.now();
   const ocr = await extrairePv(buffer);
+  // Trace unique et exploitable en prod : provider, format, succès, volumétrie.
+  console.log(
+    JSON.stringify({
+      evt: "createDossier:ocr",
+      provider: getOcrProvider(),
+      mime: file.type,
+      ok: Boolean(ocr),
+      chars: ocr?.texte?.length ?? 0,
+      ms: Date.now() - tOcr,
+    }),
+  );
   if (!ocr) {
     // Diagnostic prod : un OCR sans résultat laisse le dossier sans texte ni
     // pré-remplissage — le scan/scoring semble « ne rien détecter ». La cause
