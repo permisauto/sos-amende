@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import type { JurisprudenceRef } from "@/lib/catalogue-sources";
+import { buildFaillesHref, RechercheFailles } from "./recherche-failles";
 
 const statusMeta: Record<string, { label: string; cls: string }> = {
   ACTIVE: { label: "Active", cls: "bg-emerald-100 text-emerald-800" },
@@ -31,9 +32,16 @@ interface FailleDto {
 interface FaillesListProps {
   failles: FailleDto[];
   filter: string;
+  q?: string;
+  nbTotal?: number;
 }
 
-export function FaillesList({ failles, filter }: FaillesListProps) {
+export function FaillesList({
+  failles,
+  filter,
+  q = "",
+  nbTotal,
+}: FaillesListProps) {
   const [disclosed, setDisclosed] = useState<ReadonlySet<string>>(new Set());
   const toggleDisclosed = (id: string) =>
     setDisclosed((prev) => {
@@ -63,7 +71,16 @@ export function FaillesList({ failles, filter }: FaillesListProps) {
         l&apos;auto-alimentation ; l&apos;admin valide leur activation.
       </p>
 
-      <div className="mt-6 flex flex-wrap gap-2">
+      <div className="mt-6">
+        <RechercheFailles
+          q={q}
+          filter={filter}
+          nb={failles.length}
+          nbTotal={nbTotal ?? failles.length}
+        />
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
         {[
           { value: "ALL", label: "Toutes" },
           { value: "ACTIVE", label: "Actives" },
@@ -72,7 +89,7 @@ export function FaillesList({ failles, filter }: FaillesListProps) {
         ].map((item) => (
           <Link
             key={item.value}
-            href={`/dashboard/juriste/failles${item.value === "ALL" ? "" : `?f=${item.value}`}`}
+            href={buildFaillesHref(item.value, q)}
             className={`rounded-full px-4 py-2 text-sm font-medium transition ${
               filter === item.value
                 ? "bg-emerald-600 text-white"
@@ -87,7 +104,19 @@ export function FaillesList({ failles, filter }: FaillesListProps) {
       <div className="mt-6 flex flex-col gap-4">
         {failles.length === 0 ? (
           <p className="rounded-2xl border border-dashed border-zinc-300 p-8 text-center text-sm text-zinc-500">
-            Aucune faille dans cette catégorie.
+            {q ? (
+              <>
+                Aucune faille pour «&nbsp;{q}&nbsp;» dans cette catégorie.{" "}
+                <Link
+                  href={buildFaillesHref(filter, "")}
+                  className="font-medium text-emerald-700 hover:underline"
+                >
+                  Effacer la recherche
+                </Link>
+              </>
+            ) : (
+              "Aucune faille dans cette catégorie."
+            )}
           </p>
         ) : (
           failles.map((faille) => {

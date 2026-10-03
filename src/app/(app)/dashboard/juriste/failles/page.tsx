@@ -5,6 +5,7 @@ import { synchroniserCatalogue, listerMisesAJourCatalogue } from "@/lib/auto-ali
 import type { RegleDetection } from "@/lib/moteur";
 import type { JurisprudenceRef } from "@/lib/catalogue-sources";
 import { getMockFailles, getMockStats, getSuspensionActiveCount } from "@/lib/mock-failles";
+import { rechercherFailles } from "@/lib/failles-recherche";
 import { FaillesAdmin, type FailleDto } from "../../admin/failles/failles-admin";
 import { MisesAJourCatalogue } from "../../admin/failles/mises-a-jour-catalogue";
 import { FaillesList } from "./FaillesList";
@@ -16,11 +17,12 @@ export default async function BibliothequeFaillesPage(
   await synchroniserCatalogue().catch((e) => {
     console.error("bibliothèque: synchroniserCatalogue fail (DB down)", e);
   });
-  const { f } = await props.searchParams;
+  const { f, q } = await props.searchParams;
   const raw = typeof f === "string" ? f.toUpperCase() : "ALL";
   const filter = ["ACTIVE", "INACTIVE", "PROPOSEE", "ALL"].includes(raw)
     ? raw
     : "ALL";
+  const recherche = (typeof q === "string" ? q : "").trim().slice(0, 100);
 
   let failles: Awaited<ReturnType<typeof getMockFailles>>;
   let stats: Array<{ statut: string; _count: number }>;
@@ -66,6 +68,10 @@ export default async function BibliothequeFaillesPage(
 
   if (filter !== "ALL") {
     failles = failles.filter((f) => f.statut === filter);
+  }
+  const nbTotalRecherche = failles.length;
+  if (recherche) {
+    failles = rechercherFailles(failles, recherche);
   }
 
   const nbActives = stats.find((x) => x.statut === "ACTIVE")?._count ?? 0;
@@ -170,11 +176,21 @@ export default async function BibliothequeFaillesPage(
           )}
           <MisesAJourCatalogue ecarts={ecartsCatalogue} />
           <div className="mt-6">
-            <FaillesAdmin failles={dto} filter={filter} />
+            <FaillesAdmin
+              failles={dto}
+              filter={filter}
+              q={recherche}
+              nbTotal={nbTotalRecherche}
+            />
           </div>
         </div>
       ) : (
-        <FaillesList failles={failles} filter={filter} />
+        <FaillesList
+          failles={failles}
+          filter={filter}
+          q={recherche}
+          nbTotal={nbTotalRecherche}
+        />
       )}
     </div>
   );

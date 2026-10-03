@@ -11,6 +11,10 @@ import {
 } from "../actions";
 import type { RegleDetection } from "@/lib/moteur";
 import type { JurisprudenceRef } from "@/lib/catalogue-sources";
+import {
+  buildFaillesHref,
+  RechercheFailles,
+} from "../../juriste/failles/recherche-failles";
 
 export type FailleDto = {
   id: string;
@@ -62,9 +66,13 @@ const statusMeta: Record<string, { label: string; cls: string }> = {
 export function FaillesAdmin({
   failles,
   filter,
+  q = "",
+  nbTotal,
 }: {
   failles: FailleDto[];
   filter: string;
+  q?: string;
+  nbTotal?: number;
 }) {
   const [localValidated, setLocalValidated] = useState<
     Record<string, StatutFaille>
@@ -177,7 +185,13 @@ export function FaillesAdmin({
       </section>
 
       <section>
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <RechercheFailles
+          q={q}
+          filter={filter}
+          nb={failles.length}
+          nbTotal={nbTotal ?? failles.length}
+        />
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold">
             Failles existantes ({failles.length})
           </h2>
@@ -185,7 +199,7 @@ export function FaillesAdmin({
             {filters.map((item) => (
               <Link
                 key={item.value}
-                href={`/dashboard/juriste/failles${item.value === "ALL" ? "" : `?f=${item.value}`}`}
+                href={buildFaillesHref(item.value, q)}
                 className={`rounded-full px-4 py-2 text-sm font-medium transition ${
                   filter === item.value
                     ? "bg-emerald-600 text-white"
@@ -203,7 +217,19 @@ export function FaillesAdmin({
         <div className="mt-4 flex flex-col gap-4">
           {failles.length === 0 ? (
             <p className="rounded-2xl border border-dashed border-zinc-300 p-8 text-center text-sm text-zinc-500">
-              Aucune faille dans cette catégorie.
+              {q ? (
+                <>
+                  Aucune faille pour «&nbsp;{q}&nbsp;» dans cette catégorie.{" "}
+                  <Link
+                    href={buildFaillesHref(filter, "")}
+                    className="font-medium text-emerald-700 hover:underline"
+                  >
+                    Effacer la recherche
+                  </Link>
+                </>
+              ) : (
+                "Aucune faille dans cette catégorie."
+              )}
             </p>
           ) : (
             failles.map((faille) => (
