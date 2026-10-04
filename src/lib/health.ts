@@ -3,10 +3,10 @@
  * Utilisable pour monitoring, alerting, readiness/liveness probes
  */
 
-import { prisma } from "@/lib/prisma";
 import { createClient } from "@supabase/supabase-js";
-import { Resend } from "resend";
-import { storageWrite } from "@/lib/storage";
+import { storageWrite, storageDelete } from "@/lib/storage";
+import { consommerCreneau } from "@/lib/rate-limit";
+import { timingSafeEqual } from "node:crypto";
 
 export type HealthStatus = "healthy" | "degraded" | "unhealthy";
 
@@ -23,6 +23,7 @@ export interface HealthCheckResponse {
   timestamp: string;
   version: string;
   environment: string;
+  mode: "lite" | "full";
   checks: HealthCheckResult[];
   uptimeMs: number;
 }
@@ -255,16 +256,18 @@ async function checkOpenMeteo(): Promise<HealthCheckResult> {
 
 async function checkStorage(): Promise<HealthCheckResult> {
   const start = Date.now();
+  const cle = `health-check-${Date.now()}.txt`;
 
   try {
-    const { storageWrite } = await import("@/lib/storage");
-    await storageWrite(`health-check-${Date.now()}.txt`, Buffer.from("test"));
+    await storageWrite(cle, Buffer.from("test"));
+    // Fichier de test retiré immédiatement : aucun orphelin dans le bucket.
+    await storageDelete(cle).catch(() => {});
 
     return {
       name: "storage",
       status: "healthy",
       latencyMs: Date.now() - start,
-      details: { message: "Stockage accessible (local/S3)" },
+      details: { message: "Stockage accessible (local/S3), fichier de test supprimé" },
     };
   } catch (err: unknown) {
     return {
@@ -276,15 +279,18 @@ async function checkStorage(): Promise<HealthCheckResult> {
   }
 }
 
-export async function runHealthChecks(): Promise<HealthCheckResponse> {
-  const results = await Promise.allSettled([
-    checkSupabase(),
-    checkGroq(),
-    checkResend(),
-    checkDataGouv(),
-    checkOpenMeteo(),
-    checkStorage(),
-  ]);
+/**
+ * `full` (défaut) = toutes les vérifications, y compris les externes coûteuses
+ * (radars.csv data.gouv, Open-Meteo, Groq, écriture storage). `lite` = checks
+ * sans effet de bord (base + config e-mail) — c'est ce que reçoit un appelant
+ * anonyme : `/api/health` public ne doit pas servir de relais de spam vers les
+ * API tierces (audit lot 3).
+ */
+export async function runHealthChecks(full = true): Promise<HealthCheckResponse> {
+  const checksEnVue = full
+    ? [checkSupabase(), checkGroq(), checkResend(), checkDataGouv(), checkOpenMeteo(), checkStorage()]
+    : [checkSupabase(), checkResend()];
+  const results = await Promise.allSettled(checksEnVue);
 
   const checks: HealthCheckResult[] = results.map((r) =>
     r.status === "fulfilled" ? r.value : {
@@ -306,13 +312,52 @@ export async function runHealthChecks(): Promise<HealthCheckResponse> {
     timestamp: new Date().toISOString(),
     version: process.env.npm_package_version ?? "0.1.0",
     environment: process.env.NODE_ENV ?? "development",
+    mode: full ? "full" : "lite",
     checks,
     uptimeMs: Date.now() - START_TIME,
   };
 }
 
-export async function GET() {
-  const health = await runHealthChecks();
+/** Secret d'accès aux checks approfondis : CRON_SECRET (Header
+ * `x-health-secret` ou `Authorization: Bearer …`). Sans CRON_SECRET, le mode
+ * full reste ouvert hors production (dev local). */
+function secretHealthValide(req: Request): boolean {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return process.env.NODE_ENV !== "production";
+  const fourni = (
+    req.headers.get("x-health-secret") ??
+    req.headers.get("authorization") ??
+    ""
+  )
+    .replace(/^Bearer\s+/i, "")
+    .trim();
+  if (fourni.length !== secret.length) return false;
+  try {
+    return timingSafeEqual(Buffer.from(fourni), Buffer.from(secret));
+  } catch {
+    return false;
+  }
+}
+
+export async function GET(req: Request) {
+  // Rate-limit par IP : l'endpoint est public, il ne doit pas devenir un
+  // relais de spam (même en mode lite, chaque appel ouvre une connexion base).
+  const ip =
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "inconnue";
+  const essais = consommerCreneau(`health:${ip}`, 20, 15 * 60 * 1000);
+  if (essais <= 0) {
+    return new Response(JSON.stringify({ error: "Trop de requêtes." }), {
+      status: 429,
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Retry-After": "900",
+      },
+    });
+  }
+
+  const full = secretHealthValide(req);
+  const health = await runHealthChecks(full);
 
   const statusCode = health.status === "healthy" ? 200 : health.status === "degraded" ? 200 : 503;
 

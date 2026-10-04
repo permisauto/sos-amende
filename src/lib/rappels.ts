@@ -14,6 +14,18 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://recours-permis-pv.co
 export const RAPPEL_TYPES = ["J10", "J3", "J0"] as const;
 export type RappelType = (typeof RAPPEL_TYPES)[number];
 
+/** Statuts de dossier clôturé ou sans objet : plus aucune relance — ni
+ * échéances J10/J3/J0, ni pièces manquantes (un dossier rejeté ou déjà déposé
+ * ne reçoit plus « faites signer votre lettre… », audit lot 3). */
+export const STATUTS_HORS_RELANCE_PREUVES = [
+  "BROUILLON",
+  "ENVOYE",
+  "REJETE",
+  "ERREUR_TECHNIQUE",
+  "RESOLU",
+  "ANNULE",
+] as const;
+
 /**
  * Fenêtres de rappel (par date limite de contestation) :
  * J10 = il reste 10 jours ou moins (>3), J3 = 3 jours ou moins (>0), J0 = échu.
@@ -75,7 +87,7 @@ export async function chercherRappels(): Promise<RappelResultat[]> {
   const dossiers = await prisma.dossier.findMany({
     where: {
       dateLimite: { not: null },
-      statut: { notIn: ["RESOLU", "ANNULE", "ENVOYE"] },
+      statut: { notIn: [...STATUTS_HORS_RELANCE_PREUVES] },
     },
     include: {
       rappels: { select: { type: true } },
@@ -116,17 +128,6 @@ export async function chercherRappels(): Promise<RappelResultat[]> {
 
 /** Type de rappel dédié : une seule relance par dossier (dédup en base). */
 export const RAPPEL_TYPE_PREUVES = "PREUVES";
-
-/** Statuts pour lesquels la pièce n'a plus d'intérêt (dépôt fait ou dossier
- * clôturé) — la relance s'arrête d'elle-même. */
-export const STATUTS_HORS_RELANCE_PREUVES = [
-  "BROUILLON",
-  "ENVOYE",
-  "REJETE",
-  "ERREUR_TECHNIQUE",
-  "RESOLU",
-  "ANNULE",
-] as const;
 
 /**
  * Fenêtre de la relance « pièces manquantes » : pure, testée. Une pièce

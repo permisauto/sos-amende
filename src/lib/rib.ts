@@ -4,12 +4,13 @@ const TITULAIRE = process.env.NEXT_PUBLIC_RIB_TITULAIRE;
 
 /**
  * RIB de paiement centralisé. Sans variable `NEXT_PUBLIC_RIB_*` configurée on
- * retombe sur des valeurs de démonstration : l'UI doit alors afficher un
- * avertissement explicite (pas de virement réel possible sur un RIB fictif).
+ * n'expose AUCUNE coordonnée bancaire réelle : les valeurs affichées sont
+ * explicitement non payantes et `placeholder` signale à l'UI d'afficher
+ * l'avertissement (audit lot 3 — plus de RIB codé en dur dans le dépôt).
  */
 export const RIB = {
-  iban: IBAN ?? "BE06 9058 9752 3122",
-  bic: BIC ?? "TRWIBEB1XXX",
-  titulaire: TITULAIRE ?? "DIXIT LLC",
+  iban: IBAN ?? "IBAN NON RENSEIGNÉ",
+  bic: BIC ?? "BIC NON RENSEIGNÉ",
+  titulaire: TITULAIRE ?? "NON RENSEIGNÉ",
   placeholder: !IBAN || !BIC || !TITULAIRE,
 } as const;
