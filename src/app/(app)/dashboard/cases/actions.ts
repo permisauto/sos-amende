@@ -277,52 +277,69 @@ export async function analyserDossier(
   //   zéro) ;
   // - sans faille (aucune lettre) → EN_ATTENTE_VALIDATION sans débit : le
   //   juriste examine le fondement, le crédit n'est jamais débité.
-  const statut = await prisma.$transaction(async (tx) => {
-    let next: "EN_ATTENTE_VALIDATION" | "EN_ATTENTE_PAIEMENT";
-    if (faille) {
-      const debit = await tx.user.updateMany({
-        where: { id: user.id, credits: { gte: 1 } },
-        data: { credits: { decrement: 1 } },
-      });
-      next =
-        debit.count === 1 ? "EN_ATTENTE_VALIDATION" : "EN_ATTENTE_PAIEMENT";
-    } else {
-      next = "EN_ATTENTE_VALIDATION";
-    }
+  // Idempotence financière : le crédit n'est débité qu'à la PREMIÈRE analyse
+  // du dossier — une relance après retour du juriste (EN_ANALYSE) ne
+  // redébite jamais. Un ANALYSE event existe dès la première analyse passée.
+  const dejaAnalyse = !!(await prisma.dossierEvent.findFirst({
+    where: { dossierId: dossier.id, type: "ANALYSE" },
+    select: { id: true },
+  }));
 
-    await tx.dossier.update({
-      where: { id: dossier.id },
-      data: {
-        extractedData: data as object,
-        failleJuridiqueId: faille?.id ?? null,
-        lettreGeneree: lettre,
-        dateLimite: dateLimitePv(data.date, dossier.type),
-        statut: next,
-      },
-    });
-    await tx.dossierEvent.create({
-      data: { dossierId: dossier.id, type: "ANALYSE" },
-    });
-    await tx.dossierEvent.create({
-      data: {
-        dossierId: dossier.id,
-        type: faille ? "LETTRE_GENEREE" : "EN_ATTENTE",
-        detail:
-          next === "EN_ATTENTE_PAIEMENT"
-            ? "En attente de paiement (virement bancaire)"
-            : undefined,
-      },
-    });
-    // Réinitialise les candidatures puis rejoue toutes les failles détectées
-    // (une relance de l'analyse relance aussi la détection automatique).
-    await tx.dossierFaille.deleteMany({ where: { dossierId: dossier.id } });
-    for (const failleId of candidats) {
-      await tx.dossierFaille.create({
-        data: { dossierId: dossier.id, failleId, statut: "CANDIDATE" },
+  let statut: "EN_ATTENTE_VALIDATION" | "EN_ATTENTE_PAIEMENT";
+  try {
+    statut = await prisma.$transaction(async (tx) => {
+      let next: "EN_ATTENTE_VALIDATION" | "EN_ATTENTE_PAIEMENT";
+      if (faille && !dejaAnalyse) {
+        const debit = await tx.user.updateMany({
+          where: { id: user.id, credits: { gte: 1 } },
+          data: { credits: { decrement: 1 } },
+        });
+        next =
+          debit.count === 1 ? "EN_ATTENTE_VALIDATION" : "EN_ATTENTE_PAIEMENT";
+      } else {
+        next = "EN_ATTENTE_VALIDATION";
+      }
+
+      // Verrou anti double-soumission (double-clic / deux onglets) : l'écriture
+      // du dossier n'est acceptée que depuis EN_ANALYSE — sinon on annule la
+      // transaction entière, rollback du débit compris.
+      const maj = await tx.dossier.updateMany({
+        where: { id: dossier.id, statut: "EN_ANALYSE" },
+        data: {
+          extractedData: data as object,
+          failleJuridiqueId: faille?.id ?? null,
+          lettreGeneree: lettre,
+          dateLimite: dateLimitePv(data.date, dossier.type),
+          statut: next,
+        },
       });
-    }
-    return next;
-  });
+      if (maj.count === 0) throw new Error("ANALYSE_DEJA_TRAITEE");
+      await tx.dossierEvent.create({
+        data: { dossierId: dossier.id, type: "ANALYSE" },
+      });
+      await tx.dossierEvent.create({
+        data: {
+          dossierId: dossier.id,
+          type: faille ? "LETTRE_GENEREE" : "EN_ATTENTE",
+          detail:
+            next === "EN_ATTENTE_PAIEMENT"
+              ? "En attente de paiement (virement bancaire)"
+              : undefined,
+        },
+      });
+      // Réinitialise les candidatures puis rejoue toutes les failles détectées
+      // (une relance de l'analyse relance aussi la détection automatique).
+      await tx.dossierFaille.deleteMany({ where: { dossierId: dossier.id } });
+      for (const failleId of candidats) {
+        await tx.dossierFaille.create({
+          data: { dossierId: dossier.id, failleId, statut: "CANDIDATE" },
+        });
+      }
+      return next;
+    });
+  } catch {
+    return { error: "Ce dossier n'est plus en attente d'analyse." };
+  }
 
   // Preuves externes (météo, fiche radar, travaux) récupérées automatiquement
   // depuis les sources publiques, uniquement pour les types pertinents aux

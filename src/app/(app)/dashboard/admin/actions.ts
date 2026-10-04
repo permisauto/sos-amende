@@ -476,8 +476,14 @@ export async function validerVirement(
   // crédit sert directement le dossier — il passe en EN_ATTENTE_VALIDATION
   // pour le juriste, sans créditer le client (le paiement a été consommé).
   let dossierEnValidation: string | null = null;
-  await prisma.$transaction(async (tx) => {
-    await tx.payment.update({ where: { id }, data: { status: "PAID" } });
+  const dejaValide = await prisma.$transaction(async (tx) => {
+    // Verrou anti double-validation (double-clic / onglets concurrents) : seul
+    // un PENDING_VIREMENT → PAID est accepté — un seul crédit incrémenté.
+    const verrou = await tx.payment.updateMany({
+      where: { id, status: "PENDING_VIREMENT" },
+      data: { status: "PAID" },
+    });
+    if (verrou.count === 0) return true;
 
     if (payment.dossierId) {
       const dossierLie = await tx.dossier.findUnique({
@@ -497,7 +503,7 @@ export async function validerVirement(
             detail: "Paiement validé — dossier transmis au juriste",
           },
         });
-        return;
+        return false;
       }
     }
 
@@ -505,7 +511,11 @@ export async function validerVirement(
       where: { id: payment.userId },
       data: { credits: { increment: 1 } },
     });
+    return false;
   });
+  if (dejaValide) {
+    return { error: "Seuls les virements en attente peuvent être validés." };
+  }
 
   const user = await prisma.user.findUnique({ where: { id: payment.userId } });
   if (user) {

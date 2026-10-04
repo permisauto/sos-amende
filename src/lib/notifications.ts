@@ -327,7 +327,7 @@ export async function notifierStatut(dossierId: string): Promise<boolean> {
 
   try {
     await resend.emails.send({
-      from: "SOS Amende <onboarding@resend.dev>",
+      from: EMAIL_FROM,
       to: dossier.user.email,
       subject,
       html,

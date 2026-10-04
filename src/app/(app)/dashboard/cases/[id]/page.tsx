@@ -797,19 +797,12 @@ export default async function CaseDetailPage(
         </div>
       ) : (item.statut === "A_VERIFIER" && item.lettreGeneree) ||
         item.statut === "EN_ATTENTE_PRE_SIGNATURE" ? (
-        user.credits < 1 ? (
-          <div className="mt-8 rounded-2xl border-2 border-emerald-600 bg-emerald-50 p-6">
-            <h2 className="text-lg font-semibold text-emerald-900">✓ Faille validée — finalisez votre paiement</h2>
-            <p className="mt-2 text-sm text-emerald-800">
-              Le scan et le scoring ({item.failleJuridique ? "faille détectée" : "analyse terminée"}) sont gratuits. Pour débloquer la lettre ({item.type === "AMENDE" ? "39 €" : "59 €"}) et la faire signer/valider par un juriste, renseignez vos coordonnées et choisissez votre paiement.
-            </p>
-            <Link href={`/paiement?type=${item.type}`} className="mt-4 inline-block rounded-full bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700">
-              Payer — virement bancaire
-            </Link>
-            <p className="mt-2 text-xs text-emerald-700">Nom, prénom, email, WhatsApp demandés à l'étape suivante.</p>
-          </div>
-        ) : (
-          <div className="mt-8 flex flex-col gap-6">
+        // Pas de bandeau « crédits épuisés » ici : le paiement de CE dossier est
+        // déjà résolu avant ces statuts (débit à l'analyse, virement validé par
+        // l'admin, ou voie sans faille non débitée par conception) — demander un
+        // nouveau paiement relierait un compteur global déjà consommé ailleurs.
+        // Les dossiers non payés passent par EN_ATTENTE_PAIEMENT (bloc ci-dessus).
+        <div className="mt-8 flex flex-col gap-6">
             <div className="rounded-2xl border border-zinc-200 bg-white p-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2 className="text-lg font-semibold">Signature de la lettre</h2>
@@ -854,7 +847,6 @@ export default async function CaseDetailPage(
               </div>
             </div>
           </div>
-        )
       ) : item.statut === "PRET" && item.courriers.length > 0 ? (
         item.valideLe ? (
           item.canalEnvoi === "ANTAI" || item.canalEnvoi === "TELERECOURS" ? (

@@ -1072,21 +1072,39 @@ export async function rejeterDossier(
     return { error: "Seul un dossier en attente peut être rejeté." };
   }
 
-  await prisma.$transaction([
-    prisma.dossier.update({
-      where: { id: dossier.id },
+  const dejaRejete = await prisma.$transaction(async (tx) => {
+    // Verrou anti double-rejet : la transition n'est acceptée que depuis un
+    // statut éligible — sinon aucun remboursement (crédit rendu au plus une fois).
+    const verrou = await tx.dossier.updateMany({
+      where: {
+        id: dossier.id,
+        statut: {
+          in: [
+            "PRET",
+            "A_VERIFIER",
+            "EN_ATTENTE_VALIDATION",
+            "EN_ATTENTE_PRE_SIGNATURE",
+          ],
+        },
+      },
       data: { statut: "REJETE", motifRejet: motif },
-    }),
-    prisma.dossierEvent.create({
+    });
+    if (verrou.count === 0) return true;
+
+    await tx.dossierEvent.create({
       data: { dossierId: dossier.id, type: "REJET", detail: motif },
-    }),
+    });
     // Aucune lettre transmise : le crédit consommé au dépôt est rendu au client
     // (il peut lancer un nouveau dossier sans repayer).
-    prisma.user.update({
+    await tx.user.update({
       where: { id: dossier.userId },
       data: { credits: { increment: 1 } },
-    }),
-  ]);
+    });
+    return false;
+  });
+  if (dejaRejete) {
+    return { error: "Seul un dossier en attente peut être rejeté." };
+  }
 
   // Notification (défensive : sans AUTH_RESEND_KEY, aucun e-mail envoyé).
   await notifierStatut(dossier.id).catch(() => false);

@@ -46,7 +46,7 @@ async function envoyerRappel(opts: {
       : "N'attendez plus : faites signer votre lettre et validez-la pour respecter le délai.";
 
   await resend.emails.send({
-    from: "SOS Amende <onboarding@resend.dev>",
+    from: EMAIL_FROM,
     to: opts.email,
     subject: titre,
     html: `
