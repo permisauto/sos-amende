@@ -24,6 +24,8 @@ const PORT = 3998;
 const BASE = `http://localhost:${PORT}`;
 const SERVER = path.join(__dirname, '..', 'server.js');
 const MODE = (process.env.RECOURS_TEST_MODE || 'base');
+// Secret partagé avec server.js (routes API verrouillées en mode base).
+const SECRET = process.env.RECOURS_MODULE_SECRET || 'recours-test-secret';
 
 let passed = 0;
 let failed = 0;
@@ -41,7 +43,10 @@ function ok(name, condition) {
 async function request(method, pathname, body) {
   const res = await fetch(`${BASE}${pathname}`, {
     method,
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    headers: {
+      'x-recours-secret': SECRET,
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+    },
     body: body ? JSON.stringify(body) : undefined,
   });
   const text = await res.text();
@@ -146,6 +151,7 @@ async function run() {
         ...process.env,
         PORT: String(PORT),
         RECOURS_DB: MODE,
+        RECOURS_MODULE_SECRET: SECRET,
         WORKER_INTERVAL_MS: String(60000),
         EMAIL_FROM: process.env.EMAIL_FROM || 'no-reply@example.fr',
       },
@@ -212,7 +218,7 @@ async function run() {
       ok('nom de fichier .txt', r.headers.get('content-disposition')?.includes('.txt'));
     }
 
-    console.log('[TEST] 6/7 — Suivi automatique → décision OMP (écrite sur le dossier)');
+    console.log(`[TEST] 6/7 — Suivi automatique (${MODE === 'base' ? 'aucune décision inventée en mode base' : 'décision simulée (démo)'})`);
     r = await request('GET', '/recours/finaliser?token=FAUX');
     ok('token invalide → 403', r.status === 403);
     r = await request('POST', '/api/recours/forcer', { dossierId: 'INCONNU' });
@@ -223,14 +229,18 @@ async function run() {
       r = await request('POST', '/api/recours/forcer', { dossierId: dossierValidable });
       if (r.json?.decision && ['ACCEPTE', 'REJETE'].includes(r.json.decision)) decision = r.json;
     }
-    ok('décision OMP atteinte (ACCEPTE|REJETE)', decision !== null && ['ACCEPTE', 'REJETE'].includes(decision.decision));
 
     if (MODE === 'base') {
+      // Garde-fou anti-hallucination : en mode réel le module attend le retour
+      // officiel (cron /api/cron/recuperations-decisions ou saisie juriste).
+      ok('aucune décision inventée par le worker (decision=null)', decision === null);
       base = await verifierDossierReel(idReel.id);
-      ok('VRAI dossier → statut RESOLU + decisionOmp écrits', base.statut === 'RESOLU' && ['ACCEPTE', 'REJETE'].includes(base.decisionOmp));
-      ok('DossierEvent DECISION écrit', base.details.includes('Décision OMP'));
+      ok('VRAI dossier → statut ENVOYE conservé, decisionOmp null', base.statut === 'ENVOYE' && !base.decisionOmp);
+      ok('aucun DossierEvent DECISION', !base.details.includes('Décision OMP'));
       console.log(`  Détail base : statut=${base.statut}, canal=${base.canalEnvoi}, decision=${base.decisionOmp}`);
       console.log(`  Événements : ${base.details}`);
+    } else {
+      ok('décision OMP atteinte (ACCEPTE|REJETE)', decision !== null && ['ACCEPTE', 'REJETE'].includes(decision.decision));
     }
 
     console.log(`[TEST] 7/7 — État final (${MODE})`);

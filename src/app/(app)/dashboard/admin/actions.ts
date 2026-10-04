@@ -166,15 +166,23 @@ export async function basculerFaille(
     return { error: "Faille introuvable." };
   }
 
+  // Garde-fou anti-hallucination : une réactivation (→ ACTIVE) passe par le
+  // même contrôle que la validation de proposition (règle dégagée + template).
+  const devientActive = faille.statut !== "ACTIVE";
+  if (devientActive) {
+    const bloque = messageActivationBloquee(faille);
+    if (bloque) return { error: bloque };
+  }
+
   await prisma.failleJuridique.update({
     where: { id },
     data: {
-      statut: faille.statut === "ACTIVE" ? "INACTIVE" : "ACTIVE",
+      statut: devientActive ? "ACTIVE" : "INACTIVE",
     },
   });
 
   revalidatePath("/dashboard/juriste/failles");
-  return { ok: true, statut: faille.statut === "ACTIVE" ? "INACTIVE" : "ACTIVE" };
+  return { ok: true, statut: devientActive ? "ACTIVE" : "INACTIVE" };
 }
 
 /**

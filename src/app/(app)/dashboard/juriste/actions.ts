@@ -49,6 +49,7 @@ function isDemoId(id: string): boolean {
  * recommandée (envoyée par SOS Amende).
  */
 export async function soumettreEtMarquerEnvoye(dossierId: string) {
+  await requireJuristeRedacteur();
   const dossier = await prisma.dossier.findUnique({
     where: { id: dossierId },
     include: {

@@ -49,6 +49,45 @@ if (MODE === 'base') {
 const estBase = () => MODE === 'base';
 
 /* ========================================================================
+ * Sécurité (mode BASE uniquement — le module touche à la vraie base) :
+ * toutes les routes API exigent le header `x-recours-secret` égal à
+ * RECOURS_MODULE_SECRET (comparaison à temps constant). Sans secret au
+ * démarrage, les routes restent verrouillées (401). Le mode démo (aucune
+ * donnée réelle) reste ouvert pour les demonstrations.
+ * ====================================================================== */
+
+const SECRET = String(process.env.RECOURS_MODULE_SECRET || '');
+
+function secretValide(req) {
+  if (!SECRET) return false;
+  const fourni = String(req.get('x-recours-secret') || '');
+  const a = Buffer.from(fourni);
+  const b = Buffer.from(SECRET);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function gardeApi(req, res) {
+  if (!estBase()) return true;
+  if (secretValide(req)) return true;
+  res.status(401).json({ error: 'Header x-recours-secret requis (RECOURS_MODULE_SECRET).' });
+  return false;
+}
+
+if (estBase() && !SECRET) {
+  console.warn('[SEC] RECOURS_MODULE_SECRET absent — routes API verrouillées (401).');
+}
+
+/** Échappement HTML (anti-XSS : nom, plaque, faille, n° d'avis saisis par le client). */
+function htmlEscape(v) {
+  return String(v ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/* ========================================================================
  * Dossiers simulés (mode démo purement)
  * ====================================================================== */
 
@@ -196,9 +235,9 @@ async function notifierChangement(client, statutLabel, texte) {
   const html = `
     <div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto">
       <h2>SOS Amende — Suivi de votre contestation</h2>
-      <p>Bonjour ${client.nom},</p>
-      <p>${texte}</p>
-      <p style="color:#64748b;font-size:12px">Statut : ${statutLabel}.</p>
+      <p>Bonjour ${htmlEscape(client.nom)},</p>
+      <p>${htmlEscape(texte)}</p>
+      <p style="color:#64748b;font-size:12px">Statut : ${htmlEscape(statutLabel)}.</p>
       <p style="color:#64748b;font-size:12px">Simulation de démonstration — aucun envoi réel.</p>
     </div>`;
   await sendEmail(client.email, `SOS Amende — ${statutLabel}`, html);
@@ -230,6 +269,7 @@ function libelleDecision(decision) {
     : 'Votre contestation a été rejetée. Un courrier de l’OMP précise les suites.';
 }
 
+/** Tirage de démonstration — JAMAIS utilisé en mode base (voir avancerDossierReel). */
 function tirageDecision() {
   return Math.random() < 0.5 ? 'ACCEPTE' : 'REJETE';
 }
@@ -277,6 +317,13 @@ async function avancerDossierReel(dossierId) {
   const vue = vueDossierReel(dossier);
 
   if (etape === 'DECISION') {
+    if (estBase()) {
+      // Garde-fou anti-hallucination : en mode réel, le module N'INVENTE
+      // jamais de décision — on attend le retour officiel (cron
+      // /api/cron/recuperations-decisions ou saisie manuelle du juriste).
+      console.log(`[WORKER] ${dossierId} → DECISION en attente (aucune écriture, mode base)`);
+      return { statut: 'ENVOYE', suivi: 'DECISION', enAttenteReelle: true };
+    }
     const decision = tirageDecision();
     await ecrireEtapeReel(dossierId, etape, decision);
     console.log(`[EVENT] ${dossierId} → Décision OMP : ${decision}`);
@@ -356,8 +403,9 @@ const app = express();
 app.use(express.json());
 
 /* ---- Index ---- */
-app.get('/', async (_req, res) => {
+app.get('/', async (req, res) => {
   const infos = { demo: 'SOS Amende — Envoi & suivi des contestations', mode: MODE, simulation: true };
+  if (estBase() && !secretValide(req)) return res.json(infos);
   if (estBase()) {
     const c = await pool.query('select count(*)::int as n from "Dossier"');
     infos.dossiersReels = c.rows[0].n;
@@ -381,6 +429,7 @@ app.get('/', async (_req, res) => {
  * ====================================================================== */
 
 app.post('/api/recours/valider', async (req, res) => {
+  if (!gardeApi(req, res)) return;
   const { dossierId, juriste } = req.body || {};
   if (!dossierId) return res.status(400).json({ error: 'dossierId requis' });
 
@@ -417,9 +466,9 @@ app.post('/api/recours/valider', async (req, res) => {
   const html = `
     <div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto">
       <h2>SOS Amende — Finalisez votre contestation</h2>
-      <p>Bonjour ${client.nom},</p>
-      <p>Votre dossier <strong>${dossierId}</strong> a été validé par notre juriste
-         (faille retenue : ${faille}).</p>
+      <p>Bonjour ${htmlEscape(client.nom)},</p>
+      <p>Votre dossier <strong>${htmlEscape(dossierId)}</strong> a été validé par notre juriste
+         (faille retenue : ${htmlEscape(faille)}).</p>
       <p>Il ne reste qu’une étape de votre côté : ouvrir le portail officiel et
          déposer. Nous avons préparé tous les documents. Lien valable <strong>7 jours</strong> :</p>
       <p style="text-align:center">
@@ -515,22 +564,22 @@ function pageFinaliser(dossier) {
 <body>
 <header>
   <h1>SOS Amende — Finalisation de votre contestation</h1>
-  <p>Dossier ${dossier.id} · ${dossier.platformLabel}</p>
+  <p>Dossier ${htmlEscape(dossier.id)} · ${htmlEscape(dossier.platformLabel)}</p>
 </header>
 <div class="banner">Simulation de démonstration — aucun envoi réel vers l’administration.</div>
 <main>
   <div class="card">
     <span class="badge">Lettre préparée par notre juriste</span>
-    <p style="font-size:14px;margin:8px 0 0">Faille retenue : <strong>${dossier.faille}</strong>.</p>
+    <p style="font-size:14px;margin:8px 0 0">Faille retenue : <strong>${htmlEscape(dossier.faille)}</strong>.</p>
   </div>
 
   <div class="card">
     <h3 style="margin:0 0 4px">Vos identifiants de dépôt</h3>
     <div class="avis-box">
-      <code id="avis">${dossier.numAvis}</code>
+      <code id="avis" data-num-avis="${htmlEscape(dossier.numAvis)}">${htmlEscape(dossier.numAvis)}</code>
       <button class="ghost" id="copyBtn">Copier</button>
     </div>
-    <p style="font-size:14px;margin:4px 0 8px">Véhicule : <strong>${dossier.plaque}</strong></p>
+    <p style="font-size:14px;margin:4px 0 8px">Véhicule : <strong>${htmlEscape(dossier.plaque)}</strong></p>
     <p style="font-size:12px;color:#64748b;margin:2px 0 10px">Déjà copié automatiquement dans le presse-papiers.</p>
     <a class="btn" href="${portailUrl}" target="_blank" rel="noopener noreferrer">${etapesBouton}</a>
     ${consignation}
@@ -564,15 +613,15 @@ function pageFinaliser(dossier) {
 
 <script>
   const token = new URLSearchParams(location.search).get('token');
-  const d = [${JSON.stringify({ id: dossier.id, numAvis: dossier.numAvis })}][0];
+  const numAvis = document.getElementById('avis').dataset.numAvis || '';
 
   async function copyAvis() {
     try {
-      await navigator.clipboard.writeText(d.numAvis);
+      await navigator.clipboard.writeText(numAvis);
       document.getElementById('copyBtn').textContent = 'Copié ✓';
     } catch {
       const ta = document.createElement('textarea');
-      ta.value = d.numAvis; document.body.appendChild(ta); ta.select();
+      ta.value = numAvis; document.body.appendChild(ta); ta.select();
       document.execCommand('copy'); ta.remove();
       document.getElementById('copyBtn').textContent = 'Copié ✓';
     }
@@ -639,21 +688,33 @@ app.post('/api/recours/depose', async (req, res) => {
   if (estBase()) {
     const dossier = await chargerDossierReel(entry.dossierId);
     if (!dossier) return res.status(404).json({ error: 'Dossier introuvable.' });
-    if (dossier.statut !== 'EN_ATTENTE_CLIENT' && dossier.statut !== 'PRET' && dossier.statut !== 'ENVOYE') {
+    if (dossier.statut !== 'PRET' && dossier.statut !== 'ENVOYE') {
       return res.status(409).json({ error: `Dossier au statut ${dossier.statut}` });
     }
     const platform = dossier.type === 'SUSPENSION' ? 'TELERECOURS' : 'ANTAI';
-    await pool.query(
-      `UPDATE "Dossier" SET statut='ENVOYE', "canalEnvoi"=$2, "updatedAt"=now() WHERE id=$1`,
-      [dossier.id, platform],
+    // Le canal n'est jamais forcé : un dossier basculé en lettre recommandée
+    // après l'envoi du lien n'est pas déposable en ligne par ce module.
+    if (dossier.canalEnvoi === 'LRAR') {
+      return res.status(409).json({ error: 'Dossier basculé en lettre recommandée — dépôt en ligne impossible.' });
+    }
+    const canal = dossier.canalEnvoi || platform;
+    // Verrou conditionnel : la transition est appliquée seulement si le
+    // dossier est encore dans un statut déposable (anti double-clic/TOCTOU).
+    const maj = await pool.query(
+      `UPDATE "Dossier" SET statut='ENVOYE', "canalEnvoi"=$2, "updatedAt"=now()
+       WHERE id=$1 AND statut IN ('PRET','ENVOYE')`,
+      [dossier.id, canal],
     );
+    if (maj.rowCount === 0) {
+      return res.status(409).json({ error: 'Statut du dossier modifié — dépôt non enregistré.' });
+    }
     await pool.query(
       `INSERT INTO "DossierEvent" (id, "dossierId", type, detail, "createdAt") VALUES ($1, $2, 'ENVOI', $3, now())`,
       [crypto.randomUUID(), dossier.id, `${MARQUEUR} Contestation déposée par le client — suivi activé`],
     );
     suivisRecours.add(dossier.id);
     etapesSuivi.set(dossier.id, 'RECU_PAR_LE_SERVICE');
-    console.log(`[EVENT] ${dossier.id} → ENVOYE (${platform}), suivi activé`);
+    console.log(`[EVENT] ${dossier.id} → ENVOYE (${canal}), suivi activé`);
     const vue = vueDossierReel(dossier);
     await notifierChangement(vue.client, libelleSuivi('RECU_PAR_LE_SERVICE'), 'Votre contestation a été déposée. SOS Amende suit maintenant le dossier automatiquement.');
     return res.json({ ok: true, dossierId: dossier.id, suivi: 'RECU_PAR_LE_SERVICE' });
@@ -674,6 +735,7 @@ app.post('/api/recours/depose', async (req, res) => {
 
 /* ---- Lettre / pièces (base : vraie lettre ; démo : texte) ---- */
 app.get('/api/recours/lettre/:dossierId', async (req, res) => {
+  if (!gardeApi(req, res)) return;
   const type = req.query.type || 'lettre';
   let contenu;
   let nom;
@@ -709,6 +771,7 @@ app.get('/api/recours/lettre/:dossierId', async (req, res) => {
 
 /* ---- Accélération de la démo (avance manuelle d’une étape) ---- */
 app.post('/api/recours/forcer', async (req, res) => {
+  if (!gardeApi(req, res)) return;
   const { dossierId } = req.body || {};
 
   if (estBase()) {
@@ -737,7 +800,8 @@ app.post('/api/recours/forcer', async (req, res) => {
 });
 
 /* ---- État des dossiers (démo ou vrais suivis par le module) ---- */
-app.get('/api/recours/dossiers', async (_req, res) => {
+app.get('/api/recours/dossiers', async (req, res) => {
+  if (!gardeApi(req, res)) return;
   if (estBase()) {
     const r = await pool.query(
       `SELECT d.id, d.type, u.email, d.statut, d."decisionOmp", (

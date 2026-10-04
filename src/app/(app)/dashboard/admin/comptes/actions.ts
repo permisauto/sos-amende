@@ -62,6 +62,7 @@ export async function creerCompteJuriste(
 
 /** Liste des comptes juristes et administrateurs (lecture super admin). */
 export async function listerComptesInternes() {
+  await requireAdmin();
   return prisma.user.findMany({
     where: { role: { in: ["JURISTE", "ADMIN"] } },
     orderBy: { createdAt: "asc" },
