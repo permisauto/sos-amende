@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { chercherRappels, chercherRappelsPreuves } from "@/lib/rappels";
+import { purgerLiensDepotExpires } from "@/lib/lien-depot";
 
 /**
  * Endpoint de rappels (deadline manager + relance des pièces manquantes).
@@ -23,12 +24,16 @@ export async function GET(req: Request) {
 
   const rappels = await chercherRappels();
   const rappelsPreuves = await chercherRappelsPreuves();
+  // RGPD : purge des liens de dépôt expirés depuis plus de 30 jours
+  // (meilleur effort — une erreur de purge ne doit pas casser les rappels).
+  const liensPurges = await purgerLiensDepotExpires().catch(() => 0);
   return NextResponse.json({
     ok: true,
     rappels: rappels.length,
     details: rappels,
     rappelsPreuves: rappelsPreuves.length,
     detailsPreuves: rappelsPreuves,
+    liensDepotPurges: liensPurges,
   });
 }
 

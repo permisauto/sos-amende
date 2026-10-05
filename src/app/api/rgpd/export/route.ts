@@ -3,9 +3,10 @@ import { requireUser } from "@/lib/dal";
 
 /**
  * Portabilité des données (RGPD, art. 20) : export JSON des données
- * personnelles de l'utilisateur connecté (profil, dossiers, paiements,
- * mises en relation avocat, rappels). Champs internes exclus : passwordHash,
- * jetons next-auth.
+ * personnelles de l'utilisateur connecté (profil + signature, dossiers avec
+ * texte OCR brut, paiements avec preuve de virement, mises en relation
+ * avocat, rappels, messages). Champs internes exclus : passwordHash, jetons
+ * next-auth, tokens de dépôt (hachés).
  */
 export async function GET() {
   const user = await requireUser();
@@ -62,6 +63,7 @@ export async function GET() {
       nom: user.name,
       role: user.role,
       credits: user.credits,
+      signatureUrl: user.signatureUrl ?? null,
     },
     dossiers: dossiers.map((d) => ({
       id: d.id,
@@ -69,7 +71,11 @@ export async function GET() {
       statut: d.statut,
       prix: d.prix.toString(),
       pvUrl: d.pvUrl,
+      pvTexte: d.pvTexte,
       extractedData: d.extractedData,
+      numeroDepot: d.numeroDepot,
+      canalEnvoi: d.canalEnvoi,
+      valideLe: d.valideLe,
       faille: d.failleJuridique
         ? { titre: d.failleJuridique.titreFaille, article: d.failleJuridique.articleLoi }
         : null,
@@ -110,6 +116,9 @@ export async function GET() {
       amount: p.amount.toString(),
       currency: p.currency,
       status: p.status,
+      preuveUrl: p.preuveUrl,
+      preuveNom: p.preuveNom,
+      preuveUploadedAt: p.preuveUploadedAt,
       createdAt: p.createdAt,
     })),
     misesEnRelationAvocat: matches.map((m) => ({

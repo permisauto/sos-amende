@@ -7,7 +7,7 @@ export const metadata: Metadata = {
 
 export default function ConfidentialitePage() {
   return (
-    <LegalPage title="Politique de confidentialité" updatedAt="11 septembre 2026">
+    <LegalPage title="Politique de confidentialité" updatedAt="5 octobre 2026">
       <h2 className="text-lg font-semibold text-zinc-900">1. Responsable du traitement</h2>
       <p>
         SOS Amende est un service édité par DIXIT LLC (30 N Gould St, Ste R,
@@ -23,9 +23,10 @@ export default function ConfidentialitePage() {
         Dossiers : identité et coordonnées (nom, prénom, e-mail, adresse),
         numéro de téléphone (facultatif), le contenu de l'avis de contravention ou
         de la décision transmis (numéro de PV, plaque d'immatriculation, date,
-        montant), les pièces jointes versées au Dossier, ainsi que les données de
-        paiement (traitées par le prestataire de paiement, jamais conservées par
-        SOS Amende).
+        montant), les pièces jointes versées au Dossier, ainsi que la preuve de
+        virement téléversée lors du paiement (conservée 10 ans au titre des
+        obligations comptables — aucune donnée de carte bancaire n'est traitée ni
+        conservée, le paiement se fait par virement).
       </p>
       <p>
         Ces données revêtent un caractère sensible et font l'objet de mesures de
@@ -74,14 +75,27 @@ export default function ConfidentialitePage() {
         besoins de leur mission :
       </p>
       <ul className="list-disc space-y-1 pl-5">
-        <li>Hébergement du service : Hostinger ;</li>
+        <li>Hébergement de l'application : Vercel ;</li>
+        <li>Base de données (comptes, dossiers, paiements) : Supabase
+          (PostgreSQL, hébergement Union européenne) ;</li>
         <li>Envoi des e-mails (liens de connexion, notifications) : Resend ;</li>
-        <li>Fichiers des pièces (PV, signatures, PDF) : stockage sécurisé local ou S3-compatible.</li>
+        <li>Fichiers des pièces (PV, signatures, PDF, preuves de virement) :
+          stockage S3-compatible hébergé dans l'Union européenne ;</li>
+        <li>Lecture automatique du document transmis (OCR, uniquement si
+          activée) : Google Vision API ou Mistral AI — ces prestataires
+          reçoivent l'image du document pour l'analyser ;</li>
+        <li>Géolocalisation de l'adresse d'infraction (pièces externes) :
+          API Adresse de l'État français (BAN) ;</li>
+        <li>Relevés météo des pièces (coordonnées du lieu) : Open-Meteo ;</li>
+        <li>Veille juridique (Journal officiel uniquement, données publiques,
+          aucune donnée personnelle) : Groq.</li>
       </ul>
       <p>
         Conformément au RGPD, ces sous-traitants font l'objet d'accords encadrant
         le traitement des données et respectent les garanties prévues par le
-        règlement.
+        règlement. Certains sont établis hors de l'Union européenne : les
+        transferts correspondants sont encadrés par les clauses contractuelles
+        types de la Commission européenne.
       </p>
 
       <h2 className="text-lg font-semibold text-zinc-900">7. Délégué à la protection des données</h2>

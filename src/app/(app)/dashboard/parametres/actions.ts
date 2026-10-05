@@ -57,6 +57,9 @@ export async function changerMotDePasse(
  * Effacement RGPD (art. 17) : supprime le compte, tous les dossiers,
  * paiements, mises en relation et fichiers associés (cascade Prisma + pièces
  * stockées localement/S3, best-effort), puis déconnecte l'utilisateur.
+ * Fichiers couverts : PV, preuves, courriers, signature de profil,
+ * preuves de virement (Payment.preuveUrl) — pas seulement les fichiers de
+ * dossier, sinon il reste des orphelins en stockage.
  */
 export async function supprimerCompte(
   _prev: SuppressionState,
@@ -68,12 +71,21 @@ export async function supprimerCompte(
     return { error: "Veuillez cocher la confirmation de suppression." };
   }
 
-  const dossiers = await prisma.dossier.findMany({
-    where: { userId: user.id },
-    include: { courriers: true, preuves: true },
-  });
+  const [dossiers, paiements] = await Promise.all([
+    prisma.dossier.findMany({
+      where: { userId: user.id },
+      include: { courriers: true, preuves: true },
+    }),
+    prisma.payment.findMany({
+      where: { userId: user.id },
+      select: { preuveUrl: true },
+    }),
+  ]);
 
-  const fichiers: (string | null | undefined)[] = [];
+  const fichiers: (string | null | undefined)[] = [user.signatureUrl];
+  for (const p of paiements) {
+    fichiers.push(p.preuveUrl);
+  }
   for (const d of dossiers) {
     fichiers.push(d.pvUrl);
     for (const p of d.preuves) {

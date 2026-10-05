@@ -6,6 +6,27 @@ import { notifierLienDepot, notifierStatut } from "@/lib/notifications";
 /** Validité du lien de dépôt assisté envoyé au client (7 jours). */
 export const LIEN_DEPOT_DUREE_JOURS = 7;
 
+/**
+ * RGPD (minimisation de la conservation) : les liens expirés sont conservés
+ * 30 jours après leur expiration (trace de support : « mon lien ne marche
+ * plus ») puis purgés de la base par `purgerLiensDepotExpires` (cron rappels).
+ * Seul le hash y figure — mais il n'a plus aucune utilité une fois expiré.
+ */
+export const LIEN_DEPOT_PURGE_JOURS = 30;
+
+/** Seuil de purge : tout lien expiré depuis plus de `LIEN_DEPOT_PURGE_JOURS`. */
+export function dateSeuilPurgeLiens(now: Date): Date {
+  return new Date(now.getTime() - LIEN_DEPOT_PURGE_JOURS * 24 * 60 * 60 * 1000);
+}
+
+/** Supprime les liens de dépôt expirés depuis plus de 30 jours. Retourne le nombre purgé. */
+export async function purgerLiensDepotExpires(now: Date = new Date()): Promise<number> {
+  const res = await prisma.lienDepot.deleteMany({
+    where: { expireLe: { lt: dateSeuilPurgeLiens(now) } },
+  });
+  return res.count;
+}
+
 /** Canaux en ligne concernés par le dépôt assisté (jamais LRAR). */
 export type CanalDepotEnLigne = "ANTAI" | "TELERECOURS";
 

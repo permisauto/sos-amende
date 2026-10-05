@@ -6,6 +6,7 @@ vi.mock("@/lib/prisma", () => ({
       upsert: vi.fn(),
       findUnique: vi.fn(),
       update: vi.fn(),
+      deleteMany: vi.fn(),
     },
     dossier: { update: vi.fn() },
     dossierEvent: { create: vi.fn() },
@@ -23,11 +24,14 @@ import { prisma } from "./prisma";
 import { notifierLienDepot, notifierStatut } from "./notifications";
 import {
   LIEN_DEPOT_DUREE_JOURS,
+  LIEN_DEPOT_PURGE_JOURS,
   activerDepotEnLigne,
   confirmerDepotSurPortail,
   creerLienDepot,
+  dateSeuilPurgeLiens,
   hashToken,
   peutActiverDepotEnLigne,
+  purgerLiensDepotExpires,
   verifierLienDepot,
 } from "./lien-depot";
 
@@ -310,5 +314,26 @@ describe("activerDepotEnLigne", () => {
     expect(opts.dossierId).toBe("dossier-1");
     expect(opts.url).toContain("/recours/finaliser?token=");
     expect(res?.url).toContain("/recours/finaliser?token=");
+  });
+});
+
+describe("purge RGPD des liens expirés", () => {
+  it("dateSeuilPurgeLiens recule de LIEN_DEPOT_PURGE_JOURS (30 j)", () => {
+    const now = new Date("2026-10-05T12:00:00Z");
+    const seuil = dateSeuilPurgeLiens(now);
+    expect(LIEN_DEPOT_PURGE_JOURS).toBe(30);
+    expect(seuil.toISOString()).toBe("2026-09-05T12:00:00.000Z");
+  });
+
+  it("purgerLiensDepotExpires supprime les liens expirés avant le seuil et retourne le compte", async () => {
+    (prisma.lienDepot.deleteMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 3 });
+
+    const now = new Date("2026-10-05T12:00:00Z");
+    const nb = await purgerLiensDepotExpires(now);
+
+    expect(nb).toBe(3);
+    expect(prisma.lienDepot.deleteMany).toHaveBeenCalledWith({
+      where: { expireLe: { lt: dateSeuilPurgeLiens(now) } },
+    });
   });
 });
