@@ -26,6 +26,10 @@ import type { JurisprudenceRef } from "@/lib/catalogue-sources";
  */
 
 /** Échantillons simulés utilisés par la démo (aucun upload requis). */
+// La démo peut appeler l'OCR local (mock/tesseract) : marge alignée sur le
+// watchdog OCR de la page de dépôt (OCR_TIMEOUT_MS = 20 s).
+export const maxDuration = 30;
+
 const ECHANTILLONS: Record<"AMENDE" | "SUSPENSION", string> = {
   AMENDE: `CONTRAVENTION
 N° 123456789

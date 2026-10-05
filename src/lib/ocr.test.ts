@@ -11,8 +11,13 @@ Montant : 135 €
 N° de télé-paiement 123456789, clé 02`;
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   delete process.env.OCR_PROVIDER;
   delete process.env.GOOGLE_VISION_KEY;
+  delete process.env.GEMINI_API_KEY;
+  delete process.env.MISTRAL_API_KEY;
+  delete process.env.OCR_TIMEOUT_MS;
+  delete process.env.OCR_HTTP_TIMEOUT_MS;
 });
 
 describe("normaliserPv", () => {
@@ -370,4 +375,109 @@ describe("extrairePv — Google Vision (log, retry, erreur cachée dans le corps
     expect(res).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });
+});
+
+describe("normaliserPv — dates : toutes lettres, ISO, validation", () => {
+  it("date en toutes lettres → ISO", () => {
+    expect(normaliserPv("infraction commise le 1er juillet 2026").date).toBe(
+      "2026-07-01",
+    );
+    expect(normaliserPv("PV établi le 15 févr. 2026").date).toBe("2026-02-15");
+  });
+
+  it("date ISO déjà formatée (sortie Gemini)", () => {
+    expect(normaliserPv("Date : 2026-07-01").date).toBe("2026-07-01");
+  });
+
+  it("date impossible (mois 45) → absente, jamais fabriquée", () => {
+    expect(normaliserPv("infraction commise le 13/45/2026").date).toBeUndefined();
+  });
+});
+
+describe("normaliserPv — n° d'avis contextuel", () => {
+  it("privilégie le n° d'avis au n° de télépaiement", () => {
+    const out = normaliserPv(
+      `Règlement par télépaiement n° 99887766554433
+Avis de contravention n° 37592048152634 en date du 01/07/2026`,
+    );
+    expect(out.num_pv).toBe("37592048152634");
+  });
+
+  it("n° près de « n° d'avis » sans libellé « avis de contravention »", () => {
+    const out = normaliserPv("N° d'avis: 45678912345678\nMontant : 135 €");
+    expect(out.num_pv).toBe("45678912345678");
+  });
+
+  it("conserve le repli historique (groupe de chiffres)", () => {
+    const out = normaliserPv("CONTRAVENTION\n9876 543 210\n01/07/2026");
+    expect(out.num_pv).toBe("9876543210");
+  });
+});
+
+describe("normaliserPv — télépaiement", () => {
+  it("extrait numéro et clé près du libellé", () => {
+    const out = normaliserPv(PV_TEXTE);
+    expect(out.numTelePaiement).toBe("123456789");
+    expect(out.cle).toBe("02");
+  });
+
+  it("ne fabrique ni numéro ni clé sans libellé", () => {
+    const out = normaliserPv("CONTRAVENTION\nN° 123456789\nMontant : 135 €");
+    expect(out.numTelePaiement).toBeUndefined();
+    expect(out.cle).toBeUndefined();
+  });
+});
+
+describe("normaliserPv — plaques (confusions d'OCR)", () => {
+  it("répare 0/O et 1/I en contexte véhicule", () => {
+    expect(normaliserPv("Véhicule : AB-I23-CD\n01/07/2026").plaque).toBe(
+      "AB-123-CD",
+    );
+    expect(normaliserPv("Véhicule : AB-123-C0\n01/07/2026").plaque).toBe(
+      "AB-123-CO",
+    );
+    expect(normaliserPv("Véhicule immatriculé I234 AB 75\n01/07/2026").plaque).toBe(
+      "1234-AB-75",
+    );
+  });
+
+  it("ne cherche pas de plaque sans contexte véhicule", () => {
+    expect(normaliserPv("Contrôle à 12h30 le 01/07/2026").plaque).toBeUndefined();
+  });
+});
+
+describe("extrairePv — garde-fous temporels", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.OCR_PROVIDER;
+    delete process.env.GOOGLE_VISION_KEY;
+    delete process.env.OCR_TIMEOUT_MS;
+    delete process.env.OCR_HTTP_TIMEOUT_MS;
+  });
+
+  it("watchdog : rend null quand l'OCR dépasse OCR_TIMEOUT_MS", async () => {
+    process.env.OCR_PROVIDER = "google-vision";
+    process.env.GOOGLE_VISION_KEY = "cle-test";
+    process.env.OCR_TIMEOUT_MS = "30";
+    process.env.OCR_HTTP_TIMEOUT_MS = "200";
+    vi.stubGlobal("fetch", () => new Promise(() => {})); // pend à vie
+
+    const t = Date.now();
+    await expect(extrairePv(PNG_1PX)).resolves.toBeNull();
+    expect(Date.now() - t).toBeLessThan(2_000);
+  });
+
+  it("timeout HTTP → 504 transitoire → 3 tentatives puis null", async () => {
+    process.env.OCR_PROVIDER = "google-vision";
+    process.env.GOOGLE_VISION_KEY = "cle-test";
+    const fetchMock = vi.fn(async () => {
+      const err = new Error("The operation was aborted due to timeout");
+      err.name = "TimeoutError";
+      throw err;
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(extrairePv(PNG_1PX)).resolves.toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  }, 15_000);
 });

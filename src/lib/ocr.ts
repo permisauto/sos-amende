@@ -40,12 +40,48 @@ export function getOcrProvider(): OcrProvider {
  * PDF **en local** (pdf-parse) et, à défaut, on en extrait les images
  * intégrées (scan) pour les passer à l'OCR image. Gemini garde son propre
  * chemin Files API.
+ *
+ * Garde-fous temporalité : un OCR qui pend ne doit JAMAIS faire échouer le
+ * dépôt du dossier — watchdog global (`OCR_TIMEOUT_MS`) + délai par requête
+ * HTTP (`OCR_HTTP_TIMEOUT_MS`), voir `createDossier` (dossier créé avant OCR).
  */
+const OCR_TIMEOUT_MS_DEFAUT = 20_000;
+const OCR_HTTP_TIMEOUT_MS_DEFAUT = 10_000;
+
+function delaiOcr(env: string | undefined, defaut: number): number {
+  return env && /^\d+$/.test(env) ? Number(env) : defaut;
+}
+
+/** Délai global d'un cycle OCR (API, pdf-parse, tesseract) : passé, on rend
+ * null et le client saisit à la main — jamais d'exception, jamais de hang. */
 export async function extrairePv(buffer: Buffer): Promise<OcrResult | null> {
   const provider = getOcrProvider();
   if (provider === "mock") return mockOcr();
   if (provider === "aucun") return null;
 
+  const delai = delaiOcr(process.env.OCR_TIMEOUT_MS, OCR_TIMEOUT_MS_DEFAUT);
+  let minuteur: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      extrairePvSelonFormat(buffer, provider),
+      new Promise<null>((resolve) => {
+        minuteur = setTimeout(() => {
+          console.error(
+            JSON.stringify({ evt: "ocr:timeout", provider, ms: delai }),
+          );
+          resolve(null);
+        }, delai);
+      }),
+    ]);
+  } finally {
+    clearTimeout(minuteur);
+  }
+}
+
+async function extrairePvSelonFormat(
+  buffer: Buffer,
+  provider: OcrProvider,
+): Promise<OcrResult | null> {
   if (detecterMime(buffer) === "application/pdf") {
     if (provider === "gemini-flash") return geminiFlashOcr(buffer);
     return lirePdfAvecProvider(buffer, provider);
@@ -56,6 +92,33 @@ export async function extrairePv(buffer: Buffer): Promise<OcrResult | null> {
   if (provider === "mistral-ocr") return mistralOcr(buffer);
   if (provider === "tesseract") return tesseractOcr(buffer);
   return null;
+}
+
+/**
+ * `fetch` borné (`AbortSignal.timeout`) : une API qui ne répond pas est
+ * coupée après `OCR_HTTP_TIMEOUT_MS` au lieu de faire attendre la server
+ * action jusqu'au kill plateforme. L'expiration est convertie en
+ * `ErreurHttp(504)` — transitoire, donc gérée par le retry existant.
+ */
+function fetchOcr(url: string, init: RequestInit = {}): Promise<Response> {
+  const delai = delaiOcr(
+    process.env.OCR_HTTP_TIMEOUT_MS,
+    OCR_HTTP_TIMEOUT_MS_DEFAUT,
+  );
+  return (async () => {
+    try {
+      return await fetch(url, {
+        ...init,
+        signal: AbortSignal.timeout(delai),
+      });
+    } catch (err) {
+      const nom = err instanceof Error ? err.name : "";
+      if (nom === "TimeoutError" || nom === "AbortError") {
+        throw new ErreurHttp(504, `délai OCR dépassé (${delai} ms)`);
+      }
+      throw err;
+    }
+  })();
 }
 
 /** Seuil sous lequel on considère qu'un PDF n'a pas de couche texte exploitable. */
@@ -260,7 +323,7 @@ async function geminiFlashOcrUnEssai(buffer: Buffer): Promise<OcrResult | null> 
       ];
     }
 
-    const res = await fetch(
+    const res = await fetchOcr(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
       {
         method: "POST",
@@ -373,7 +436,7 @@ const PROMPT_EXTRACTION_JSON = `Lis cet avis de contravention (ou cette décisio
 async function geminiUploadFile(buffer: Buffer, mime: string): Promise<string | null> {
   const key = process.env.GEMINI_API_KEY ?? "";
   // Étape 1 — start : ouvre une session de téléversement, récupère l'URL dédiée.
-  const start = await fetch(`https://generativelanguage.googleapis.com/upload/v1beta/files?key=${key}`, {
+  const start = await fetchOcr(`https://generativelanguage.googleapis.com/upload/v1beta/files?key=${key}`, {
     method: "POST",
     headers: {
       "X-Goog-Upload-Protocol": "resumable",
@@ -398,7 +461,7 @@ async function geminiUploadFile(buffer: Buffer, mime: string): Promise<string | 
   }
 
   // Étape 2 — upload + finalize : pousse les octets du fichier.
-  const upload = await fetch(uploadUrl, {
+  const upload = await fetchOcr(uploadUrl, {
     method: "PUT",
     headers: {
       "X-Goog-Upload-Command": "upload, finalize",
@@ -454,7 +517,7 @@ async function googleVisionOcrUnEssai(buffer: Buffer): Promise<OcrResult | null>
     return null;
   }
 
-  const res = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${process.env.GOOGLE_VISION_KEY}`, {
+  const res = await fetchOcr(`https://vision.googleapis.com/v1/images:annotate?key=${process.env.GOOGLE_VISION_KEY}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     cache: "no-store",
@@ -512,7 +575,7 @@ async function mistralOcr(buffer: Buffer): Promise<OcrResult | null> {
   }
   try {
     const dataUrl = `data:${mime};base64,${buffer.toString("base64")}`;
-    const res = await fetch("https://api.mistral.ai/v1/ocr", {
+    const res = await fetchOcr("https://api.mistral.ai/v1/ocr", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -583,21 +646,69 @@ N° de télé-paiement 123456789, clé 02`,
   };
 }
 
-const DATE_RE = /(\d{2}[\/-]\d{2}[\/-]\d{2,4})/;
+/** Date slashes/barres, jamais à l'intérieur d'une date ISO
+ * (« 2026-07-01 » ne doit pas être lu en « 26-07-01 »). */
+const DATE_RE = /(?<!\d)(\d{2}[\/-]\d{2}[\/-]\d{2,4})/;
+/** Date en toutes lettres : « 1er juillet 2026 », « 15 déc. 2026 ». */
+const DATE_TEXTUELLE_RE = /\b(\d{1,2})(?:er|\.)?\s+([A-Za-zÀ-ÿ]{3,9})\.?\s+(\d{4})\b/;
+/** Date ISO déjà formatée par certains OCR (Gemini le demande explicitement). */
+const DATE_ISO_RE = /\b(\d{4})-(\d{2})-(\d{2})\b/;
 const HEURE_RE = /(\d{1,2})[hH:.](\d{2})/;
 const MONTANT_RE = /(\d{1,3}(?:[\s.]\d{3})*(?:[,.]\d{2})?)\s*(?:€|euros?)/i;
 const NUM_RE = /(\d{3,4}[\s-]?\d{3,4}[\s-]?\d{3,4})/;
+/** Numéro près d'un libellé d'avis (« N° d'avis… ») — évite de capter un
+ * montant, une date ou le n° de télépaiement. */
+const NUM_AVIS_RE = /\b(?:n[°º]\s*d['’]?\s*avis|avis(?:\s+de\s+contravention)?\s+n[°º]|proc(?:è|e)s-verbal\s+n[°º])\s*[^\d]{0,30}(\d[\d\s.-]{7,18}\d)/i;
+/** Télépaiement : numéro de paiement en ligne (2 formats : groupé ou avec
+ * espaces, le nom n° 1234567890123). */
+const TELEPAIEMENT_RE = /t[ée]l[ée]?[-\s]?paiement\s*(?:n[°º])?\s*[^\d]{0,15}(\d[\d\s-]{7,18}\d)/i;
+/** Clé de télépaiement (1 à 2 chiffres) — jamais extraite ailleurs. */
+const CLE_TELEPAIEMENT_RE = /\bcl[ée]\s*[:\-]?\s*(\d{1,2})\b/i;
 
 /** Plaque SIV moderne : AB-123-CD (séparateurs espace ou tiret). */
 const PLAQUE_SIV_RE = /\b[A-Z]{2,3}[\s-]\d{2,4}[\s-][A-Z]{2}\b/;
 /** Plaque FNI (ancien format) : 1234 AB 75. */
 const PLAQUE_FNI_RE = /\b\d{2,4}[\s-][A-Z]{1,2}[\s-]\d{2,3}\b/;
+/** Passage permissif : 3 segments libres (lettres ou chiffres) — sert à
+ * réparer les confusions d'OCR (0↔O, 1↔I) en contexte véhicule. */
+const PLAQUE_PERMISE_RE = /\b([A-Z0-9]{2,4})[\s-]([A-Z0-9]{2,4})[\s-]([A-Z0-9]{2,3})\b/;
 /** Adresse : tolérant — numéro + rue/bd/av/... + code postal + ville (1 ou 2 lignes). */
 const ADRESSE_RE = /\b\d{1,4}\s+(?:rue|avenue|av\.?|boulevard|bd|chemin|impasse|all[eé]e|place|route|quai)[^\n]{0,80}\b\d{5}\s+[A-Za-zÉÈÀÂÊÎÔÛÇéèàâêîôûç\- ]{2,40}/i;
 const ADRESSE_FALLBACK_RE = /\b\d{5}\s+[A-ZÉÈÀÂÊÎÔÛÇ][A-ZÉÈÀÂÊÎÔÛÇa-zéèàâêîôûç\- ]{2,30}\b/;
 /** Lieu d'infraction : après "lieu" ou "à" + adresse. */
 const LIEU_RE = /lieu[^\n]{0,5}[:\-]\s*([^\n]{5,80})/i;
 const LIEU_FALLBACK_RE = /(?:à|au|lieu)\s+([A-ZÉÈÀÂÊÎÔÛÇa-zéèàâêîôûç0-9][^\n]{5,60})/i;
+
+/** Segment lettre : chiffres d'OCR (0→O, 1→I) réparés ; null si autre chiffre. */
+function segLettres(s: string): string | null {
+  const v = s.replace(/0/g, "O").replace(/1/g, "I");
+  return /\d/.test(v) ? null : v;
+}
+
+/** Segment chiffres : lettres d'OCR (O→0, I/l→1) réparées ; null si autre lettre. */
+function segChiffres(s: string): string | null {
+  const v = s.replace(/[Oo]/g, "0").replace(/[Il]/g, "1");
+  return /[A-Z]/.test(v) ? null : v;
+}
+
+/** Essai permissif de plaque (SIV puis FNI) avec réparation des confusions
+ * d'OCR, strictement validé : un segment invalide = pas de plaque. */
+function plaquePermise(source: string): string | undefined {
+  const m = source.match(PLAQUE_PERMISE_RE);
+  if (!m) return undefined;
+  const [, a, b, c] = m;
+  // SIV : lettres - chiffres - lettres
+  const l1 = segLettres(a);
+  const ch = segChiffres(b);
+  const l2 = segLettres(c);
+  if (l1 && ch && l2) return `${l1}-${ch}-${l2}`;
+  // FNI : chiffres - lettres - chiffres
+  const c1 = segChiffres(a);
+  const l = segLettres(b);
+  const c2 = segChiffres(c);
+  if (c1 && l && c2) return `${c1}-${l}-${c2}`;
+  return undefined;
+}
 
 function extrairePlaque(texte: string): string | undefined {
   // On cherche d'abord près des mots-clés pour éviter les faux positifs
@@ -613,7 +724,84 @@ function extrairePlaque(texte: string): string | undefined {
   const siv = source.match(PLAQUE_SIV_RE);
   if (siv) return siv[0].replace(/\s+/g, "-").toUpperCase();
 
+  // Secours uniquement en contexte véhicule : les confusions 0/O et 1/I de
+  // l'OCR ne doivent pas faire échouer la lecture — mais jamais globalement
+  // (« 12 h 30 », dates… ne doivent pas devenir des plaques).
+  if (ctx) return plaquePermise(source);
   return undefined;
+}
+
+const MOIS_FR: Record<string, string> = {
+  janv: "01", fevr: "02", mars: "03", avr: "04", mai: "05", juin: "06",
+  juil: "07", aout: "08", sept: "09", oct: "10", nov: "11", dec: "12",
+};
+
+/** « juillet » → « 07 » (accents normalisés) ; null si ce n'est pas un mois. */
+function moisVersNumero(token: string): string | null {
+  const t = token
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  for (const [prefixe, num] of Object.entries(MOIS_FR)) {
+    if (t.startsWith(prefixe)) return num;
+  }
+  return null;
+}
+
+/** Date au format ISO, quel que soit le rendu de l'OCR (slashes, toutes
+ * lettres, ISO) — validée (mois 01-12, jour 01-31) pour ne jamais produire
+ * une date absurde. Absente si aucun format fiable. */
+function extraireDate(texte: string): string | undefined {
+  // ISO d'abord : DATE_RE sinon le décrocherait à l'intérieur (« 26-07-01 »).
+  const iso = texte.match(DATE_ISO_RE);
+  if (iso) {
+    const jour = Number(iso[3]);
+    const mois = Number(iso[2]);
+    if (jour >= 1 && jour <= 31 && mois >= 1 && mois <= 12) {
+      return `${iso[1]}-${iso[2]}-${iso[3]}`;
+    }
+  }
+
+  const slash = texte.match(DATE_RE);
+  if (slash) {
+    const [d, m, y] = slash[1].split(/[/-]/);
+    const jour = Number(d);
+    const mois = Number(m);
+    if (jour >= 1 && jour <= 31 && mois >= 1 && mois <= 12) {
+      return `${y.length === 4 ? y : `20${y}`}-${m}-${d}`;
+    }
+  }
+
+  const tex = texte.match(DATE_TEXTUELLE_RE);
+  if (tex) {
+    const mois = moisVersNumero(tex[2]);
+    const jour = Number(tex[1]);
+    if (mois && jour >= 1 && jour <= 31) {
+      return `${tex[3]}-${mois}-${String(jour).padStart(2, "0")}`;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * N° d'avis, préféré près d'un libellé (« N° d'avis… », « avis de
+ * contravention n°… »), sinon n'importe quel « n° » dont le contexte n'est
+ * pas un paiement, sinon repli historique (premier groupe de chiffres).
+ * Jamais de chiffres inventés : si rien de fiable, indéfini.
+ */
+function extraireNumPv(texte: string): string | undefined {
+  const avis = texte.match(NUM_AVIS_RE);
+  if (avis) return avis[1].replace(/[\s.-]/g, "");
+
+  for (const m of texte.matchAll(/n[°º][^\d\n]{0,30}(\d[\d\s.-]{7,18}\d)/gi)) {
+    const debut = m.index ?? 0;
+    const contexte = texte.slice(Math.max(0, debut - 45), debut);
+    if (/paiement/i.test(contexte)) continue; // n° de télépaiement ≠ n° d'avis
+    return m[1].replace(/[\s.-]/g, "");
+  }
+
+  const fallback = texte.match(NUM_RE);
+  return fallback ? fallback[1].replace(/[\s-]/g, "") : undefined;
 }
 
 /**
@@ -632,17 +820,24 @@ export function normaliserPv(texte: string): Partial<ExtractedData> {
     }
   }
 
-  const numMatch = texte.match(NUM_RE);
-  if (numMatch) result.num_pv = numMatch[1].replace(/[\s-]/g, "");
+  const numPv = extraireNumPv(texte);
+  if (numPv) result.num_pv = numPv;
 
   const plaque = extrairePlaque(texte);
   if (plaque) result.plaque = plaque;
 
-  const dateMatch = texte.match(DATE_RE);
-  if (dateMatch) {
-    const [d, m, y] = dateMatch[1].split(/[/-]/);
-    result.date = `${y.length === 4 ? y : `20${y}`}-${m}-${d}`;
+  const date = extraireDate(texte);
+  if (date) result.date = date;
+
+  // Télépaiement (amendes payables en ligne) : numéro complet + clé, jamais
+  // déduits d'un simple montant (≥9 chiffres exigés).
+  const teleM = texte.match(TELEPAIEMENT_RE);
+  if (teleM) {
+    const num = teleM[1].replace(/[\s-]/g, "");
+    if (num.length >= 9 && num.length <= 20) result.numTelePaiement = num;
   }
+  const cleM = texte.match(CLE_TELEPAIEMENT_RE);
+  if (cleM) result.cle = cleM[1];
 
   const heureMatch = texte.match(HEURE_RE);
   if (heureMatch) {

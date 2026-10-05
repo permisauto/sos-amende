@@ -7,6 +7,7 @@ import { createClient } from "@supabase/supabase-js";
 import { storageWrite, storageDelete } from "@/lib/storage";
 import { consommerCreneau } from "@/lib/rate-limit";
 import { secretsEgaux } from "@/lib/cron-auth";
+import { getOcrProvider } from "@/lib/ocr";
 
 export type HealthStatus = "healthy" | "degraded" | "unhealthy";
 
@@ -272,6 +273,57 @@ async function checkStorage(): Promise<HealthCheckResult> {
 }
 
 /**
+ * Snapshot de la configuration OCR (mode full uniquement) — sans appel API :
+ * la présence/absence de la clé est détectée par `getOcrProvider`. Un provider
+ * demandé (`OCR_PROVIDER` renseigné) mais désactivé par une clé manquante est
+ * `unhealthy` : les dépôts tombent alors en saisie manuelle silencieuse
+ * (bannière ?ocr=echec côté client, rien côté monitoring).
+ */
+function checkOcr(): HealthCheckResult {
+  const brut = process.env.OCR_PROVIDER ?? "";
+  const provider = getOcrProvider();
+  const details = {
+    provider,
+    ocr_provider_configure: brut.trim() || "(vide)",
+    // booléens seuls — jamais la valeur des clés (elles ne doivent pas fuiter
+    // dans les journaux de monitoring, cf. /api/debug/config).
+    google_vision_key_set: Boolean(process.env.GOOGLE_VISION_KEY),
+    gemini_key_set: Boolean(process.env.GEMINI_API_KEY),
+    mistral_key_set: Boolean(process.env.MISTRAL_API_KEY),
+    timeout_ms: process.env.OCR_TIMEOUT_MS ?? "(défaut 20000)",
+    http_timeout_ms: process.env.OCR_HTTP_TIMEOUT_MS ?? "(défaut 10000)",
+  };
+
+  if (!brut.trim()) {
+    return {
+      name: "ocr",
+      status: "degraded",
+      details: { ...details, message: "Aucun provider OCR configuré (OCR_PROVIDER vide)" },
+    };
+  }
+  if (provider === "aucun") {
+    return {
+      name: "ocr",
+      status: "unhealthy",
+      error: `OCR_PROVIDER="${brut}" mais provider désactivé (clé API manquante)`,
+      details,
+    };
+  }
+  if (provider === "mock" && process.env.NODE_ENV === "production") {
+    return {
+      name: "ocr",
+      status: "degraded",
+      details: { ...details, message: "OCR simulé (mock) en production — textes fictifs" },
+    };
+  }
+  return {
+    name: "ocr",
+    status: "healthy",
+    details,
+  };
+}
+
+/**
  * `full` (défaut) = toutes les vérifications, y compris les externes coûteuses
  * (radars.csv data.gouv, Open-Meteo, Groq, écriture storage). `lite` = checks
  * sans effet de bord (base + config e-mail) — c'est ce que reçoit un appelant
@@ -280,7 +332,7 @@ async function checkStorage(): Promise<HealthCheckResult> {
  */
 export async function runHealthChecks(full = true): Promise<HealthCheckResponse> {
   const checksEnVue = full
-    ? [checkSupabase(), checkGroq(), checkResend(), checkDataGouv(), checkOpenMeteo(), checkStorage()]
+    ? [checkSupabase(), checkGroq(), checkResend(), checkDataGouv(), checkOpenMeteo(), checkStorage(), Promise.resolve(checkOcr())]
     : [checkSupabase(), checkResend()];
   const results = await Promise.allSettled(checksEnVue);
 

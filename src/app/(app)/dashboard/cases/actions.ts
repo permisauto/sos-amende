@@ -68,42 +68,6 @@ export async function createDossier(
   const buffer = Buffer.from(await file.arrayBuffer());
   const pvUrl = await storageWrite(safeName, buffer);
 
-  // OCR (garde-fou human-in-the-loop) : pré-remplit le formulaire d'analyse,
-  // jamais l'analyse finale — un humain vérifie puis soumet.
-  const prefill: Record<string, string> = {};
-  const tOcr = Date.now();
-  const ocr = await extrairePv(buffer);
-  // Trace unique et exploitable en prod : provider, format, succès, volumétrie.
-  console.log(
-    JSON.stringify({
-      evt: "createDossier:ocr",
-      provider: getOcrProvider(),
-      mime: file.type,
-      ok: Boolean(ocr),
-      chars: ocr?.texte?.length ?? 0,
-      ms: Date.now() - tOcr,
-    }),
-  );
-  if (!ocr) {
-    // Diagnostic prod : un OCR sans résultat laisse le dossier sans texte ni
-    // pré-remplissage — le scan/scoring semble « ne rien détecter ». La cause
-    // la plus fréquente est un provider non configuré (getOcrProvider →
-    // "aucun") ou une clé API manquante/épuisée.
-    console.error(
-      `createDossier: OCR sans résultat (provider=${getOcrProvider()}, type=${file.type})`,
-    );
-  }
-  if (ocr) {
-    // Gemini renvoie des champs structurés (plus fiables que les regex) ;
-    // sinon on applique normaliserPv sur le texte brut (providers classiques).
-    const struct = ocr.extrait;
-    if (struct && Object.keys(struct).length > 0) {
-      Object.assign(prefill, struct);
-    } else {
-      Object.assign(prefill, normaliserPv(ocr.texte));
-    }
-  }
-
   const prix = prixBase(parsedType.data);
 
   // Signature du client capturée au dépôt : stockée une fois sur le profil,
@@ -124,6 +88,9 @@ export async function createDossier(
     }
   }
 
+  // Le dossier est créé AVANT l'OCR : un OCR qui pend ou plante (timeout,
+  // panne API) ne doit jamais empêcher le dépôt — le PV est déjà stocké et le
+  // client retombe sur la saisie manuelle (bannière ?ocr=echec).
   const dossier = await prisma.$transaction(async (tx) => {
     if (signatureUrl) {
       await tx.user.update({
@@ -137,9 +104,9 @@ export async function createDossier(
         type: parsedType.data,
         statut: "EN_ANALYSE",
         pvUrl,
-        pvTexte: ocr?.texte ?? null, // texte brut scanné (détection par scan)
+        pvTexte: null, // complété après l'OCR (best-effort)
         prix,
-        extractedData: prefill,
+        extractedData: {},
       },
     });
     await tx.dossierEvent.create({
@@ -148,12 +115,62 @@ export async function createDossier(
     return d;
   });
 
+  // OCR (garde-fou human-in-the-loop) : pré-remplit le formulaire d'analyse,
+  // jamais l'analyse finale — un humain vérifie puis soumet. Borné par le
+  // watchdog d'`extrairePv` ; tout échec laisse le dossier créé sans texte.
+  let ocrOk = false;
+  const tOcr = Date.now();
+  try {
+    const ocr = await extrairePv(buffer);
+    // Trace unique et exploitable en prod : provider, format, succès, volumétrie.
+    console.log(
+      JSON.stringify({
+        evt: "createDossier:ocr",
+        provider: getOcrProvider(),
+        mime: file.type,
+        ok: Boolean(ocr),
+        chars: ocr?.texte?.length ?? 0,
+        ms: Date.now() - tOcr,
+      }),
+    );
+    if (ocr) {
+      // Gemini renvoie des champs structurés (plus fiables que les regex) ;
+      // sinon on applique normaliserPv sur le texte brut (providers classiques).
+      const prefill: Record<string, string> = {};
+      const struct = ocr.extrait;
+      if (struct && Object.keys(struct).length > 0) {
+        Object.assign(prefill, struct);
+      } else {
+        Object.assign(prefill, normaliserPv(ocr.texte));
+      }
+      await prisma.dossier.update({
+        where: { id: dossier.id },
+        data: { pvTexte: ocr.texte, extractedData: prefill },
+      });
+      ocrOk = true;
+    }
+  } catch (e) {
+    console.error(
+      "[createDossier] OCR indisponible :",
+      e instanceof Error ? `${e.name}: ${e.message}` : String(e),
+    );
+  }
+  if (!ocrOk) {
+    // Diagnostic prod : un OCR sans résultat laisse le dossier sans texte ni
+    // pré-remplissage — le scan/scoring semble « ne rien détecter ». La cause
+    // la plus fréquente est un provider non configuré (getOcrProvider →
+    // "aucun") ou une clé API manquante/épuisée.
+    console.error(
+      `createDossier: OCR sans résultat (provider=${getOcrProvider()}, type=${file.type})`,
+    );
+  }
+
   revalidatePath("/dashboard");
   // Échec OCR signalé au client (bannière sur la page du dossier) : sans cela,
   // le formulaire s'affiche vide sans explication, car le pré-remplissage
   // n'est qu'un confort — la saisie manuelle reste le chemin principal.
   redirect(
-    ocr
+    ocrOk
       ? `/dashboard/cases/${dossier.id}`
       : `/dashboard/cases/${dossier.id}?ocr=echec`,
   );

@@ -5,6 +5,12 @@ import { storageUrl } from "@/lib/storage";
 import { UploadForm } from "./upload-form";
 import { PRIX_AMENDE, PRIX_SUSPENSION, PRIX_OPTION_LRAR } from "@/lib/tarifs";
 
+// Marge temporelle de la server action `createDossier` (dépôt + OCR) : le
+// watchdog OCR interne (OCR_TIMEOUT_MS, 20 s) doit tomber AVANT la coupe
+// plateforme (docs Next : maxDuration au niveau page = timeout des server
+// actions de la page).
+export const maxDuration = 30;
+
 export default async function NewCasePage(props: PageProps<"/dashboard/cases/new">) {
   const user = await requireUser();
 
