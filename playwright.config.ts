@@ -28,6 +28,9 @@ export default defineConfig({
     env: {
       NEXT_PUBLIC_APP_URL: "http://localhost:3200",
       OCR_PROVIDER: "mock",
+      // Vérification des failles : IA simulée (suggestions mock tracées) —
+      // le bouton « Analyse approfondie (IA) » reste visible sans clé Gemini.
+      VERIF_IA_PROVIDER: "mock",
       ANTAI_MOCK: "1",
       ANTAI_MOCK_TOKEN: "dev-antai-mock",
       AUTH_DEV_FILE: "1",

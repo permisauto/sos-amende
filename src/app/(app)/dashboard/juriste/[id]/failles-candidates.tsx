@@ -9,6 +9,15 @@ export type CandidatDto = {
   titre: string;
   articleLoi: string;
   principale: boolean;
+  /** Dernière suggestion/observation IA rattachée à cette candidature. */
+  suggestionIa?: {
+    source?: string;
+    pertinence?: string;
+    justification?: string;
+    controle?: string;
+    signalement?: string;
+    at?: string;
+  } | null;
 };
 
 const statutLabels: Record<string, string> = {
@@ -120,6 +129,32 @@ function CandidatRow({
           )}
         </div>
       </div>
+      {candidat.suggestionIa?.justification && (
+        <div className="mt-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900">
+          <p>
+            <span className="font-semibold">
+              Suggestion IA
+              {candidat.suggestionIa.pertinence
+                ? ` · ${candidat.suggestionIa.pertinence}`
+                : ""}
+              {candidat.suggestionIa.source === "mock" ? " (simulée)" : ""} :
+            </span>{" "}
+            {candidat.suggestionIa.justification}
+          </p>
+          {candidat.suggestionIa.controle && (
+            <p className="mt-1">
+              <span className="font-semibold">À contrôler :</span>{" "}
+              {candidat.suggestionIa.controle}
+            </p>
+          )}
+        </div>
+      )}
+      {candidat.suggestionIa?.signalement && (
+        <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <span className="font-semibold">Signalé par l&apos;IA :</span>{" "}
+          {candidat.suggestionIa.signalement}
+        </div>
+      )}
       {(confState?.error || rejState?.error) && (
         <p className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">
           {confState?.error ?? rejState?.error}

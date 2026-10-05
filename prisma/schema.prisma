@@ -226,6 +226,11 @@ model DossierFaille {
   dossierId String
   failleId  String
   statut    DossierFailleStatut @default(CANDIDATE)
+  // Suggestion IA de la dernière « Vérification des failles » (audit
+  // verification 2.0) : {source, pertinence, justification, controle,
+  // signalement} — affichée au juriste, jamais utilisée pour générer une
+  // lettre (templates ACTIVE uniquement).
+  suggestionIa Json?
 
   dossier Dossier         @relation(fields: [dossierId], references: [id], onDelete: Cascade)
   faille  FailleJuridique @relation(fields: [failleId], references: [id])

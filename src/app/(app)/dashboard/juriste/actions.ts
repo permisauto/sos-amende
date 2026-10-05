@@ -20,6 +20,13 @@ import { generatePreuvePdf } from "@/lib/preuve-pdf";
 import { destinataireLrar, canauxEnvoi, formaterLettreOfficielle, organismeEnvoi, type CanalEnvoi } from "@/lib/envoi";
 import { setDemoLettre } from "@/lib/demo-lettres";
 import { listePiecesJointes, recupererPreuvesPourDossierId } from "@/lib/preuves-api";
+import {
+  faitsDepuisPreuves,
+  fusionnerCandidats,
+  memesIds,
+  type MajSuggestion,
+} from "@/lib/verif-failles";
+import { verifierAvecIa } from "@/lib/verif-ia";
 
 export type ValidationState = { error?: string; ok?: boolean } | undefined;
 
@@ -552,34 +559,41 @@ export async function envoyerParLrar(
   return { ok: true as const, numeroDepot: numero };
 }
 
-export type VerificationPousseeState = { error?: string; ok?: boolean } | undefined;
+export type VerifierFaillesState = {
+  error?: string;
+  ok?: boolean;
+  message?: string;
+} | undefined;
 
 /**
- * Vérification poussée (action déclenchée par le juriste sur un dossier en
- * EN_ATTENTE_VALIDATION) : ses remarques sont annexées au texte scanné et le
- * moteur relance la détection de failles sur ce contexte enrichi. La lettre
- * est régénérée si de nouvelles failles sont trouvées ; aucune donnée
- * juridique n'est inventée — les seules sources restent les templates
- * validés par l'admin (FailleJuridique ACTIVE).
+ * « Vérifier les failles » (verification 2.0) : le juriste relance la
+ * recherche des failles correspondant au cas d'espèce. La détection rejoue
+ * sur un contexte enrichi (données extraites + questionnaire + pièces
+ * versées + météo réelle + calibration radar) et, sur demande, l'IA
+ * (Gemini/mock) cross-checke les faits contre le catalogue — uniquement des
+ * ids du catalogue, chaque suggestion justifiée par un fait du dossier,
+ * jamais d'article inventé, toujours en proposition (le juriste confirme).
+ * Garde-fous : décisions CONFIRMEE/REJETEE préservées (aucun deleteMany),
+ * pvTexte intact (remarques tracées en événement, plus annexées au texte),
+ * lettre régénérée seulement si l'ensemble de candidats a changé.
  */
-export async function relancerVerificationPoussee(
-  _prev: VerificationPousseeState,
+export async function verifierFailles(
+  _prev: VerifierFaillesState,
   formData: FormData,
-): Promise<VerificationPousseeState> {
+): Promise<VerifierFaillesState> {
   await requireJuristeRedacteur();
 
   const dossierId = String(formData.get("dossierId") ?? "");
   const remarques = String(formData.get("remarques") ?? "").trim();
-  if (remarques.length < 10) {
-    return {
-      error:
-        "Précisez vos remarques (au moins 10 caractères) avant la vérification poussée.",
-    };
-  }
+  const utiliseIa = formData.get("ia") === "on";
 
   const dossier = await prisma.dossier.findUnique({
     where: { id: dossierId },
-    include: { user: { select: { name: true } } },
+    include: {
+      user: { select: { name: true } },
+      preuves: { select: { type: true, url: true } },
+      faillesRetenues: { select: { failleId: true, statut: true } },
+    },
   });
   if (!dossier) {
     return { error: "Dossier introuvable." };
@@ -590,34 +604,40 @@ export async function relancerVerificationPoussee(
   ) {
     return {
       error:
-        "La vérification poussée n'est disponible que sur un dossier en attente de validation.",
+        "La vérification des failles n'est disponible que sur un dossier en attente de validation.",
     };
   }
 
   const data = (dossier.extractedData ?? {}) as ExtractedData;
-  const texteAjour = [
-    dossier.pvTexte,
-    `[Vérification poussée du juriste — ${remarques}]`,
-  ]
-    .filter(Boolean)
-    .join("\n");
-
   const failles = await prisma.failleJuridique.findMany({
     where: { statut: "ACTIVE", typeInfraction: dossier.type },
   });
 
-  let dateExpirationEtalonnage: Date | null = null;
-  if (data.radarId) {
-    const cal = await prisma.radarCalibration.findFirst({
-      where: { radarId: data.radarId },
-      orderBy: { dateExpiration: "desc" },
-    });
-    if (cal) dateExpirationEtalonnage = cal.dateExpiration;
+  // Contexte enrichi : faits du questionnaire + pièces versées (attestations
+  // de vol/cession, relevé de paiement, chantiers) + météo réellement
+  // récupérée — tout ce qui a pu être ajouté après l'analyse.
+  const faits = faitsDepuisPreuves(data, dossier.preuves);
+  if (!faits.conditions_meteo && dossier.conditions_meteo) {
+    faits.conditions_meteo = dossier.conditions_meteo;
   }
 
-  const candidats = detecterFailles(
-    data,
-    texteAjour,
+  let dateExpirationEtalonnage: Date | null = null;
+  let preuveEtalonnageRadar: string | null = null;
+  if (faits.radarId) {
+    const cal = await prisma.radarCalibration.findFirst({
+      where: { radarId: faits.radarId },
+      orderBy: { dateExpiration: "desc" },
+    });
+    if (cal) {
+      dateExpirationEtalonnage = cal.dateExpiration;
+      preuveEtalonnageRadar = cal.preuveUrl;
+    }
+  }
+
+  // 1. Détection par règles sur le contexte enrichi (texte OCR inchangé).
+  const detectesRegles = detecterFailles(
+    faits,
+    dossier.pvTexte,
     failles.map((f) => ({
       id: f.id,
       reglesDetection: f.reglesDetection as unknown as
@@ -627,92 +647,187 @@ export async function relancerVerificationPoussee(
     { dateExpirationEtalonnage },
   );
 
-  const principalId = candidats[0] ?? null;
-  const faille = principalId
-    ? failles.find((f) => f.id === principalId) ?? null
-    : null;
-
-  if (principalId === FAILLE_IDS.etalonnage && data.radarId) {
-    const cal = await prisma.radarCalibration.findFirst({
-      where: { radarId: data.radarId },
-      orderBy: { dateExpiration: "desc" },
-    });
-    if (cal) data.preuveEtalonnage = cal.preuveUrl;
-  }
-
-  // Lettre multi-arguments : la relance régénère une lettre qui juxtapose
-  // toutes les failles candidates sur le contexte enrichi du juriste.
-  const candidatsFailles = candidats
-    .map((id) => failles.find((f) => f.id === id))
-    .filter((f): f is NonNullable<typeof f> => !!f);
-  const lettre = remplirLettreMulti(
-    candidatsFailles.map((f) => ({
+  // 2. Vérification approfondie IA (optionnelle) : faits × catalogue.
+  const detectes = [...detectesRegles];
+  const suggestions: MajSuggestion[] = [];
+  const signalements: MajSuggestion[] = [];
+  let messageIa: string | null = null;
+  if (utiliseIa) {
+    const catalogueIa = failles.map((f) => ({
       id: f.id,
       titreFaille: f.titreFaille,
       articleLoi: f.articleLoi,
-      templateLettre: f.templateLettre,
-    })),
-    data,
+      regle: f.regle ?? null,
+      jurisprudence: (
+        Array.isArray(f.jurisprudence)
+          ? (f.jurisprudence as Array<{ resume?: unknown }>)
+              .map((j) => j.resume)
+              .filter((r): r is string => typeof r === "string" && r.length > 0)
+          : []
+      ).slice(0, 3),
+    }));
+    const faitsIa: Record<string, unknown> = {
+      ...faits,
+      type: dossier.type,
+      textePv: (dossier.pvTexte ?? "").slice(0, 4000),
+      remarquesJuriste: remarques || null,
+      dateLimite: dossier.dateLimite
+        ? dossier.dateLimite.toISOString().slice(0, 10)
+        : null,
+    };
+    const resultat = await verifierAvecIa(faitsIa, catalogueIa);
+    if (resultat.source === "indisponible") {
+      messageIa = resultat.motif;
+    } else {
+      const at = new Date().toISOString();
+      for (const s of resultat.reponse.suggestions) {
+        suggestions.push({
+          failleId: s.id,
+          suggestionIa: {
+            source: resultat.source,
+            pertinence: s.pertinence,
+            justification: s.justification,
+            controle: s.controle,
+            at,
+          },
+        });
+        if (!detectes.includes(s.id)) detectes.push(s.id);
+      }
+      for (const s of resultat.reponse.signalements) {
+        signalements.push({
+          failleId: s.id,
+          suggestionIa: {
+            source: resultat.source,
+            signalement: s.motif,
+            at,
+          },
+        });
+      }
+      messageIa =
+        resultat.source === "mock"
+          ? "IA simulée (mock) : aucune analyse réelle."
+          : `IA : ${suggestions.length} suggestion(s), ${signalements.length} signalement(s).`;
+    }
+  }
+
+  // 3. Fusion avec les décisions du juriste : aucune confirmation/écart
+  //    effacé, aucune faille écartée ressuscitée.
+  const fusion = fusionnerCandidats(
+    dossier.faillesRetenues,
+    detectes,
+    suggestions,
+    signalements,
   );
+
+  // La lettre n'est régénérée que si l'ensemble de candidats a changé — les
+  // éditions/validations du juriste sont conservées sinon.
+  const actifsAvant = dossier.faillesRetenues
+    .filter((e) => e.statut === "CANDIDATE" || e.statut === "CONFIRMEE")
+    .map((e) => e.failleId);
+  const changement = !memesIds(fusion.idsLettre, actifsAvant);
+
+  const principalId = fusion.idsLettre[0] ?? null;
+  if (principalId === FAILLE_IDS.etalonnage && preuveEtalonnageRadar) {
+    faits.preuveEtalonnage = preuveEtalonnageRadar;
+  }
+
+  let lettreGeneree: string | null | undefined;
+  if (changement) {
+    const candidatsFailles = fusion.idsLettre
+      .map((id) => failles.find((f) => f.id === id))
+      .filter((f): f is NonNullable<typeof f> => !!f);
+    const lettre = remplirLettreMulti(
+      candidatsFailles.map((f) => ({
+        id: f.id,
+        titreFaille: f.titreFaille,
+        articleLoi: f.articleLoi,
+        templateLettre: f.templateLettre,
+      })),
+      faits,
+    );
+    lettreGeneree = lettre
+      ? formaterLettreOfficielle({
+          type: dossier.type,
+          corps: lettre,
+          numRef: faits.num_pv ?? null,
+          dateRef: faits.date ?? null,
+          nom: dossier.user?.name ?? null,
+          date: new Date().toISOString().slice(0, 10),
+        })
+      : null;
+  }
+
+  const detailVerif = [
+    `Vérification des failles : ${fusion.idsLettre.length} en jeu (${fusion.nouvelles.length} nouvelle(s))`,
+    messageIa,
+    remarques ? `remarques : ${remarques}` : null,
+  ]
+    .filter(Boolean)
+    .join(" — ");
 
   await prisma.$transaction([
     prisma.dossier.update({
       where: { id: dossier.id },
       data: {
-        remarquesJuriste: remarques,
-        pvTexte: texteAjour,
-        failleJuridiqueId: faille?.id ?? null,
-        lettreGeneree: lettre,
-        extractedData: data as object,
+        ...(remarques ? { remarquesJuriste: remarques } : {}),
+        extractedData: faits as object,
+        ...(changement
+          ? {
+              failleJuridiqueId: principalId,
+              lettreGeneree: lettreGeneree ?? null,
+            }
+          : {}),
       },
     }),
     prisma.dossierEvent.create({
       data: {
         dossierId: dossier.id,
         type: "VERIFICATION_POUSSEE",
-        detail: remarques,
+        detail: detailVerif,
       },
     }),
-    ...(lettre
+    ...(changement && lettreGeneree
       ? [
           prisma.dossierEvent.create({
             data: {
               dossierId: dossier.id,
               type: "LETTRE_GENEREE",
-              detail: "Lettre régénérée après vérification poussée.",
+              detail: "Lettre régénérée après vérification des failles.",
             },
           }),
         ]
       : []),
-    prisma.dossierFaille.deleteMany({ where: { dossierId: dossier.id } }),
-    ...candidats.map((failleId) =>
-      prisma.dossierFaille.create({
-        data: { dossierId: dossier.id, failleId, statut: "CANDIDATE" },
+    ...fusion.nouvelles.map((failleId) => {
+      const s = suggestions.find((x) => x.failleId === failleId);
+      return prisma.dossierFaille.create({
+        data: {
+          dossierId: dossier.id,
+          failleId,
+          statut: "CANDIDATE",
+          ...(s ? { suggestionIa: s.suggestionIa as object } : {}),
+        },
+      });
+    }),
+    ...fusion.majs.map((m) =>
+      prisma.dossierFaille.updateMany({
+        where: { dossierId: dossier.id, failleId: m.failleId },
+        data: { suggestionIa: m.suggestionIa as object },
       }),
     ),
   ]);
-
-  const docVerif = (dossier.extractedData ?? {}) as Record<string, unknown>;
-  const lettreOfficielleVerif = formaterLettreOfficielle({
-    type: dossier.type,
-    corps: lettre ?? "",
-    numRef: typeof docVerif["num_pv"] === "string" ? (docVerif["num_pv"] as string) : null,
-    dateRef: typeof docVerif["date"] === "string" ? (docVerif["date"] as string) : null,
-    nom: dossier.user?.name ?? null,
-    date: new Date().toISOString().slice(0, 10),
-  });
-  if (lettreOfficielleVerif !== lettre) {
-    await prisma.dossier.update({
-      where: { id: dossier.id },
-      data: { lettreGeneree: lettreOfficielleVerif },
-    });
-  }
 
   revalidatePath("/dashboard/juriste");
   revalidatePath(`/dashboard/juriste/${dossier.id}`);
   revalidatePath(`/dashboard/cases/${dossier.id}`);
   revalidatePath("/dashboard/admin/dossiers");
-  return { ok: true };
+
+  const message = [
+    `Vérification effectuée : ${fusion.idsLettre.length} faille(s) en jeu, ${fusion.nouvelles.length} nouvelle(s).`,
+    messageIa,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return { ok: true, message };
 }
 
 /**

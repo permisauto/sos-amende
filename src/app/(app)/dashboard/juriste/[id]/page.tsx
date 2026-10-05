@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireJuriste } from "@/lib/dal";
 import { storageUrl } from "@/lib/storage";
 import { JuristeActions, DecisionOmpForm } from "./juriste-actions";
-import { VerificationPoussee } from "./verification-poussee";
+import { VerificationFailles } from "./verification-failles";
 import { LettreEdition } from "./lettre-edition";
 import { GenerateurLettre } from "./generateur-lettre";
 import { AvocatTraitement } from "./avocat-traitement";
@@ -119,6 +119,7 @@ type JuristeCaseDetail = {
   faillesRetenues: Array<{
     failleId: string;
     statut: string;
+    suggestionIa?: unknown;
     faille: {
       id: string;
       statut: string;
@@ -388,7 +389,33 @@ export default async function JuristeCasePage(
     titre: df.faille.titreFaille,
     articleLoi: df.faille.articleLoi,
     principale: item.failleJuridiqueId === df.failleId,
+    suggestionIa: df.suggestionIa as {
+      source?: string;
+      pertinence?: string;
+      justification?: string;
+      controle?: string;
+      signalement?: string;
+      at?: string;
+    } | null,
   }));
+
+  // Dernière « Vérifier les failles » (horodatage affiché dans le drawer).
+  const derniereVerifEvent = item.evenements
+    .filter((e) => e.type === "VERIFICATION_POUSSEE")
+    .slice(-1)[0];
+  const derniereVerification = derniereVerifEvent
+    ? new Date(derniereVerifEvent.createdAt).toLocaleString("fr-FR", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : null;
+  // Analyse approfondie disponible : clé Gemini ou provider simulé (E2E).
+  const iaDisponible =
+    Boolean(process.env.GEMINI_API_KEY) ||
+    process.env.VERIF_IA_PROVIDER === "mock";
 
   const data = item.extractedData as Record<string, unknown> | null;
 
@@ -543,7 +570,7 @@ export default async function JuristeCasePage(
   };
   const lettreAccroche =
     item.statut === "EN_ATTENTE_VALIDATION"
-      ? "Lettre générée par le moteur, à relire. Corrigez, lancez une vérification poussée si nécessaire, puis approuvez — la contestation sera transmise au canal choisi."
+      ? "Lettre générée par le moteur, à relire.                   Corrigez, relancez la vérification des failles si nécessaire, puis approuvez — la contestation sera transmise au canal choisi."
       : item.statut === "EN_ATTENTE_PRE_SIGNATURE"
         ? "Lettre validée par vos soins : le client doit maintenant la signer. Une fois signée, il recevra le lien de dépôt assisté pour transmettre sa contestation sur le portail officiel (sauf canal LRAR, envoyé par SOS Amende)."
         : item.statut === "A_VERIFIER"
@@ -700,12 +727,11 @@ export default async function JuristeCasePage(
                     item.statut === "A_VERIFIER" ? (
                       <>
                         <p className="rounded-xl bg-sky-50 px-4 py-2.5 text-sm text-sky-800">
-                          Valider la lettre finale pour déclencher l&apos;envoi
-                          (canal ANTAI, Télérecours, ou lettre recommandée
-                          envoyée par SOS Amende) — la recherche peut être
-                          affinée avant validation.
+                          Valider la lettre finale pour déclencher
+                          l&apos;envoi (canal ANTAI, Télérecours, ou lettre
+                          recommandée envoyée par SOS Amende) — la recherche
+                          peut être affinée avant validation.
                         </p>
-                        <VerificationPoussee dossierId={item.id} lectureSeule={lectureSeule} />
                         <div className="flex flex-wrap items-center gap-3">
                           <GenerateurLettre
                             dossierId={item.id}
@@ -1048,7 +1074,7 @@ export default async function JuristeCasePage(
             {item.remarquesJuriste && (
               <div className="mt-4 border-t border-zinc-100 pt-4">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                  Vérification poussée
+                  Remarques du juriste (vérification)
                 </h3>
                 <p className="mt-2 whitespace-pre-wrap rounded-xl bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
                   {item.remarquesJuriste}
@@ -1104,6 +1130,16 @@ export default async function JuristeCasePage(
             conditionsMeteo={item.conditions_meteo}
           />
 
+          {!lectureSeule &&
+            (item.statut === "A_VERIFIER" ||
+              item.statut === "EN_ATTENTE_VALIDATION") && (
+              <VerificationFailles
+                dossierId={item.id}
+                iaDisponible={iaDisponible}
+                derniereVerification={derniereVerification}
+              />
+            )}
+
           <FilMessages
             dossierId={item.id}
             messages={messagesDto}
@@ -1144,6 +1180,7 @@ export default async function JuristeCasePage(
         dossierId={item.id}
         candidats={candidats}
         lectureSeule={lectureSeule}
+        derniereVerification={derniereVerification}
         failleRetenue={failleRetenue}
         bibliotheque={bibliothequeDto}
         lettresProposees={lettresProposees}

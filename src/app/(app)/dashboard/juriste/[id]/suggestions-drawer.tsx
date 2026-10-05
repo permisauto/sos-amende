@@ -24,6 +24,7 @@ export function SuggestionsDrawer({
   lettresProposees,
   lettreCombine,
   lettrePrincipale,
+  derniereVerification = null,
 }: {
   dossierId: string;
   candidats: CandidatDto[];
@@ -33,6 +34,7 @@ export function SuggestionsDrawer({
   lettresProposees: LettreProposee[];
   lettreCombine: string | null;
   lettrePrincipale: string | null;
+  derniereVerification?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
@@ -90,6 +92,11 @@ export function SuggestionsDrawer({
               modèles de lettres adaptés à ce dossier — sans quitter le
               dossier.
             </p>
+            {derniereVerification && (
+              <p className="mt-1 text-xs text-zinc-400">
+                Dernière vérification des failles : {derniereVerification}
+              </p>
+            )}
           </div>
           <button
             ref={closeRef}
