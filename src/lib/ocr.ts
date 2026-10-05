@@ -34,12 +34,12 @@ export function getOcrProvider(): OcrProvider {
  * il pré-remplit le formulaire d'analyse soumis par un humain (garde-fou
  * human-in-the-loop). Sans provider configuré, renvoie null.
  *
- * PDF : les API d'OCR images (Google Vision `images:annotate`, Tesseract,
- * Mistral) n'acceptent JAMAIS un PDF dans `image.content` — Google impose
- * `files:asyncBatchAnnotate` + Cloud Storage. On lit donc la couche texte du
- * PDF **en local** (pdf-parse) et, à défaut, on en extrait les images
- * intégrées (scan) pour les passer à l'OCR image. Gemini garde son propre
- * chemin Files API.
+ * PDF : la couche texte est lue **en local** (pdf-parse) pour TOUS les
+ * providers — un PDF à texte ne dépend d'aucune API (les API d'OCR images
+ * n'acceptent jamais un PDF dans `image.content`, et Gemini saturait en
+ * prod sur des PDF pourtant lisibles en local). Sans couche texte (scan),
+ * on en extrait les images intégrées pour l'OCR image, sauf Gemini qui lit
+ * le PDF entier via sa Files API.
  *
  * Garde-fous temporalité : un OCR qui pend ne doit JAMAIS faire échouer le
  * dépôt du dossier — watchdog global (`OCR_TIMEOUT_MS`) + délai par requête
@@ -83,7 +83,6 @@ async function extrairePvSelonFormat(
   provider: OcrProvider,
 ): Promise<OcrResult | null> {
   if (detecterMime(buffer) === "application/pdf") {
-    if (provider === "gemini-flash") return geminiFlashOcr(buffer);
     return lirePdfAvecProvider(buffer, provider);
   }
 
@@ -129,9 +128,12 @@ const MAX_IMAGES_PDF = 4;
 type PdfParse = InstanceType<typeof import("pdf-parse").PDFParse>;
 
 /**
- * Lit un PDF pour un provider image : d'abord la couche texte (local, gratuit,
- * immédiat — le cas des courriers/suspensions), sinon les images intégrées
- * (PDF scanné) passées à l'OCR image.
+ * Lit un PDF pour le provider configuré : d'abord la couche texte (local,
+ * gratuit, immédiat — tous les providers, Gemini compris), sinon le scan.
+ *
+ * Sans couche texte exploitable : Gemini reçoit le PDF entier (sa Files API
+ * lit les documents nativement), les autres providers passent par les images
+ * intégrées extraites en local.
  *
  * Jamais d'exception propagée : un PDF illisible laisse le client saisir à la
  * main et est journalisé.
@@ -154,6 +156,16 @@ async function lirePdfAvecProvider(
         JSON.stringify({ evt: "ocr:pdf", couche: "texte", provider, mots, pages: lu?.total ?? 0, ms: Date.now() - debut }),
       );
       return { texte };
+    }
+
+    if (provider === "gemini-flash") {
+      // PDF scanné : Gemini lit le document entier (Files API) — le seul
+      // chemin qu'il connaît pour un PDF, préservé tel quel.
+      const res = await geminiFlashOcr(buffer);
+      console.log(
+        JSON.stringify({ evt: "ocr:pdf", couche: "gemini", provider, mots, ok: Boolean(res), ms: Date.now() - debut }),
+      );
+      return res;
     }
 
     const images = await imagesDepuisPdf(parser);

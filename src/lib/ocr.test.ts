@@ -184,6 +184,44 @@ function simulerGemini(reponses: Array<{ status: number; body?: unknown }>) {
   return fetchMock;
 }
 
+/**
+ * Simule la Gemini Files API d'un bout à l'autre pour un PDF scanné :
+ * start (session resumable + x-goog-upload-url), push (octets → file.uri)
+ * puis generateContent (réponse JSON `reponse`).
+ */
+function simulerGeminiFiles(reponse: unknown) {
+  const fetchMock = vi.fn(async (url: RequestInfo | URL) => {
+    const u = String(url);
+    if (u.includes("/upload/v1beta/files")) {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: (h: string) => (h === "x-goog-upload-url" ? "https://upload.test/session" : null) },
+        text: async () => "",
+        json: async () => ({}),
+      };
+    }
+    if (u.startsWith("https://upload.test/")) {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => null },
+        text: async () => "",
+        json: async () => ({ file: { uri: "https://files.test/pv-1" } }),
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      text: async () => JSON.stringify(reponse),
+      json: async () => reponse,
+    };
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
 describe("estTransitoire", () => {
   it("classe les pannes temporaires comme retriables", () => {
     // 503 « high demand » = saturation momentanée du modèle Flash (cas prod observé).
@@ -263,6 +301,7 @@ describe("extrairePv — PDF (couche texte locale, jamais envoyé aux API images
     delete process.env.OCR_PROVIDER;
     delete process.env.GOOGLE_VISION_KEY;
     delete process.env.MISTRAL_API_KEY;
+    delete process.env.GEMINI_API_KEY;
   });
 
   it(
@@ -278,6 +317,39 @@ describe("extrairePv — PDF (couche texte locale, jamais envoyé aux API images
       expect(res?.texte).toContain("123456789");
       // Régression du bug : le PDF partait en image.content de images:annotate.
       expect(fetchMock).not.toHaveBeenCalled();
+    },
+    30_000,
+  );
+
+  it(
+    "PDF texte + gemini-flash : lu en local, zéro appel Gemini (régression 503 prod)",
+    async () => {
+      process.env.OCR_PROVIDER = "gemini-flash";
+      process.env.GEMINI_API_KEY = "cle-test";
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+
+      const res = await extrairePv(PV_PDF);
+
+      expect(res?.texte).toContain("123456789");
+      // Avant P1, ce PDF partait en Files API → 503 « high demand » en prod.
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+    30_000,
+  );
+
+  it(
+    "PDF scanné + gemini-flash : bien téléversé via la Files API",
+    async () => {
+      process.env.OCR_PROVIDER = "gemini-flash";
+      process.env.GEMINI_API_KEY = "cle-test";
+      const fetchMock = simulerGeminiFiles(REPONSE_OK);
+
+      const res = await extrairePv(SCAN_PDF);
+
+      expect(res?.extrait?.plaque).toBe("AB-123-CD");
+      // start (session) + push (octets) + generateContent = la Files API.
+      expect(fetchMock).toHaveBeenCalledTimes(3);
     },
     30_000,
   );
