@@ -50,6 +50,14 @@ const nextConfig: NextConfig = {
       "./node_modules/tesseract.js-core/**/*",
       "./node_modules/pdf-parse/**/*",
       "./node_modules/pdfjs-dist/**/*",
+      // pdfjs (embarqué dans pdf-parse) importe @napi-rs/canvas dynamiquement
+      // au démarrage pour obtenir DOMMatrix/ImageData/Path2D : le traceur ne
+      // suit pas ce require conditionnel et le paquet manquait dans la lambda
+      // → « DOMMatrix is not defined » à l'import de pdf-parse en prod
+      // (couche texte PDF perdue, 2026-10-05). La binaire platform est un
+      // paquet distinct, chargé dynamiquement lui aussi.
+      "./node_modules/@napi-rs/canvas/**/*",
+      "./node_modules/@napi-rs/canvas-linux-x64-gnu/**/*",
     ],
   },
   async headers() {

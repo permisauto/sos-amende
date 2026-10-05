@@ -187,6 +187,17 @@ async function lirePdfAvecProvider(
     return concatene ? { texte: concatene } : null;
   } catch (err) {
     console.error("[ocr:pdf] échec :", err instanceof Error ? `${err.name}: ${err.message}` : String(err));
+    // Repli : la lecture locale a échoué (polyfill canvas absent de la
+    // plateforme, PDF corrompu…) — on ne bloque pas pour autant. Gemini
+    // reçoit le PDF entier (Files API, comportement d'avant P1) ; les autres
+    // providers n'ont aucun flux images sans parser, reste la saisie manuelle.
+    if (provider === "gemini-flash") {
+      const res = await geminiFlashOcr(buffer);
+      console.log(
+        JSON.stringify({ evt: "ocr:pdf", couche: "gemini-repli", ok: Boolean(res), ms: Date.now() - debut }),
+      );
+      return res;
+    }
     return null;
   } finally {
     if (parser) await parser.destroy().catch(() => undefined);

@@ -361,6 +361,25 @@ describe("extrairePv — PDF (couche texte locale, jamais envoyé aux API images
   });
 
   it(
+    "PDF corrompu + gemini-flash : repli Files API au lieu d'abandonner (perte du canvas en prod)",
+    async () => {
+      // Reproduit l'incident du 2026-10-05 en prod : pdf-parse refusait de se
+      // charger (DOMMatrix undefined) et l'OCR retournait null sans rien
+      // tenter. Le repli renvoie le PDF à Gemini comme avant P1.
+      process.env.OCR_PROVIDER = "gemini-flash";
+      process.env.GEMINI_API_KEY = "cle-test";
+      const fetchMock = simulerGeminiFiles(REPONSE_OK);
+
+      const res = await extrairePv(PDF_CORROMPU);
+
+      expect(res?.extrait?.plaque).toBe("AB-123-CD");
+      // start (session) + push (octets) + generateContent = la Files API.
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    },
+    30_000,
+  );
+
+  it(
     "PDF scanné (aucun texte) : extrait les images intégrées et les OCRise en image",
     async () => {
       process.env.OCR_PROVIDER = "google-vision";
