@@ -76,7 +76,7 @@ export function LettreEdition({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="max-h-96 overflow-y-auto rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm leading-relaxed text-zinc-800">
+      <div className="max-h-96 overflow-y-auto rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm leading-relaxed text-zinc-800 lg:max-h-none lg:overflow-visible">
         {lectureActive ? (
           <>
             <p className="whitespace-pre-wrap">{lettre}</p>

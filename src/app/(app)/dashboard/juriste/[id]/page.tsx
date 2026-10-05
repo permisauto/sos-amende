@@ -6,6 +6,7 @@ import { storageUrl } from "@/lib/storage";
 import { JuristeActions, DecisionOmpForm } from "./juriste-actions";
 import { VerificationFailles } from "./verification-failles";
 import { LettreEdition } from "./lettre-edition";
+import { PvViewer } from "./pv-viewer";
 import { GenerateurLettre } from "./generateur-lettre";
 import { AvocatTraitement } from "./avocat-traitement";
 import { SuggestionsDrawer } from "./suggestions-drawer";
@@ -500,7 +501,8 @@ export default async function JuristeCasePage(
     preuves: item.preuves.map((p) => ({ nom: p.nom, type: p.type, url: p.url })),
   });
   const pvUrl = await storageUrl(item.pvUrl);
-  const isImage = pvUrl?.match(/\.(jpe?g|png|webp)(\?.*)?$/i);
+  const titrePv =
+    item.type === "AMENDE" ? "Avis de contravention" : "Décision de suspension";
   const pdfUrl = await storageUrl(courrier?.pdfUrl ?? null);
   const accuseUrl = await storageUrl(courrier?.preuveDepotUrl ?? null);
   const signatureCourrier = await storageUrl(courrier?.signatureUrl ?? null);
@@ -687,20 +689,24 @@ export default async function JuristeCasePage(
           </div>
         )}
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
-        {/* Colonne principale — la lettre, objet du travail du juriste */}
-        <div className="flex flex-col gap-6 lg:col-span-2">
-          <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 bg-emerald-50/70 px-6 py-4">
-              <div>
-                <h2 className="text-lg font-semibold">Lettre de contestation</h2>
-                <p className="mt-0.5 text-sm text-zinc-600">{lettreAccroche}</p>
-              </div>
-              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${chip.cls}`}>
-                {chip.label}
-              </span>
+      {/* Contrôle côte à côte : le document du client face à la lettre, pleine
+          largeur — le juriste confronte les deux sans quitter la page. */}
+      <section className="mt-6 overflow-hidden rounded-2xl border border-zinc-200 bg-white">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 bg-emerald-50/70 px-6 py-4">
+          <div>
+            <h2 className="text-lg font-semibold">Lettre de contestation</h2>
+            <p className="mt-0.5 text-sm text-zinc-600">{lettreAccroche}</p>
+          </div>
+          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${chip.cls}`}>
+            {chip.label}
+          </span>
+        </div>
+        <div className="p-6">
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div className="order-2 min-w-0 lg:order-1 lg:h-[70vh]">
+              <PvViewer url={pvUrl} titre={titrePv} pvTexte={item.pvTexte} />
             </div>
-            <div className="p-6">
+            <div className="order-1 min-w-0 lg:order-2 lg:h-[70vh] lg:overflow-y-auto">
               {editable ? (
                 <>
                   {item.lettreGeneree ? (
@@ -718,73 +724,6 @@ export default async function JuristeCasePage(
                       examen : rejetez-le avec un motif si nécessaire.
                     </p>
                   )}
-                  <div className="mt-6 border-t border-zinc-100 pt-6">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
-                      Prochaine étape
-                    </p>
-                    <div className="mt-3 flex flex-col gap-3">
-                    {item.statut === "EN_ATTENTE_VALIDATION" ||
-                    item.statut === "A_VERIFIER" ? (
-                      <>
-                        <p className="rounded-xl bg-sky-50 px-4 py-2.5 text-sm text-sky-800">
-                          Valider la lettre finale pour déclencher
-                          l&apos;envoi (canal ANTAI, Télérecours, ou lettre
-                          recommandée envoyée par SOS Amende) — la recherche
-                          peut être affinée avant validation.
-                        </p>
-                        <div className="flex flex-wrap items-center gap-3">
-                          <GenerateurLettre
-                            dossierId={item.id}
-                            variantes={variantes}
-                            lectureSeule={lectureSeule}
-                          />
-                          <span className="text-xs text-zinc-500">
-                            La lettre ne vous convient pas ? Choisissez une autre
-                            combinaison de fondements juridiques.
-                          </span>
-                        </div>
-                        <JuristeActions
-                          dossierId={item.id}
-                          showCanal
-                          type={item.type}
-                          organisme={organismeEnvoi(item.type)}
-                          lectureSeule={lectureSeule}
-                        />
-                      </>
-                    ) : item.statut === "PRET" ? (
-                      <>
-                        {!item.valideLe && (
-                          <div className="flex flex-wrap items-center gap-3">
-                            <GenerateurLettre
-                              dossierId={item.id}
-                              variantes={variantes}
-                              lectureSeule={lectureSeule}
-                            />
-                            <span className="text-xs text-zinc-500">
-                              Lettre signée par le client : une variante
-                              réécrite conserve la signature et régénère le PDF.
-                            </span>
-                          </div>
-                        )}
-                        <JuristeActions
-                          dossierId={item.id}
-                          validee={Boolean(item.valideLe)}
-                          showCanal={!Boolean(item.valideLe)}
-                          type={item.type}
-                          organisme={organismeEnvoi(item.type)}
-                          canalEnvoi={item.canalEnvoi}
-                          lectureSeule={lectureSeule}
-                        />
-                      </>
-                    ) : (
-                      <JuristeActions
-                        dossierId={item.id}
-                        mode="rejet"
-                        lectureSeule={lectureSeule}
-                      />
-                    )}
-                    </div>
-                  </div>
                 </>
               ) : (
                 <>
@@ -874,8 +813,82 @@ export default async function JuristeCasePage(
                 </div>
               )}
             </div>
-          </section>
 
+            {editable && (
+              <div className="order-3 border-t border-zinc-100 pt-6 lg:col-span-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+                  Prochaine étape
+                </p>
+                <div className="mt-3 flex flex-col gap-3">
+                  {item.statut === "EN_ATTENTE_VALIDATION" ||
+                  item.statut === "A_VERIFIER" ? (
+                    <>
+                      <p className="rounded-xl bg-sky-50 px-4 py-2.5 text-sm text-sky-800">
+                        Valider la lettre finale pour déclencher
+                        l&apos;envoi (canal ANTAI, Télérecours, ou lettre
+                        recommandée envoyée par SOS Amende) — la recherche
+                        peut être affinée avant validation.
+                      </p>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <GenerateurLettre
+                          dossierId={item.id}
+                          variantes={variantes}
+                          lectureSeule={lectureSeule}
+                        />
+                        <span className="text-xs text-zinc-500">
+                          La lettre ne vous convient pas ? Choisissez une autre
+                          combinaison de fondements juridiques.
+                        </span>
+                      </div>
+                      <JuristeActions
+                        dossierId={item.id}
+                        showCanal
+                        type={item.type}
+                        organisme={organismeEnvoi(item.type)}
+                        lectureSeule={lectureSeule}
+                      />
+                    </>
+                  ) : item.statut === "PRET" ? (
+                    <>
+                      {!item.valideLe && (
+                        <div className="flex flex-wrap items-center gap-3">
+                          <GenerateurLettre
+                            dossierId={item.id}
+                            variantes={variantes}
+                            lectureSeule={lectureSeule}
+                          />
+                          <span className="text-xs text-zinc-500">
+                            Lettre signée par le client : une variante
+                            réécrite conserve la signature et régénère le PDF.
+                          </span>
+                        </div>
+                      )}
+                      <JuristeActions
+                        dossierId={item.id}
+                        validee={Boolean(item.valideLe)}
+                        showCanal={!Boolean(item.valideLe)}
+                        type={item.type}
+                        organisme={organismeEnvoi(item.type)}
+                        canalEnvoi={item.canalEnvoi}
+                        lectureSeule={lectureSeule}
+                      />
+                    </>
+                  ) : (
+                    <JuristeActions
+                      dossierId={item.id}
+                      mode="rejet"
+                      lectureSeule={lectureSeule}
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-2 lg:items-start">
+        <div className="flex flex-col gap-6">
           {item.valideLe && (
             <section className="rounded-2xl border border-emerald-200 bg-white p-6">
               <h2 className="font-semibold text-emerald-900">
@@ -1081,31 +1094,6 @@ export default async function JuristeCasePage(
                 </p>
               </div>
             )}
-          </section>
-
-          <section className="rounded-2xl border border-zinc-200 bg-white p-6">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-              Avis de contravention
-            </h2>
-            {item.pvUrl &&
-              pvUrl &&
-              (isImage ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={pvUrl}
-                  alt="Avis de contravention"
-                  className="mt-3 rounded-2xl border border-zinc-200 bg-zinc-50 object-contain"
-                />
-              ) : (
-                <a
-                  href={pvUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-3 inline-block rounded-xl border border-zinc-200 px-4 py-3 text-sm font-medium text-emerald-700 hover:bg-zinc-50"
-                >
-                  Ouvrir le PV (PDF)
-                </a>
-              ))}
           </section>
 
           {suggestionsPreuves.length > 0 && (
