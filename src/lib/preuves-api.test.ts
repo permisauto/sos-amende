@@ -88,19 +88,19 @@ describe("typesPreuvesPourFailles — pertinence faille → preuves externes", (
   });
 
   it("mappe la faille travaux sur les chantiers routiers", () => {
-    const types = typesPreuvesPourFailles(["faille-travaux-signalisation"]);
+    const types = typesPreuvesPourFailles(["faille-panneau-non-conforme"]);
     expect(types.has("TRAVAUX")).toBe(true);
   });
 
-  it("mappe la faille météo sur le bulletin météo", () => {
-    const types = typesPreuvesPourFailles(["faille-meteo-visibilite"]);
-    expect(types.has("METEO")).toBe(true);
+  it("n'expose plus de mapping météo (faille-meteo-visibilite = id fantôme retiré, audit lot 5)", () => {
+    expect(faillesPourTypePreuve("METEO")).toEqual([]);
+    expect(typesPreuvesPourFailles(["faille-certificat-etalonnage"]).has("METEO")).toBe(false);
   });
 
   it("fait l'union des types quand plusieurs failles sont pertinentes", () => {
     const types = typesPreuvesPourFailles([
       "faille-certificat-etalonnage",
-      "faille-travaux-signalisation",
+      "faille-panneau-non-conforme",
     ]);
     expect(types.has("RADAR")).toBe(true);
     expect(types.has("TRAVAUX")).toBe(true);
@@ -109,12 +109,10 @@ describe("typesPreuvesPourFailles — pertinence faille → preuves externes", (
 });
 
 describe("faillesPourTypePreuve — inverse : preuve externe → failles pertinentes", () => {
-  it("reste vide pour un type sans faille associée", () => {
-    // Il n'existe pas de mapping TELEMETRE… : on teste un type courant qui
-    // n'apparaît dans aucun mapping (aucune chance de faux positifs).
-    expect(faillesPourTypePreuve("METEO")).toContain("faille-meteo-visibilite");
+  it("retourne les failles du mapping pour chaque type", () => {
+    expect(faillesPourTypePreuve("METEO")).toEqual([]);
     expect(faillesPourTypePreuve("RADAR")).toContain("faille-certificat-etalonnage");
-    expect(faillesPourTypePreuve("TRAVAUX")).toContain("faille-travaux-signalisation");
+    expect(faillesPourTypePreuve("TRAVAUX")).toContain("faille-panneau-non-conforme");
   });
 
   it("correspond aux failles qui pointent réellement vers le type", () => {

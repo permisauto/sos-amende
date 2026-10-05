@@ -194,7 +194,9 @@ export async function POST(req: Request) {
     // Sans document fourni : la démo simule le téléversement d'un échantillon.
     if (!texte) {
       texte = ECHANTILLONS[type];
-      data = { ...data, ...normaliserPv(texte) };
+      // Les saisies manuelles du formulaire priment sur l'échantillon simulé
+      // (audit lot 5 : l'écrasement précédent écrasait plaque/date saisies).
+      data = { ...normaliserPv(texte), ...data };
       // Identité fictive pour la lettre démo (remplissage du template).
       data.nom = data.nom ?? "Alex Martin";
       simule = true;

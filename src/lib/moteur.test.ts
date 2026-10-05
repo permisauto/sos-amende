@@ -458,3 +458,16 @@ describe("scoreFaille", () => {
     ).toEqual({ matchees: 1, total: 1, score: 88, calibree: true });
   });
 });
+
+describe("FAILLE_IDS — synchronisation seed (audit lot 5)", () => {
+  it("ne contient que les 4 failles AMENDE seedées (aucun id fantôme)", () => {
+    expect([...Object.values(FAILLE_IDS)].sort()).toEqual(
+      [
+        "faille-certificat-etalonnage",
+        "faille-erreur-plaque",
+        "faille-mentions-obligatoires",
+        "faille-prescription-1-an",
+      ].sort(),
+    );
+  });
+});

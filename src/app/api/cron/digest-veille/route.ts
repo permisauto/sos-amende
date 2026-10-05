@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { verifierSecretCron } from "@/lib/cron-auth";
 import { sourcesNouvelles } from "@/lib/veille-ingestion";
 import { notifierDigestVeille } from "@/lib/notifications";
 
@@ -15,18 +16,15 @@ import { notifierDigestVeille } from "@/lib/notifications";
  * `?jours=14` élargit la fenêtre.
  */
 export async function GET(req: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret && process.env.NODE_ENV === "production") {
+  const auth = verifierSecretCron(req);
+  if (auth === "secret-absent") {
     return NextResponse.json(
       { error: "CRON_SECRET non configuré en production" },
       { status: 500 },
     );
   }
-  if (secret) {
-    const auth = req.headers.get("authorization");
-    if (auth !== `Bearer ${secret}`) {
-      return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
-    }
+  if (auth === "non-autorise") {
+    return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
   }
 
   const url = new URL(req.url);

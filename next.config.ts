@@ -10,11 +10,16 @@ const securityHeaders = [
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
   // CSP : pas de script inline généré par nous (Next.js APP Router inclut les
   // scripts NextJS en 'unsafe-inline' — impossible de s'en passer sans nonce).
+  // 'unsafe-eval' reste réservé au dev : la config est évaluée à la
+  // construction, un build de production (Vercel/E2E) part donc sans eval
+  // (audit lot 5 — aucun eval/new Function dans le code applicatif).
   {
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      `script-src 'self' 'unsafe-inline'${
+        process.env.NODE_ENV === "production" ? "" : " 'unsafe-eval'"
+      }`,
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",

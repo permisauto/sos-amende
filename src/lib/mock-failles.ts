@@ -21,12 +21,6 @@ const isHistorique = new Set([
   "faille-mentions-obligatoires",
   "faille-erreur-plaque",
   "faille-certificat-etalonnage",
-  "faille-travaux-signalisation",
-  "faille-meteo-visibilite",
-  "faille-cession-vehicule",
-  "faille-conducteur-different",
-  "faille-paiement-deja-effectue",
-  "faille-adresse-erronee",
   "faille-prescription-peine-3ans",
 ]);
 

@@ -42,17 +42,19 @@ export type ExtractedData = {
   suspRefereEngage?: boolean;
 };
 
+/**
+ * Ids calibrés = les 4 failles AMENDE seedées et validées (`FAILLES.md` §A).
+ * Synchronisation stricte avec `prisma/seed.ts` — un id absent de la base ne
+ * peut être ni détecté ni scoré « calibré » (audit lot 5 : les 6 ids
+ * fantômes « questionnaire » — travaux/meteo/cession/conducteur/paiement/
+ * adresse — n'existaient en base sur aucun environnement ; leur déclenchement
+ * passe par `reglesDetection` des failles réelles, jamais par un id inventé).
+ */
 export const FAILLE_IDS = {
   prescription: "faille-prescription-1-an",
   mentions: "faille-mentions-obligatoires",
   erreurPlaque: "faille-erreur-plaque",
   etalonnage: "faille-certificat-etalonnage",
-  travaux: "faille-travaux-signalisation",
-  meteo: "faille-meteo-visibilite",
-  cession: "faille-cession-vehicule",
-  conducteur: "faille-conducteur-different",
-  paiement: "faille-paiement-deja-effectue",
-  adresse: "faille-adresse-erronee",
 } as const;
 
 export function datePrescrite(datePv?: string): boolean {
@@ -159,17 +161,12 @@ export type FailleDetectable = {
   reglesDetection?: RegleDetection[] | null;
 };
 
-// Ordre de priorité — questionnaire + preuves d'abord (très pointu, chaque réponse = faille)
+// Ordre de priorité de restitution des candidates (les 4 failles seedées) :
+// prescription > erreur de plaque > étalonnage > mentions.
 const PRIORITE_DETECTION = [
   FAILLE_IDS.prescription,
   FAILLE_IDS.erreurPlaque,
   FAILLE_IDS.etalonnage,
-  FAILLE_IDS.travaux,
-  FAILLE_IDS.meteo,
-  FAILLE_IDS.cession,
-  FAILLE_IDS.conducteur,
-  FAILLE_IDS.paiement,
-  FAILLE_IDS.adresse,
   FAILLE_IDS.mentions,
 ];
 
@@ -293,18 +290,6 @@ function predicatHerite(
       return !data.numTelePaiement || !data.cle || d.adresseIncorrecte === true;
     case FAILLE_IDS.etalonnage:
       return !!contexte?.dateExpirationEtalonnage && etalonnageExpire(contexte.dateExpirationEtalonnage, data.date);
-    case FAILLE_IDS.travaux:
-      return d.travaux_présents === true;
-    case FAILLE_IDS.meteo:
-      return meteoDefavorable(d.conditions_meteo as string | undefined);
-    case FAILLE_IDS.cession:
-      return d.vehiculeCede === true;
-    case FAILLE_IDS.conducteur:
-      return d.conducteurDifferent === true || d.vehiculeVole === true;
-    case FAILLE_IDS.paiement:
-      return d.paiementDejaFait === true;
-    case FAILLE_IDS.adresse:
-      return d.adresseIncorrecte === true;
     default:
       return false;
   }
@@ -495,30 +480,6 @@ export function scoreFaille(
       base = 82;
       if (d.preuveEtalonnage || contexte?.dateExpirationEtalonnage) bonus += 13;
       if (d.lieu) bonus += 5;
-      break;
-    case FAILLE_IDS.travaux:
-      base = 78;
-      if (d.lieu) bonus += 8;
-      if (texte && /travaux|chantier/i.test(texte)) bonus += 6;
-      break;
-    case FAILLE_IDS.meteo:
-      base = 74;
-      if (d.lieu) bonus += 6;
-      if (d.conditions_meteo) bonus += 8;
-      break;
-    case FAILLE_IDS.cession:
-      base = 85;
-      if (d.vehiculeCede) bonus += 10;
-      break;
-    case FAILLE_IDS.conducteur:
-      base = d.vehiculeVole ? 92 : 80;
-      break;
-    case FAILLE_IDS.paiement:
-      base = 90;
-      break;
-    case FAILLE_IDS.adresse:
-      base = 76;
-      if (d.adresse && d.lieu) bonus += 8;
       break;
     default:
       if (texte && texte.length > 200) bonus += 3;

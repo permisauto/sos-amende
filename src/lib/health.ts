@@ -6,7 +6,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { storageWrite, storageDelete } from "@/lib/storage";
 import { consommerCreneau } from "@/lib/rate-limit";
-import { timingSafeEqual } from "node:crypto";
+import { secretsEgaux } from "@/lib/cron-auth";
 
 export type HealthStatus = "healthy" | "degraded" | "unhealthy";
 
@@ -29,7 +29,6 @@ export interface HealthCheckResponse {
 }
 
 const START_TIME = Date.now();
-const APP_VERSION = process.env.npm_package_version ?? "0.1.0";
 
 function getStatus(latencyMs?: number, error?: string): HealthStatus {
   if (error) return "unhealthy";
@@ -39,8 +38,6 @@ function getStatus(latencyMs?: number, error?: string): HealthStatus {
 
 async function checkSupabase(): Promise<HealthCheckResult> {
   const start = Date.now();
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_ANON_KEY;
 
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
     return {
@@ -92,7 +89,6 @@ async function checkSupabase(): Promise<HealthCheckResult> {
 
 async function checkGroq(): Promise<HealthCheckResult> {
   const start = Date.now();
-  const apiKey = process.env.GROQ_API_KEY;
 
   if (!process.env.GROQ_API_KEY) {
     return {
@@ -185,8 +181,6 @@ async function checkDataGouv(): Promise<HealthCheckResult> {
     );
     clearTimeout(timeout);
 
-    const latencyMs = Date.now() - start;
-
     if (!res.ok) {
       return {
         name: "data.gouv.fr (radars)",
@@ -225,8 +219,6 @@ async function checkOpenMeteo(): Promise<HealthCheckResult> {
       { signal: controlleur.signal }
     );
     clearTimeout(timeout);
-
-    const latencyMs = Date.now() - start;
 
     if (!res.ok) {
       return {
@@ -331,12 +323,9 @@ function secretHealthValide(req: Request): boolean {
   )
     .replace(/^Bearer\s+/i, "")
     .trim();
-  if (fourni.length !== secret.length) return false;
-  try {
-    return timingSafeEqual(Buffer.from(fourni), Buffer.from(secret));
-  } catch {
-    return false;
-  }
+  // Comparaison constante du temps sur sha256 : jamais de fuite de longueur
+  // (audit lot 5 — cf. `secretsEgaux`, partagée avec les endpoints cron).
+  return secretsEgaux(fourni, secret);
 }
 
 export async function GET(req: Request) {

@@ -27,9 +27,7 @@ const PREUVES_PAR_FAILLE: Record<string, TypePreuveExterne[]> = {
   "faille-certificat-etalonnage": ["RADAR"],
   "faille-etalonnage-jurisprudence": ["RADAR"],
   "faille-homologation-radar": ["RADAR"],
-  "faille-travaux-signalisation": ["TRAVAUX"],
   "faille-panneau-non-conforme": ["TRAVAUX"],
-  "faille-meteo-visibilite": ["METEO"],
 };
 
 /**
