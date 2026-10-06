@@ -19,5 +19,10 @@ export async function baseUrlApp(repli = "http://localhost:3000"): Promise<strin
   } catch {
     // Absence de contexte requête (tests, CLI).
   }
-  return process.env.NEXT_PUBLIC_APP_URL ?? repli;
+  // En production, repli jamais localhost : domaine réel de l'app (une
+  // URL canonique ou un lien de notification en localhost casserait les
+  // redirections hors requête). `repli` reste le chemin dev/E2E.
+  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL;
+  if (process.env.NODE_ENV === "production") return "https://recours-permis-pv.com";
+  return repli;
 }

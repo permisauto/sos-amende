@@ -13,7 +13,13 @@ const geistMono = Geist_Mono({
 });
 
 function getBaseUrl(): URL {
-  const raw = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  // Repli dynamique : en production, jamais localhost — domaine réel de
+  // l'app ; localhost réservé au dev local.
+  const raw =
+    process.env.NEXT_PUBLIC_APP_URL ??
+    (process.env.NODE_ENV === "production"
+      ? "https://recours-permis-pv.com"
+      : "http://localhost:3000");
   // Strip BOM (U+FEFF) anywhere, quotes, and whitespace — Vercel CLI on Windows may inject BOM
   const cleaned = raw.replace(/\uFEFF/g, "").replace(/^"+|"+$/g, "").trim();
   try {
