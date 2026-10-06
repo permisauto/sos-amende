@@ -48,7 +48,15 @@ export default auth((req) => {
     return NextResponse.redirect(new URL("/login", nextUrl));
   }
 
-  if (isLoggedIn && nextUrl.pathname === "/login") {
+  // Redirection réservée aux navigations (GET/HEAD) : un POST de server
+  // action (formulaire de connexion) reçu ici serait rejoué en 307 contre
+  // /dashboard, où l'identifiant d'action n'existe pas → page d'erreur.
+  // Laisser passer le POST permet aussi de changer de compte depuis /login.
+  if (
+    isLoggedIn &&
+    nextUrl.pathname === "/login" &&
+    (req.method === "GET" || req.method === "HEAD")
+  ) {
     return NextResponse.redirect(new URL("/dashboard", nextUrl));
   }
 
