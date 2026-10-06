@@ -25,6 +25,7 @@ import type { SourceJuridique } from "@/generated/prisma/client";
 import {
   analyserArchiveGz,
   archiveAcceptable,
+  dernierTokenValide,
   LISTINGS_DILA,
   type CodeSource,
   type SourceDila,
@@ -71,15 +72,28 @@ export async function recupererListing(code: CodeSource): Promise<string[]> {
   }
 }
 
-/** Archive déjà ingérée, d'après la dernière trace de cette source. */
+/** Token de reprise attendu dans le détail d'une trace : la dernière archive réellement ingérée. */
+const MARQUEUR_ARCHIVE_RE = /derniere=([A-Z]+_\d{8}-\d{6}\.tar\.gz)/;
+
+/**
+ * Archive déjà ingérée, d'après les traces récentes de cette source. On
+ * remonte jusqu'au premier token valide : une trace « ECHEC » sans token
+ * (index injoignable) ou l'ancien marqueur `derniere=aucune` ne doit pas
+ * écraser le vrai point de reprise — au risque de sauter des archives ou de
+ * reprendre l'ingestion depuis le début de l'historique.
+ */
 export async function derniereArchiveTraitee(code: CodeSource): Promise<string | null> {
   try {
-    const trace = await prisma.autoAlimentationTrace.findFirst({
+    const traces = await prisma.autoAlimentationTrace.findMany({
       where: { campagne: `veille-dila:${code}` },
       orderBy: { createdAt: "desc" },
+      take: 10,
       select: { detail: true },
     });
-    return trace?.detail?.match(/derniere=([^\s]+)/)?.[1] ?? null;
+    return dernierTokenValide(
+      traces.map((t) => t.detail),
+      MARQUEUR_ARCHIVE_RE,
+    );
   } catch {
     return null;
   }
@@ -186,35 +200,54 @@ export async function ingererSource(code: CodeSource): Promise<BilanSource> {
     erreur: null,
   };
 
+  // Point de reprise lu AVANT l'index : il doit figurer dans tous les types
+  // de trace (y compris « index injoignable »), sinon une coupure réseau
+  // efface le marqueur et les archives intermédiaires sont sautées.
+  const derniere = await derniereArchiveTraitee(code);
+
   const listing = await recupererListing(code);
   if (listing.length === 0) {
     bilan.erreur = "index injoignable";
+    bilan.archive = derniere;
+    await enregistrerTraceAutoAlimentation({
+      campagne: `veille-dila:${code}`,
+      statut: "ECHEC",
+      traitees: 0,
+      nouvelles: 0,
+      detail: `0 archive(s), derniere=${derniere ?? "aucune"}, 0 publication(s) — ERREUR: index injoignable`,
+    });
     return bilan;
   }
 
-  const derniere = await derniereArchiveTraitee(code);
   const aTraiter = archivesATraiter(listing, derniere);
   bilan.archives = aTraiter.length;
 
   for (const nom of aTraiter) {
-    bilan.archive = nom;
     const gz = await telechargerArchive(code, nom);
     if (!gz) {
+      // Échec de téléchargement (transitoire la plupart du temps) : on arrête
+      // le lot SANS avancer le marqueur — le point de reprise reste au dernier
+      // lot réussi et l'archive ratée sera reprise au prochain passage. Une
+      // archive sautée au milieu serait perdue définitivement.
       bilan.erreur = `archive ${nom} illisible ou trop grosse`;
-      continue;
+      break;
     }
-    let publications: SourceDila[];
+    let publications: SourceDila[] = [];
     try {
       publications = analyserArchiveGz(code, gz);
     } catch (e) {
-      bilan.erreur = `analyse ${nom} impossible`;
+      // Archive corrompue : on la marque traitée (inutile de la revoir) et on
+      // continue — se bloquer dessus arrêterait toute ingestion future.
+      bilan.erreur = `analyse ${nom} impossible — archive sautée`;
       console.error("veille-dila: archive illisible", nom, e);
-      continue;
     }
     bilan.publiees += publications.length;
     for (const p of publications) {
       if (await enregistrerSource(p, nom)) bilan.retenues += 1;
     }
+    // Marqueur avancé seulement après téléchargement réussi de l'archive
+    // (jamais avant : un simple échec réseau ne doit pas la marquer traitée).
+    bilan.archive = nom;
   }
 
   await enregistrerTraceAutoAlimentation({
@@ -223,7 +256,7 @@ export async function ingererSource(code: CodeSource): Promise<BilanSource> {
     traitees: bilan.publiees,
     nouvelles: bilan.retenues,
     detail: `${bilan.archives} archive(s), derniere=${
-      bilan.archive ?? "aucune"
+      bilan.archive ?? derniere ?? "aucune"
     }, ${bilan.retenues} publication(s) pertinente(s)${
       bilan.erreur ? ` — ERREUR: ${bilan.erreur}` : ""
     }`,

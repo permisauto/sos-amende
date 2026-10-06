@@ -5,6 +5,7 @@ import {
   analyserTexteJorf,
   archiveAcceptable,
   decoderEntites,
+  dernierTokenValide,
   extraireTag,
   sourceDeArchive,
   texteDeXml,
@@ -282,5 +283,64 @@ describe("veille-dila — archive", () => {
     expect(archiveAcceptable(Number.POSITIVE_INFINITY)).toBe(false);
     expect(archiveAcceptable(64 * 1024 * 1024 + 1)).toBe(false);
     expect(archiveAcceptable(1024)).toBe(true);
+  });
+});
+
+describe("dernierTokenValide — reprise à partir des traces", () => {
+  const MARQUEUR = /derniere=([A-Z]+_\d{8}-\d{6}\.tar\.gz)/;
+  const EDITION = /edition=([^\s]+)/;
+
+  it("retourne le token de la trace la plus récente (ordre desc)", () => {
+    expect(
+      dernierTokenValide(
+        [
+          "3 archive(s), derniere=CASS_20261004-215500.tar.gz, 0 publication(s)",
+          "1 archive(s), derniere=CASS_20260930-215413.tar.gz, 1 publication(s)",
+        ],
+        MARQUEUR,
+      ),
+    ).toBe("CASS_20261004-215500.tar.gz");
+  });
+
+  it("ignore une trace ECHEC sans token et retombe sur la trace valide plus ancienne", () => {
+    // Répertoire injoignable : le détail ne contient aucun marqueur — le vrai
+    // point de reprise reste sur la dernière trace OK (régression Lot A).
+    expect(
+      dernierTokenValide(
+        ["index injoignable", "1 archive(s), derniere=JADE_20261001-214554.tar.gz, 3 publication(s)"],
+        MARQUEUR,
+      ),
+    ).toBe("JADE_20261001-214554.tar.gz");
+  });
+
+  it("ignore l'ancien marqueur « derniere=aucune » (empoisonné)", () => {
+    // Écrit quand rien n'était à traiter : le traiter comme un point de
+    // reprise faisait reprendre l'ingestion depuis le début de l'historique.
+    expect(
+      dernierTokenValide(
+        [
+          "0 archive(s), derniere=aucune, 0 publication(s) pertinente(s)",
+          "1 archive(s), derniere=CASS_20260930-215413.tar.gz, 1 publication(s)",
+        ],
+        MARQUEUR,
+      ),
+    ).toBe("CASS_20260930-215413.tar.gz");
+  });
+
+  it("retourne null sans aucun token valide", () => {
+    expect(dernierTokenValide(["répertoire JORF injoignable", null], EDITION)).toBeNull();
+    expect(dernierTokenValide([], EDITION)).toBeNull();
+  });
+
+  it("extrait aussi un token d'édition JORF", () => {
+    expect(
+      dernierTokenValide(
+        [
+          "edition=JORF_20261006-002605.tar.gz (06/10/2026 à 00h26)",
+          "répertoire JORF injoignable",
+        ],
+        EDITION,
+      ),
+    ).toBe("JORF_20261006-002605.tar.gz");
   });
 });

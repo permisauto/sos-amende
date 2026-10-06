@@ -14,6 +14,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { dernierTokenValide } from "@/lib/veille-dila";
 
 export const JORF_LISTING_URL = "https://echanges.dila.gouv.fr/OPENDATA/JORF/";
 
@@ -87,17 +88,26 @@ export function tokenEditionJorf(e: EditionJorf): string {
 }
 
 /**
- * Lit la dernière édition JORF connue (issue de la dernière trace veille-jorf).
+ * Lit la dernière édition JORF connue (issue des traces veille-jorf).
+ *
+ * On remonte les traces récentes jusqu'au premier token `edition=` valide :
+ * une trace « ECHEC » (répertoire injoignable) porte un detail sans token et
+ * ne doit pas faire perdre l'édition de référence — sinon le passage suivant
+ * considère l'édition comme inconnue et ne signale plus « nouvelle édition »
+ * après une coupure.
  */
 async function derniereEditionConnue(): Promise<string | null> {
   try {
-    const trace = await prisma.autoAlimentationTrace.findFirst({
+    const traces = await prisma.autoAlimentationTrace.findMany({
       where: { campagne: "veille-jorf" },
       orderBy: { createdAt: "desc" },
+      take: 10,
       select: { detail: true },
     });
-    const m = trace?.detail?.match(/edition=([^\s]+)/);
-    return m ? m[1] : null;
+    return dernierTokenValide(
+      traces.map((t) => t.detail),
+      /edition=([^\s]+)/,
+    );
   } catch {
     return null;
   }

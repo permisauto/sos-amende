@@ -252,3 +252,28 @@ export function archiveAcceptable(taille: number): boolean {
 export function analyserArchiveGz(source: CodeSource, gz: Buffer): SourceDila[] {
   return analyserArchive(source, extraireTarGz(gz));
 }
+
+/**
+ * Extrait l'état de reprise le plus récent parmi des détails de traces
+ * (`AutoAlimentationTrace.detail`), en remontant de la trace la plus
+ * récente vers la plus ancienne.
+ *
+ * Ignore les lignes sans token valide : trace « ECHEC » sans état (répertoire
+ * DILA injoignable) et ancien marqueur poison `derniere=aucune` (écrit quand
+ * rien n'était à traiter — le traiter comme un marqueur réel faisait
+ * reprendre l'ingestion depuis le début de l'historique). Le premier token
+ * trouvé est donc toujours un vrai point de reprise.
+ *
+ * `motif` doit capturer l'état dans le groupe 1 et ne doit pas être global.
+ */
+export function dernierTokenValide(
+  details: readonly (string | null | undefined)[],
+  motif: RegExp,
+): string | null {
+  for (const d of details) {
+    if (!d) continue;
+    const m = d.match(motif);
+    if (m?.[1]) return m[1];
+  }
+  return null;
+}
