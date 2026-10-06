@@ -15,7 +15,7 @@ import {
   type RegleDetection,
 } from "@/lib/moteur";
 import { generateLettrePdf } from "@/lib/lettre-pdf";
-import { extrairePv, getOcrProvider, normaliserPv } from "@/lib/ocr";
+import { extrairePv, getOcrProvider, fusionnerPrefill } from "@/lib/ocr";
 import { notifierStatut } from "@/lib/notifications";
 import { prixBase } from "@/lib/tarifs";
 import { formaterLettreOfficielle } from "@/lib/envoi";
@@ -134,15 +134,11 @@ export async function createDossier(
       }),
     );
     if (ocr) {
-      // Gemini renvoie des champs structurés (plus fiables que les regex) ;
-      // sinon on applique normaliserPv sur le texte brut (providers classiques).
-      const prefill: Record<string, string> = {};
-      const struct = ocr.extrait;
-      if (struct && Object.keys(struct).length > 0) {
-        Object.assign(prefill, struct);
-      } else {
-        Object.assign(prefill, normaliserPv(ocr.texte));
-      }
+      // Fusion : champs structurés du provider (Gemini) d'abord, puis
+      // complément par les regex locales — l'ancien « struct OU regex »
+      // laissait « Nom » vide sur les PDF à couche texte (lecture locale
+      // sans extrait) et perdait prefecture/duree/motif sans Gemini.
+      const prefill = fusionnerPrefill(ocr.extrait, ocr.texte);
       await prisma.dossier.update({
         where: { id: dossier.id },
         data: { pvTexte: ocr.texte, extractedData: prefill },

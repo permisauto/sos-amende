@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { estTransitoire, extrairePv, getOcrProvider, normaliserPv } from "./ocr";
+import { estTransitoire, extrairePv, fusionnerPrefill, getOcrProvider, normaliserPv } from "./ocr";
 
 const PV_TEXTE = `CONTRAVENTION
 N° 123456789
@@ -9,6 +9,28 @@ Vous êtes avisé d'une infraction commise le 01/07/2026 à 14h32.
 Véhicule : AB-123-CD
 Montant : 135 €
 N° de télé-paiement 123456789, clé 02`;
+
+/** Extrait réel d'un avis de contravention à couche texte (prod 2026-10-06) :
+ * c'est ce document qui révélait le champ « Nom » vide côté client. */
+const PV_OFFICIEL = `RÉPUBLIQUE FRANÇAISE
+Ministère de l'Intérieur
+AVIS DE CONTRAVENTION
+Numéro de l'avis : 37592048152634
+Date de l'avis : 14/04/2026
+1. DESCRIPTION DE L'INFRACTION
+Nature : Excès de vitesse inférieur à 20 km/h par conducteur de véhicule à moteur -
+Date/Heure : Le 08/04/2026 à 14h23
+Lieu : Avenue de la République, Face au n°42 - METZ (57000)
+2. DONNÉES TECHNIQUES & MESURES
+Vitesse retenue : 59 km/h
+Appareil : RADAR TYPE MESTA 210C - N° 1248
+3. IDENTIFICATION DU VÉHICULE & TITULAIRE
+Immatriculation : AA-123-BB (F)
+Titulaire : MARTIN Jean
+Adresse : 15 Rue des Lilas, Apt 4B
+75011 PARIS
+5. MONTANTS DES AMENDES FORFAITAIRES
+• Amende Minorée (15 jours max) : 90,00 €`;
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -534,6 +556,63 @@ describe("normaliserPv — plaques (confusions d'OCR)", () => {
 
   it("ne cherche pas de plaque sans contexte véhicule", () => {
     expect(normaliserPv("Contrôle à 12h30 le 01/07/2026").plaque).toBeUndefined();
+  });
+});
+
+describe("normaliserPv — PV officiel à couche texte (prod 2026-10-06)", () => {
+  it("extrait le nom près de « Titulaire : »", () => {
+    expect(normaliserPv(PV_OFFICIEL).nom).toBe("MARTIN Jean");
+  });
+
+  it("n° d'avis sous la forme officielle « Numéro de l'avis » → 14 chiffres", () => {
+    expect(normaliserPv(PV_OFFICIEL).num_pv).toBe("37592048152634");
+  });
+
+  it("trouve la plaque en section 3 malgré « véhicule » en section 1", () => {
+    expect(normaliserPv(PV_OFFICIEL).plaque).toBe("AA-123-BB");
+  });
+
+  it("extrait typeRadar et radarId près de « Appareil : »", () => {
+    const d = normaliserPv(PV_OFFICIEL);
+    expect(d.typeRadar).toBe("RADAR TYPE MESTA 210C");
+    expect(d.radarId).toBe("1248");
+  });
+
+  it("adresse propre sur deux lignes (sans rubriques voisines)", () => {
+    expect(normaliserPv(PV_OFFICIEL).adresse).toBe(
+      "15 Rue des Lilas, Apt 4B 75011 PARIS",
+    );
+  });
+
+  it("nom : aucun libellé → jamais de nom inventé", () => {
+    expect(normaliserPv(PV_TEXTE).nom).toBeUndefined();
+    expect(normaliserPv("aucune donnée exploitable !").nom).toBeUndefined();
+  });
+});
+
+describe("fusionnerPrefill (struct Gemini ∪ regex locales)", () => {
+  it("sans extrait (PDF à couche texte) → tout vient des regex", () => {
+    const f = fusionnerPrefill(undefined, PV_OFFICIEL);
+    expect(f.nom).toBe("MARTIN Jean");
+    expect(f.plaque).toBe("AA-123-BB");
+    expect(f.num_pv).toBe("37592048152634");
+  });
+
+  it("le struct garde la priorité et les regex comblent les manquants", () => {
+    const f = fusionnerPrefill({ nom: "DUPONT Marie" }, PV_OFFICIEL);
+    expect(f.nom).toBe("DUPONT Marie"); // jamais écrasé
+    expect(f.num_pv).toBe("37592048152634"); // comblé par regex
+    expect(f.plaque).toBe("AA-123-BB"); // comblé par regex
+  });
+
+  it("remplace une plaque struct au format invalide par la plaque regex", () => {
+    const f = fusionnerPrefill({ plaque: "545526" }, PV_OFFICIEL);
+    expect(f.plaque).toBe("AA-123-BB");
+  });
+
+  it("conserve une plaque struct valide", () => {
+    const f = fusionnerPrefill({ plaque: "BB-999-AA" }, PV_OFFICIEL);
+    expect(f.plaque).toBe("BB-999-AA");
   });
 });
 

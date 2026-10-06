@@ -398,6 +398,9 @@ async function geminiFlashOcrUnEssai(buffer: Buffer): Promise<OcrResult | null> 
       "radarId",
       "adresse",
       "lieu",
+      "prefecture",
+      "duree",
+      "motif",
     ] as const) {
       const v = parse[champ];
       if (typeof v === "string" && v.trim()) extrait[champ] = v.trim().slice(0, 140);
@@ -448,6 +451,9 @@ const PROMPT_EXTRACTION_JSON = `Lis cet avis de contravention (ou cette décisio
 - "radarId" : numéro d'identification du radar (ex : 1248)
 - "lieu" : lieu de l'infraction (ex : Avenue de la République - METZ)
 - "adresse" : adresse du titulaire (rue + code postal + ville)
+- "prefecture" : préfecture émettrice de la décision si mentionnée (ex : Préfecture de la Gironde)
+- "duree" : durée de suspension ou de rétention si mentionnée (ex : 6 mois)
+- "motif" : motif de la suspension si mentionné (ex : alcoolémie)
 - "numTelePaiement" : numéro de télépaiement complet s'il figure
 - "cle" : clé de télépaiement (1 chiffre) si elle figure`;
 
@@ -679,9 +685,11 @@ const DATE_ISO_RE = /\b(\d{4})-(\d{2})-(\d{2})\b/;
 const HEURE_RE = /(\d{1,2})[hH:.](\d{2})/;
 const MONTANT_RE = /(\d{1,3}(?:[\s.]\d{3})*(?:[,.]\d{2})?)\s*(?:€|euros?)/i;
 const NUM_RE = /(\d{3,4}[\s-]?\d{3,4}[\s-]?\d{3,4})/;
-/** Numéro près d'un libellé d'avis (« N° d'avis… ») — évite de capter un
- * montant, une date ou le n° de télépaiement. */
-const NUM_AVIS_RE = /\b(?:n[°º]\s*d['’]?\s*avis|avis(?:\s+de\s+contravention)?\s+n[°º]|proc(?:è|e)s-verbal\s+n[°º])\s*[^\d]{0,30}(\d[\d\s.-]{7,18}\d)/i;
+/** Numéro près d'un libellé d'avis (« N° d'avis… », « Numéro de l'avis : » —
+ * la forme officielle des avis) — évite de capter un montant, une date ou le
+ * n° de télépaiement, et surtout de retomber sur le repli NUM_RE (12 chiffres
+ * max) qui tronquait les vrais numéros d'avis (14 chiffres). */
+const NUM_AVIS_RE = /\b(?:n[°º]\s*d['’]?\s*avis|num[ée]ro\s+de\s+l['’]\s*avis|n[°º]\s+de\s+l['’]\s*avis|avis(?:\s+de\s+contravention)?\s+n[°º]|proc(?:è|e)s-verbal\s+n[°º])\s*[^\d]{0,30}(\d[\d\s.-]{7,18}\d)/i;
 /** Télépaiement : numéro de paiement en ligne (2 formats : groupé ou avec
  * espaces, le nom n° 1234567890123). */
 const TELEPAIEMENT_RE = /t[ée]l[ée]?[-\s]?paiement\s*(?:n[°º])?\s*[^\d]{0,15}(\d[\d\s-]{7,18}\d)/i;
@@ -695,12 +703,21 @@ const PLAQUE_FNI_RE = /\b\d{2,4}[\s-][A-Z]{1,2}[\s-]\d{2,3}\b/;
 /** Passage permissif : 3 segments libres (lettres ou chiffres) — sert à
  * réparer les confusions d'OCR (0↔O, 1↔I) en contexte véhicule. */
 const PLAQUE_PERMISE_RE = /\b([A-Z0-9]{2,4})[\s-]([A-Z0-9]{2,4})[\s-]([A-Z0-9]{2,3})\b/;
-/** Adresse : tolérant — numéro + rue/bd/av/... + code postal + ville (1 ou 2 lignes). */
-const ADRESSE_RE = /\b\d{1,4}\s+(?:rue|avenue|av\.?|boulevard|bd|chemin|impasse|all[eé]e|place|route|quai)[^\n]{0,80}\b\d{5}\s+[A-Za-zÉÈÀÂÊÎÔÛÇéèàâêîôûç\- ]{2,40}/i;
+/** Adresse : tolérant — numéro + rue/bd/av/... + code postal + ville. Le code
+ * postal peut être sur la ligne suivante (« 15 Rue des Lilas, Apt 4B↵75011
+ * PARIS ») : sans ce `\s+`, seul le repli (peu propre) captait l'adresse. */
+const ADRESSE_RE = /\b\d{1,4}\s+(?:rue|avenue|av\.?|boulevard|bd|chemin|impasse|all[eé]e|place|route|quai)[^\n]{0,60}\s+\d{5}\s+[A-Za-zÉÈÀÂÊÎÔÛÇéèàâêîôûç\- ]{2,40}/i;
 const ADRESSE_FALLBACK_RE = /\b\d{5}\s+[A-ZÉÈÀÂÊÎÔÛÇ][A-ZÉÈÀÂÊÎÔÛÇa-zéèàâêîôûç\- ]{2,30}\b/;
 /** Lieu d'infraction : après "lieu" ou "à" + adresse. */
 const LIEU_RE = /lieu[^\n]{0,5}[:\-]\s*([^\n]{5,80})/i;
 const LIEU_FALLBACK_RE = /(?:à|au|lieu)\s+([A-ZÉÈÀÂÊÎÔÛÇa-zéèàâêîôûç0-9][^\n]{5,60})/i;
+/** Nom du titulaire : exclusivement près d'un libellé explicite (« Titulaire :
+ * MARTIN Jean », « NOM/PRÉNOM : … », « Destinataire : … ») — jamais déduit
+ * d'une ligne libre (anti-hallucination). Même ligne uniquement (jamais `\s`
+ * qui inclut `\n` : sinon « MARTIN Jean↵Adresse : … » avalerait la rubrique). */
+const NOM_RE = /\b(?:nom\s*\/\s*pr[eé]nom|nom\s+du\s+titulaire|titulaire|propri[eé]taire|destinataire|conducteur|pr[eé]nom|nom)\s*[:\-]\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'’\- \t]{1,59})/iu;
+/** Radar : « Appareil : RADAR TYPE MESTA 210C - N° 1248 » (avis de vitesse). */
+const RADAR_RE = /\b(?:appareil(?:\s+de\s+mesure)?|cin[eé]mom[eè]tre|radar)\s*[:\-]\s*([^\n]{3,70})/i;
 
 /** Segment lettre : chiffres d'OCR (0→O, 1→I) réparés ; null si autre chiffre. */
 function segLettres(s: string): string | null {
@@ -734,23 +751,35 @@ function plaquePermise(source: string): string | undefined {
 }
 
 function extrairePlaque(texte: string): string | undefined {
-  // On cherche d'abord près des mots-clés pour éviter les faux positifs
-  // (heures, dates, numéros).
-  const ctx = texte.match(
-    /(?:v[eé]hicule|plaque|immatriculation|v[eé]rificateur)[^\n]{0,60}/i,
-  );
-  const source = ctx ? ctx[0] : texte;
+  // Toutes les fenêtres-clé du document, dans l'ordre du texte : un PV réel
+  // mentionne « véhicule » (section 1, souvent sans plaque) AVANT la vraie
+  // ligne « Immatriculation : AA-123-BB » (section 3) — la première fenêtre
+  // seule étouffait l'extraction (lacune détectée en prod le 2026-10-06).
+  const fenetres = [...texte.matchAll(
+    /(?:v[eé]hicule|plaque|immatriculation|v[eé]rificateur)[^\n]{0,60}/gi,
+  )].map((m) => m[0]);
 
-  const fni = source.match(PLAQUE_FNI_RE);
-  if (fni) return fni[0].replace(/\s+/g, "-").toUpperCase();
+  for (const f of fenetres) {
+    const fni = f.match(PLAQUE_FNI_RE);
+    if (fni) return fni[0].replace(/\s+/g, "-").toUpperCase();
+    const siv = f.match(PLAQUE_SIV_RE);
+    if (siv) return siv[0].replace(/\s+/g, "-").toUpperCase();
+  }
 
-  const siv = source.match(PLAQUE_SIV_RE);
-  if (siv) return siv[0].replace(/\s+/g, "-").toUpperCase();
+  // Repli strict sur l'ensemble du texte : une plaque présente sans libellé
+  // (ou dont le libellé n'est pas dans la liste) reste détectable.
+  const fniTexte = texte.match(PLAQUE_FNI_RE);
+  if (fniTexte) return fniTexte[0].replace(/\s+/g, "-").toUpperCase();
+  const sivTexte = texte.match(PLAQUE_SIV_RE);
+  if (sivTexte) return sivTexte[0].replace(/\s+/g, "-").toUpperCase();
 
   // Secours uniquement en contexte véhicule : les confusions 0/O et 1/I de
   // l'OCR ne doivent pas faire échouer la lecture — mais jamais globalement
   // (« 12 h 30 », dates… ne doivent pas devenir des plaques).
-  if (ctx) return plaquePermise(source);
+  for (const f of fenetres) {
+    const permissive = plaquePermise(f);
+    if (permissive) return permissive;
+  }
   return undefined;
 }
 
@@ -849,6 +878,25 @@ export function normaliserPv(texte: string): Partial<ExtractedData> {
   const plaque = extrairePlaque(texte);
   if (plaque) result.plaque = plaque;
 
+  // Nom du titulaire (libellé explicite, même ligne) — le champ « Nom » du
+  // formulaire est requis : sans cette règle, un PDF à couche texte (lecture
+  // locale, sans extrait Gemini) laissait le pré-remplissage vide.
+  const nomM = texte.match(NOM_RE);
+  if (nomM) {
+    const nom = nomM[1].replace(/[\s\-–—|:]+$/, "").replace(/\s+/g, " ").trim();
+    if (nom.length >= 2 && nom.length <= 60) result.nom = nom;
+  }
+
+  // Radar : type de l'appareil + numéro d'identification, près de « Appareil : ».
+  const radarM = texte.match(RADAR_RE);
+  if (radarM) {
+    const ligne = radarM[1];
+    const type = ligne.replace(/\s*[-–—]\s*n[°º].*$/i, "").replace(/\s+/g, " ").trim();
+    if (type) result.typeRadar = type.slice(0, 60);
+    const idM = ligne.match(/\bn[°º]\s*(\d{2,8})\b/i);
+    if (idM) result.radarId = idM[1];
+  }
+
   const date = extraireDate(texte);
   if (date) result.date = date;
 
@@ -867,7 +915,9 @@ export function normaliserPv(texte: string): Partial<ExtractedData> {
     result.heure = `${heureMatch[1].padStart(2, "0")}h${heureMatch[2]}`;
   }
 
-  // Adresse : essai strict puis fallback code postal générique (puis ligne autour)
+  // Adresse : essai strict (rue + code postal, 1 ou 2 lignes) puis repli code
+  // postal — borné aux lignes de rue/CP pour ne pas avaler les rubriques
+  // voisines (« 4. EMPLACEMENT CLIC », « Titulaire : … »).
   let adresse: string | undefined;
   const adresseMatch = texte.match(ADRESSE_RE);
   if (adresseMatch) adresse = adresseMatch[0];
@@ -875,11 +925,24 @@ export function normaliserPv(texte: string): Partial<ExtractedData> {
     const fallback = texte.match(ADRESSE_FALLBACK_RE);
     if (fallback) {
       const idx = fallback.index ?? 0;
-      const start = Math.max(0, idx - 40);
-      adresse = texte.slice(start, idx + fallback[0].length + 20).replace(/\n/g, " ");
+      const ligneCp = texte.lastIndexOf("\n", idx) + 1; // ligne du code postal
+      const lignePrec =
+        ligneCp >= 2 ? texte.lastIndexOf("\n", ligneCp - 2) + 1 : 0;
+      const finLigneCp = texte.indexOf("\n", idx);
+      const end =
+        finLigneCp === -1
+          ? Math.min(texte.length, idx + fallback[0].length + 20)
+          : finLigneCp;
+      adresse = texte.slice(Math.min(lignePrec, idx), end);
     }
   }
-  if (adresse) result.adresse = adresse.replace(/\s+/g, " ").trim().slice(0, 140);
+  if (adresse) {
+    result.adresse = adresse
+      .replace(/\s+/g, " ")
+      .replace(/[\s\-–—|:]+$/, "")
+      .trim()
+      .slice(0, 140);
+  }
 
   let lieu: string | undefined;
   const lieuMatch = texte.match(LIEU_RE);
@@ -935,4 +998,55 @@ export function normaliserPv(texte: string): Partial<ExtractedData> {
   }
 
   return result;
+}
+
+/** Un champ structuré n'est « fiable » (et donc jamais remplacé par la regex)
+ * que s'il respecte son format : sinon une valeur incohérente venant du
+ * provider (ex : plaque = numéro de dossier « 545526 ») étouffe la regex. */
+function formatChampFiable(cle: string, valeur: string): boolean {
+  if (cle === "plaque") {
+    return PLAQUE_SIV_RE.test(valeur) || PLAQUE_FNI_RE.test(valeur);
+  }
+  if (cle === "date") {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(valeur);
+    if (!m) return false;
+    const mois = Number(m[2]);
+    const jour = Number(m[3]);
+    return mois >= 1 && mois <= 12 && jour >= 1 && jour <= 31;
+  }
+  return true;
+}
+
+/**
+ * Pré-remplissage du formulaire d'analyse : **champs structurés du provider
+ * (Gemini) d'abord, puis complément par les regex locales** sur le texte.
+ *
+ * Avant cette fusion, `createDossier` appliquait `struct OU normaliserPv` —
+ * jamais les deux : un PDF à couche texte (lecture locale, extrait absent)
+ * laissait le champ « Nom » vide alors que « Titulaire : MARTIN Jean » était
+ * dans le texte, et les scans sans Gemini (repli) perdaient
+ * prefecture/duree/motif. Règle : la regex ne remplace une valeur structurée
+ * que si celle-ci est absente/vide **ou au format invalide** (plaque/date).
+ */
+export function fusionnerPrefill(
+  extrait: Partial<ExtractedData> | undefined,
+  texte: string,
+): Record<string, string> {
+  const prefill: Record<string, string> = {};
+  if (extrait) {
+    for (const [cle, valeur] of Object.entries(extrait)) {
+      if (typeof valeur === "string" && valeur.trim()) prefill[cle] = valeur;
+    }
+  }
+  const regex = normaliserPv(texte);
+  for (const [cle, valeur] of Object.entries(regex)) {
+    if (typeof valeur !== "string" || !valeur.trim()) continue;
+    const actuel = prefill[cle];
+    if (!actuel) {
+      prefill[cle] = valeur; // champ absent → comblé
+    } else if (!formatChampFiable(cle, actuel) && formatChampFiable(cle, valeur)) {
+      prefill[cle] = valeur; // format invalide remplacé par la valeur regex
+    }
+  }
+  return prefill;
 }
