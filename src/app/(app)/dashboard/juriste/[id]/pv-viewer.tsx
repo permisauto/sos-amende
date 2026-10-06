@@ -4,19 +4,17 @@ import { useState } from "react";
 
 /**
  * Aperçu du document versé par le client (avis de contravention / décision de
- * suspension) affiché à côté de la lettre pour le contrôle côte à côte :
+ * suspension), affiché dans la rangée « Pièces » sous le contrôle côte à côte :
  * image avec zoom et pivotement, PDF dans une iframe (repli « Ouvrir » en
- * cas d'iframe refusée), et le texte OCR extrait replié sous le média — le
- * juriste confronte la lettre au document source sans quitter la page.
+ * cas d'iframe refusée). Le texte OCR extrait a son propre panneau, à droite
+ * de la lettre — jamais replié ici.
  */
 export function PvViewer({
   url,
   titre,
-  pvTexte = null,
 }: {
   url: string | null;
   titre: string;
-  pvTexte?: string | null;
 }) {
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
@@ -121,17 +119,6 @@ export function PvViewer({
             className="h-full min-h-[18rem] w-full border-0"
           />
         </div>
-      )}
-
-      {pvTexte && (
-        <details className="border-t border-zinc-100 px-4 py-3">
-          <summary className="cursor-pointer select-none text-xs font-semibold uppercase tracking-wide text-zinc-500">
-            Texte extrait (OCR)
-          </summary>
-          <pre className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap break-words text-xs leading-relaxed text-zinc-700">
-            {pvTexte}
-          </pre>
-        </details>
       )}
     </section>
   );

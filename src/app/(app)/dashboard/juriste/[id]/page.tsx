@@ -689,8 +689,9 @@ export default async function JuristeCasePage(
           </div>
         )}
 
-      {/* Contrôle côte à côte : le document du client face à la lettre, pleine
-          largeur — le juriste confronte les deux sans quitter la page. */}
+      {/* Contrôle côte à côte : la lettre à gauche face au texte extrait (OCR)
+          à droite, pleine hauteur — le juriste confronte les deux sans quitter
+          la page ; le document versé et les pièces suivent en dessous. */}
       <section className="mt-6 overflow-hidden rounded-2xl border border-zinc-200 bg-white">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 bg-emerald-50/70 px-6 py-4">
           <div>
@@ -703,10 +704,7 @@ export default async function JuristeCasePage(
         </div>
         <div className="p-6">
           <div className="grid gap-6 lg:grid-cols-2">
-            <div className="order-2 min-w-0 lg:order-1 lg:h-[70vh]">
-              <PvViewer url={pvUrl} titre={titrePv} pvTexte={item.pvTexte} />
-            </div>
-            <div className="order-1 min-w-0 lg:order-2 lg:h-[70vh] lg:overflow-y-auto">
+            <div className="min-w-0 lg:h-[70vh] lg:overflow-y-auto">
               {editable ? (
                 <>
                   {item.lettreGeneree ? (
@@ -814,8 +812,36 @@ export default async function JuristeCasePage(
               )}
             </div>
 
+            {/* Texte extrait (OCR) : panneau dédié, toujours déplié — bonne
+                visibilité pour confronter la lettre au contenu du PV. */}
+            <section
+              data-testid="ocr-texte"
+              className="flex h-full min-h-[20rem] flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white lg:h-[70vh]"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 bg-zinc-50/70 px-4 py-3">
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
+                  Texte extrait (OCR)
+                </h2>
+                <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+                  Lecture automatique — à vérifier
+                </span>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+                {item.pvTexte ? (
+                  <pre className="whitespace-pre-wrap break-words text-sm leading-relaxed text-zinc-800">
+                    {item.pvTexte}
+                  </pre>
+                ) : (
+                  <p className="text-sm text-zinc-500">
+                    Aucun texte extrait pour ce dossier (OCR non abouti) —
+                    reportez-vous au document versé plus bas.
+                  </p>
+                )}
+              </div>
+            </section>
+
             {editable && (
-              <div className="order-3 border-t border-zinc-100 pt-6 lg:col-span-2">
+              <div className="border-t border-zinc-100 pt-6 lg:col-span-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
                   Prochaine étape
                 </p>
@@ -886,6 +912,36 @@ export default async function JuristeCasePage(
           </div>
         </div>
       </section>
+
+      {/* Pièces du dossier : document versé (aperçu zoom) à gauche, pièces
+          manquantes et justificatives à droite — juste sous le contrôle. */}
+      <div className="mt-6 grid gap-6 lg:grid-cols-2 lg:items-start">
+        <PvViewer url={pvUrl} titre={titrePv} />
+
+        <div className="flex min-w-0 flex-col gap-6">
+          {suggestionsPreuves.length > 0 && (
+            <PiecesManquantes
+              dossierId={item.id}
+              numPv={numPvExtrait}
+              pieces={suggestionsPreuves}
+            />
+          )}
+
+          <Preuves
+            dossierId={item.id}
+            preuves={preuvesDto}
+            currentUserId={null}
+            canDeleteAll={!lectureSeule}
+            suggestions={suggestionsPreuves}
+          />
+
+          <PreuvesApiBlock
+            dossierId={item.id}
+            lectureSeule={lectureSeule}
+            conditionsMeteo={item.conditions_meteo}
+          />
+        </div>
+      </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2 lg:items-start">
         <div className="flex flex-col gap-6">
@@ -1095,28 +1151,6 @@ export default async function JuristeCasePage(
               </div>
             )}
           </section>
-
-          {suggestionsPreuves.length > 0 && (
-            <PiecesManquantes
-              dossierId={item.id}
-              numPv={numPvExtrait}
-              pieces={suggestionsPreuves}
-            />
-          )}
-
-          <Preuves
-            dossierId={item.id}
-            preuves={preuvesDto}
-            currentUserId={null}
-            canDeleteAll={!lectureSeule}
-            suggestions={suggestionsPreuves}
-          />
-
-          <PreuvesApiBlock
-            dossierId={item.id}
-            lectureSeule={lectureSeule}
-            conditionsMeteo={item.conditions_meteo}
-          />
 
           {!lectureSeule &&
             (item.statut === "A_VERIFIER" ||
