@@ -2,11 +2,12 @@ import { expect, test } from "@playwright/test";
 import { analyserDossier, createDossier, loginAs } from "./helpers";
 
 // Contrôle côte à côté (lot juriste) : la lettre à gauche, le texte extrait
-// (OCR) à droite et toujours déplié pour une bonne visibilité — le document
-// versé et les pièces suivent juste en dessous.
+// (OCR) à droite toujours déplié, bouton de téléchargement du document au pied
+// du panneau OCR — plus d'aperçu intégré. Pièces justificatives, preuves
+// externes et pièces manquantes empilées en dessous de la lettre.
 
 test.describe("Juriste — contrôle lettre / document", () => {
-  test("lettre à gauche, texte OCR à droite, document et pièces en dessous", async ({
+  test("lettre à gauche, OCR à droite, bouton document sous l'OCR, pièces en dessous", async ({
     page,
     browser,
   }) => {
@@ -46,33 +47,34 @@ test.describe("Juriste — contrôle lettre / document", () => {
     // Le texte OCR est toujours déplié (pas de <details>) : contenu visible.
     await expect(ocr.getByText(/AB-123-CD/)).toBeVisible();
 
-    // Document versé : déplacé en dessous, dans la rangée « Pièces ».
-    const pv = jpage.getByTestId("pv-apercu");
-    await expect(pv).toBeVisible();
-    await expect(
-      pv.getByRole("heading", { name: "Avis de contravention" }),
-    ).toBeVisible();
-    const pvBox = (await pv.boundingBox())!;
-    expect(pvBox.y).toBeGreaterThan(ocrBox.y + ocrBox.height - 10);
+    // Aucun aperçu intégré du document : un seul bouton, au pied du panneau
+    // OCR, qui ouvre l'original dans un nouvel onglet.
+    await expect(jpage.getByTestId("pv-apercu")).toHaveCount(0);
+    const telecharger = ocr.getByRole("link", {
+      name: /Télécharger le document/,
+    });
+    await expect(telecharger).toBeVisible();
+    await expect(telecharger).toHaveAttribute("href", /\/uploads\//);
+    await expect(telecharger).toHaveAttribute("target", "_blank");
+    const boutonBox = (await telecharger.boundingBox())!;
+    expect(boutonBox.y).toBeGreaterThan(ocrBox.y);
+    expect(boutonBox.y).toBeLessThan(ocrBox.y + ocrBox.height);
 
-    // « Prochaine étape » : bandeau pleine largeur sous les deux colonnes,
-    // au-dessus de la rangée pièces (mesuré AVANT les clics de zoom, qui
-    // font défiler la page et faussent les coordonnées — on se repère sur le
-    // panneau OCR à hauteur fixe, le bouton « Modifier la lettre » pouvant
-    // être hors zone visible dans la colonne scrollable).
+    // « Prochaine étape » : bandeau pleine largeur sous les deux colonnes
+    // (mesuré avant tout déclenchement de scroll).
     const prochaine = jpage.getByText("Prochaine étape");
     await expect(prochaine).toBeVisible();
     const prochaineBox = (await prochaine.boundingBox())!;
     expect(prochaineBox.y).toBeGreaterThan(ocrBox.y + ocrBox.height - 100);
-    expect(prochaineBox.y).toBeLessThan(pvBox.y);
     expect(prochaineBox.x).toBeLessThanOrEqual(ocrBox.x + 1);
 
-    // PV téléversé en image : zoom pilotable (100 % → 125 %).
-    await expect(pv.getByRole("img", { name: "Avis de contravention" })).toBeVisible();
-    await pv.getByRole("button", { name: "Agrandir l'aperçu" }).click();
-    await expect(pv.getByText("125 %")).toBeVisible();
-    await pv.getByRole("button", { name: "Réduire l'aperçu" }).click();
-    await expect(pv.getByText("100 %")).toBeVisible();
+    // Pièces justificatives empilées en dessous de la lettre (section).
+    const preuves = jpage.getByRole("heading", {
+      name: "Pièces justificatives (preuves)",
+    });
+    await expect(preuves).toBeVisible();
+    const preuvesBox = (await preuves.boundingBox())!;
+    expect(preuvesBox.y).toBeGreaterThan(prochaineBox.y);
 
     await ctx.close();
   });

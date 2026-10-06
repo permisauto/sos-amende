@@ -6,7 +6,6 @@ import { storageUrl } from "@/lib/storage";
 import { JuristeActions, DecisionOmpForm } from "./juriste-actions";
 import { VerificationFailles } from "./verification-failles";
 import { LettreEdition } from "./lettre-edition";
-import { PvViewer } from "./pv-viewer";
 import { GenerateurLettre } from "./generateur-lettre";
 import { AvocatTraitement } from "./avocat-traitement";
 import { SuggestionsDrawer } from "./suggestions-drawer";
@@ -691,7 +690,8 @@ export default async function JuristeCasePage(
 
       {/* Contrôle côte à côte : la lettre à gauche face au texte extrait (OCR)
           à droite, pleine hauteur — le juriste confronte les deux sans quitter
-          la page ; le document versé et les pièces suivent en dessous. */}
+          la page ; le document original se télécharge via un bouton au pied
+          du panneau OCR, les pièces suivent en dessous. */}
       <section className="mt-6 overflow-hidden rounded-2xl border border-zinc-200 bg-white">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 bg-emerald-50/70 px-6 py-4">
           <div>
@@ -834,10 +834,22 @@ export default async function JuristeCasePage(
                 ) : (
                   <p className="text-sm text-zinc-500">
                     Aucun texte extrait pour ce dossier (OCR non abouti) —
-                    reportez-vous au document versé plus bas.
+                    le document original reste téléchargeable ci-dessous.
                   </p>
                 )}
               </div>
+              {pvUrl && (
+                <div className="border-t border-zinc-100 px-4 py-3">
+                  <a
+                    href={pvUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-block rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                  >
+                    Télécharger le document ({titrePv.toLowerCase()})
+                  </a>
+                </div>
+              )}
             </section>
 
             {editable && (
@@ -913,34 +925,31 @@ export default async function JuristeCasePage(
         </div>
       </section>
 
-      {/* Pièces du dossier : document versé (aperçu zoom) à gauche, pièces
-          manquantes et justificatives à droite — juste sous le contrôle. */}
-      <div className="mt-6 grid gap-6 lg:grid-cols-2 lg:items-start">
-        <PvViewer url={pvUrl} titre={titrePv} />
-
-        <div className="flex min-w-0 flex-col gap-6">
-          {suggestionsPreuves.length > 0 && (
-            <PiecesManquantes
-              dossierId={item.id}
-              numPv={numPvExtrait}
-              pieces={suggestionsPreuves}
-            />
-          )}
-
-          <Preuves
+      {/* Volet pièces sous la lettre : justificatives, preuves externes et
+          relance des pièces manquantes empilées — le document ne s'affiche
+          plus en aperçu, un bouton sous le texte OCR y donne accès. */}
+      <div className="mt-6 flex flex-col gap-6">
+        {suggestionsPreuves.length > 0 && (
+          <PiecesManquantes
             dossierId={item.id}
-            preuves={preuvesDto}
-            currentUserId={null}
-            canDeleteAll={!lectureSeule}
-            suggestions={suggestionsPreuves}
+            numPv={numPvExtrait}
+            pieces={suggestionsPreuves}
           />
+        )}
 
-          <PreuvesApiBlock
-            dossierId={item.id}
-            lectureSeule={lectureSeule}
-            conditionsMeteo={item.conditions_meteo}
-          />
-        </div>
+        <Preuves
+          dossierId={item.id}
+          preuves={preuvesDto}
+          currentUserId={null}
+          canDeleteAll={!lectureSeule}
+          suggestions={suggestionsPreuves}
+        />
+
+        <PreuvesApiBlock
+          dossierId={item.id}
+          lectureSeule={lectureSeule}
+          conditionsMeteo={item.conditions_meteo}
+        />
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2 lg:items-start">
