@@ -193,3 +193,77 @@ describe("verifierAvecIa — providers", () => {
     expect(r.source).toBe("indisponible");
   });
 });
+
+describe("motifsNonCouverts — propositions hors catalogue", () => {
+  it("parse un motif non couvert complet (titre, observation, articleCite)", () => {
+    const brut = JSON.stringify({
+      suggestions: [],
+      signalements: [],
+      motifsNonCouverts: [
+        {
+          titre: "Mention du stage obligatoire absente",
+          observation:
+            "Le document ne comporte aucune mention du stage de sensibilisation alors que l'article le prévoit.",
+          articleCite: "art. R. 232-14",
+        },
+      ],
+    });
+    const r = parserReponseIa(brut, []);
+    expect(r?.reponse.motifsNonCouverts).toHaveLength(1);
+    expect(r?.reponse.motifsNonCouverts[0].titre).toContain("stage");
+    expect(r?.reponse.motifsNonCouverts[0].articleCite).toBe(
+      "art. R. 232-14",
+    );
+  });
+
+  it("borne les entrées (titre/observation trop courts écartés) et plafonne à 3", () => {
+    const motifs = Array.from({ length: 5 }, (_, i) => ({
+      titre: `Motif anormal numéro ${i} sur le document`,
+      observation: `Constat factuel suffisamment détaillé numéro ${i} pour être retenu.`,
+    }));
+    motifs.push({ titre: "court", observation: "trop court" });
+    const brut = JSON.stringify({ suggestions: [], signalements: [], motifsNonCouverts: motifs });
+    const r = parserReponseIa(brut, []);
+    expect(r?.reponse.motifsNonCouverts).toHaveLength(3);
+  });
+
+  it("déduplique les titres identiques (casse/accents)", () => {
+    const brut = JSON.stringify({
+      suggestions: [],
+      signalements: [],
+      motifsNonCouverts: [
+        {
+          titre: "Défaut de motivation de l'arrêté",
+          observation: "Constat factuel suffisamment long sur la motivation absente.",
+        },
+        {
+          titre: "DEFaut de motivation de l'arrete",
+          observation: "Doublon avec accent différent mais même constat ici.",
+        },
+      ],
+    });
+    const r = parserReponseIa(brut, []);
+    expect(r?.reponse.motifsNonCouverts).toHaveLength(1);
+  });
+
+  it("n'accepte jamais un articleCite trop long (anti-flood)", () => {
+    const brut = JSON.stringify({
+      suggestions: [],
+      signalements: [],
+      motifsNonCouverts: [
+        {
+          titre: "Motif avec article anormalement long",
+          observation: "Constat factuel suffisamment long pour être retenu.",
+          articleCite: "x".repeat(200),
+        },
+      ],
+    });
+    const r = parserReponseIa(brut, []);
+    expect(r?.reponse.motifsNonCouverts[0].articleCite).toBeUndefined();
+  });
+
+  it("mock : aucun motif simulé (le catalogue n'est jamais pollué en base)", () => {
+    const r = reponseIaMock(catalogue);
+    expect(r.motifsNonCouverts).toEqual([]);
+  });
+});

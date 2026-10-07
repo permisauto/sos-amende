@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  MAX_MOTIFS_NOUVEAUX,
   enrichissementActif,
   enrichirApresOcr,
   planEnrichissement,
+  planNouvellesFailles,
 } from "./auto-enrichissement";
 import type { MajSuggestion } from "./verif-failles";
 
@@ -137,5 +139,85 @@ describe("enrichirApresOcr — garde-fous", () => {
       }
       if (prevKey !== undefined) process.env.GEMINI_API_KEY = prevKey;
     }
+  });
+});
+
+describe("planNouvellesFailles — propositions PROPOSEE (lot H2)", () => {
+  const motif = (
+    titre: string,
+    observation = "Constat factuel suffisamment long pour fonder une proposition.",
+    articleCite?: string,
+  ) => ({ titre, observation, articleCite });
+
+  it("propose un motif inédit, sans template (l'IA ne rédige jamais de lettre)", () => {
+    const plan = planNouvellesFailles(
+      [
+        motif(
+          "Absence de mention du stage obligatoire",
+          "Le document ne comporte aucune mention du stage de sensibilisation obligatoire.",
+          "art. R. 232-14",
+        ),
+      ],
+      ["Prescription de l'action publique"],
+      "Le document mentionne l'art. R. 232-14 du code de la route.",
+      "AMENDE",
+    );
+    expect(plan).toHaveLength(1);
+    expect(plan[0].id.startsWith("proposition-ia-")).toBe(true);
+    expect(plan[0].typeInfraction).toBe("AMENDE");
+    expect(plan[0].regle).toContain("stage");
+    // Article conservé uniquement s'il figure textuellement dans le document.
+    expect(plan[0].articleLoi).toBe("art. R. 232-14");
+    expect(plan).not.toHaveProperty("templateLettre");
+    expect(JSON.stringify(plan)).not.toContain("template");
+  });
+
+  it("refuse l'article si absent du texte (jamais d'article halluciné)", () => {
+    const plan = planNouvellesFailles(
+      [motif("Motif sans ancrage textuel ici", undefined, "art. L. 999-9")],
+      [],
+      "Procès-verbal de contravention classique sans article particulier.",
+      "SUSPENSION",
+    );
+    expect(plan).toHaveLength(1);
+    expect(plan[0].articleLoi).toBe("");
+  });
+
+  it("déduplique contre le catalogue existant (casse/accents/ponctuation)", () => {
+    const plan = planNouvellesFailles(
+      [
+        motif("Défaut de motivation de l'arrêté 3F"),
+        motif("DEFAUT DE MOTIVATION de l'arrete 3f !"),
+      ],
+      ["Défaut de motivation de l'arrêté 3F"],
+      "texte",
+      "SUSPENSION",
+    );
+    expect(plan).toHaveLength(0);
+  });
+
+  it("plafonne à MAX_MOTIFS_NOUVEAUX par passage", () => {
+    const motifs = Array.from({ length: 6 }, (_, i) =>
+      motif(`Motif anormal distinct numéro ${i} sur le document`),
+    );
+    const plan = planNouvellesFailles(motifs, [], "texte", "AMENDE");
+    expect(plan).toHaveLength(MAX_MOTIFS_NOUVEAUX);
+  });
+
+  it("id déterministe pour un même titre (idempotence createMany skipDuplicates)", () => {
+    const m = motif("Mention de consignation absente du document");
+    const a = planNouvellesFailles([m], [], "texte", "SUSPENSION");
+    const b = planNouvellesFailles([m], [], "autre texte", "SUSPENSION");
+    expect(a[0].id).toBe(b[0].id);
+  });
+
+  it("écarte une observation trop courte (pas de ligne sans substance)", () => {
+    const plan = planNouvellesFailles(
+      [{ titre: "Motif valide mais observation vide", observation: "court" }],
+      [],
+      "texte",
+      "AMENDE",
+    );
+    expect(plan).toHaveLength(0);
   });
 });

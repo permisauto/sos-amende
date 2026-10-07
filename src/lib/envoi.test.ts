@@ -5,10 +5,12 @@ import {
   delaiLibelle,
   destinataireLrar,
   formuleAppel,
+  formuleEnTeteDestinataire,
   formulePolitesse,
   formaterLettreOfficielle,
   libelleCanal,
   libelleCanalDepuisStockage,
+  lireDocType,
   numeroRefLibelle,
   objetLettre,
   organismeEnvoi,
@@ -169,5 +171,71 @@ describe("envoi — formalisme de la lettre", () => {
 
   it("retourne une chaîne vide quand le corps est vide", () => {
     expect(formaterLettreOfficielle({ type: "AMENDE", corps: "  " })).toBe("");
+  });
+});
+describe("envoi — destinataire par docType (lot H1)", () => {
+  it("lireDocType : n'accepte que AMENDE / 3F / 48SI", () => {
+    expect(lireDocType("3F")).toBe("3F");
+    expect(lireDocType("48SI")).toBe("48SI");
+    expect(lireDocType("AMENDE")).toBe("AMENDE");
+    expect(lireDocType("INCONN")).toBeUndefined();
+    expect(lireDocType(null)).toBeUndefined();
+    expect(lireDocType(undefined)).toBeUndefined();
+  });
+
+  it("3F → le préfet (auteur de l'arrêté) ; 48SI → le ministre de l'Intérieur", () => {
+    expect(formuleEnTeteDestinataire("SUSPENSION", "3F")).toBe(
+      "Monsieur le Préfet",
+    );
+    expect(formuleEnTeteDestinataire("SUSPENSION", "48SI")).toBe(
+      "Monsieur le Ministre de l'Intérieur",
+    );
+    // docType inconnu : repli prudent sur le préfet (défaut SUSPENSION).
+    expect(formuleEnTeteDestinataire("SUSPENSION")).toBe("Monsieur le Préfet");
+    expect(formuleAppel("SUSPENSION", "48SI")).toBe(
+      "Monsieur le Ministre de l'Intérieur,",
+    );
+    expect(formuleAppel("SUSPENSION", "3F")).toBe("Monsieur le Préfet,");
+    expect(formulePolitesse("SUSPENSION", "48SI")).toContain(
+      "Monsieur le Ministre de l'Intérieur",
+    );
+  });
+
+  it("LRAR 48SI : adresse de la notification, jamais « préfet »", () => {
+    expect(destinataireLrar("SUSPENSION", "48SI")).toContain("notification");
+    expect(destinataireLrar("SUSPENSION", "48SI")).not.toContain("préfet");
+    expect(destinataireLrar("SUSPENSION", "3F")).toContain("préfet");
+    expect(destinataireLrar("AMENDE", "AMENDE")).toContain("OMP");
+  });
+
+  it("lettre 48SI habillée au ministre, en-tête + appel + politesse alignés", () => {
+    const lettre = formaterLettreOfficielle({
+      type: "SUSPENSION",
+      docType: "48SI",
+      corps: "Je conteste l'invalidation pour solde de points nul.",
+      numRef: "789",
+      date: "2026-10-01",
+    });
+    expect(lettre).toContain("Monsieur le Ministre de l'Intérieur");
+    expect(lettre).not.toContain("Monsieur le Préfet");
+    expect(lettre.endsWith(formulePolitesse("SUSPENSION", "48SI"))).toBe(true);
+    // Idempotent même après changement de docType (aucune double habilitation).
+    const relance = formaterLettreOfficielle({
+      type: "SUSPENSION",
+      docType: "3F",
+      corps: lettre,
+    });
+    expect(relance).toBe(lettre);
+  });
+
+  it("non-régression amende : le docType ne change rien au tunnel 39 €", () => {
+    const lettre = formaterLettreOfficielle({
+      type: "AMENDE",
+      docType: "AMENDE",
+      corps: "Je conteste le PV 42.",
+    });
+    expect(lettre).toContain("Madame, Monsieur,");
+    expect(lettre).toContain("Monsieur l'Officier du ministère public");
+    expect(lettre.endsWith(formulePolitesse("AMENDE"))).toBe(true);
   });
 });

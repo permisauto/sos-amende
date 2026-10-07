@@ -17,6 +17,19 @@ export type ReponseIa = {
     controle?: string;
   }>;
   signalements: Array<{ id: string; motif: string }>;
+  /**
+   * Motifs anormaux du document **non couverts** par aucune faille du
+   * catalogue fourni (mention obligatoire absente, délai inhabituel…).
+   * Jamais d'article inventé : `articleCite` n'est accepté que s'il figure
+   * textuellement dans le texte du document (vérifié à l'écriture, cf.
+   * `planNouvellesFailles`) — l'entrée n'est qu'une **proposition** à créer
+   * en `PROPOSEE` (jamais utilisée par le moteur ni par une lettre).
+   */
+  motifsNonCouverts: Array<{
+    titre: string;
+    observation: string;
+    articleCite?: string;
+  }>;
 };
 
 const schemaReponse = z.object({
@@ -32,6 +45,15 @@ const schemaReponse = z.object({
     .default([]),
   signalements: z
     .array(z.object({ id: z.string(), motif: z.string() }))
+    .default([]),
+  motifsNonCouverts: z
+    .array(
+      z.object({
+        titre: z.string(),
+        observation: z.string(),
+        articleCite: z.string().optional(),
+      }),
+    )
     .default([]),
 });
 
@@ -49,7 +71,7 @@ export function construirePrompt(
     "Tu assistes un juriste français qui vérifie les failles de contestation d'un procès-verbal (cas d'espèce).",
     "",
     "Réponds UNIQUEMENT par un objet JSON sans texte autour, de la forme :",
-    '{"suggestions":[{"id":"...","pertinence":"forte|moyenne","justification":"...","controle":"..."}],"signalements":[{"id":"...","motif":"..."}]}',
+    '{"suggestions":[{"id":"...","pertinence":"forte|moyenne","justification":"...","controle":"..."}],"signalements":[{"id":"...","motif":"..."}],"motifsNonCouverts":[{"titre":"...","observation":"...","articleCite":"..."}]}',
     "",
     "Règles absolues :",
     "1. N'utilise que des id exacts du catalogue fourni — n'invente jamais d'article, de fondement ou d'id.",
@@ -57,7 +79,8 @@ export function construirePrompt(
     "3. justification : cite le fait du dossier qui fonde la suggestion (2 phrases maximum).",
     "4. controle : une action concrète et brève pour le juriste (optionnel).",
     "5. signalements : réservé à une faille du catalogue dont UN FAIT contredit la détection (faux positif probable).",
-    "6. Si aucune faille ne correspond aux faits : {\"suggestions\":[],\"signalements\":[]}.",
+    "6. motifsNonCouverts : décris UNIQUEMENT un motif anormal du document NON couvert par aucune faille du catalogue ci-dessous (mention obligatoire absente, délai inhabituel, formalisme incomplet…) : titre court (3 à 8 mots), observation factuelle. articleCite : UNIQUEMENT si l'article figure textuellement dans le texte fourni ci-dessous — n'invente jamais d'article ; sinon omets la clé. Maximum 3 entrées.",
+    '7. Si rien ne correspond : {"suggestions":[],"signalements":[],"motifsNonCouverts":[]}.',
     "",
     "=== FAITS DU DOSSIER ===",
     JSON.stringify(faits, null, 2),
@@ -120,7 +143,37 @@ export function parserReponseIa(
     signalements.push({ id: s.id, motif });
   }
 
-  return { reponse: { suggestions, signalements }, idsIgnores };
+  // Motifs non couverts : bornes strictes + dédup + plafond (jamais de
+  // flood du catalogue en propositions).
+  const motifsNonCouverts: ReponseIa["motifsNonCouverts"] = [];
+  const titresVus = new Set<string>();
+  for (const m of parsed.data.motifsNonCouverts) {
+    if (motifsNonCouverts.length >= 3) break;
+    const titre = m.titre.trim();
+    const observation = m.observation.trim();
+    if (titre.length < 6 || titre.length > 180) continue;
+    if (observation.length < 15 || observation.length > 1200) continue;
+    const cle = titre
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+    if (titresVus.has(cle)) continue;
+    titresVus.add(cle);
+    const articleCite = m.articleCite?.trim();
+    motifsNonCouverts.push({
+      titre,
+      observation,
+      articleCite:
+        articleCite && articleCite.length > 0 && articleCite.length <= 120
+          ? articleCite
+          : undefined,
+    });
+  }
+
+  return {
+    reponse: { suggestions, signalements, motifsNonCouverts },
+    idsIgnores,
+  };
 }
 
 /**
@@ -138,6 +191,9 @@ export function reponseIaMock(catalogue: CatalogueIa[]): ReponseIa {
       controle: "Vérification simulée — aucun appel réseau.",
     })),
     signalements: [],
+    // Jamais de motif simulé : le mock ne pollue pas le catalogue global
+    // (les propositions de test resteraient en PROPOSEE en base réelle).
+    motifsNonCouverts: [],
   };
 }
 

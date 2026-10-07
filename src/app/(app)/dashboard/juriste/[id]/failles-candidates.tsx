@@ -6,6 +6,8 @@ import { confirmerFaille, rejeterFaille } from "../actions";
 export type CandidatDto = {
   failleId: string;
   statut: string;
+  /** Statut de la faille au catalogue (ACTIVE / PROPOSEE / INACTIVE). */
+  statutFaille?: string;
   titre: string;
   articleLoi: string;
   principale: boolean;
@@ -16,6 +18,7 @@ export type CandidatDto = {
     justification?: string;
     controle?: string;
     signalement?: string;
+    nouvelleProposition?: boolean;
     at?: string;
   } | null;
 };
@@ -82,6 +85,11 @@ function CandidatRow({
     rejeterFaille,
     undefined,
   );
+  // Faille non encore validée au catalogue (ex. proposition créée par
+  // l'auto-enrichissement IA) : le juriste la consulte et peut l'écarter de
+  // son dossier, mais la confirmation est réservée aux failles ACTIVE —
+  // l'activation du catalogue reste un geste admin (Q3 validée).
+  const proposeeAuCatalogue = candidat.statutFaille === "PROPOSEE";
 
   return (
     <div className="rounded-xl border border-zinc-200 px-4 py-3">
@@ -101,7 +109,12 @@ function CandidatRow({
           >
             {statutLabels[candidat.statut] ?? candidat.statut}
           </span>
-          {!lectureSeule && candidat.statut !== "CONFIRMEE" && (
+          {proposeeAuCatalogue && (
+            <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+              Proposition (catalogue)
+            </span>
+          )}
+          {!lectureSeule && !proposeeAuCatalogue && candidat.statut !== "CONFIRMEE" && (
             <form action={confAction}>
               <input type="hidden" name="dossierId" value={dossierId} />
               <input type="hidden" name="failleId" value={candidat.failleId} />
@@ -129,6 +142,15 @@ function CandidatRow({
           )}
         </div>
       </div>
+      {proposeeAuCatalogue && (
+        <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <span className="font-semibold">Proposition au catalogue :</span>{" "}
+          faille suggérée hors base validée — activation réservée à l&apos;admin
+          depuis la bibliothèque juridique (règle puis template à rédiger).
+          Aucune lettre ne peut la retenir tant qu&apos;elle n&apos;est pas
+          ACTIVE.
+        </div>
+      )}
       {candidat.suggestionIa?.justification && (
         <div className="mt-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900">
           <p>

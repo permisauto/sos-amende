@@ -411,3 +411,78 @@ document simulé — voir `extrairePv(buffer, nomFichier)` / `mockOcr`) → badg
 Télérecours → pack 3 PDF côté client **et** juriste (href + octets `%PDF-` sur
 disque — `next start` ne sert que les fichiers `public/` présents au boot, les
 uploads du run sont donc vérifiés sur disque, jamais via HTTP).
+
+---
+
+## J. DEUX OFFRES ÉTCHES — LOT H (2026-10-07)
+
+Arbitrages validés par le client : **Sebaoun toujours refusé** (jamais versé en
+base), **référé maintenu en L. 521-2 CJA** (pas de L. 521-1), **activation
+`PROPOSEE → ACTIVE` réservée à l'admin** (`requireAdmin` conservé — le juriste
+propose et écarte, jamais d'activation), **périmètre lots H1 + H2 + H3** (H4
+refusé : types KBIS/attestation, n° Pièce 1/2/3 du bordereau).
+
+### H1 — Destinataire de la lettre par docType (`src/lib/envoi.ts`)
+
+- `DocTypeAnalyse = "AMENDE" | "3F" | "48SI"` + `lireDocType()` (n'accepte que
+  ces 3 valeurs, sinon `undefined`).
+- `civiliteSuspension(docType)` : **48SI → « Monsieur le Ministre de
+  l'Intérieur »** (l'auteur de la notification d'invalidation), **3F /
+  inconnu → « Monsieur le Préfet »** (auteur de l'arrêté). `formuleAppel`,
+  `formulePolitesse`, `formuleEnTeteDestinataire`, `enTeteLettre` et
+  `formaterLettreOfficielle` prennent `docType?` et le propagent aux trois
+  formules (en-tête, appel, politesse) pour rester cohérents.
+- `destinataireLrar(type, docType?)` : 48SI → « notification de la décision »
+  (jamais « préfet »), 3F → préfet, amende → OMP.
+- Idempotence : `politessesConnues()` reconnaît **toutes** les politesses
+  connues (neutre / préfet / ministre) — un second habillage (relance,
+  changement de docType) ne doublera jamais l'en-tête.
+- Call sites : `cases/actions.ts` (`docType: data.docType`) et
+  `juriste/actions.ts` (4 sites via `lireDocType` sur `extractedData`,
+  `data.docType`, variante, faille confirmée).
+- **Tunnel amende 39 € intact** : `formateLettreOfficielle(AMENDE)` ne change
+  pas d'un iota (« Madame, Monsieur, » + OMP, test de non-régression).
+
+### H2 — Motifs non couverts → nouvelles `PROPOSEE` (`verif-ia` + `auto-enrichissement`)
+
+- `ReponseIa.motifsNonCouverts` : max **3** motifs `{titre (6-180),
+  observation (15-1200), articleCite? (≤120)}`, bornes + dédup côté parser
+  (anti-hallucination) ; prompt interdit d'inventer un article non cité
+  textuellement ; **mock** renvoie toujours `[]` (jamais de pollution de base
+  en dev/E2E).
+- `planNouvellesFailles(motifs, titresExistants, pvTexte, typeInfraction)`
+  (pur, testé) : dédup titre global (normalisation casse/accents),
+  `articleLoi` conservé **uniquement si textuellement présent dans le PV**
+  (sinon `""`), `regle` = observation, **`templateLettre = ""`** (l'IA ne
+  rédige **jamais** de lettre — `estActivable` l'interdira tant que le juriste
+  n'aura pas rédigé le template), id déterministe
+  `proposition-ia-<slug>-<hash6>`, plafond `MAX_MOTIFS_NOUVEAUX = 3`.
+- IO dans `enrichirApresOcr` (best-effort, jamais bloquant) : `createMany`
+  `failleJuridique` (statut **`PROPOSEE`**, `skipDuplicates`) + `createMany`
+  `dossierFaille` (`CANDIDATE` + `suggestionIa {source, signalement,
+  nouvelleProposition: true, at}`), trace `AutoAlimentationTrace` avec
+  `propositions=N`.
+- Garde-fous inchangés : `PROPOSEE` = invisible du moteur et des lettres,
+  `confirmerFaille` refuse toute faille non `ACTIVE` (vérifié), activation
+  admin seule, verrou `FAILLE_IDS` intact.
+
+### H3 — Circuit juriste propose / admin active (`failles-candidates.tsx`)
+
+- La liste des candidatures porte `statutFaille` ; une ligne issue d'une
+  proposition IA (`statutFaille === "PROPOSEE"` **ou**
+  `suggestionIa.nouvelleProposition`) affiche un **badge ambre « Proposition
+  (catalogue) »** + encart explicatif (activation réservée à l'admin, lettre
+  impossible tant que `PROPOSEE`), **bouton « Confirmer » masqué** ;
+  **« Écarter » conservé** (`rejeterFaille` n'exige pas `ACTIVE`).
+
+### Tests
+
+- `envoi.test.ts` : describe « destinataire par docType (lot H1) » —
+  `lireDocType`, 48SI → ministre (en-tête/appel/politesse), LRAR 48SI sans
+  « préfet », idempotence 2ᵉ habillage, non-régression amende.
+- `verif-ia.test.ts` : describe « motifsNonCouverts » — parse, bornes/plafond
+  3, dédup, `articleCite` trop long écarté, mock `[]`.
+- `auto-enrichissement.test.ts` : describe « planNouvellesFailles » — sans
+  template, article absent → `""`, dédup, plafond `MAX_MOTIFS_NOUVEAUX`, id
+  déterministe, observation courte écartée.
+- Bilan : **510 tests unitaires** (tsc ✓ / lint ✓), e2e 50/50 inchangés.

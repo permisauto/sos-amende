@@ -9,6 +9,14 @@ export type InfractionType = "AMENDE" | "SUSPENSION";
 
 export type CanalEnvoi = "ANTAI" | "TELERECOURS" | "LRAR";
 
+/** Classification du document contesté (OCR, cf. `classifierDocType`). */
+export type DocTypeAnalyse = "AMENDE" | "3F" | "48SI";
+
+/** Lecture défensive du docType extrait (Json) — jamais de valeur fabriquée. */
+export function lireDocType(v: unknown): DocTypeAnalyse | undefined {
+  return v === "AMENDE" || v === "3F" || v === "48SI" ? v : undefined;
+}
+
 /**
  * Canaux d'envoi proposés selon le type d'infraction.
  * - AMENDE : ANTAI (envoi en ligne) ou LRAR (envoi par SOS Amende)
@@ -39,10 +47,30 @@ export function libelleCanalDepuisStockage(
   return libelleCanal(canauxEnvoi(type)[0]);
 }
 
-export function destinataireLrar(type: InfractionType): string {
-  return type === "SUSPENSION"
-    ? "à l'adresse du préfet indiquée sur votre décision"
-    : "à l'adresse de l'OMP indiquée sur votre avis de contravention";
+/**
+ * Civilité du destinataire en suspension, selon le document contesté :
+ * - **3F** (arrêté préfectoral) → le préfet, auteur de la décision ;
+ * - **48SI** (invalidation pour solde nul) → le ministre de l'Intérieur,
+ *   auteur de la notification (art. L. 223-3 : « le ministre de l'Intérieur
+ *   notifie la décision ») ;
+ * - docType inconnu → repli prudent sur le préfet (défaut SUSPENSION).
+ */
+function civiliteSuspension(docType?: DocTypeAnalyse | null): string {
+  return docType === "48SI"
+    ? "Monsieur le Ministre de l'Intérieur"
+    : "Monsieur le Préfet";
+}
+
+export function destinataireLrar(
+  type: InfractionType,
+  docType?: DocTypeAnalyse | null,
+): string {
+  if (type !== "SUSPENSION") {
+    return "à l'adresse de l'OMP indiquée sur votre avis de contravention";
+  }
+  return docType === "48SI"
+    ? "à l'adresse de l'autorité indiquée sur votre notification de décision"
+    : "à l'adresse du préfet indiquée sur votre décision";
 }
 
 export function pieceAJoindre(type: InfractionType): string {
@@ -108,25 +136,44 @@ export function portailEnLigne(type: InfractionType): {
 }
 
 /**
- * Civilité d'appel selon le destinataire (type-aware) :
- * - AMENDE (OMP / service)     → formule neutre « Madame, Monsieur, »
- * - SUSPENSION (le préfet)     → « Monsieur le Préfet, »
+ * Civilité d'appel selon le destinataire (type-aware + docType en suspension) :
+ * - AMENDE (OMP / service)        → formule neutre « Madame, Monsieur, »
+ * - SUSPENSION 3F / inconnu       → « Monsieur le Préfet, »
+ * - SUSPENSION 48SI               → « Monsieur le Ministre de l'Intérieur, »
  * La formule neutre reste la plus largement acceptée lorsque le destinataire
  * est un service ou reste indéterminé.
  */
-export function formuleAppel(type: InfractionType): string {
-  return type === "SUSPENSION" ? "Monsieur le Préfet," : "Madame, Monsieur,";
+export function formuleAppel(
+  type: InfractionType,
+  docType?: DocTypeAnalyse | null,
+): string {
+  if (type === "AMENDE") return "Madame, Monsieur,";
+  return `${civiliteSuspension(docType)},`;
 }
 
 /**
  * Formule de politesse finale, alignée sur la formule d'appel du destinataire.
- * Le préfet reçoit la civilité propre (« Monsieur le Préfet »), l'OMP ou un
- * service la formule neutre.
+ * Le préfet ou le ministre reçoivent la civilité propre, l'OMP ou un service
+ * la formule neutre.
  */
-export function formulePolitesse(type: InfractionType): string {
-  return type === "SUSPENSION"
-    ? "Je vous prie d'agréer, Monsieur le Préfet, l'expression de ma considération distinguée."
-    : "Je vous prie d'agréer, Madame, Monsieur, l'expression de ma considération distinguée.";
+export function formulePolitesse(
+  type: InfractionType,
+  docType?: DocTypeAnalyse | null,
+): string {
+  if (type === "AMENDE") {
+    return "Je vous prie d'agréer, Madame, Monsieur, l'expression de ma considération distinguée.";
+  }
+  return `Je vous prie d'agréer, ${civiliteSuspension(docType)}, l'expression de ma considération distinguée.`;
+}
+
+/** Toutes les politesses connues — sert au test d'habillage idempotent. */
+export function politessesConnues(): string[] {
+  return [
+    formulePolitesse("AMENDE"),
+    formulePolitesse("SUSPENSION", "3F"),
+    formulePolitesse("SUSPENSION", "48SI"),
+    formulePolitesse("SUSPENSION"),
+  ];
 }
 
 const MOIS_FR = [
@@ -182,16 +229,19 @@ export function objetLettre(opts: {
 }
 
 /**
- * Libellé du destinataire d'en-tête, type-aware :
- * - AMENDE    → l'Officier du ministère public près le tribunal compétent
- * - SUSPENSION → le préfet auteur de la décision
+ * Libellé du destinataire d'en-tête, type-aware (+ docType en suspension) :
+ * - AMENDE         → l'Officier du ministère public près le tribunal compétent
+ * - SUSPENSION 3F  → le préfet auteur de l'arrêté
+ * - SUSPENSION 48SI → le ministre de l'Intérieur, auteur de la notification
  * Formulation administrative générique : aucune adresse n'est inventée, la
  * précision est laissée au requérant.
  */
-export function formuleEnTeteDestinataire(type: InfractionType): string {
-  return type === "SUSPENSION"
-    ? "Monsieur le Préfet"
-    : "Monsieur l'Officier du ministère public";
+export function formuleEnTeteDestinataire(
+  type: InfractionType,
+  docType?: DocTypeAnalyse | null,
+): string {
+  if (type === "SUSPENSION") return civiliteSuspension(docType);
+  return "Monsieur l'Officier du ministère public";
 }
 
 /**
@@ -201,6 +251,7 @@ export function formuleEnTeteDestinataire(type: InfractionType): string {
  */
 export function enTeteLettre(opts: {
   type: InfractionType;
+  docType?: DocTypeAnalyse | null;
   nom?: string | null;
   adresse?: string | null;
   dateRedaction?: string | null;
@@ -210,7 +261,7 @@ export function enTeteLettre(opts: {
   if (expediteur.length > 0) {
     lignes.push(...(expediteur as string[]));
   }
-  lignes.push(formuleEnTeteDestinataire(opts.type));
+  lignes.push(formuleEnTeteDestinataire(opts.type, opts.docType));
   lignes.push("");
   const dateFr = formaterDateFr(opts.dateRedaction);
   if (dateFr) lignes.push(`Le ${dateFr}`);
@@ -235,6 +286,7 @@ export function enTeteLettre(opts: {
 export function formaterLettreOfficielle(opts: {
   type: InfractionType;
   corps: string;
+  docType?: DocTypeAnalyse | null;
   numRef?: string | null;
   dateRef?: string | null;
   nom?: string | null;
@@ -243,28 +295,29 @@ export function formaterLettreOfficielle(opts: {
 }): string {
   const corps = opts.corps.trim();
   if (!corps) return "";
-  // Idempotent : une lettre déjà habillée (formule de politesse du type ou la
-  // forme neutre historique) est retournée telle quelle — aucune re-formulation.
-  if (
-    corps.includes(formulePolitesse(opts.type)) ||
-    corps.includes(formulePolitesse("AMENDE"))
-  ) {
+  // Idempotent : une lettre déjà habillée (une quelconque des politesses
+  // connues — neutre, préfet ou ministre) est retournée telle quelle —
+  // aucune re-formulation, aucune double habilitation.
+  if (politessesConnues().some((p) => corps.includes(p))) {
     return corps;
   }
 
   const lignes: string[] = [];
-  lignes.push(...enTeteLettre({
-    type: opts.type,
-    nom: opts.nom,
-    adresse: opts.adresse,
-    dateRedaction: opts.date,
-  }));
+  lignes.push(
+    ...enTeteLettre({
+      type: opts.type,
+      docType: opts.docType,
+      nom: opts.nom,
+      adresse: opts.adresse,
+      dateRedaction: opts.date,
+    }),
+  );
   lignes.push(`Objet : ${objetLettre(opts)}`);
   lignes.push("");
-  lignes.push(formuleAppel(opts.type));
+  lignes.push(formuleAppel(opts.type, opts.docType));
   lignes.push("");
   lignes.push(corps);
   lignes.push("");
-  lignes.push(formulePolitesse(opts.type));
+  lignes.push(formulePolitesse(opts.type, opts.docType));
   return lignes.join("\n");
 }

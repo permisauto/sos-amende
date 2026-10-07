@@ -17,7 +17,7 @@ import { storageRead, storageWrite } from "@/lib/storage";
 import { generateLettrePdf } from "@/lib/lettre-pdf";
 import { soumettreDossier } from "@/lib/antai";
 import { generatePreuvePdf } from "@/lib/preuve-pdf";
-import { destinataireLrar, canauxEnvoi, formaterLettreOfficielle, organismeEnvoi, type CanalEnvoi } from "@/lib/envoi";
+import { destinataireLrar, canauxEnvoi, formaterLettreOfficielle, organismeEnvoi, lireDocType, type CanalEnvoi } from "@/lib/envoi";
 import { setDemoLettre } from "@/lib/demo-lettres";
 import { listePiecesJointes, recupererPreuvesPourDossierId } from "@/lib/preuves-api";
 import {
@@ -294,6 +294,7 @@ export async function validerDossier(
   const lettreFinale = formaterLettreOfficielle({
     type: dossier.type,
     corps: dossier.lettreGeneree,
+    docType: lireDocType(dataExt["docType"]),
     numRef: typeof dataExt["num_pv"] === "string" ? (dataExt["num_pv"] as string) : null,
     dateRef: typeof dataExt["date"] === "string" ? (dataExt["date"] as string) : null,
     nom: dossier.user?.name ?? null,
@@ -817,6 +818,7 @@ export async function verifierFailles(
       ? formaterLettreOfficielle({
           type: dossier.type,
           corps: lettre,
+          docType: data.docType,
           numRef: faits.num_pv ?? null,
           dateRef: faits.date ?? null,
           nom: dossier.user?.name ?? null,
@@ -1100,6 +1102,7 @@ export async function genererVarianteLettre(
   const lettreOfficielle = formaterLettreOfficielle({
     type: dossier.type,
     corps: lettre ?? "",
+    docType: lireDocType(docVariante["docType"]),
     numRef: typeof docVariante["num_pv"] === "string" ? (docVariante["num_pv"] as string) : null,
     dateRef: typeof docVariante["date"] === "string" ? (docVariante["date"] as string) : null,
     nom: dossier.user?.name ?? null,
@@ -1408,6 +1411,7 @@ export async function confirmerFaille(
   const lettreOfficielle = formaterLettreOfficielle({
     type: dossier.type,
     corps: lettre ?? "",
+    docType: lireDocType(docConfirme["docType"]),
     numRef: typeof docConfirme["num_pv"] === "string" ? (docConfirme["num_pv"] as string) : null,
     dateRef: typeof docConfirme["date"] === "string" ? (docConfirme["date"] as string) : null,
     nom: dossier.user?.name ?? null,

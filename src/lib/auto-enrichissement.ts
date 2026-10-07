@@ -4,7 +4,7 @@ import {
   faitsDepuisPreuves,
   type MajSuggestion,
 } from "@/lib/verif-failles";
-import { verifierAvecIa, type CatalogueIa } from "@/lib/verif-ia";
+import { verifierAvecIa, type CatalogueIa, type ReponseIa } from "@/lib/verif-ia";
 import type { ExtractedData } from "@/lib/moteur";
 
 /** Campagne de traçage dans `AutoAlimentationTrace`. */
@@ -93,6 +93,104 @@ export function enrichissementActif(
   return !!env.GEMINI_API_KEY;
 }
 
+// ---------------------------------------------------------------------------
+// Lot H2 — motifs non couverts → proposition de faille (PROPOSEE)
+// ---------------------------------------------------------------------------
+
+export type MotifNonCouvert = ReponseIa["motifsNonCouverts"][number];
+
+export type NouvelleFailleProposee = {
+  id: string;
+  typeInfraction: string;
+  titreFaille: string;
+  articleLoi: string;
+  regle: string;
+  source: string;
+};
+
+/** Plafond de propositions créées par un passage d'enrichissement. */
+export const MAX_MOTIFS_NOUVEAUX = 3;
+
+/** Normalisation partagée dédup (casse, accents, ponctuation). */
+export function normaliserPourDedup(t: string): string {
+  return t
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function slugTitre(titre: string): string {
+  const s = normaliserPourDedup(titre)
+    .replace(/\s+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return (s || "motif").slice(0, 40);
+}
+
+function hashCourt(s: string): string {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) {
+    h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+  }
+  return h.toString(16).padStart(8, "0").slice(0, 6);
+}
+
+/**
+ * Plan pur des **nouvelles failles à proposer** en base (statut `PROPOSEE`,
+ * posé par l'appelant). Garde-fous anti-hallucination :
+ *
+ * - dédup sur titre normalisé contre **tout** le catalogue existant (tout
+ *   statut) — un motif déjà connu n'est jamais recréé ;
+ * - `articleLoi` n'est conservé que si l'article cité par l'IA figure
+ *   **textuellement** dans le texte OCR du document ; sinon champ vide
+ *   (l'admin rédige avant activation — `estActivable` exige `regle` +
+ *   `templateLettre`) ;
+ * - jamais de template : la lettre viendra exclusivement d'une rédaction
+ *   humaine validée (garde-fou V1 « l'IA ne rédige jamais de template ») ;
+ * - plafond `MAX_MOTIFS_NOUVEAUX` par passage (pas de flood du catalogue).
+ */
+export function planNouvellesFailles(
+  motifs: MotifNonCouvert[],
+  titresExistants: string[],
+  pvTexte: string,
+  typeInfraction: string,
+): NouvelleFailleProposee[] {
+  const existants = new Set(titresExistants.map(normaliserPourDedup));
+  const texte = normaliserPourDedup(pvTexte);
+  const vus = new Set<string>();
+  const plan: NouvelleFailleProposee[] = [];
+
+  for (const m of motifs) {
+    if (plan.length >= MAX_MOTIFS_NOUVEAUX) break;
+    const titre = m.titre.trim();
+    const observation = m.observation.trim();
+    if (titre.length < 6 || observation.length < 15) continue;
+    const cle = normaliserPourDedup(titre);
+    if (!cle || existants.has(cle) || vus.has(cle)) continue;
+    vus.add(cle);
+
+    const cite = (m.articleCite ?? "").trim();
+    const articleNorm = normaliserPourDedup(cite);
+    const articleLoi =
+      articleNorm.split(" ").length >= 2 && articleNorm.length >= 6
+        ? texte.includes(articleNorm)
+          ? cite
+          : ""
+        : "";
+
+    plan.push({
+      id: `proposition-ia-${slugTitre(titre)}-${hashCourt(cle)}`,
+      typeInfraction,
+      titreFaille: titre.slice(0, 180),
+      articleLoi: articleLoi.slice(0, 180),
+      regle: observation.slice(0, 1200),
+      source: "Signalement IA (auto-enrichissement) — à valider par l'admin",
+    });
+  }
+  return plan;
+}
+
 export type ResultatEnrichissement =
   | { statut: "ignore"; motif: string }
   | {
@@ -102,6 +200,7 @@ export type ResultatEnrichissement =
       signalements: number;
       creees: number;
       majs: number;
+      nouvellesFailles: number;
     }
   | { statut: "echec"; motif: string };
 
@@ -116,6 +215,9 @@ export type ResultatEnrichissement =
  * Garde-fous :
  * - **jamais** de lettre régénérée, de statut modifié ou de faille
  *   confirmée : l'IA ne fait que proposer, le juriste confirme/écarte ;
+ * - un motif non couvert crée au plus `MAX_MOTIFS_NOUVEAUX` lignes
+ *   `FailleJuridique` en **PROPOSEE, sans template** (lettre impossible
+ *   jusqu'à rédaction humaine + activation admin) — cf. `planNouvellesFailles` ;
  * - idempotent : un dossier déjà annoté (vérification manuelle ou passage
  *   précédent) est ignoré ;
  * - tracé dans `AutoAlimentationTrace` (campagne `auto-enrichissement`) :
@@ -252,12 +354,71 @@ export async function enrichirApresOcr(
       ]);
     }
 
+    // Lot H2 : motif anormal non couvert par le catalogue → proposition de
+    // faille globale en PROPOSEE (sans template, jamais détectée ni utilisée
+    // dans une lettre tant que l'admin ne l'a pas activée). Créations
+    // best-effort, idempotentes (`skipDuplicates` + dédup sur titre).
+    let nouvellesFailles = 0;
+    if (resultat.reponse.motifsNonCouverts.length > 0) {
+      try {
+        const titres = (
+          await prisma.failleJuridique.findMany({
+            select: { titreFaille: true },
+          })
+        ).map((f) => f.titreFaille);
+        const propositions = planNouvellesFailles(
+          resultat.reponse.motifsNonCouverts,
+          titres,
+          dossier.pvTexte ?? "",
+          dossier.type,
+        );
+        if (propositions.length > 0) {
+          await prisma.failleJuridique.createMany({
+            data: propositions.map((p) => ({
+              id: p.id,
+              typeInfraction: p.typeInfraction,
+              titreFaille: p.titreFaille,
+              articleLoi: p.articleLoi,
+              regle: p.regle,
+              templateLettre: "",
+              source: p.source,
+              reglesDetection: [],
+              jurisprudence: [],
+              statut: "PROPOSEE" as const,
+            })),
+            skipDuplicates: true,
+          });
+          await prisma.dossierFaille.createMany({
+            data: propositions.map((p) => ({
+              dossierId,
+              failleId: p.id,
+              statut: "CANDIDATE" as const,
+              suggestionIa: {
+                source: resultat.source,
+                signalement: p.regle,
+                nouvelleProposition: true,
+                at,
+              },
+            })),
+            skipDuplicates: true,
+          });
+          nouvellesFailles = propositions.length;
+        }
+      } catch (e) {
+        // Best-effort : une proposition non créée ne casse jamais l'enrichissement.
+        console.error(
+          "[auto-enrichissement] création de proposition impossible :",
+          e instanceof Error ? `${e.name}: ${e.message}` : String(e),
+        );
+      }
+    }
+
     await enregistrerTraceAutoAlimentation({
       campagne: CAMPAGNE_AUTO_ENRICHISSEMENT,
       statut: "OK",
       traitees: suggestions.length + signalements.length,
       nouvelles: plan.creations.length,
-      detail: `dossier=${dossierId} · suggestions=${suggestions.length} · signalements=${signalements.length} · créées=${plan.creations.length} · source=${resultat.source}`,
+      detail: `dossier=${dossierId} · suggestions=${suggestions.length} · signalements=${signalements.length} · créées=${plan.creations.length} · propositions=${nouvellesFailles} · source=${resultat.source}`,
     });
 
     return {
@@ -267,6 +428,7 @@ export async function enrichirApresOcr(
       signalements: signalements.length,
       creees: plan.creations.length,
       majs: plan.majs.length,
+      nouvellesFailles,
     };
   } catch (e) {
     console.error(

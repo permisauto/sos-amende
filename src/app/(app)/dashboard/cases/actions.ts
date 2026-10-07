@@ -413,6 +413,7 @@ export async function analyserDossier(
   const lettreFinale = formaterLettreOfficielle({
     type: dossier.type,
     corps: lettre ?? "",
+    docType: data.docType,
     numRef: data.num_pv,
     dateRef: data.date,
     nom: user.name ?? null,

@@ -389,6 +389,7 @@ export default async function JuristeCasePage(
   const candidats = item.faillesRetenues.map((df) => ({
     failleId: df.failleId,
     statut: df.statut,
+    statutFaille: df.faille.statut,
     titre: df.faille.titreFaille,
     articleLoi: df.faille.articleLoi,
     principale: item.failleJuridiqueId === df.failleId,
@@ -398,6 +399,7 @@ export default async function JuristeCasePage(
       justification?: string;
       controle?: string;
       signalement?: string;
+      nouvelleProposition?: boolean;
       at?: string;
     } | null,
   }));
