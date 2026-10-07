@@ -1,4 +1,5 @@
 import { formaterDateFr } from "./envoi";
+import { ajouterJoursFrances, reporterJourOuvrable } from "./delais";
 
 export type ExtractedData = {
   nom?: string;
@@ -43,6 +44,28 @@ export type ExtractedData = {
   suspEthylometreCarnet?: boolean;
   suspSecondSouffle?: boolean;
   suspRefereEngage?: boolean;
+  // Pack 3F/48SI (Télérecours Citoyens) — classificateur de document
+  // (AMENDE / 3F / 48SI) et champs temporels du pack. Jamais inventés : extrait
+  // par libellé (OCR) ou saisis par l'humain ; le moteur ne conclut que si les
+  // valeurs existent. Les règles pack ne portent que 3F/48SI (`DocTypeDocument`)
+  // : un document classé AMENDE ne déclenche donc jamais une règle de pack.
+  docType?: "AMENDE" | "3F" | "48SI";
+  dateSignatureArrete?: string; // date de signature de l'arrêté / de la 48SI
+  heureSignatureArrete?: string;
+  /** Cumul de retraits de points le même jour — nombre si l'OCR l'a lu
+   * directement, chaîne après passage par `fusionnerPrefill` (les
+   * `Record<string, string>` du dépôt stockent tout en texte ; `valeurSuperieure`
+   * convertit les deux formes). */
+  pointsRetiresMemesDate?: number | string;
+  dateStage?: string; // date d'attestation de stage de récupération
+  dateNotification?: string; // date de notification de la décision 48SI
+  // Référé-suspension (art. L. 521-2 CJA) — **noms identiques aux variables
+  // du template** (`{metier}`, `{entreprise}`, `{risque_licenciement}`) : un
+  // renommage en `urgence*` casserait `remplirTemplate` (jamais de copie
+  // intermédiaire). Saisie formulaire, jamais inventés.
+  metier?: string;
+  entreprise?: string;
+  risque_licenciement?: string;
 };
 
 /**
@@ -69,7 +92,9 @@ export function datePrescrite(datePv?: string): boolean {
 
 /**
  * Délai réglementaire de contestation : 45 jours pour une amende forfaitaire,
- * 2 mois pour un recours gracieux de suspension de permis.
+ * 2 mois pour un recours gracieux de suspension de permis — jours **francs**
+ * (le jour du PV n'est pas compté), reporté au prochain jour ouvrable s'il
+ * expire un week-end ou un jour férié (`src/lib/delais.ts`).
  * Retourne null si la date du PV est absente ou invalide.
  */
 export function dateLimitePv(
@@ -80,9 +105,7 @@ export function dateLimitePv(
   const d = new Date(`${datePv}T00:00:00Z`);
   if (Number.isNaN(d.getTime())) return null;
   const jours = type === "SUSPENSION" ? 60 : 45;
-  const limite = new Date(d);
-  limite.setUTCDate(limite.getUTCDate() + jours);
-  return limite;
+  return reporterJourOuvrable(ajouterJoursFrances(d, jours));
 }
 
 export function joursRestants(dateLimite?: Date | null): number {
@@ -204,7 +227,31 @@ export type RegleDetection =
   | { type: "paiementDejaFait" }
   | { type: "adresseIncorrecte" }
   | { type: "texteContient"; motif: string }
-  | { type: "texteAbsent"; motif: string };
+  | { type: "texteAbsent"; motif: string }
+  // --- Pack 3F/48SI (types **additifs** — les types ci-dessus sont intacts) ---
+  /** Délai horodaté dépassé entre deux événements du document
+   * (ex. contrôle → signature de l'arrêté : 72 h / 120 h — L. 224-2 CR).
+   * N'exige les deux horodatages que si présents : jamais de contexte fabriqué. */
+  | {
+      type: "delaiDepasse";
+      limiteHeures: number;
+      /** Sous-condition sur une donnée extraite (ex. motif « vitesse » → 72 h,
+       * « alcool » → 120 h) ; sans `siChamp`, la règle s'applique toujours. */
+      siChamp?: { champ: string; valeur: string };
+    }
+  /** Deux dates extraites, l'une strictement antérieure à l'autre
+   * (ex. stage effectué avant la notification 48SI). */
+  | { type: "datePrealable"; champ: string; reference: string }
+  /** Valeur numérique extraite strictement supérieure à un seuil
+   * (ex. cumul de retraits de points le même jour > 8 — L. 223-2/R. 223-2 CR). */
+  | { type: "valeurSuperieure"; champ: string; seuil: number }
+  /** Composition ET (les règles d'une même faille sont sinon en OU). */
+  | { type: "et"; regles: RegleDetection[] };
+
+/** Garde de cloisonnement : une règle portant `docType` ne matche que si le
+ * document a été classé du même type (3F ≠ 48SI) — jamais de candidature
+ * croisée. */
+export type DocTypeDocument = "3F" | "48SI";
 
 export type FailleDetectable = {
   id: string;
@@ -218,6 +265,18 @@ const PRIORITE_DETECTION = [
   FAILLE_IDS.erreurPlaque,
   FAILLE_IDS.etalonnage,
   FAILLE_IDS.mentions,
+];
+
+// Ordre du pack 3F/48SI : évalué **après** les 4 failles calibrées (jamais de
+// régression AMENDE) et avant les autres failles SUSPENSION du catalogue —
+// la première candidate reste la principale retenue.
+const PRIORITE_PACK: string[] = [
+  "faille-3f-delai-retention",
+  "faille-3f-incompetence",
+  "faille-3f-defaut-motivation",
+  "faille-48si-defaut-info",
+  "faille-48si-plafond-8pts",
+  "faille-48si-stage-avant-notification",
 ];
 
 /**
@@ -234,9 +293,16 @@ export function detecterFailles(
   contexte?: { dateExpirationEtalonnage?: Date | string | null },
 ): string[] {
   const byId = new Map(failles.map((f) => [f.id, f]));
-  const connues = PRIORITE_DETECTION.filter((id) => byId.has(id));
+  const connues = [...PRIORITE_DETECTION, ...PRIORITE_PACK].filter((id) =>
+    byId.has(id),
+  );
   const autres = failles
-    .filter((f) => !PRIORITE_DETECTION.includes(f.id as (typeof PRIORITE_DETECTION)[number]))
+    .filter(
+      (f) =>
+        !PRIORITE_DETECTION.includes(
+          f.id as (typeof PRIORITE_DETECTION)[number],
+        ) && !PRIORITE_PACK.includes(f.id),
+    )
     .map((f) => f.id);
 
   const candidates: string[] = [];
@@ -269,6 +335,10 @@ function evalRegle(
   texte: string | null | undefined,
   contexte?: { dateExpirationEtalonnage?: Date | string | null },
 ): boolean {
+  // Garde de docType : une règle réservée au 3F (ou au 48SI) ne matche jamais
+  // sur un document de l'autre type — cloisonnement strict du pack.
+  const docTypeRegle = (regle as { docType?: DocTypeDocument }).docType;
+  if (docTypeRegle && data.docType !== docTypeRegle) return false;
   switch (regle.type) {
     case "champAbsent": {
       const valeur = (data as Record<string, unknown>)[regle.champ];
@@ -312,7 +382,65 @@ function evalRegle(
         texteDePv(texte, data) &&
         !texte.toLowerCase().includes(regle.motif.toLowerCase())
       );
+    case "delaiDepasse": {
+      if (regle.siChamp) {
+        const brut = (data as Record<string, unknown>)[regle.siChamp.champ];
+        const valeur = brut == null ? "" : String(brut);
+        if (!valeur.toLowerCase().includes(regle.siChamp.valeur.toLowerCase())) {
+          return false;
+        }
+      }
+      const debut = horodatage(data.date, data.heure);
+      const fin = horodatage(data.dateSignatureArrete, data.heureSignatureArrete);
+      if (!debut || !fin) return false;
+      const heures = (fin.getTime() - debut.getTime()) / 3_600_000;
+      return heures > regle.limiteHeures;
+    }
+    case "datePrealable": {
+      const a = champEnDate(data, regle.champ);
+      const b = champEnDate(data, regle.reference);
+      if (!a || !b) return false;
+      return a.getTime() < b.getTime();
+    }
+    case "valeurSuperieure": {
+      const brut = (data as Record<string, unknown>)[regle.champ];
+      const n =
+        typeof brut === "number"
+          ? brut
+          : brut == null || brut === ""
+            ? Number.NaN
+            : Number(String(brut).replace(",", "."));
+      return Number.isFinite(n) && n > regle.seuil;
+    }
+    case "et":
+      return regle.regles.every((r) => evalRegle(r, data, texte, contexte));
   }
+}
+
+/** Date ISO/fr + heure optionnelle (« 14:30 », « 8h05 ») → Date UTC ;
+ * null si la date est absente ou illisible (jamais d'horodatage fabriqué). */
+function horodatage(
+  date: string | undefined,
+  heure: string | undefined,
+): Date | null {
+  const base = date ? versDateUtc(date) : null;
+  if (!base) return null;
+  const h = heure ? /^(\d{1,2})[:hH]?(\d{2})/.exec(heure.trim()) : null;
+  if (h) {
+    const heures = Number(h[1]);
+    const minutes = Number(h[2]);
+    if (heures <= 23 && minutes <= 59) {
+      base.setUTCHours(heures, minutes, 0, 0);
+    }
+  }
+  return base;
+}
+
+/** Valeur de champ lue comme date (yyyy-mm-dd ou dd/mm/yyyy) → UTC. */
+function champEnDate(data: ExtractedData, champ: string): Date | null {
+  const brut = (data as Record<string, unknown>)[champ];
+  if (brut == null || brut === "") return null;
+  return versDateUtc(String(brut));
 }
 
 /** Le texte ressemble-t-il à un avis/lettre de PV ? (anti-faux-positifs). */

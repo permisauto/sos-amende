@@ -93,6 +93,7 @@ export async function GET() {
         pdfUrl: c.pdfUrl,
         signatureUrl: c.signatureUrl,
         preuveDepotUrl: c.preuveDepotUrl,
+        packUrls: c.packUrls,
         createdAt: c.createdAt,
       })),
       preuves: d.preuves.map((p) => ({

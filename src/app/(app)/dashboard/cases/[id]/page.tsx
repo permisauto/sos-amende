@@ -3,10 +3,11 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/dal";
 import { joursRestants } from "@/lib/moteur";
+import { controlerForclusion48si } from "@/lib/delais";
 import { titreAnalyse } from "@/lib/envoi";
 import { libelleMontant } from "@/lib/tarifs";
 import { storageRead, storageUrl } from "@/lib/storage";
-import { AnalyseForm } from "./analyse-form";
+import { AnalyseForm, type AnalysePrefill } from "./analyse-form";
 import { SignaturePad } from "./signature-pad";
 import { EnvoiSuivi } from "./envoi-suivi";
 import { DepotAssiste } from "./depot-assiste";
@@ -49,6 +50,7 @@ type CaseDetail = {
     pdfUrl: string | null;
     signatureUrl: string | null;
     preuveDepotUrl: string | null;
+    packUrls?: unknown;
   }>;
   preuves: Array<{
     id: string;
@@ -288,6 +290,15 @@ export default async function CaseDetailPage(
   const pdfUrl = await storageUrl(courrier?.pdfUrl ?? null);
   const signatureUrl = await storageUrl(courrier?.signatureUrl ?? null);
   const preuveDepotUrl = await storageUrl(courrier?.preuveDepotUrl ?? null);
+  // Pack Télérecours (3F/48SI) : les 3 PDF du dépôt en ligne.
+  const pack = (courrier?.packUrls ?? null) as {
+    requete?: string | null;
+    refere?: string | null;
+    bordereau?: string | null;
+  } | null;
+  const packRequeteUrl = await storageUrl(pack?.requete ?? null);
+  const packRefereUrl = await storageUrl(pack?.refere ?? null);
+  const packBordereauUrl = await storageUrl(pack?.bordereau ?? null);
   const preuveEtalonnage =
     typeof item.extractedData === "object" &&
     item.extractedData !== null &&
@@ -325,6 +336,21 @@ export default async function CaseDetailPage(
             badge: "bg-red-100 text-red-800",
             text: "Délai dépassé — agissez immédiatement",
           };
+
+  // Forclusion 48SI (60 jours francs de la notification) — encart non
+  // bloquant côté client : jamais fabriqué sans date de notification.
+  const dataExtraite =
+    typeof item.extractedData === "object" && item.extractedData !== null
+      ? (item.extractedData as Record<string, unknown>)
+      : null;
+  const forclusion48si =
+    item.type === "SUSPENSION" && dataExtraite?.docType === "48SI"
+      ? controlerForclusion48si(
+          typeof dataExtraite.dateNotification === "string"
+            ? dataExtraite.dateNotification
+            : null,
+        )
+      : null;
 
   // La lettre n'est révélée au client qu'après l'envoi effectif de la
   // contestation (vérifiée et validée par le juriste).
@@ -450,39 +476,7 @@ export default async function CaseDetailPage(
               dossierId={item.id}
               type={item.type}
               pvTexte={item.pvTexte}
-              prefill={
-                item.extractedData as {
-                  nom?: string;
-                  plaque?: string;
-                  num_pv?: string;
-                  date?: string;
-                  heure?: string;
-                  montant?: string;
-                  numTelePaiement?: string;
-                  cle?: string;
-                  typeRadar?: string;
-                  radarId?: string;
-                  plaqueIncorrecte?: boolean;
-                  paiementDejaFait?: boolean;
-                  vehiculeCede?: boolean;
-                  vehiculeVole?: boolean;
-                  conducteurDifferent?: boolean;
-                  adresseIncorrecte?: boolean;
-                  travaux_présents?: boolean;
-                  conditions_meteo?: string;
-                  stationnementPanneau?: boolean;
-                  stationnementGene?: boolean;
-                  stationnementTicket?: boolean;
-                  stationnementLieu?: boolean;
-                  suspNotifIrreguliere?: boolean;
-                  suspDelaiNotification?: boolean;
-                  suspMotifsAbsents?: boolean;
-                  suspObservations?: boolean;
-                  suspEthylometreCarnet?: boolean;
-                  suspSecondSouffle?: boolean;
-                  suspRefereEngage?: boolean;
-                } | null
-              }
+              prefill={item.extractedData as AnalysePrefill | null}
             />
           </div>
         </section>
@@ -654,6 +648,28 @@ export default async function CaseDetailPage(
               >
                 {deadlineUrgency.text}
               </span>
+            </div>
+          )}
+
+          {forclusion48si?.depasse && (
+            <div
+              data-testid="forclusion-48si"
+              className="rounded-2xl border border-amber-300 bg-amber-50 p-5"
+            >
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-amber-700">
+                Délai de recours 48SI dépassé
+              </h2>
+              <p className="mt-2 text-sm text-amber-900">
+                Votre recours contre l&apos;invalidation du permis devait être
+                engagé avant le{" "}
+                <span className="font-medium">
+                  {forclusion48si.dateForclusion.toLocaleDateString("fr-FR")}
+                </span>{" "}
+                ({forclusion48si.joursDepasse} jour
+                {forclusion48si.joursDepasse > 1 ? "s" : ""} de dépassement).
+                Ce délai conditionne la recevabilité : contactez le juriste
+                avant toute démarche.
+              </p>
             </div>
           )}
 
@@ -887,6 +903,55 @@ export default async function CaseDetailPage(
                   <a href={pdfUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100">
                     Télécharger la lettre signée (PDF)
                   </a>
+                </div>
+              )}
+              {(packRequeteUrl || packBordereauUrl) && (
+                <div
+                  data-testid="pack-telerecours"
+                  className="mt-6 rounded-2xl border border-indigo-200 bg-indigo-50/50 p-6"
+                >
+                  <h2 className="text-sm font-semibold text-indigo-900">
+                    Pack de dépôt Télérecours (3 documents)
+                  </h2>
+                  <p className="mt-1 text-sm text-indigo-800/90">
+                    Téléchargez ces pièces, puis déposez-les avec votre
+                    contestation sur le portail officiel (bouton ci-dessus).
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-3">
+                    {packRequeteUrl && (
+                      <a
+                        data-testid="pack-requete"
+                        href={packRequeteUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+                      >
+                        Requête (PDF)
+                      </a>
+                    )}
+                    {packRefereUrl && (
+                      <a
+                        data-testid="pack-refere"
+                        href={packRefereUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 rounded-full border border-indigo-300 bg-white px-4 py-2 text-sm font-semibold text-indigo-800 hover:bg-indigo-100"
+                      >
+                        Référé-suspension L. 521-2 (PDF)
+                      </a>
+                    )}
+                    {packBordereauUrl && (
+                      <a
+                        data-testid="pack-bordereau"
+                        href={packBordereauUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 rounded-full border border-indigo-300 bg-white px-4 py-2 text-sm font-semibold text-indigo-800 hover:bg-indigo-100"
+                      >
+                        Bordereau des pièces (PDF)
+                      </a>
+                    )}
+                  </div>
                 </div>
               )}
             </>

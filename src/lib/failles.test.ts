@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
+  FAILLES_PACK_ACTIVES,
   activerPropositionsCompletes,
   estActivable,
+  injecterFaillesPack,
   manquantsPourActivation,
   messageActivationBloquee,
 } from "@/lib/failles";
@@ -114,6 +116,80 @@ describe("activerPropositionsCompletes", () => {
     const bilan = await activerPropositionsCompletes(dep as never);
 
     expect(bilan).toEqual({ activees: [], ignorees: 0, examinees: 0 });
+    expect(updates).toHaveLength(0);
+  });
+});
+
+/**
+ * Exception Pack 3F/48SI : les 4 failles validées produit sont injectées en
+ * ACTIVE à chaque synchronisation du catalogue — et **seulement** elles.
+ */
+describe("injecterFaillesPack (injection pack 3F/48SI)", () => {
+  const COMPLET = {
+    regle: "La suspension d'urgence doit être prononcée dans les 72 heures.",
+    templateLettre: "Je conteste la décision de suspension…",
+  };
+
+  function fakeDep(
+    proposees: Array<{ id: string; regle: string | null; templateLettre: string | null }>,
+  ) {
+    const updates: Array<{ where: unknown; data: unknown }> = [];
+    const dep = {
+      failleJuridique: {
+        findMany: async () => proposees,
+        updateMany: async (args: { where: unknown; data: unknown }) => {
+          updates.push(args);
+          return { count: 0 };
+        },
+      },
+    };
+    return { dep, updates };
+  }
+
+  it("porte exactement les 4 ids validés (les 2 autres restent PROPOSEE)", () => {
+    expect([...FAILLES_PACK_ACTIVES].sort()).toEqual([
+      "faille-3f-defaut-motivation",
+      "faille-3f-delai-retention",
+      "faille-48si-defaut-info",
+      "faille-48si-plafond-8pts",
+    ]);
+    expect(FAILLES_PACK_ACTIVES).not.toContain("faille-3f-incompetence");
+    expect(FAILLES_PACK_ACTIVES).not.toContain(
+      "faille-48si-stage-avant-notification",
+    );
+  });
+
+  it("n'active que les ids du pack et garde le verrou statut PROPOSEE", async () => {
+    const { dep, updates } = fakeDep([
+      { id: "faille-3f-delai-retention", ...COMPLET },
+      { id: "faille-suspension-sans-contradictoire", ...COMPLET },
+    ]);
+    const activees = await injecterFaillesPack(dep as never);
+
+    expect(activees).toEqual(["faille-3f-delai-retention"]);
+    expect(updates).toHaveLength(1);
+    expect(updates[0]?.data).toEqual({ statut: "ACTIVE" });
+    expect(updates[0]?.where).toEqual({
+      id: { in: ["faille-3f-delai-retention"] },
+      statut: "PROPOSEE",
+    });
+  });
+
+  it("une faille pack incomplète n'est jamais injectée (même garde-fou)", async () => {
+    const { dep, updates } = fakeDep([
+      { id: "faille-48si-defaut-info", regle: "…", templateLettre: "   " },
+    ]);
+    const activees = await injecterFaillesPack(dep as never);
+
+    expect(activees).toEqual([]);
+    expect(updates).toHaveLength(0);
+  });
+
+  it("rien à promouvoir → aucune écriture (idempotent)", async () => {
+    const { dep, updates } = fakeDep([]);
+    const activees = await injecterFaillesPack(dep as never);
+
+    expect(activees).toEqual([]);
     expect(updates).toHaveLength(0);
   });
 });

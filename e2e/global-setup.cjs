@@ -88,13 +88,28 @@ const { Client } = require("pg");
     // Le test suspension.spec.ts vérifie le garde-fou « aucune faille
     // SUSPENSION validée → examen par un juriste ».
     //
-    // On réinitialise TOUTES les failles SUSPENSION, sans liste d'ids en dur :
-    // le catalogue en compte 10 et continuera d'en gagner (auto-alimentation
-    // veille). Une liste figée oubliait les nouvelles, et une seule d'entre
-    // elles activée en admin faisait échouer suspension.spec.ts.
+    // On réinitialise les failles SUSPENSION, sans liste d'ids en dur pour le
+    // reste du catalogue : le catalogue en compte 10 et continuera d'en gagner
+    // (auto-alimentation veille). Une seule faille suspension active (sans garde
+    // docType) faisait échouer suspension.spec.ts.
+    //
+    // Les 4 failles du Pack 3F/48SI injectées en ACTIVE par la synchronisation
+    // (`FAILLES_PACK_ACTIVES`) sont EXCLUES de la remise à zéro : leur garde
+    // docType les rend inoffensives sur un PV non classé, et pack-telerecours
+    // a besoin qu'elles le restent. Les 2 autres failles pack (PROPOSEE)
+    // sont bien remises à zéro.
     await client.query(
-      'UPDATE "FailleJuridique" SET statut = $1 WHERE "typeInfraction" = $2',
-      ["PROPOSEE", "SUSPENSION"],
+      'UPDATE "FailleJuridique" SET statut = $1 WHERE "typeInfraction" = $2 AND id <> ALL($3::text[])',
+      [
+        "PROPOSEE",
+        "SUSPENSION",
+        [
+          "faille-3f-delai-retention",
+          "faille-3f-defaut-motivation",
+          "faille-48si-defaut-info",
+          "faille-48si-plafond-8pts",
+        ],
+      ],
     );
   } finally {
     await client.end();

@@ -15,6 +15,11 @@ const VARIABLES_AUTORISEES = [
   "{prefecture}",
   "{motif}",
   "{conditions_meteo}",
+  // Référé-suspension du pack 3F/48SI (urgence art. L. 521-2 CJA) — effacées
+  // par nettoyerLettre si le client n'a rien saisi.
+  "{metier}",
+  "{entreprise}",
+  "{risque_licenciement}",
 ];
 
 function variablesDuTemplate(template: string): string[] {
@@ -82,6 +87,11 @@ describe("catalogue-sources (garde-fou anti-hallucination)", () => {
       "etalonnageExpire",
       "texteContient",
       "texteAbsent",
+      // Pack 3F/48SI (types additifs)
+      "delaiDepasse",
+      "datePrealable",
+      "valeurSuperieure",
+      "et",
     ]);
     for (const faille of CATALOGUE_SOURCES) {
       for (const regle of faille.reglesDetection as RegleDetection[]) {
@@ -94,6 +104,16 @@ describe("catalogue-sources (garde-fou anti-hallucination)", () => {
           regle.type === "texteAbsent"
         ) {
           expect((regle as { motif: string }).motif).toBeTruthy();
+        }
+        if (regle.type === "delaiDepasse") {
+          expect(regle.limiteHeures).toBeGreaterThan(0);
+          expect(regle.limiteHeures).toBeLessThanOrEqual(168);
+        }
+        if (regle.type === "valeurSuperieure") {
+          expect(regle.seuil).toBeGreaterThan(0);
+        }
+        if (regle.type === "et") {
+          expect(regle.regles.length).toBeGreaterThan(0);
         }
       }
     }
@@ -117,5 +137,34 @@ describe("catalogue-sources (garde-fou anti-hallucination)", () => {
     expect(ids).toContain("faille-suspension-sans-contradictoire");
     expect(ids).toContain("faille-suspension-marge-erreur-ethylometre");
     expect(ids).toContain("faille-suspension-notification-irreguliere");
+  });
+
+  it("pack 3F/48SI : 6 failles complètes, modèle de référé L. 521-2, aucun L. 521-1", () => {
+    const pack = CATALOGUE_SOURCES.filter(
+      (f) => f.id.startsWith("faille-3f-") || f.id.startsWith("faille-48si-"),
+    );
+    expect(pack.map((f) => f.id).sort()).toEqual([
+      "faille-3f-defaut-motivation",
+      "faille-3f-delai-retention",
+      "faille-3f-incompetence",
+      "faille-48si-defaut-info",
+      "faille-48si-plafond-8pts",
+      "faille-48si-stage-avant-notification",
+    ]);
+    for (const f of pack) {
+      expect(f.typeInfraction).toBe("SUSPENSION");
+      expect(f.templateRefere).toContain("L. 521-2");
+      expect(f.templateLettre.length).toBeGreaterThan(50);
+      expect(f.reglesDetection.length).toBeGreaterThan(0);
+      // Chaque règle de pack est cloisonnée par docType (3F ≠ 48SI)
+      for (const regle of f.reglesDetection as RegleDetection[]) {
+        expect(regle).toHaveProperty("docType");
+      }
+    }
+    // Le référé-suspension relève de l'article L. 521-2 CJA — plus aucune
+    // occurrence de l'ancienne (fausse) référence L. 521-1 (référé-liberté).
+    const tout = JSON.stringify(CATALOGUE_SOURCES);
+    expect(tout).not.toContain("L. 521-1");
+    expect(tout).not.toContain("L.521-1");
   });
 });

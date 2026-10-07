@@ -503,3 +503,125 @@ describe("FAILLE_IDS — synchronisation seed (audit lot 5)", () => {
     );
   });
 });
+describe("règles du pack 3F/48SI (types additifs)", () => {
+  const uneSeule = (id: string, regle: unknown) => [
+    { id, reglesDetection: [regle as RegleDetection] },
+  ];
+  const PACK_ID = "faille-3f-delai-retention";
+
+  it("delaiDepasse : horodatage contrôle → signature (72 h)", () => {
+    const faillesPack = uneSeule(PACK_ID, { type: "delaiDepasse", limiteHeures: 72 });
+    // 97 h entre le contrôle et la signature de l'arrêté → dépassé.
+    expect(
+      detecterFailles(
+        { date: "2026-07-01", heure: "08:00", dateSignatureArrete: "2026-07-05", heureSignatureArrete: "09:00" },
+        null,
+        faillesPack,
+      ),
+    ).toEqual([PACK_ID]);
+    // 26 h → dans les délais.
+    expect(
+      detecterFailles(
+        { date: "2026-07-01", heure: "08:00", dateSignatureArrete: "2026-07-02", heureSignatureArrete: "09:00" },
+        null,
+        faillesPack,
+      ),
+    ).toEqual([]);
+    // Date de signature absente → aucun horodatage fabriqué.
+    expect(
+      detecterFailles(
+        { date: "2026-07-01", heure: "08:00" },
+        null,
+        faillesPack,
+      ),
+    ).toEqual([]);
+    expect(
+      detecterFailles(
+        { dateSignatureArrete: "2026-07-05", heureSignatureArrete: "09:00" },
+        null,
+        faillesPack,
+      ),
+    ).toEqual([]);
+  });
+
+  it("delaiDepasse : siChamp conditionne le délai au motif (72 h vitesse)", () => {
+    const faillesPack = uneSeule(PACK_ID, {
+      type: "delaiDepasse",
+      limiteHeures: 72,
+      siChamp: { champ: "motif", valeur: "vitesse" },
+    });
+    const base = { date: "2026-07-01", heure: "08:00", dateSignatureArrete: "2026-07-05", heureSignatureArrete: "09:00" };
+    expect(detecterFailles({ ...base, motif: "excès de vitesse" }, null, faillesPack)).toEqual([PACK_ID]);
+    expect(detecterFailles({ ...base, motif: "alcoolémie" }, null, faillesPack)).toEqual([]);
+    expect(detecterFailles(base, null, faillesPack)).toEqual([]);
+  });
+
+  it("datePrealable : stage effectué avant la notification (48SI)", () => {
+    const faillesPack = uneSeule("faille-48si-stage-avant-notification", {
+      type: "datePrealable",
+      champ: "dateStage",
+      reference: "dateNotification",
+    });
+    expect(
+      detecterFailles({ dateStage: "2026-06-01", dateNotification: "2026-06-15" }, null, faillesPack),
+    ).toEqual(["faille-48si-stage-avant-notification"]);
+    // Stage postérieur à la notification → pas de candidature.
+    expect(
+      detecterFailles({ dateStage: "2026-06-20", dateNotification: "2026-06-15" }, null, faillesPack),
+    ).toEqual([]);
+    expect(
+      detecterFailles({ dateStage: "2026-06-01" }, null, faillesPack),
+    ).toEqual([]);
+  });
+
+  it("valeurSuperieure : cumul de points, en nombre ou en chaîne", () => {
+    const faillesPack = uneSeule("faille-48si-plafond-8pts", {
+      type: "valeurSuperieure",
+      champ: "pointsRetiresMemesDate",
+      seuil: 8,
+    });
+    expect(detecterFailles({ pointsRetiresMemesDate: 9 }, null, faillesPack)).toEqual(["faille-48si-plafond-8pts"]);
+    expect(detecterFailles({ pointsRetiresMemesDate: "9" }, null, faillesPack)).toEqual(["faille-48si-plafond-8pts"]);
+    expect(detecterFailles({ pointsRetiresMemesDate: "9,5" }, null, faillesPack)).toEqual(["faille-48si-plafond-8pts"]);
+    // Seuil strict : 8 n'est pas supérieur à 8.
+    expect(detecterFailles({ pointsRetiresMemesDate: 8 }, null, faillesPack)).toEqual([]);
+    expect(detecterFailles({ pointsRetiresMemesDate: "" }, null, faillesPack)).toEqual([]);
+    expect(detecterFailles({}, null, faillesPack)).toEqual([]);
+  });
+
+  it("et : toutes les sous-règles doivent matcher (sinon OU entre règles d'une faille)", () => {
+    const faillesPack = uneSeule("faille-48si-plafond-8pts", {
+      type: "et",
+      regles: [
+        { type: "valeurSuperieure", champ: "pointsRetiresMemesDate", seuil: 8 },
+        { type: "champAbsent", champ: "dateNotification" },
+      ],
+    });
+    expect(detecterFailles({ pointsRetiresMemesDate: 9 }, null, faillesPack)).toEqual(["faille-48si-plafond-8pts"]);
+    expect(detecterFailles({ pointsRetiresMemesDate: 9, dateNotification: "2026-06-15" }, null, faillesPack)).toEqual([]);
+    expect(detecterFailles({ dateNotification: "2026-06-15" }, null, faillesPack)).toEqual([]);
+  });
+
+  it("cloisonnement docType : une règle 3F ne matche jamais sur une 48SI (ni sans classement)", () => {
+    const faillesPack = uneSeule(PACK_ID, {
+      type: "texteContient",
+      motif: "vitesse",
+      docType: "3F",
+    });
+    expect(detecterFailles({ docType: "3F" }, "avis pour excès de vitesse", faillesPack)).toEqual([PACK_ID]);
+    expect(detecterFailles({ docType: "48SI" }, "avis pour excès de vitesse", faillesPack)).toEqual([]);
+    expect(detecterFailles({ docType: "AMENDE" }, "avis pour excès de vitesse", faillesPack)).toEqual([]);
+    expect(detecterFailles({}, "avis pour excès de vitesse", faillesPack)).toEqual([]);
+  });
+
+  it("les failles pack passent après les 4 failles seedées, les autres après", () => {
+    const faillesOrdre = [
+      { id: PACK_ID, reglesDetection: [{ type: "texteContient", motif: "vitesse" } as RegleDetection] },
+      { id: FAILLE_IDS.prescription },
+      { id: "faille-autre-suspension", reglesDetection: [{ type: "texteContient", motif: "vitesse" } as RegleDetection] },
+    ];
+    expect(
+      detecterFailles({ date: "2024-01-01" }, "avis pour excès de vitesse", faillesOrdre),
+    ).toEqual([FAILLE_IDS.prescription, PACK_ID, "faille-autre-suspension"]);
+  });
+});

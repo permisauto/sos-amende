@@ -263,8 +263,8 @@ export async function notifierStatut(dossierId: string): Promise<boolean> {
       html = `
         <p>Bonjour ${prenom},</p>
         <p>Votre lettre de contestation${ref} a été validée par notre juriste.
-        Il ne vous reste qu'à la signer électroniquement, elle sera transmise
-        automatiquement.</p>
+        Il ne vous reste qu'à la signer électroniquement : vous recevrez ensuite
+        le lien de dépôt assisté pour la transmettre sur le portail officiel.</p>
         ${ACCUEIL}`;
       break;
     case "A_VERIFIER":
@@ -282,8 +282,11 @@ export async function notifierStatut(dossierId: string): Promise<boolean> {
       html = `
         <p>Bonjour ${prenom},</p>
         <p>Votre dossier${ref} a été transmis par SOS Amende (en ligne ou en
-        lettre recommandée avec accusé de réception). L'OMP examinera votre
-        requête ; l'accusé de dépôt est consultable dans votre suivi.</p>
+        lettre recommandée avec accusé de réception). ${
+          dossier.type === "SUSPENSION"
+            ? "Votre recours sera examiné par l'autorité compétente ; l'accusé de dépôt est consultable dans votre suivi."
+            : "L'OMP examinera votre requête ; l'accusé de dépôt est consultable dans votre suivi."
+        }</p>
         ${ACCUEIL}`;
       break;
     case "REJETE":
@@ -313,7 +316,11 @@ export async function notifierStatut(dossierId: string): Promise<boolean> {
           ? `
         <p>Bonjour ${prenom},</p>
         <p>Votre dossier${ref} a été examiné : la requête a été
-        <strong>acceptée</strong>. L'amende est annulée.</p>
+        <strong>acceptée</strong>. ${
+          dossier.type === "SUSPENSION"
+            ? "La décision contestée est annulée."
+            : "L'amende est annulée."
+        }</p>
         ${ACCUEIL}`
           : `
         <p>Bonjour ${prenom},</p>

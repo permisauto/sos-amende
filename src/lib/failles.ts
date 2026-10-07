@@ -91,3 +91,47 @@ export async function activerPropositionsCompletes(
     examinees: proposees.length,
   };
 }
+
+/**
+ * Offre Pack 3F/48SI — failles validées produit (décision 2026-10-07) :
+ * injectées en `ACTIVE` à chaque synchronisation du catalogue (idempotent),
+ * dès lors qu'elles sont complètes (règle dégagée + template de lettre).
+ *
+ * Garde-fous :
+ * - jamais une faille **incomplète** (mêmes `estActivable`) ;
+ * - jamais une faille **écartée** par l'admin (INACTIVE reste INACTIVE) ;
+ * - seules des règles cloisonnées `docType` (3F/48SI) : elles ne peuvent donc
+ *   jamais se déclencher sur un PV d'amende ni sur un document non classé.
+ *
+ * Les 2 autres propositions du pack (`faille-3f-incompetence`,
+ * `faille-48si-stage-avant-notification`) restent en PROPOSEE : activation
+ * admin uniquement, comme le reste du catalogue.
+ */
+export const FAILLES_PACK_ACTIVES = [
+  "faille-3f-delai-retention",
+  "faille-3f-defaut-motivation",
+  "faille-48si-defaut-info",
+  "faille-48si-plafond-8pts",
+] as const;
+
+export async function injecterFaillesPack(
+  dep: Pick<PrismaClient, "failleJuridique">,
+): Promise<string[]> {
+  const proposees = await dep.failleJuridique.findMany({
+    where: { id: { in: [...FAILLES_PACK_ACTIVES] }, statut: "PROPOSEE" },
+    select: { id: true, regle: true, templateLettre: true },
+  });
+  // Double filtre (défense en profondeur) : jamais un id hors pack, même si la
+  // requête ci-dessus est un jour réécrite.
+  const packIds = new Set<string>(FAILLES_PACK_ACTIVES);
+  const activables = proposees.filter(
+    (f) => packIds.has(f.id) && estActivable(f),
+  );
+  if (activables.length > 0) {
+    await dep.failleJuridique.updateMany({
+      where: { id: { in: activables.map((f) => f.id) }, statut: "PROPOSEE" },
+      data: { statut: "ACTIVE" },
+    });
+  }
+  return activables.map((f) => f.id);
+}

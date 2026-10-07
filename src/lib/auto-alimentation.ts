@@ -4,9 +4,16 @@
 // entrées du catalogue en statut PROPOSEE — jamais ACTIVE, jamais utilisée par
 // le moteur.
 //
+// **Exception Pack 3F/48SI** (décision produit 2026-10-07) : à la fin de la
+// synchronisation, `injecterFaillesPack` promeut les 4 failles validées du
+// pack (cf. `FAILLES_PACK_ACTIVES`) de PROPOSEE → ACTIVE, à condition qu'elles
+// soient complètes. Elles sont cloisonnées par `docType` : elles ne peuvent donc
+// se déclencher que sur un document 3F/48SI, jamais sur un PV d'amende.
+//
 // Deux chemins :
 //   • **automatique** (cron `/api/cron/auto-alimentation`, ouverture de la page
-//     bibliothèque) : reste en PROPOSEE — aucune activation sans geste humain ;
+//     bibliothèque) : reste en PROPOSEE — aucune activation sans geste humain,
+//     hors injection pack ci-dessus ;
 //   • **manuel admin** (bouton « Synchroniser et activer »,
 //     `importerFaillesDepuisSources`) : synchronise puis passe en ACTIVE toutes
 //     les propositions complètes via `activerPropositionsCompletes` — les
@@ -18,13 +25,15 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
 import { CATALOGUE_SOURCES } from "@/lib/catalogue-sources";
+import { injecterFaillesPack } from "@/lib/failles";
 import { synchroniserVeilleJorf } from "@/lib/veille-juridique";
 
 /**
  * Synchronise la base juridique avec le catalogue sourcé. Toutes les entrées
  * sont upsertées en PROPOSEE (création ou mise à jour du contenu). Une faille
  * déjà ACTIVE/INACTIVE garde son statut — la synchronisation ne rétrograde
- * jamais une validation admin.
+ * jamais une validation admin. **Exception** : les 4 failles du Pack 3F/48SI
+ * validées produit sont promues PROPOSEE → ACTIVE (`injecterFaillesPack`).
  *
  * Retourne le nombre d'entrées du catalogue traitées.
  * Résilient : si DB down, log et retourne 0 (mock gère l'affichage).
@@ -35,16 +44,23 @@ export async function synchroniserCatalogue(): Promise<number> {
     for (const f of CATALOGUE_SOURCES) {
       const existing = await prisma.failleJuridique.findUnique({
         where: { id: f.id },
-        select: { statut: true, regle: true },
+        select: { statut: true, regle: true, templateRefere: true },
       });
       if (existing?.statut === "INACTIVE") {
         continue;
       }
       if (existing?.statut === "ACTIVE") {
-        if (!existing.regle) {
+        // Enrichissement non destructif : on ne comble que les champs vides —
+        // jamais de réécriture d'un contenu validé par l'admin.
+        const aCompleter: { regle?: string; templateRefere?: string } = {};
+        if (!existing.regle) aCompleter.regle = f.regle;
+        if (!existing.templateRefere && f.templateRefere) {
+          aCompleter.templateRefere = f.templateRefere;
+        }
+        if (Object.keys(aCompleter).length > 0) {
           await prisma.failleJuridique.update({
             where: { id: f.id },
-            data: { regle: f.regle },
+            data: aCompleter,
           });
           count += 1;
         }
@@ -62,6 +78,7 @@ export async function synchroniserCatalogue(): Promise<number> {
         articleLoi: f.articleLoi,
         regle: f.regle,
         templateLettre: f.templateLettre,
+        templateRefere: f.templateRefere ?? null,
         source: f.source,
         reglesDetection: f.reglesDetection as Prisma.InputJsonValue,
         jurisprudence: f.jurisprudence as Prisma.InputJsonValue,
@@ -74,6 +91,9 @@ export async function synchroniserCatalogue(): Promise<number> {
       });
       count += 1;
     }
+    // Exception Pack 3F/48SI : injection des 4 failles validées produit
+    // (PROPOSEE → ACTIVE, idempotente — voir `FAILLES_PACK_ACTIVES`).
+    await injecterFaillesPack(prisma);
   } catch (e) {
     console.error("synchroniserCatalogue: DB indisponible, mock utilisé", e);
     // En mode dégradé, le mock affiche déjà les 28 failles du catalogue
@@ -109,6 +129,7 @@ export type LigneBase = {
   articleLoi: string;
   regle: string | null;
   templateLettre: string;
+  templateRefere?: string | null;
   source: string | null;
   statut: string;
   reglesDetection: unknown;
@@ -120,6 +141,7 @@ const CHAMPS_TEXTUELS = [
   "articleLoi",
   "regle",
   "templateLettre",
+  "templateRefere",
   "source",
 ] as const;
 
@@ -130,6 +152,7 @@ const LIBELLES_CHAMPS: Record<string, string> = {
   articleLoi: "Article de loi",
   regle: "Règle dégagée",
   templateLettre: "Template de lettre",
+  templateRefere: "Template de référé (pack)",
   source: "Source",
   reglesDetection: "Règles de détection",
   jurisprudence: "Jurisprudence",
@@ -221,6 +244,7 @@ export async function listerMisesAJourCatalogue(): Promise<EcartCatalogue[]> {
         articleLoi: true,
         regle: true,
         templateLettre: true,
+        templateRefere: true,
         source: true,
         statut: true,
         reglesDetection: true,

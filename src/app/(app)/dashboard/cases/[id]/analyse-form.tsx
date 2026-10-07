@@ -6,6 +6,7 @@ import { questionsPour } from "@/lib/questions";
 import { libellePreuve } from "@/lib/preuve-labels";
 import {
   dateRefLibelle,
+  libelleDocType,
   numeroRefLibelle,
   titreAnalyse,
   type InfractionType,
@@ -46,6 +47,15 @@ export type AnalysePrefill = {
   suspEthylometreCarnet?: boolean;
   suspSecondSouffle?: boolean;
   suspRefereEngage?: boolean;
+  // Pack 3F/48SI : classificateur lu à l'OCR (badge informatif — le champ
+  // n'est pas éditable ici, il est porté automatiquement à l'analyse).
+  docType?: string;
+  dateSignatureArrete?: string;
+  dateNotification?: string;
+  // Référé-suspension (art. L. 521-2 CJA) — noms = variables du template.
+  metier?: string;
+  entreprise?: string;
+  risque_licenciement?: string;
 };
 
 export function AnalyseForm({
@@ -85,6 +95,11 @@ export function AnalyseForm({
             </strong> {titreAnalyse(type)}. Vérifiez-les avant de
             valider : ils sont ensuite relus par un juriste (vérification
             humaine obligatoire).
+            {libelleDocType(prefill?.docType) && (
+              <span className="mt-2 block w-fit rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
+                Document classé : {libelleDocType(prefill?.docType)}
+              </span>
+            )}
           </>
         ) : (
           <>
@@ -228,6 +243,35 @@ export function AnalyseForm({
               <span className="text-sm font-medium text-zinc-700">Motif</span>
               <input name="motif" placeholder="alcool / stupéfiants / vitesse" defaultValue={prefill?.motif} className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100" />
             </label>
+            {(prefill?.docType === "3F" || prefill?.docType === "48SI") && (
+              <>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-zinc-700">
+                    Votre métier{" "}
+                    <span className="font-normal text-zinc-500">
+                      (facultatif — référé d&apos;urgence)
+                    </span>
+                  </span>
+                  <input name="metier" placeholder="Ex. : cariste, chauffeur VTC" defaultValue={prefill?.metier} className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100" />
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-zinc-700">
+                    Employeur / entreprise{" "}
+                    <span className="font-normal text-zinc-500">(facultatif)</span>
+                  </span>
+                  <input name="entreprise" placeholder="Ex. : Logistique Dupont SAS" defaultValue={prefill?.entreprise} className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100" />
+                </label>
+                <label className="flex flex-col gap-1.5 sm:col-span-2">
+                  <span className="text-sm font-medium text-zinc-700">
+                    Conséquence concrète de la décision{" "}
+                    <span className="font-normal text-zinc-500">
+                      (facultatif — ex. : risque de licenciement)
+                    </span>
+                  </span>
+                  <input name="risque_licenciement" placeholder="Ex. : risque de licenciement si je ne peux plus me déplacer" defaultValue={prefill?.risque_licenciement} className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100" />
+                </label>
+              </>
+            )}
           </>
         )}
       </div>

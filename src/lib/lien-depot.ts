@@ -104,6 +104,12 @@ export async function verifierLienDepot(token: string): Promise<{
       lettrePdf: string | null;
       pv: string | null;
       preuves: FichierDepot[];
+      /** Pack Télérecours (3F/48SI) : requête, référé L. 521-2, bordereau. */
+      pack: {
+        requete: string | null;
+        refere: string | null;
+        bordereau: string | null;
+      };
     };
   };
   expireLe: Date;
@@ -136,6 +142,16 @@ export async function verifierLienDepot(token: string): Promise<{
   const montant = Number(ex["montant"] ?? 0);
   const courriers = lien.dossier.courriers ?? [];
   const dernierCourrier = courriers[courriers.length - 1];
+  // Pack Télérecours (3F/48SI) : rattaché au courrier validé ou signé — on
+  // remonte le dernier qui en porte (un courrier plus récent peut l'ignorer).
+  const courrierPack = [...courriers]
+    .reverse()
+    .find((c) => c.packUrls != null);
+  const pack = (courrierPack?.packUrls ?? null) as {
+    requete?: string | null;
+    refere?: string | null;
+    bordereau?: string | null;
+  } | null;
 
   return {
     dossier: {
@@ -154,6 +170,11 @@ export async function verifierLienDepot(token: string): Promise<{
         preuves: (lien.dossier.preuves ?? [])
           .filter((p) => p.url && p.url.trim() !== "")
           .map((p) => ({ id: p.id, nom: p.nom, type: p.type })),
+        pack: {
+          requete: pack?.requete ?? null,
+          refere: pack?.refere ?? null,
+          bordereau: pack?.bordereau ?? null,
+        },
       },
     },
     expireLe: lien.expireLe,

@@ -136,4 +136,58 @@ describe("GET /api/recours/finaliser/fichier", () => {
     const res = await GET(req("token-ok", "&doc=pv"));
     expect(res.status).toBe(404);
   });
+
+  const fichiersPack = {
+    lettrePdf: "/uploads/lettre.pdf",
+    pv: "/uploads/pv.png",
+    preuves: [],
+    pack: {
+      requete: "/uploads/pack-requete.pdf",
+      refere: "/uploads/pack-refere.pdf",
+      bordereau: "/uploads/pack-bordereau.pdf",
+    },
+  } as unknown as typeof dossierBase.fichiers;
+
+  it("sert les 3 documents du pack Télérecours via le token du lien", async () => {
+    mockLien({ type: "SUSPENSION", fichiers: fichiersPack });
+    (storageRead as ReturnType<typeof vi.fn>).mockResolvedValue(
+      Buffer.from("PDF-PACK"),
+    );
+
+    const resRef = await GET(req("token-ok", "&doc=refere"));
+    expect(resRef.status).toBe(200);
+    expect(resRef.headers.get("Content-Type")).toBe("application/pdf");
+    expect(resRef.headers.get("Content-Disposition")).toContain(
+      "refere-suspension-l521-2.pdf",
+    );
+    expect(
+      (storageRead as ReturnType<typeof vi.fn>).mock.calls[0][0],
+    ).toBe("/uploads/pack-refere.pdf");
+
+    const resBord = await GET(req("token-ok", "&doc=bordereau"));
+    expect(resBord.status).toBe(200);
+    expect(resBord.headers.get("Content-Disposition")).toContain(
+      "bordereau-pieces.pdf",
+    );
+
+    const resReq = await GET(req("token-ok", "&doc=requete"));
+    expect(resReq.status).toBe(200);
+    expect(resReq.headers.get("Content-Disposition")).toContain(
+      "requete-contestation.pdf",
+    );
+  });
+
+  it("404 sur un document du pack non produit (référé absent)", async () => {
+    mockLien({
+      type: "SUSPENSION",
+      fichiers: {
+        ...fichiersPack,
+        pack: { requete: "/uploads/pack-requete.pdf", refere: null, bordereau: null },
+      } as unknown as typeof dossierBase.fichiers,
+    });
+
+    const res = await GET(req("token-ok", "&doc=refere"));
+    expect(res.status).toBe(404);
+    expect(storageRead).not.toHaveBeenCalled();
+  });
 });

@@ -614,6 +614,105 @@ describe("normaliserPv — PV officiel à couche texte (prod 2026-10-06)", () =>
   });
 });
 
+/** Arrêté préfectoral de suspension (pack 3F) — dates d'infraction et de
+ * signature, libellés explicites uniquement. */
+const ARRETE_3F = `ARRÊTÉ PRÉFECTORAL N° 2026-0451
+Préfecture du Rhône
+ARRÊTÉ DE SUSPENSION DU PERMIS DE CONDUIRE
+Infraction commise le 02/03/2026 à 22h15
+Motif : alcoolémie
+Fait à Lyon, le 10/03/2026 à 09h30`;
+
+/** Courrier 48SI (invalidation — solde de points nul) : retraits datés,
+ * notification, aucune signature. */
+const LETTRE_48SI = `LETTRE 48 SI
+INVALIDATION DE MON PERMIS DE CONDUIRE POUR SOLDE DE POINTS NUL
+Récapitulatif des retraits :
+05/03/2026 : retrait de 6 points
+05/03/2026 : retrait de 4 points
+12/03/2026 : retrait de 3 points
+Notifiée le 20/03/2026`;
+
+describe("pack 3F/48SI — classification de document", () => {
+  it("classe un arrêté de suspension en 3F", () => {
+    expect(normaliserPv(ARRETE_3F).docType).toBe("3F");
+  });
+
+  it("classe un courrier 48SI en 48SI", () => {
+    expect(normaliserPv(LETTRE_48SI).docType).toBe("48SI");
+  });
+
+  it("« 48 SI » l'emporte sur une mention de suspension voisine", () => {
+    const t =
+      "LETTRE 48 SI\nINVALIDATION pour solde de points nul\nARRÊTÉ DE SUSPENSION du permis";
+    expect(normaliserPv(t).docType).toBe("48SI");
+  });
+
+  it("classe un PV d'amende en AMENDE (hors pack)", () => {
+    expect(normaliserPv(PV_OFFICIEL).docType).toBe("AMENDE");
+    expect(normaliserPv(PV_TEXTE).docType).toBe("AMENDE");
+  });
+
+  it("un texte non reconnu garde docType absent (jamais de classement fabriqué)", () => {
+    expect(normaliserPv("Bonjour, ce texte ne contient aucun repère.").docType).toBeUndefined();
+  });
+});
+
+describe("pack 3F/48SI — horodatages par libellé", () => {
+  it("extrait la date ET l'heure de signature (« Fait à …, le … »)", () => {
+    const d = normaliserPv(ARRETE_3F);
+    expect(d.dateSignatureArrete).toBe("2026-03-10");
+    expect(d.heureSignatureArrete).toBe("09h30");
+    expect(d.date).toBe("2026-03-02"); // date d'infraction = première date
+    expect(d.heure).toBe("22h15");
+  });
+
+  it("« Signé le … » sans heure → date seule", () => {
+    const d = normaliserPv("ARRÊTÉ DE SUSPENSION\nSigné le 12/06/2026");
+    expect(d.dateSignatureArrete).toBe("2026-06-12");
+    expect(d.heureSignatureArrete).toBeUndefined();
+  });
+
+  it("sans libellé de signature → jamais de date fabriquée", () => {
+    expect(normaliserPv(LETTRE_48SI).dateSignatureArrete).toBeUndefined();
+    expect(normaliserPv(PV_OFFICIEL).dateSignatureArrete).toBeUndefined();
+  });
+
+  it("extrait la date de notification (libellé explicite)", () => {
+    expect(normaliserPv(LETTRE_48SI).dateNotification).toBe("2026-03-20");
+    expect(normaliserPv(ARRETE_3F).dateNotification).toBeUndefined();
+  });
+
+  it("extrait la date du stage (première date du paragraphe « stage »)", () => {
+    const d = normaliserPv(
+      "DÉCISION\n\nAttestation de stage de récupération de points suivie les 12/03/2026 et 13/03/2026\n\nSigné le 20/03/2026",
+    );
+    expect(d.dateStage).toBe("2026-03-12");
+    expect(d.dateSignatureArrete).toBe("2026-03-20");
+    expect(d.dateNotification).toBeUndefined();
+  });
+});
+
+describe("pack 3F/48SI — cumul de points le même jour", () => {
+  it("cumule les retraits d'une même journée (6 + 4 = 10 > plafond 8)", () => {
+    expect(normaliserPv(LETTRE_48SI).pointsRetiresMemesDate).toBe(10);
+  });
+
+  it("jamais de nombre sans date sur la ligne (anti-hallucination)", () => {
+    const d = normaliserPv(
+      "48 SI\nRécapitulatif : 12 points retirés au total",
+    );
+    expect(d.pointsRetiresMemesDate).toBeUndefined();
+  });
+
+  it("fusionnerPrefill convertit le cumul en texte (JSON du dépôt)", () => {
+    const f = fusionnerPrefill(undefined, LETTRE_48SI);
+    expect(f.pointsRetiresMemesDate).toBe("10");
+    expect(f.docType).toBe("48SI");
+    expect(f.dateNotification).toBe("2026-03-20");
+  });
+});
+
 describe("fusionnerPrefill (struct Gemini ∪ regex locales)", () => {
   it("sans extrait (PDF à couche texte) → tout vient des regex", () => {
     const f = fusionnerPrefill(undefined, PV_OFFICIEL);
@@ -674,4 +773,33 @@ describe("extrairePv — garde-fous temporels", () => {
     await expect(extrairePv(PNG_1PX)).resolves.toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(3);
   }, 15_000);
+});
+
+describe("provider mock — document simulé choisi par le nom de fichier (dev/E2E)", () => {
+  afterEach(() => {
+    delete process.env.OCR_PROVIDER;
+  });
+
+  it("« arrete-… » rend un arrêté 3F, « 48si… » une lettre 48SI, sinon le PV d'amende", async () => {
+    process.env.OCR_PROVIDER = "mock";
+
+    const arrete = await extrairePv(Buffer.from("x"), "arrete-suspension.png");
+    const d = normaliserPv(arrete?.texte ?? "");
+    expect(d.docType).toBe("3F");
+    expect(d.plaque).toBe("AB-123-CD");
+    expect(d.motif).toBe("excès de vitesse");
+    expect(d.date).toBe("2026-07-01");
+    expect(d.heure).toBe("14h32");
+    expect(d.dateSignatureArrete).toBe("2026-07-05");
+    expect(d.heureSignatureArrete).toBe("09h00");
+
+    const lettre48 = await extrairePv(Buffer.from("x"), "48si.png");
+    expect(normaliserPv(lettre48?.texte ?? "").docType).toBe("48SI");
+
+    // Fichier par défaut (toutes les autres specs) : PV d'amende inchangé.
+    const pv = await extrairePv(Buffer.from("x"), "pv.png");
+    const dpv = normaliserPv(pv?.texte ?? "");
+    expect(dpv.docType).toBe("AMENDE");
+    expect(dpv.numTelePaiement).toBe("12345678902");
+  });
 });

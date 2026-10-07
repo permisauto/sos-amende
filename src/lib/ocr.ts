@@ -53,10 +53,18 @@ function delaiOcr(env: string | undefined, defaut: number): number {
 }
 
 /** Délai global d'un cycle OCR (API, pdf-parse, tesseract) : passé, on rend
- * null et le client saisit à la main — jamais d'exception, jamais de hang. */
-export async function extrairePv(buffer: Buffer): Promise<OcrResult | null> {
+ * null et le client saisit à la main — jamais d'exception, jamais de hang.
+ *
+ * `nomFichier` ne sert qu'au provider mock (dev/E2E) : il choisit le document
+ * simulé (« arrete-… » → arrêté 3F, « 48si… » → lettre 48SI, sinon le PV
+ * d'amende de référence). Seul « arrete » ouvre la voie 3F : « decision »
+ * reste sur le PV par défaut pour ne pas basculer `suspension.spec.ts`. */
+export async function extrairePv(
+  buffer: Buffer,
+  nomFichier?: string,
+): Promise<OcrResult | null> {
   const provider = getOcrProvider();
-  if (provider === "mock") return mockOcr();
+  if (provider === "mock") return mockOcr(nomFichier);
   if (provider === "aucun") return null;
 
   const delai = delaiOcr(process.env.OCR_TIMEOUT_MS, OCR_TIMEOUT_MS_DEFAUT);
@@ -662,17 +670,41 @@ async function tesseractOcr(buffer: Buffer): Promise<OcrResult | null> {
   }
 }
 
-/** Provider de dev/E2E : retourne un texte de PV fictif déterministe. */
-async function mockOcr(): Promise<OcrResult | null> {
-  return {
-    texte: `CONTRAVENTION
+/** Provider de dev/E2E : retourne un texte de PV fictif déterministe.
+ * Trois documents de référence — le nom du fichier téléversé (optionnel)
+ * permet aux specs E2E de déposer un vrai document de pack (arrêté 3F ou
+ * lettre 48SI) au lieu du PV d'amende, sans jamais toucher aux autres specs
+ * (fichier « pv.png » par défaut). */
+const MOCK_PV_AMENDE = `CONTRAVENTION
 N° 123456789
 Vous êtes avisé d'une infraction commise le 01/07/2026 à 14h32.
 Véhicule : AB-123-CD
 Montant : 135 €
 Règlement par télépaiement : 123456789 02
-N° de télé-paiement 123456789, clé 02`,
-  };
+N° de télé-paiement 123456789, clé 02`;
+
+const MOCK_ARRETE_3F = `ARRÊTÉ PRÉFECTORAL N° 2026-0451
+Préfecture du Rhône
+ARRÊTÉ DE SUSPENSION DU PERMIS DE CONDUIRE
+Véhicule : AB-123-CD
+Infraction commise le 01/07/2026 à 14h32
+Motif : excès de vitesse
+Fait à Lyon, le 05/07/2026 à 09h00`;
+
+const MOCK_LETTRE_48SI = `LETTRE 48 SI
+INVALIDATION DE MON PERMIS DE CONDUIRE POUR SOLDE DE POINTS NUL
+Récapitulatif des retraits :
+05/03/2026 : retrait de 6 points
+05/03/2026 : retrait de 4 points
+Notifiée le 20/03/2026`;
+
+async function mockOcr(nomFichier?: string): Promise<OcrResult | null> {
+  const nom = (nomFichier ?? "").toLowerCase();
+  if (nom.includes("48si")) return { texte: MOCK_LETTRE_48SI, confiance: 100 };
+  if (nom.includes("arrete")) {
+    return { texte: MOCK_ARRETE_3F, confiance: 100 };
+  }
+  return { texte: MOCK_PV_AMENDE, confiance: 100 };
 }
 
 /** Date slashes/barres, jamais à l'intérieur d'une date ISO
@@ -724,6 +756,21 @@ const RADAR_RE = /\b(?:appareil(?:\s+de\s+mesure)?|cin[eé]mom[eè]tre|radar)\s*
  * de date déduite sans libellé : c'est la preuve d'entretien annuel. */
 const DATE_VERIF_RE =
   /\b(?:derni[eè]re\s+)?(?:date\s+de\s+v[ée]rification(?:\s+p[ée]riodique)?|v[ée]rification\s+p[ée]riodique)\s*(?:du|le)?\s*[:\-]?\s*(\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}|\d{4}-\d{2}-\d{2}|\d{1,2}\s+[A-Za-zÀ-ÿ]{3,9}\.?\s+\d{4})/i;
+
+// --- Pack 3F / 48SI (Télérecours Citoyens) : horodatages par libellé ------
+/** Signature de l'arrêté : « Signé le 12/03/2026 », « Date de signature :
+ * … », « Fait à PARIS, le 3 mars 2026 ». Le libellé est obligatoire et la
+ * date doit suivre immédiatement (même fenêtre) : jamais une date prise au
+ * hasard dans le corps du document. */
+const SIGNATURE_RE =
+  /\b(?:sign[ée]e?\s+le|date\s+de\s+signature\s*(?:de\s+l['’]arr[eê]t[eé])?\s*:?\s*|fait[ea]?\s+à\s+[^\n,]{2,50},?\s*le\s+)([^\n]{0,35})/i;
+/** Notification de la décision : libellé de réception/recommandé d'abord
+ * (« notifiée le … », « notification du … », « avis de réception … le … »). */
+const NOTIFICATION_RE =
+  /\b(?:notifi[ée]e?\s+le|notification\s+(?:le|du)|avis\s+de\s+r[ée]ception[^\n]{0,60}?(?:le|du)|lettre\s+recommand[ée]e[^\n]{0,60}?(?:le|du)|re[çc]ue?\s+le)([^\n]{0,35})/i;
+/** Heure française « 14h30 » (séparateur h/H seulement : un point de date
+ * comme « 12.03.2026 » ne doit jamais être lu en heure). */
+const HEURE_H_RE = /\b([0-2]?\d)[hH]([0-5]\d)\b/;
 
 /** Segment lettre : chiffres d'OCR (0→O, 1→I) réparés ; null si autre chiffre. */
 function segLettres(s: string): string | null {
@@ -860,6 +907,39 @@ function extraireNumPv(texte: string): string | undefined {
 
   const fallback = texte.match(NUM_RE);
   return fallback ? fallback[1].replace(/[\s-]/g, "") : undefined;
+}
+
+/**
+ * Classe le document scanné : « 48SI » (invalidation, solde de points nul),
+ * « 3F » (arrêté/décision de suspension préfectorale) ou « AMENDE » (avis de
+ * contravention). Ordre décroissant de spécificité : 48SI d'abord (motif très
+ * spécifique), puis 3F — un courrier 48SI ne doit jamais retomber sur 3F, ni
+ * un arrêté sur AMENDE. Un texte non reconnu garde `docType` absent (jamais de
+ * classement fabriqué) : le moteur n'applique alors aucune règle à docType
+ * imposé (anti-faux-positifs : jamais de pack hors pack).
+ */
+function classifierDocType(
+  texte: string,
+): "AMENDE" | "3F" | "48SI" | undefined {
+  if (
+    /\b48\s*si\b/i.test(texte) ||
+    /solde\s+(?:de\s+points\s+)?nul/i.test(texte) ||
+    (/(?:invalidation|invalider)/i.test(texte) &&
+      /nombre\s+de\s+points[^\n]{0,60}nul/i.test(texte))
+  ) {
+    return "48SI";
+  }
+  if (
+    /arr[eê]t[eé][^\n]{0,60}suspension|avis\s+de\s+suspension|suspension[^\n]{0,60}permis|d[ée]cision[^\n]{0,60}suspension/i.test(
+      texte,
+    )
+  ) {
+    return "3F";
+  }
+  if (/avis\s+de\s+contravention|proc[eè]s[-\s]verbal|contravention|amende\s+forfaitaire/i.test(texte)) {
+    return "AMENDE";
+  }
+  return undefined;
 }
 
 /**
@@ -1012,6 +1092,63 @@ export function normaliserPv(texte: string): Partial<ExtractedData> {
     }
   }
 
+  // --- Pack 3F / 48SI : horodatages du pack, hors garde SUSPENSION --------
+  // Les courriers 48SI ne mentionnent ni « suspension » ni « préfet » : ces
+  // extractions doivent tourner sur TOUS les documents (libellés explicites
+  // uniquement — jamais une date fabriquée).
+  const docType = classifierDocType(texte);
+  if (docType) result.docType = docType;
+
+  const sigM = texte.match(SIGNATURE_RE);
+  if (sigM) {
+    const iso = extraireDate(sigM[1]);
+    if (iso) {
+      result.dateSignatureArrete = iso;
+      const h = HEURE_H_RE.exec(sigM[1]);
+      if (h) {
+        result.heureSignatureArrete = `${h[1].padStart(2, "0")}h${h[2]}`;
+      }
+    }
+  }
+
+  const notifM = texte.match(NOTIFICATION_RE);
+  if (notifM) {
+    const iso = extraireDate(notifM[1]);
+    if (iso) result.dateNotification = iso;
+  }
+
+  // Stage de récupération : première date du paragraphe où apparaît le mot
+  // « stage » (borné au paragraphe, jamais au document entier).
+  const stageIdx = texte.search(/\bstage\b/i);
+  if (stageIdx >= 0) {
+    const paragraphe = texte.slice(stageIdx).split(/\n{2,}/)[0].slice(0, 160);
+    const iso = extraireDate(paragraphe);
+    if (iso) result.dateStage = iso;
+  }
+
+  // Cumul de retraits de points le même jour (plafond annuel de 8 points,
+  // art. L. 223-2 CR) : une ligne = un retrait, groupé par date ; le plus
+  // haut cumul de la journée est retenu. Jamais de nombre sans date de ligne.
+  const cumuls = new Map<string, number>();
+  for (const ligne of texte.split(/\r?\n/)) {
+    if (!/point/i.test(ligne) || !/retir|retrait|d[ée]compt/i.test(ligne)) {
+      continue;
+    }
+    const dm = /(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}|\d{4}-\d{2}-\d{2})/.exec(ligne);
+    if (!dm) continue;
+    const iso = extraireDate(dm[1]);
+    if (!iso) continue;
+    const nm =
+      /(\d{1,2})\s*points?\b/i.exec(ligne) ?? /points?[^\d]{0,15}(\d{1,2})/i.exec(ligne);
+    if (!nm) continue;
+    const n = Number(nm[1]);
+    if (!Number.isFinite(n) || n <= 0 || n > 20) continue;
+    cumuls.set(iso, (cumuls.get(iso) ?? 0) + n);
+  }
+  if (cumuls.size) {
+    result.pointsRetiresMemesDate = Math.max(...cumuls.values());
+  }
+
   return result;
 }
 
@@ -1055,12 +1192,19 @@ export function fusionnerPrefill(
   }
   const regex = normaliserPv(texte);
   for (const [cle, valeur] of Object.entries(regex)) {
-    if (typeof valeur !== "string" || !valeur.trim()) continue;
+    // Nombre (cumul de points 48SI) → texte : le pré-remplissage du dépôt est
+    // un Record<string, string> stocké en JSON ; l'analyse reconvertis
+    // (`valeurSuperieure` lit les deux formes).
+    const brut =
+      typeof valeur === "number" && Number.isFinite(valeur)
+        ? String(valeur)
+        : valeur;
+    if (typeof brut !== "string" || !brut.trim()) continue;
     const actuel = prefill[cle];
     if (!actuel) {
-      prefill[cle] = valeur; // champ absent → comblé
-    } else if (!formatChampFiable(cle, actuel) && formatChampFiable(cle, valeur)) {
-      prefill[cle] = valeur; // format invalide remplacé par la valeur regex
+      prefill[cle] = brut; // champ absent → comblé
+    } else if (!formatChampFiable(cle, actuel) && formatChampFiable(cle, brut)) {
+      prefill[cle] = brut; // format invalide remplacé par la valeur regex
     }
   }
   return prefill;

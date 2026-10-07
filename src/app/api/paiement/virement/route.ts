@@ -75,11 +75,12 @@ export async function POST(req: Request) {
       const from = process.env.EMAIL_FROM ?? "SOS Amende <onboarding@resend.dev>";
       const libelle = libelleMontant(type, optionLrar);
       const optionLinee = optionLrar ? `<p>Option « lettre recommandée » incluse (+${PRIX_OPTION_LRAR} €).</p>` : "";
+      const offreLinee = type === "SUSPENSION" ? "<p>Offre Suspension &amp; Invalidation incluse : requête au fond, référé-suspension (art. L. 521-2 CJA) et bordereau des pièces, pour un dépôt sur Télérecours Citoyens.</p>" : "";
       await resend.emails.send({
         from,
         to: email,
         subject: "SOS Amende — votre compte est créé, virement en attente",
-        html: `<p>Bonjour ${prenom},</p><p>Votre compte SOS Amende (${email}) est créé. Votre dossier ${type} est en attente de virement ${libelle}.</p>${optionLinee}<p><strong>RIB :</strong> ${RIB.iban} / BIC ${RIB.bic} / Titulaire ${RIB.titulaire}</p><p><strong>Référence obligatoire :</strong> ${ref} — ${prenom} ${nom}</p><p>Dès que le virement est effectué, envoyez la référence + capture par email à contact@recours-permis-pv.com ou WhatsApp ${whatsapp}. Un juriste validera sous 24h et débloquera votre lettre. Accédez à votre espace : ${(process.env.NEXT_PUBLIC_APP_URL ?? "https://recours-permis-pv.com")}/dashboard</p>`,
+        html: `<p>Bonjour ${prenom},</p><p>Votre compte SOS Amende (${email}) est créé. Votre dossier ${type} est en attente de virement ${libelle}.</p>${optionLinee}${offreLinee}<p><strong>RIB :</strong> ${RIB.iban} / BIC ${RIB.bic} / Titulaire ${RIB.titulaire}</p><p><strong>Référence obligatoire :</strong> ${ref} — ${prenom} ${nom}</p><p>Dès que le virement est effectué, envoyez la référence + capture par email à contact@recours-permis-pv.com ou WhatsApp ${whatsapp}. Un juriste validera sous 24h et débloquera votre lettre. Accédez à votre espace : ${(process.env.NEXT_PUBLIC_APP_URL ?? "https://recours-permis-pv.com")}/dashboard</p>`,
       });
     } else {
       console.log(`[DEV] Email confirmation pour ${email} (sans clé Resend) — ref ${ref}`);

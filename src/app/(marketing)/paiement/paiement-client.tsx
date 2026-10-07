@@ -2,10 +2,18 @@
 
 import { useState } from "react";
 import { PreuveVirementUpload } from "@/components/preuve-virement-upload";
-import { libelleMontant, libelleMontantCentimes, PRIX_OPTION_LRAR } from "@/lib/tarifs";
+import {
+  libelleMontant,
+  libelleMontantCentimes,
+  PRIX_OPTION_LRAR,
+} from "@/lib/tarifs";
 import { RIB } from "@/lib/rib";
 
-export function PaiementPublicClient({ initialType }: { initialType: "AMENDE" | "SUSPENSION" }) {
+export function PaiementPublicClient({
+  initialType,
+}: {
+  initialType: "AMENDE" | "SUSPENSION";
+}) {
   const [type, setType] = useState<"AMENDE" | "SUSPENSION">(() => {
     try {
       const raw = sessionStorage.getItem("deposer_data");
@@ -66,6 +74,26 @@ export function PaiementPublicClient({ initialType }: { initialType: "AMENDE" | 
             <option value="SUSPENSION">Suspension — {libelleMontant("SUSPENSION", false)}</option>
           </select>
         </label>
+        {type === "SUSPENSION" && (
+          <div className="sm:col-span-2">
+            <span className="text-sm font-medium">Offre</span>
+            <div className="mt-2 flex flex-col gap-2">
+              <div className="rounded-xl border border-emerald-600 bg-emerald-50/60 p-3">
+                <span className="text-sm">
+                  <span className="font-semibold">
+                    Suspension &amp; Invalidation — {libelleMontant("SUSPENSION", false)}
+                  </span>
+                  <span className="mt-0.5 block text-xs text-zinc-600">
+                    Offre unique : requête au fond, référé-suspension (art. L. 521-2 du
+                    code de justice administrative) et bordereau des pièces, prêts à
+                    déposer sur Télérecours Citoyens — pour les arrêtés de suspension
+                    (3F) et les invalidations du permis pour solde de points nul (48SI).
+                  </span>
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {message && <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{message}</p>}
@@ -84,7 +112,7 @@ export function PaiementPublicClient({ initialType }: { initialType: "AMENDE" | 
           <p className="mt-1 flex items-center gap-2"><span className="font-semibold">BIC</span> {RIB_BIC} <button type="button" onClick={() => navigator.clipboard.writeText(RIB_BIC)} className="text-xs text-emerald-700 hover:underline">Copier</button></p>
           <p className="mt-1"><span className="font-semibold">Titulaire :</span> {RIB_TITULAIRE}</p>
           <p className="mt-2 font-mono bg-amber-50 px-2 py-1 rounded text-xs">Référence : {prenom || "Prénom"} {nom || "Nom"} — {email || "email"}</p>
-          <p className="mt-1 text-xs text-zinc-500">Montant : {libelleMontantCentimes(type, optionLrar)}{optionLrar ? " — option lettre recommandée incluse" : ""}</p>
+          <p className="mt-1 text-xs text-zinc-500">Montant : {libelleMontantCentimes(type, optionLrar)}{optionLrar ? " — option lettre recommandée incluse" : ""}{type === "SUSPENSION" ? " — offre Suspension & Invalidation (pack REP + référé inclus)" : ""}</p>
         </div>
         <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
           <input type="checkbox" checked={optionLrar} onChange={(e) => setOptionLrar(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-emerald-600" />

@@ -388,6 +388,45 @@ export async function validerPropositionFaille(
   return { ok: true, statut: action };
 }
 
+/**
+ * Activation dédiée d'une proposition (PROPOSEE → ACTIVE) — action utilisée
+ * par le bouton « Valider (Active) » de la bibliothèque.
+ *
+ * Garde-fous : admin seulement (`requireAdmin`) ; seule une proposition est
+ * activable, et seulement si elle est complète (`estActivable` = règle dégagée
+ * + template de lettre rédigés — `messageActivationBloquee` donne le message
+ * actionnable) ; le verrou `statut=PROPOSEE` posé dans l'`updateMany` rend le
+ * double-clic idempotent (un seul passage en ACTIVE) et refuse toute faille
+ * écartée (INACTIVE) ou déjà active.
+ */
+export async function activerFailleProposee(
+  _prev: FailleState,
+  formData: FormData,
+): Promise<FailleState> {
+  await requireAdmin();
+
+  const id = String(formData.get("id") ?? "");
+  const faille = await prisma.failleJuridique.findUnique({ where: { id } });
+  if (!faille) return { error: "Faille introuvable." };
+  if (faille.statut !== "PROPOSEE") {
+    return { error: "Seule une proposition peut être activée ainsi." };
+  }
+  // messageActivationBloquee est null ⟺ estActivable(faille).
+  const bloque = messageActivationBloquee(faille);
+  if (bloque) return { error: bloque };
+
+  const maj = await prisma.failleJuridique.updateMany({
+    where: { id, statut: "PROPOSEE" },
+    data: { statut: "ACTIVE" },
+  });
+  if (maj.count === 0) {
+    return { error: "Cette proposition a déjà été activée ou écartée." };
+  }
+
+  revalidatePath("/dashboard/juriste/failles");
+  return { ok: true, statut: "ACTIVE" };
+}
+
 const importItemSchema = z.object({
   id: z.string().min(1),
   typeInfraction: z.enum(["AMENDE", "SUSPENSION"]),

@@ -28,6 +28,12 @@ import {
 } from "@/lib/verif-failles";
 import { verifierAvecIa } from "@/lib/verif-ia";
 import { contexteEtalonnage } from "@/lib/etalonnage";
+import { controlerForclusion48si } from "@/lib/delais";
+import {
+  estPackTelecours,
+  genererPackTelecours,
+  type PackTelecours,
+} from "@/lib/pack-telerecours";
 
 export type ValidationState = { error?: string; ok?: boolean } | undefined;
 
@@ -219,6 +225,7 @@ export async function validerDossier(
       courriers: { orderBy: { createdAt: "asc" } },
       user: { select: { name: true, signatureUrl: true } },
       preuves: { orderBy: { createdAt: "asc" } },
+      failleJuridique: { select: { templateRefere: true } },
     },
   });
   if (!dossier) {
@@ -240,6 +247,22 @@ export async function validerDossier(
   }
   if (!dossier.lettreGeneree) {
     return { error: "Aucune lettre générée à valider." };
+  }
+
+  // Forclusion 48SI (60 jours francs de la notification) : bloquant côté
+  // juriste — jamais fabriqué si la date de notification est absente.
+  if (dossier.type === "SUSPENSION") {
+    const ed = (dossier.extractedData ?? {}) as Record<string, unknown>;
+    if (ed.docType === "48SI") {
+      const forclusion = controlerForclusion48si(
+        typeof ed.dateNotification === "string" ? ed.dateNotification : null,
+      );
+      if (forclusion?.depasse) {
+        return {
+          error: `Forclusion dépassée — le recours 48SI devait être engagé avant le ${forclusion.dateForclusion.toLocaleDateString("fr-FR")} (${forclusion.joursDepasse} jour${forclusion.joursDepasse > 1 ? "s" : ""} de dépassement). Validation refusée : vérifiez le délai avec le client.`,
+        };
+      }
+    }
   }
 
   // Canal d'envoi choisi par le juriste, restreint au type d'infraction
@@ -286,13 +309,15 @@ export async function validerDossier(
   // validation et le lien de dépôt assisté est émis aussitôt (canal en ligne),
   // sans repasser par la signature du client.
   let pdfSigne: { pdfUrl: string; signatureUrl: string } | null = null;
+  let signatureDataUrl: string | null = null;
   if (!dejaSigne && signatureProfil) {
     const sig = await storageRead(signatureProfil);
     if (sig) {
+      signatureDataUrl = `data:image/png;base64,${sig.toString("base64")}`;
       try {
         const pdfBuffer = await generateLettrePdf(
           lettreFinale,
-          `data:image/png;base64,${sig.toString("base64")}`,
+          signatureDataUrl,
           piecesJointes,
         );
         const pdfUrl = await storageWrite(
@@ -305,9 +330,40 @@ export async function validerDossier(
         console.error("validerDossier: génération PDF pré-signé échouée", e);
       }
     }
+  } else if (dejaSigne && courrier?.signatureUrl) {
+    // Dossier déjà signé (legs / Cas A) : la signature du courrier sert au
+    // pack Télérecours (requête et référé portent la signature du requérant).
+    const sig = await storageRead(courrier.signatureUrl);
+    if (sig) {
+      signatureDataUrl = `data:image/png;base64,${sig.toString("base64")}`;
+    }
   }
 
   const estSigne = dejaSigne || !!pdfSigne;
+
+  // Pack Télérecours (3F/48SI) : requête, référé (art. L. 521-2) et bordereau.
+  // Générés seulement une fois la lettre signée — best-effort : un échec n'a
+  // jamais bloqué une validation (le juriste relancera en relisant la lettre).
+  let packUrls: PackTelecours | null = null;
+  if (
+    estSigne &&
+    estPackTelecours({ type: dossier.type, canal, docType: dataExt["docType"] })
+  ) {
+    try {
+      packUrls = await genererPackTelecours({
+        dossierId: dossier.id,
+        lettreFinale,
+        data: dataExt as unknown as ExtractedData,
+        templateRefere: dossier.failleJuridique?.templateRefere ?? null,
+        piecesJointes,
+        signatureDataUrl,
+        numRef: typeof dataExt["num_pv"] === "string" ? dataExt["num_pv"] : null,
+        dateDecision: typeof dataExt["date"] === "string" ? dataExt["date"] : null,
+      });
+    } catch (e) {
+      console.error("validerDossier: pack Télérecours non généré", e);
+    }
+  }
 
   await prisma.$transaction([
     prisma.dossier.update({
@@ -326,9 +382,26 @@ export async function validerDossier(
               dossierId: dossier.id,
               signatureUrl: pdfSigne.signatureUrl,
               pdfUrl: pdfSigne.pdfUrl,
+              ...(packUrls ? { packUrls } : {}),
             },
           }),
         ]
+      : []),
+    // Pack sans nouveau courrier (déjà signé) : rattaché au courrier existant,
+    // ou premier courrier du dossier s'il n'y en a aucun (legs non signé).
+    ...(packUrls && !pdfSigne
+      ? courrier
+        ? [
+            prisma.courrier.update({
+              where: { id: courrier.id },
+              data: { packUrls },
+            }),
+          ]
+        : [
+            prisma.courrier.create({
+              data: { dossierId: dossier.id, packUrls },
+            }),
+          ]
       : []),
     prisma.dossierEvent.create({
       data: { dossierId: dossier.id, type: "VALIDATION" },

@@ -148,6 +148,7 @@ model FailleJuridique {
   articleLoi     String
   regle          String?      @db.Text // règle dégagée : ce que la jurisprudence + l'article imposent
   templateLettre String       @db.Text // variables {nom}, {plaque}, {num_pv}…
+  templateRefere String?      @db.Text // 2ᵉ template validé admin : référé-suspension (CJA L. 521-2) du pack 3F/48SI — null ailleurs
   source         String?
   reglesDetection Json? // règles de détection automatique (scan PV/lettre) — voir src/lib/moteur.ts
   jurisprudence  Json? // références sourcées : [{reference, juridiction, date, url, verifiee}] (base auto-alimentée)
@@ -247,6 +248,7 @@ model Courrier {
   pdfUrl         String?
   signatureUrl   String?
   preuveDepotUrl String?
+  packUrls       Json? // pack Télérecours (3F/48SI) : {requete, refere, bordereau} — /uploads/... en local
 
   dossier Dossier @relation(fields: [dossierId], references: [id], onDelete: Cascade)
 

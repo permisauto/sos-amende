@@ -25,6 +25,15 @@ export type FailleSourcee = {
   reglesDetection: unknown[];
   jurisprudence: JurisprudenceRef[];
   templateLettre: string;
+  /**
+   * 2ᵉ template validé admin (pack 3F/48SI) : requête en **référé-suspension**
+   * sur le fondement de l'art. **L. 521-2 du CJA** (le L. 521-1 est le
+   * référé-liberté — correction portée le 2026-10-07). Rendu dans le pack
+   * Télérecours aux côtés de la requête au fond ; null pour les failles sans
+   * pack. Variables autorisées identiques à `templateLettre` + `{metier}`,
+   * `{entreprise}`, `{risque_licenciement}` (urgence, effacées si absentes).
+   */
+  templateRefere?: string;
   regle: string; // règle dégagée : ce que l'article + la jurisprudence imposent
   /**
    * Proposition encore incomplète : `articleLoi` et `templateLettre` sont
@@ -40,6 +49,28 @@ export type FailleSourcee = {
    */
   aCompleter?: true;
 };
+
+/**
+ * Modèle de **référé-suspension** (art. L. 521-2 CJA) commun aux 6 failles du
+ * pack 3F/48SI : chaque faille le porte en `templateRefere` pour que le juriste
+ * puisse le relire/adapter avant validation (le pack ne rend que le template de
+ * la faille principale CONFIRMEE — jamais de texte hors base). Les variables
+ * d'urgence (`{metier}`, `{entreprise}`, `{risque_licenciement}`) sont
+ * effacées proprement par `nettoyerLettre` si le client ne les a pas saisies.
+ */
+const REFERE_SUSPENSION_PACK = `À Monsieur le Président du tribunal administratif siégeant en formation de référé,
+
+Je soussigné(e) {nom}, ai l'honneur de saisir Monsieur le Président, par la présente requête en référé, d'une demande de suspension d'exécution de la décision n° {num_pv} en date du {date} portant atteinte à la validité de mon permis de conduire.
+
+SUR LE FONDEMENT DE L'ARTICLE L. 521-2 DU CODE DE JUSTICE ADMINISTRATIVE
+
+L'urgence est caractérisée par les conséquences immédiates de la décision contestée sur ma vie personnelle et professionnelle. J'exerce l'activité de {metier} au sein de {entreprise}, et la privation immédiate de la possibilité de conduire met en péril la poursuite de mon activité : {risque_licenciement}.
+
+Le moyen présenté à l'appui de la présente demande est la légalité manifeste de la décision contestée, tel qu'exposé dans la requête au fond déposée simultanément au greffe de la juridiction — illégalité dont il est sérieusement douté qu'elle puisse être écartée au principal.
+
+EN CONSÉQUENCE
+
+Je demande qu'il plaise à Monsieur le Président du tribunal administratif, en application de l'article L. 521-2 du code de justice administrative, d'ordonner la suspension de l'exécution de la décision n° {num_pv} en date du {date}, l'administration disposant du délai légal pour régulariser la situation si elle le juge opportun.`;
 
 /**
  * Propositions issues de la recherche documentaire (FAILLES.md §H). Chaque
@@ -590,16 +621,16 @@ Dans ces conditions, seule la contravention de l'article R. 234-1 du Code de la 
     id: "faille-suspension-refere-urgence",
     typeInfraction: "SUSPENSION",
     titreFaille: "Référé-suspension et commission médicale",
-    articleLoi: "art. L.521-1 CJA + R.421-1 CJA + R.221-12/13 CR",
+    articleLoi: "art. L.521-2 CJA + R.421-1 CJA + R.221-12/13 CR",
     source: "Service-Public",
     regle: "Recours gracieux/hiérarchique (2 mois) puis REP + référé-suspension (suspension provisoire en 48h-15j). Restitution subordonnée à visite médicale + test psycho.",
     reglesDetection: [{ type: "texteContient", motif: "référé" }],
-    jurisprudence: [{ reference: "Art. L.521-1 CJA", juridiction: "Légifrance", url: null, verifiee: false, resume: "Référé-suspension : urgence + doute sérieux en 48h-15j." }],
+    jurisprudence: [{ reference: "Art. L.521-2 CJA", juridiction: "Légifrance", url: null, verifiee: false, resume: "Référé-suspension : urgence + doute sérieux en 48h-15j." }],
     templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} en date du {date} par laquelle le préfet a prononcé la suspension de mon permis de conduire.
 
 L'exécution de cette décision me cause un préjudice grave et immédiat en me privant de la possibilité de conduire, alors que ma contestation présente un doute sérieux quant à la légalité de la suspension.
 
-En application de l'article L. 521-1 du Code de justice administrative, le juge des référés peut suspendre l'exécution d'une décision administrative lorsque l'urgence le justifie et qu'il existe un doute sérieux sur sa légalité.
+En application de l'article L. 521-2 du Code de justice administrative, le juge des référés peut suspendre l'exécution d'une décision administrative lorsque l'urgence le justifie et qu'il existe un doute sérieux sur sa légalité.
 
 En conséquence, je vous demande de bien vouloir ordonner la suspension provisoire de la décision litigieuse,   en m'engageant à accomplir dans le même temps les démarches médicales et psychotechniques préalables à la restitution de mon permis de conduire.`,
   },
@@ -661,5 +692,252 @@ En application de l'article R. 411-25 du Code de la route et de l'article L. 221
 Le stationnement reproché n'est pas identifié avec une précision suffisante sur l'avis ({lieu}) : la place n'est pas balisée, l'adresse n'est pas mentionnée ou le lieu n'est pas repris, ce qui rend impossible la vérification de l'infraction alléguée.
 
 En application des articles 429, 537 et 43 du Code de procédure pénale, l'acte de poursuite doit mentionner les circonstances précises de l'infraction, au nombre desquelles le lieu exact de sa commission. En conséquence, je vous demande de bien vouloir annuler la contravention n° {num_pv} et m'exonérer du paiement de l'amende qui m'est réclamée.`,
+  },
+  // --- Pack 3F / 48SI (Télérecours Citoyens) — contestation des décisions de
+  // suspension préfectorale (« 3F ») et d'invalidation pour solde nul (48SI).
+  // 4 d'entre elles sont injectées en ACTIVE à la synchronisation (décision
+  // produit 2026-10-07, `FAILLES_PACK_ACTIVES`) ; les 2 autres (incompétence,
+  // stage) restent en PROPOSEE : activation admin uniquement. Toutes portent le
+  // modèle de référé-suspension (art. L. 521-2 CJA). Sources non confirmées
+  // marquées `verifiee: false` (décision D2) ; la citation « arrêt Sebaoun »
+  // demandée est introuvable sur Légifrance/Judilibre et n'est donc PAS versée
+  // en base (anti-hallucination, cf. FAILLES.md §Pack).
+  {
+    id: "faille-3f-delai-retention",
+    typeInfraction: "SUSPENSION",
+    titreFaille:
+      "Suspension d'urgence (3F) prononcée hors délai de 72 heures suivant le contrôle alors que le permis a été retenu",
+    articleLoi: "art. L. 224-2 et R. 224-3 du Code de la route",
+    source:
+      "Légifrance (L. 224-2, R. 224-3) — mêmes textes que faille-suspension-delai-notification-72h",
+    regle:
+      "La suspension d'urgence de l'article L. 224-2 du Code de la route doit être prononcée et notifiée dans les 72 heures suivant le contrôle (120 heures lorsque des analyses sanguines ou d'autres examens complémentaires sont requis). Au-delà, la suspension ne peut être maintenue et doit être réexaminée selon la procédure contradictoire de l'article L. 224-7 ; la rétention du permis au-delà de ce délai est alors irrégulière.",
+    reglesDetection: [
+      {
+        type: "delaiDepasse",
+        limiteHeures: 72,
+        siChamp: { champ: "motif", valeur: "vitesse" },
+        docType: "3F",
+      },
+      {
+        type: "delaiDepasse",
+        limiteHeures: 120,
+        siChamp: { champ: "motif", valeur: "alcool" },
+        docType: "3F",
+      },
+      {
+        type: "delaiDepasse",
+        limiteHeures: 120,
+        siChamp: { champ: "motif", valeur: "stup" },
+        docType: "3F",
+      },
+    ],
+    jurisprudence: [
+      {
+        reference: "Art. L. 224-2 et R. 224-3 du Code de la route (Légifrance)",
+        juridiction: "Légifrance",
+        url: null,
+        verifiee: false,
+        resume:
+          "La suspension d'urgence doit être prononcée dans les 72 heures (120 heures en cas d'analyses sanguines ou d'examens complémentaires) suivant le contrôle ; passé ces délais, elle ne peut être maintenue que selon la procédure contradictoire.",
+      },
+    ],
+    templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} en date du {date} par laquelle le préfet a prononcé la suspension de mon permis de conduire.
+
+Cette décision a été prononcée au-delà du délai impératif de soixante-douze heures — ou de cent vingt heures lorsque des analyses sanguines ont été requises — suivant le contrôle, alors que mon permis de conduire avait été retenu. Au terme de ce délai, la suspension d'urgence ne pouvait plus être maintenue sans être réexaminée selon la procédure contradictoire.
+
+En application des articles L. 224-2 et R. 224-3 du Code de la route, la suspension d'urgence doit être prononcée dans ces délais ; à défaut, elle ne peut être maintenue et doit être réexaminée dans le cadre de la procédure contradictoire prévue à l'article L. 224-7.
+
+En conséquence, je vous demande de bien vouloir retirer la décision de suspension prise à mon encontre.`,
+    templateRefere: REFERE_SUSPENSION_PACK,
+  },
+  {
+    id: "faille-3f-defaut-motivation",
+    typeInfraction: "SUSPENSION",
+    titreFaille:
+      "Arrêté de suspension (3F) ne mentionnant ni le taux d'alcoolémie ni la vitesse retenue (défaut de motivation factuelle)",
+    articleLoi:
+      "art. L. 211-2 et L. 211-5 du Code des relations entre le public et l'administration",
+    source: "Légifrance (CRPA) — mêmes textes que faille-suspension-motivation-insuffisante",
+    regle:
+      "L'arrêté individuel défavorable doit énoncer les considérations de fait et de droit qui en constituent le fondement : la mesure objective qui fonde la sanction (taux d'alcoolémie, vitesse retenue, date et lieu du contrôle) doit figurer dans la décision. Un arrêté qui ne reproduit ni le taux ni la vitesse ne permet pas de comprendre les motifs de la décision et est entaché d'insuffisance de motivation.",
+    reglesDetection: [
+      {
+        type: "et",
+        regles: [
+          { type: "texteAbsent", motif: "alcoolémie" },
+          { type: "texteAbsent", motif: "km/h" },
+        ],
+        docType: "3F",
+      },
+    ],
+    jurisprudence: [
+      {
+        reference: "TA Versailles, 12 février 2026, n° 2403953",
+        juridiction: "Tribunal administratif",
+        url: null,
+        verifiee: false,
+        resume:
+          "Motifs de fait et de droit exigés pour la suspension : l'arrêté doit viser les textes et énoncer les faits (date, heure, lieu, taux ou vitesse retenue), la motivation stéréotypée constituant une illégalité externe.",
+      },
+    ],
+    templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} en date du {date} par laquelle le préfet a prononcé la suspension de mon permis de conduire.
+
+L'arrêté de suspension ne mentionne ni le taux d'alcoolémie qui m'est reproché, ni la vitesse retenue à l'encontre de mon véhicule, alors que ces mesures objectives constituent le seul fondement factuel de la décision.
+
+En application des articles L. 211-2 et L. 211-5 du Code des relations entre le public et l'administration, une décision individuelle défavorable doit comporter l'énoncé des considérations de droit et de fait qui en constituent le fondement, de façon à permettre à l'intéressé d'en comprendre le sens et la portée et d'en contester la légalité. Un arrêté qui ne reproduit aucune mesure objective ne satisfait pas à cette exigence (TA Versailles, 12 février 2026, n° 2403953).
+
+En conséquence, je vous demande de bien vouloir annuler la décision de suspension prise à mon encontre.`,
+    templateRefere: REFERE_SUSPENSION_PACK,
+  },
+  {
+    id: "faille-3f-incompetence",
+    typeInfraction: "SUSPENSION",
+    titreFaille:
+      "Arrêté de suspension (3F) signé par le secrétaire général sans délégation de signature expresse (incompétence)",
+    articleLoi:
+      "art. L. 224-2 du Code de la route (compétence du préfet) ; principes généraux sur la délégation de signature",
+    source: "Conseil d'État, 6 novembre 2019, n° 412051 (Légifrance)",
+    regle:
+      "La décision de suspension relève de la compétence du préfet (art. L. 224-2 du Code de la route). Un signataire autre que le préfet — secrétaire général, sous-préfet — ne peut la signer qu'en vertu d'une délégation de signature expresse et couvrant l'acte. À défaut de délégation expresse, l'arrêté est entaché d'incompétence et annulable.",
+    reglesDetection: [
+      {
+        type: "et",
+        regles: [
+          { type: "texteContient", motif: "secrétaire général" },
+          { type: "texteAbsent", motif: "délégation" },
+        ],
+        docType: "3F",
+      },
+    ],
+    jurisprudence: [
+      {
+        reference: "Conseil d'État, 4e et 1ères chambres réunies, 6 novembre 2019, n° 412051",
+        juridiction: "Conseil d'État",
+        date: "2019-11-06",
+        url: "https://www.legifrance.gouv.fr/ceta/id/CETATEXT000039335815",
+        verifiee: false,
+        resume:
+          "Le juge administratif contrôle l'existence d'une délégation de signature expresse au profit du signataire d'un acte administratif : sans délégation couvrant l'acte, celui-ci est entaché d'incompétence.",
+      },
+    ],
+    templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} en date du {date} par laquelle le préfet a prononcé la suspension de mon permis de conduire.
+
+Cette décision a été signée par le secrétaire général, sans que soit mentionnée aucune délégation de signature l'y autorisant, alors que la compétence de prononcer la suspension appartient au préfet.
+
+En application de l'article L. 224-2 du Code de la route et des principes généraux régissant la délégation de signature, un acte administratif ne peut être signé au nom d'un autorité par un autre que lui sans délégation expresse couvrant l'acte ; à défaut, l'acte est entaché d'incompétence (Conseil d'État, 6 novembre 2019, n° 412051).
+
+En conséquence, je vous demande de bien vouloir annuler la décision de suspension prise à mon encontre pour incompétence du signataire.`,
+    templateRefere: REFERE_SUSPENSION_PACK,
+  },
+  {
+    id: "faille-48si-defaut-info",
+    typeInfraction: "SUSPENSION",
+    titreFaille:
+      "48 SI : décision d'invalidation ne récapitulant pas les précédents retraits ayant concouru au solde nul (défaut d'information)",
+    articleLoi: "art. L. 223-3 du Code de la route",
+    source: "Légifrance (art. L. 223-3) ; service-public.fr (invalidation solde nul)",
+    regle:
+      "Lorsque le retrait aboutit à un solde nul, le ministre de l'Intérieur notifie la décision par lettre recommandée avec avis de réception ; cette lettre doit récapituler les précédents retraits ayant concouru au solde nul, prononcer l'invalidation et enjoindre de restituer le permis dans les dix jours. Une lettre qui n'accomplit pas cette information permettant de contrôler le calcul du solde nul est irrégulière.",
+    reglesDetection: [
+      {
+        type: "et",
+        regles: [
+          { type: "texteAbsent", motif: "récapitul" },
+          { type: "texteAbsent", motif: "précédents retraits" },
+        ],
+        docType: "48SI",
+      },
+    ],
+    jurisprudence: [
+      {
+        reference: "Art. L. 223-3 et L. 223-1 du Code de la route (Légifrance)",
+        juridiction: "Légifrance",
+        url: null,
+        verifiee: false,
+        resume:
+          "L'auteur avisé d'une infraction entraînant retrait de points est informé des dispositions de l'article L. 223-2, de l'existence du traitement automatisé de son permis et de la possibilité d'exercer son droit d'accès (L. 223-3). Si le retrait aboutit à un nombre nul, la lettre notifiant l'invalidation récapitule les précédents retraits ayant concouru au solde nul, prononce l'invalidation du permis et enjoint sa restitution dans un délai de dix jours francs.",
+      },
+    ],
+    templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} en date du {date} par laquelle il m'a été notifié l'invalidation de mon permis de conduire pour solde de points nul.
+
+La décision ne récapitule pas les précédents retraits de points ayant concouru au solde nul que l'administration entend me opposer. Elle ne me permet donc pas de contrôler le calcul aboutissant à ce prétendu solde nul, ni d'en vérifier l'exactitude.
+
+En application des articles L. 223-3 et L. 223-1 du Code de la route, la décision notifiant le retrait aboutissant à un nombre nul doit informer le titulaire du permis de manière complète : récapituler les précédents retraits ayant concouru au solde nul, prononcer l'invalidation du permis de conduire et enjoindre de le restituer au préfet dans un délai de dix jours francs. Cette formalité substantielle, qui conditionne la régularité de la décision, n'a pas été respectée.
+
+En conséquence, je vous demande de bien vouloir retirer la décision d'invalidation prise à mon encontre.`,
+    templateRefere: REFERE_SUSPENSION_PACK,
+  },
+  {
+    id: "faille-48si-plafond-8pts",
+    typeInfraction: "SUSPENSION",
+    titreFaille:
+      "48 SI : cumul de retraits de points le même jour dépassant le plafond légal de huit points",
+    articleLoi: "art. L. 223-2 et R. 223-2 du Code de la route",
+    source: "Légifrance (art. L. 223-2 et R. 223-2)",
+    regle:
+      "Lorsque plusieurs infractions entraînant retrait de points sont commises simultanément, les retraits se cumulent dans la limite de huit points — deux tiers du nombre maximal de douze points (art. L. 223-2 et R. 223-2 du Code de la route). Un relevé intégral qui fait ressortir un cumul supérieur à huit points pour des infractions simultanées excède le plafond légal.",
+    reglesDetection: [
+      {
+        type: "valeurSuperieure",
+        champ: "pointsRetiresMemesDate",
+        seuil: 8,
+        docType: "48SI",
+      },
+    ],
+    jurisprudence: [
+      {
+        reference: "Art. L. 223-2 et R. 223-2 du Code de la route (Légifrance)",
+        juridiction: "Légifrance",
+        url: null,
+        verifiee: false,
+        resume:
+          "Pour les infractions commises simultanément, les retraits de points se cumulent dans la limite de huit points (deux tiers du nombre maximal de douze points).",
+      },
+    ],
+    templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} en date du {date} par laquelle il m'a été notifié l'invalidation de mon permis de conduire pour solde de points nul.
+
+Les retraits de points pris en compte pour constater ce solde nul dépassent le plafond légal de huit points applicable aux infractions commises simultanément. La somme des retraits excédant ce plafond, le calcul du solde nul sur lequel repose la décision est erroné et la privation de mon permis de conduire infondée.
+
+En application des articles L. 223-2 et R. 223-2 du Code de la route, dans le cas où plusieurs infractions entraînant retrait de points sont commises simultanément, les retraits se cumulent dans la limite de huit points. Tout retrait excédant ce plafond est illégal et ne peut concourir à l'invalidation de mon permis.
+
+En conséquence, je vous demande de bien vouloir revoir le calcul des points retirés, reconstituer le solde réel de mon permis de conduire et retirer la décision d'invalidation prise à mon encontre.`,
+    templateRefere: REFERE_SUSPENSION_PACK,
+  },
+  {
+    id: "faille-48si-stage-avant-notification",
+    typeInfraction: "SUSPENSION",
+    titreFaille:
+      "48 SI notifiée alors que le stage de récupération avait déjà été suivi (points non recrédités avant invalidation)",
+    articleLoi: "art. L. 223-1 et L. 223-6 du Code de la route",
+    source: "Légifrance (art. L. 223-1 et L. 223-6)",
+    regle:
+      "Le stage de sensibilisation à la sécurité routière suivi avec succès ouvre droit à la récupération de quatre points (art. L. 223-6 du Code de la route) ; le préfet procède à la reconstitution des points dans le mois de la réception de l'attestation. L'attestation de stage délivrée avant la notification de la décision de solde nul doit donc être créditée préalablement : un solde reconstitué n'est plus nul et l'invalidation cesse d'être justifiée.",
+    reglesDetection: [
+      {
+        type: "datePrealable",
+        champ: "dateStage",
+        reference: "dateNotification",
+        docType: "48SI",
+      },
+    ],
+    jurisprudence: [
+      {
+        reference: "Art. L. 223-1 et L. 223-6 du Code de la route (Légifrance)",
+        juridiction: "Légifrance",
+        url: null,
+        verifiee: false,
+        resume:
+          "L'attestation délivrée à l'issue du stage ouvre droit à la récupération de quatre points dans la limite du plafond ; le préfet procède à la reconstitution dans un délai d'un mois à compter de la réception de l'attestation. Une invalidation constatée malgré un stage antérieur à la notification doit être réexaminée.",
+      },
+    ],
+    templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} en date du {date} par laquelle il m'a été notifié l'invalidation de mon permis de conduire pour solde de points nul.
+
+Le stage de sensibilisation à la sécurité routière que j'ai suivi avait été accompli antérieurement à la notification de la décision contestée. L'attestation correspondante ouvrait droit à la récupération de quatre points, qui devaient être recrédités sur mon permis avant que ne soit constaté un quelconque solde nul.
+
+En application des articles L. 223-6 et L. 223-1 du Code de la route, l'attestation délivrée à l'issue du stage donne droit à la récupération de quatre points, le préfet procédant à la reconstitution des points dans le délai d'un mois à compter de la réception de l'attestation ; le solde de points devant être apprécié après cette reconstitution, l'invalidation notifiée ne peut être maintenue.
+
+En conséquence, je vous demande de bien vouloir recréditer les points ouverts par mon stage, reconstituer mon solde de points et retirer la décision d'invalidation prise à mon encontre.`,
+    templateRefere: REFERE_SUSPENSION_PACK,
   },
 ];

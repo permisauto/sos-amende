@@ -11,7 +11,7 @@ test("la landing affiche la promesse produit", async ({ page }) => {
 test("la page tarifs présente les deux offres", async ({ page }) => {
   await page.goto("/pricing");
   await expect(page.getByText(/39\s*€/).first()).toBeVisible();
-  await expect(page.getByText(/59\s*€/).first()).toBeVisible();
+  await expect(page.getByText(/199\s*€/).first()).toBeVisible();
 });
 
 test("l'analyse démo affiche la mention de simulation", async ({ page }) => {

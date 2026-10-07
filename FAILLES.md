@@ -156,10 +156,12 @@ de l'avis) — sinon l'écarter (INACTIVE).
 ## D. FAILLES SUSPENSION — 3 PROPOSITIONS SOURCÉES (à valider)
 
 Le parcours produit existe (type-aware, LRAR préfet, délai 2 mois). Le catalogue
-(`src/lib/catalogue-sources.ts`) porte désormais **3 propositions SUSPENSION**
-(`verifiee: false` — jurisprudences à confirmer sur Legifrance avant activation).
-Elles arrivent en `PROPOSEE` par l'auto-alimentation ; le moteur ne les utilise
-**jamais** tant que l'admin ne les a pas validées (`ACTIVE`).
+(`src/lib/catalogue-sources.ts`) porte **3 propositions SUSPENSION**
+(`verifiee: false` — jurisprudences à confirmer sur Legifrance avant activation),
+auxquelles le pack 3F/48SI (§I) en ajoute **6 autres**. Elles arrivent en
+`PROPOSEE` par l'auto-alimentation ; le moteur ne les utilise **jamais** tant
+qu'elles ne sont pas `ACTIVE` (les 4 ids du pack sont injectés automatiquement,
+cf. §I).
 
 | Motif | Article (source) | Jurisprudence | Statut |
 |---|---|---|---|
@@ -177,6 +179,12 @@ motifs de fond (durée, proportionnalité).
 
 - Amende forfaitaire : **45 jours** de contestation.
 - Recours suspension de permis : **2 mois**.
+- Calcul en **jours francs** (le jour de l'infraction n'est pas compté) avec
+  report des échéances tombant un jour férié ou un dimanche au **prochain
+  jour ouvré** (`src/lib/delais.ts` : `dateLimitePv`, `reporterJourOuvrable`).
+- **Invalidation 48SI — garde forclusion** : `controlerForclusion48si`
+  (60 jours, même report) bloque la validation juriste au-delà (encart
+  `data-testid="forclusion-48si"`, non bloquant côté client).
 - Prescription amende : **1 an** (`datePrescrite`).
 - Rappels client : J-10, J-3, J-0 (`src/lib/rappels.ts`).
 
@@ -191,7 +199,8 @@ motifs de fond (durée, proportionnalité).
    propositions **complètes** (`estActivable` : règle dégagée + template non
    vide) — l'admin ne les valide plus une par une. Les incomplètes (stationnement
    à sourcer, promotion de veille à rédiger) restent en `PROPOSEE`.
-3. Sinon, validation unitaire : l'admin valide (`ACTIVE`) ou écarte
+3. Sinon, validation unitaire : l'admin valide (`PROPOSEE` → `ACTIVE`,
+   verrou conditionnel idempotent) via **`activerFailleProposee`**, ou écarte
    (`INACTIVE`) via `validerPropositionFaille`.
 4. Une faille `INACTIVE` n'est jamais utilisée par le moteur, et aucune
    synchronisation ne la réactive.
@@ -294,3 +303,111 @@ juriste avant toute activation** (pas de jurisprudence non vérifiée).
 - La **Jurisprudence du 12/01/2026 n° 25-80.412** est signalée **non
   confirmée** : l'intégrer dans un produit uniquement si le juriste la
   retrouve sur Judilibre, sinon l'écarter.
+---
+
+## I. PACK TÉLÉRECOURS 3F / 48SI (implémenté 2026-10-07)
+
+Offre **Suspension & Invalidation — 199 € (offre unique, pack inclus)**
+(`PRIX_SUSPENSION = 199` dans `src/lib/tarifs.ts` —
+`estOffreSuspension(kind, amount)` déduit l'offre du montant payé, aucune colonne
+`Payment` supplémentaire ; l'ancienne offre Pack à 349 € n'existe plus) : pour
+une **suspension préfectorale (3F)** ou une
+**invalidation du permis pour solde de points nul (48SI)**, le client reçoit
+3 documents de dépôt sur **Télérecours Citoyens** (canal `TELERECOURS` par
+défaut du type SUSPENSION).
+
+### Les 6 failles du pack (catalogue, `PROPOSEE` → activation admin)
+
+| id | Fondement | Template |
+|---|---|---|
+| `faille-3f-delai-retention` | **L. 224-2 et R. 224-3 CR** — suspension d'urgence prononcée hors délai 72 h (120 h si analyses sanguines) alors que le permis est retenu | lettre + **référé** |
+| `faille-3f-incompetence` | **L. 211-3 CRPA** — signé par une autorité incompétente | lettre + **référé** |
+| `faille-3f-defaut-motivation` | **L. 211-2 / L. 211-5 CRPA** — ni taux d'alcoolémie ni vitesse retenue dans l'arrêté | lettre + **référé** |
+| `faille-48si-defaut-info` | **L. 223-3 CR** — décision d'invalidation ne récapitulant pas les précédents retraits ayant concouru au solde nul (défaut d'information) | lettre |
+| `faille-48si-plafond-8pts` | **L. 223-2 / R. 223-2 CR** — plus de 8 points retirés | lettre |
+| `faille-48si-stage-avant-notification` | **L. 223-6 CR** — stage non suivi avant notification | lettre |
+
+- Arrivée en **`PROPOSEE`** par l'auto-alimentation (§G/H) — le moteur ne les
+  utilise qu'après activation. **Injection automatique** : `injecterFaillesPack`
+  (fin de `synchroniserCatalogue`, appelée à l'ouverture de la bibliothèque et
+  par le cron catalogue) passe **4 des 6** en `ACTIVE` — `faille-3f-delai-retention`,
+  `faille-3f-defaut-motivation`, `faille-48si-defaut-info` (L. 223-3),
+  `faille-48si-plafond-8pts` (garde-fou `FAILLES_PACK_ACTIVES`) ;
+  `faille-3f-incompetence` et `faille-48si-stage-avant-notification` restent en
+  `PROPOSEE` (activation manuelle via `activerFailleProposee` ou « Synchroniser
+  et activer », garde-fou `estActivable`).
+- Sources **`verifiee: false`** (décision D2) : à confirmer sur Légifrance par
+  le juriste avant diffusion commerciale.
+- **L'« arrêt Sebaoun » demandé est introuvable** (Légifrance/Judilibre) :
+  il n'est **PAS versé en base** (anti-hallucination) — ne jamais le réintroduire.
+- Seules les failles **`ACTIVE`** entrent en détection ; la détection est
+  **filtrée par `typeInfraction`** (`analyserDossier`) : un dossier SUSPENSION
+  ne voit jamais les failles AMENDE et inversement.
+
+### Moteur (`src/lib/moteur.ts`)
+
+- Types de règles **additifs** (D3) : `delaiDepasse {limiteHeures, siChamp?}`
+  (horodatages par libellé — jamais fabriqués), `datePrealable {champ, reference}`,
+  `valeurSuperieure {champ, seuil}`, `et {regles}` ; toute règle peut porter
+  `docType: "3F" | "48SI"` (garde en tête d'`evalRegle`).
+- `PRIORITE_PACK` : évaluées **après** les 4 failles seedées (zéro régression
+  AMENDE) et avant les autres failles SUSPENSION — la première candidate reste
+  la principale (→ `templateRefere` → pack complet).
+- OCR : `classifierDocType` classe le document (`3F` = arrêté de suspension,
+  `48SI` = invalidation solde nul, `AMENDE` = avis de contravention — marqueur
+  amende testé en dernier, jamais sur un arrêté ; `undefined` si non reconnu)
+  et `normaliserPv` extrait les horodatages
+  d'urgence (`dateSignatureArrete`/`heureSignatureArrete`, `dateNotification`,
+  `dateStage`, `pointsRetiresMemesDate`) par **libellé explicite**.
+- Questionnaire SUSPENSION inchangé (Notification + Recours toujours).
+
+### Pack PDF (`src/lib/pack-telerecours.ts`)
+
+- `genererPackTelecours` rend **requête au fond + Référé-Suspension
+  (art. L. 521-2 CJA) + bordereau des pièces** ; le référé vient de
+  `remplirTemplate(faille.templateRefere, data)` **brut** (pas de mise en forme
+  officielle) et n'est requis qu'**avec** `templateRefere` (sinon pack =
+  requête + bordereau, jamais de référé inventé).
+- Généré à la validation juriste (**Cas A**, déjà signé) ou à la signature du
+  client (**Cas B**) et stocké sur le courrier (`Courrier.packUrls`, migration
+  `20261007000000_add_pack_3f_48si` — `FailleJuridique.templateRefere` aussi).
+- UI : blocs `data-testid="pack-telerecours"` + `pack-requete` / `pack-refere`
+  / `pack-bordereau` sur la fiche **client** et la fiche **juriste** (les deux
+  modes, lecture et édition) ; lien de dépôt `fichiers.pack` sur
+  `/recours/finaliser` + route token-guardée `?doc=requete|refere|bordereau` ;
+  export RGPD et purge du compte suppriment les 3 URLs.
+- **Noms de fichiers normalisés** (conventions Télérecours — le nom téléchargé
+  est le basename du href, clé `pdfs/pack/<dossierId>/`) :
+  `Requete_au_fond_REP.pdf`, `Requete_Refere_Suspension.pdf`,
+  `Bordereau_Recapitulatif_des_Pieces.pdf` (pas d'horodatage : régénération =
+  écrasement propre du même fichier).
+
+### Suggestions IA post-analyse (`src/lib/auto-enrichissement.ts`)
+
+- Après chaque analyse (`after()` dans `analyserDossier`), passage du cas
+  d'espèce IA (`verifierAvecIa`) en **arrière-plan** si `VERIF_IA_PROVIDER=mock`
+  ou `GEMINI_API_KEY` : les suggestions (ids du **catalogue seulement**) sont
+  écrites dans `DossierFaille.suggestionIa` en statut `CANDIDATE` — jamais de
+  template, jamais d'article rédigé par l'IA, jamais de lettre régénérée,
+  jamais d'événement dossier. Tracées dans `AutoAlimentationTrace`
+  (`campagne = auto-enrichissement`). Réaffichées après chaque relance
+  (fusion manuelle `fusionnerCandidats` ne supprime pas les lignes hors
+  `idsLettre`).
+- Bouton admin **« Valider (Active) »** sur une `PROPOSEE` →
+  `activerFailleProposee` (verrou conditionnel idempotent
+  `PROPOSEE → ACTIVE`, garde `messageActivationBloquee` = même message que
+  `validerPropositionFaille`).
+
+### E2E
+
+`e2e/pack-telerecours.spec.ts` : visite `/dashboard/juriste/failles?f=ACTIVE`
+(l'ouverture de la bibliothèque déclenche `synchroniserCatalogue` → injection
+pack — plus de clic sur « Synchroniser et activer », qui activerait les 10
+failles suspension sans garde docType et casserait `suspension.spec.ts`) →
+dépôt SUSPENSION d'un
+fichier nommé `arrete-*.png` (provider mock : le **nom de fichier** choisit le
+document simulé — voir `extrairePv(buffer, nomFichier)` / `mockOcr`) → badge
+« Document classé : suspension préfectorale (3F) » → validation juriste canal
+Télérecours → pack 3 PDF côté client **et** juriste (href + octets `%PDF-` sur
+disque — `next start` ne sert que les fichiers `public/` présents au boot, les
+uploads du run sont donc vérifiés sur disque, jamais via HTTP).

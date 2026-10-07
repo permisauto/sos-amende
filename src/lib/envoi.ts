@@ -78,6 +78,14 @@ export function dateRefLibelle(type: InfractionType): string {
   return type === "SUSPENSION" ? "Date de la décision" : "Date du PV";
 }
 
+/** Libellé du classificateur de document (AMENDE / 3F / 48SI). */
+export function libelleDocType(docType: string | null | undefined): string | null {
+  if (docType === "AMENDE") return "avis de contravention (amende)";
+  if (docType === "3F") return "suspension préfectorale (3F)";
+  if (docType === "48SI") return "invalidation du permis (48SI)";
+  return null;
+}
+
 /**
  * Portail officiel de dépôt en ligne de la contestation.
  * - AMENDE : téléservice ANTAI « Désigner ou contester en ligne »

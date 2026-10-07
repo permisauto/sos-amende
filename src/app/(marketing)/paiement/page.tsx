@@ -4,13 +4,24 @@ import { libelleMontant } from "@/lib/tarifs";
 
 export const metadata: Metadata = { title: "Paiement — finaliser votre dossier" };
 
-export default async function PaiementPublicPage(props: { searchParams: Promise<{ type?: string }> }) {
+export default async function PaiementPublicPage(props: {
+  searchParams: Promise<{ type?: string; offre?: string }>;
+}) {
   const sp = await props.searchParams;
   const type = sp.type === "SUSPENSION" ? "SUSPENSION" : "AMENDE";
+  const titre =
+    type === "AMENDE"
+      ? `${libelleMontant("AMENDE")} / amende`
+      : `${libelleMontant("SUSPENSION")} / suspension & invalidation`;
   return (
     <div className="mx-auto max-w-2xl px-6 py-12">
-      <h1 className="text-2xl font-bold">Paiement — {type === "AMENDE" ? `${libelleMontant("AMENDE")} / amende` : `${libelleMontant("SUSPENSION")} / suspension`}</h1>
-      <p className="mt-2 text-sm text-zinc-600">Renseignez vos informations personnelles pour obtenir le RIB et effectuer votre virement. Le scan et le scoring étaient gratuits.</p>
+      <h1 className="text-2xl font-bold">Paiement — {titre}</h1>
+      <p className="mt-2 text-sm text-zinc-600">
+        Renseignez vos informations personnelles pour obtenir le RIB et effectuer votre virement. Le scan et le scoring étaient gratuits.
+        {type === "SUSPENSION" ? (
+          <> Offre Suspension &amp; Invalidation : requête au fond, référé-suspension (art. L. 521-2 CJA) et bordereau des pièces inclus.</>
+        ) : null}
+      </p>
       <div className="mt-8">
         <PaiementPublicClient initialType={type} />
       </div>

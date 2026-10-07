@@ -2,9 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/dal";
+import { enrichirApresOcr } from "@/lib/auto-enrichissement";
 import { storageRead, storageWrite } from "@/lib/storage";
 import {
   FAILLE_IDS,
@@ -26,6 +28,11 @@ import {
 } from "@/lib/preuves-api";
 import { lireReponses, preuvesPourReponses } from "@/lib/questions";
 import { contexteEtalonnage } from "@/lib/etalonnage";
+import {
+  estPackTelecours,
+  genererPackTelecours,
+  type PackTelecours,
+} from "@/lib/pack-telerecours";
 import {
   activerDepotEnLigne,
   marquerDepotEnvoye,
@@ -122,7 +129,7 @@ export async function createDossier(
   let ocrOk = false;
   const tOcr = Date.now();
   try {
-    const ocr = await extrairePv(buffer);
+    const ocr = await extrairePv(buffer, file.name);
     // Trace unique et exploitable en prod : provider, format, succès, volumétrie.
     console.log(
       JSON.stringify({
@@ -189,6 +196,12 @@ const analyseSchema = z.object({
   prefecture: z.string().trim().optional(),
   duree: z.string().trim().optional(),
   motif: z.string().trim().optional(),
+  // Référé-suspension (art. L. 521-2 CJA) — noms identiques aux variables du
+  // template {metier}/{entreprise}/{risque_licenciement}. Saisie humaine
+  // facultative (SUSPENSION) ; jamais extraite du texte.
+  metier: z.string().trim().optional(),
+  entreprise: z.string().trim().optional(),
+  risque_licenciement: z.string().trim().optional(),
 });
 
 export type AnalyseState = { error?: string } | undefined;
@@ -226,6 +239,14 @@ export async function analyserDossier(
   // repris du pré-remplissage du dépôt pour survivre à la réécriture du
   // formulaire (human-in-the-loop sur les champs visibles seulement).
   const anterieur = (dossier.extractedData ?? {}) as Record<string, unknown>;
+  // Champs pack 3F/48SI extraits à l'OCR (non éditables au formulaire) :
+  // repris du pré-remplissage comme dateVerificationAppareil — sans ce
+  // portage, `analyseSchema` (zod, strip inconnus) les jetterait et les
+  // règles à docType/horodatage ne matcheraient jamais.
+  const chaine = (v: unknown): string | undefined =>
+    typeof v === "string" && v.trim() ? v.trim() : undefined;
+  const docTypeAnt = chaine(anterieur.docType);
+  const pointsAnt = Number(anterieur.pointsRetiresMemesDate);
 
   const data: ExtractedData = {
     ...parsed.data,
@@ -235,6 +256,26 @@ export async function analyserDossier(
     plaqueIncorrecte: formData.get("plaqueIncorrecte") === "on",
     ...(typeof anterieur.dateVerificationAppareil === "string"
       ? { dateVerificationAppareil: anterieur.dateVerificationAppareil }
+      : {}),
+    ...(docTypeAnt === "3F" ||
+    docTypeAnt === "48SI" ||
+    docTypeAnt === "AMENDE"
+      ? { docType: docTypeAnt }
+      : {}),
+    ...(chaine(anterieur.dateSignatureArrete)
+      ? { dateSignatureArrete: chaine(anterieur.dateSignatureArrete) }
+      : {}),
+    ...(chaine(anterieur.heureSignatureArrete)
+      ? { heureSignatureArrete: chaine(anterieur.heureSignatureArrete) }
+      : {}),
+    ...(chaine(anterieur.dateStage)
+      ? { dateStage: chaine(anterieur.dateStage) }
+      : {}),
+    ...(chaine(anterieur.dateNotification)
+      ? { dateNotification: chaine(anterieur.dateNotification) }
+      : {}),
+    ...(Number.isFinite(pointsAnt) && pointsAnt > 0
+      ? { pointsRetiresMemesDate: pointsAnt }
       : {}),
   };
 
@@ -387,6 +428,13 @@ export async function analyserDossier(
   // Notification (défensive : sans AUTH_RESEND_KEY, aucun e-mail envoyé).
   await notifierStatut(dossier.id).catch(() => false);
 
+  // Enrichissement IA post-analyse (fire-and-forget, après la réponse) :
+  // suggestions cas d'espèce versées dans les candidatures du dossier
+  // (drawer juriste), sans lettre régénérée ni statut touché — voir
+  // `src/lib/auto-enrichissement.ts`. `after` s'exécute même si le
+  // redirect ci-dessous lève.
+  after(() => enrichirApresOcr(dossier.id).catch(() => undefined));
+
   revalidatePath(`/dashboard/cases/${dossier.id}`);
   revalidatePath("/dashboard/juriste");
   if (statut === "EN_ATTENTE_PAIEMENT") {
@@ -408,7 +456,10 @@ export async function signerDossier(
 
   const dossier = await prisma.dossier.findFirst({
     where: { id: dossierId, userId: user.id },
-    include: { preuves: { orderBy: { createdAt: "asc" } } },
+    include: {
+      preuves: { orderBy: { createdAt: "asc" } },
+      failleJuridique: { select: { templateRefere: true } },
+    },
   });
   if (!dossier) {
     return { error: "Dossier introuvable." };
@@ -475,11 +526,39 @@ export async function signerDossier(
   const pdfName = `pdfs/lettre-${dossier.id}.pdf`;
   const pdfUrl = await storageWrite(pdfName, pdfBuffer);
 
+  // Pack Télérecours (3F/48SI, Cas B) : la validation juriste n'a pas pu le
+  // produire (lettre alors non signée) — il est généré ici, avec la
+  // signature, et rattaché au courrier créé. Best-effort jamais bloquant.
+  let packUrls: PackTelecours | undefined;
+  if (
+    estPackTelecours({
+      type: dossier.type,
+      canal: dossier.canalEnvoi,
+      docType: dataExt["docType"],
+    })
+  ) {
+    try {
+      packUrls = await genererPackTelecours({
+        dossierId: dossier.id,
+        lettreFinale: dossier.lettreGeneree,
+        data: dataExt as unknown as ExtractedData,
+        templateRefere: dossier.failleJuridique?.templateRefere ?? null,
+        piecesJointes,
+        signatureDataUrl,
+        numRef: typeof dataExt["num_pv"] === "string" ? dataExt["num_pv"] : null,
+        dateDecision: typeof dataExt["date"] === "string" ? dataExt["date"] : null,
+      });
+    } catch (e) {
+      console.error("signerDossier: pack Télérecours non généré", e);
+    }
+  }
+
   await prisma.courrier.create({
     data: {
       dossierId: dossier.id,
       signatureUrl,
       pdfUrl,
+      ...(packUrls ? { packUrls } : {}),
     },
   });
 

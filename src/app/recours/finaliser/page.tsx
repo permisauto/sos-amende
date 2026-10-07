@@ -41,7 +41,11 @@ export default async function FinaliserPage(props: {
 
   const fichiers = dossier.fichiers;
   const aDesFichiers =
-    Boolean(fichiers.lettrePdf) || Boolean(fichiers.pv) || fichiers.preuves.length > 0;
+    Boolean(fichiers.lettrePdf) ||
+    Boolean(fichiers.pv) ||
+    fichiers.preuves.length > 0 ||
+    Boolean(fichiers.pack.refere) ||
+    Boolean(fichiers.pack.bordereau);
   const hrefFichier = (doc: string, preuveId?: string) =>
     `/api/recours/finaliser/fichier?token=${encodeURIComponent(token)}&doc=${doc}` +
     (preuveId ? `&preuveId=${encodeURIComponent(preuveId)}` : "");
@@ -124,6 +128,28 @@ export default async function FinaliserPage(props: {
                       className="inline-flex items-center gap-1.5 font-medium text-emerald-800 underline hover:text-emerald-950"
                     >
                       Télécharger la lettre signée (PDF)
+                    </a>
+                  </li>
+                )}
+                {fichiers.pack.refere && (
+                  <li>
+                    <a
+                      data-testid="pack-refere"
+                      href={hrefFichier("refere")}
+                      className="inline-flex items-center gap-1.5 font-medium text-emerald-800 underline hover:text-emerald-950"
+                    >
+                      Télécharger le référé-suspension (art. L. 521-2 CJA)
+                    </a>
+                  </li>
+                )}
+                {fichiers.pack.bordereau && (
+                  <li>
+                    <a
+                      data-testid="pack-bordereau"
+                      href={hrefFichier("bordereau")}
+                      className="inline-flex items-center gap-1.5 font-medium text-emerald-800 underline hover:text-emerald-950"
+                    >
+                      Télécharger le bordereau des pièces
                     </a>
                   </li>
                 )}

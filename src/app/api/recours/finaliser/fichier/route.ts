@@ -51,6 +51,21 @@ export async function GET(req: Request) {
   } else if (doc === "pv") {
     chemin = lien.dossier.fichiers.pv;
     basename = lien.dossier.type === "SUSPENSION" ? "decision-suspension" : "avis-contravention";
+  } else if (doc === "requete" || doc === "refere" || doc === "bordereau") {
+    // Pack Télérecours (3F/48SI) : rattaché au courrier validé/signé.
+    const pack = lien.dossier.fichiers.pack;
+    chemin =
+      doc === "requete"
+        ? pack.requete
+        : doc === "refere"
+          ? pack.refere
+          : pack.bordereau;
+    basename =
+      doc === "requete"
+        ? "requete-contestation"
+        : doc === "refere"
+          ? "refere-suspension-l521-2"
+          : "bordereau-pieces";
   } else if (doc === "preuve" && preuveId) {
     const preuve = await prisma.preuve.findFirst({
       where: { id: preuveId, dossierId: lien.dossier.id },

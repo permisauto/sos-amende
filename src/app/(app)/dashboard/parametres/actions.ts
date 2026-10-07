@@ -93,6 +93,17 @@ export async function supprimerCompte(
     }
     for (const c of d.courriers) {
       fichiers.push(c.pdfUrl, c.signatureUrl, c.preuveDepotUrl);
+      // Pack Télérecours (3F/48SI) : 3 PDF rattachés au courrier.
+      if (c.packUrls && typeof c.packUrls === "object") {
+        const pack = c.packUrls as {
+          requete?: unknown;
+          refere?: unknown;
+          bordereau?: unknown;
+        };
+        for (const u of [pack.requete, pack.refere, pack.bordereau]) {
+          if (typeof u === "string" && u) fichiers.push(u);
+        }
+      }
     }
     if (
       typeof d.extractedData === "object" &&

@@ -209,6 +209,60 @@ describe("verifierLienDepot", () => {
     expect(res?.dossier.fichiers.preuves).toEqual([
       { id: "p1", nom: "Carte grise", type: "CARTE_GRISE" },
     ]);
+    // Aucun pack sur ce dossier : les 3 champs restent nuls (jamais fabriqués).
+    expect(res?.dossier.fichiers.pack).toEqual({
+      requete: null,
+      refere: null,
+      bordereau: null,
+    });
+  });
+
+  it("expose le pack Télérecours depuis le dernier courrier qui en porte", async () => {
+    (prisma.lienDepot.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...lienEnBase,
+      dossier: {
+        id: "dossier-1",
+        type: "SUSPENSION",
+        statut: "PRET",
+        pvUrl: "/uploads/pv.png",
+        extractedData: { num_pv: "D123" },
+        user: { name: "Marie" },
+        courriers: [
+          {
+            id: "c1",
+            dossierId: "dossier-1",
+            pdfUrl: "/uploads/lettre-signee.pdf",
+            signatureUrl: "/uploads/sig.png",
+            preuveDepotUrl: null,
+            packUrls: {
+              requete: "/uploads/pack-requete.pdf",
+              refere: "/uploads/pack-refere.pdf",
+              bordereau: "/uploads/pack-bordereau.pdf",
+            },
+            createdAt: new Date(Date.now() - 60_000),
+          },
+          {
+            id: "c2",
+            dossierId: "dossier-1",
+            pdfUrl: "/uploads/lettre-plus-recente.pdf",
+            signatureUrl: null,
+            preuveDepotUrl: null,
+            packUrls: null,
+            createdAt: new Date(),
+          },
+        ],
+        preuves: [],
+      },
+    });
+
+    const res = await verifierLienDepot(MOCK_TOKEN);
+    expect(res?.dossier.fichiers.pack).toEqual({
+      requete: "/uploads/pack-requete.pdf",
+      refere: "/uploads/pack-refere.pdf",
+      bordereau: "/uploads/pack-bordereau.pdf",
+    });
+    // La lettre reste celle du courrier le plus récent.
+    expect(res?.dossier.fichiers.lettrePdf).toBe("/uploads/lettre-plus-recente.pdf");
   });
 
   it("ne renvoie aucune preuve quand aucune n'a de fichier stocké", async () => {

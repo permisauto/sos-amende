@@ -22,6 +22,7 @@ import type {
   RefJurisprudentielle,
 } from "@/components/bibliotheque-juriste";
 import type { JurisprudenceRef } from "@/lib/catalogue-sources";
+import { controlerForclusion48si } from "@/lib/delais";
 import {
   remplirLettreMulti,
   remplirTemplate,
@@ -33,6 +34,7 @@ import {
   organismeEnvoi,
   destinataireLrar,
   libelleCanalDepuisStockage,
+  libelleDocType,
 } from "@/lib/envoi";
 import { faillesPourTypePreuve, listePiecesJointes } from "@/lib/preuves-api";
 import { FilMessages, type MessageDto } from "@/components/messages";
@@ -132,6 +134,7 @@ type JuristeCaseDetail = {
     pdfUrl: string | null;
     signatureUrl: string | null;
     preuveDepotUrl: string | null;
+    packUrls?: unknown;
   }>;
   preuves: Array<{
     id: string;
@@ -506,6 +509,15 @@ export default async function JuristeCasePage(
   const accuseUrl = await storageUrl(courrier?.preuveDepotUrl ?? null);
   const signatureCourrier = await storageUrl(courrier?.signatureUrl ?? null);
   const signatureProfil = await storageUrl(item.user.signatureUrl ?? null);
+  // Pack Télérecours (3F/48SI) : 3 PDF rattachés au courrier validé.
+  const pack = (courrier?.packUrls ?? null) as {
+    requete?: string | null;
+    refere?: string | null;
+    bordereau?: string | null;
+  } | null;
+  const packRequeteUrl = await storageUrl(pack?.requete ?? null);
+  const packRefereUrl = await storageUrl(pack?.refere ?? null);
+  const packBordereauUrl = await storageUrl(pack?.bordereau ?? null);
   const evenements = await Promise.all(
     item.evenements.map(async (e) => ({
       ...e,
@@ -559,6 +571,17 @@ export default async function JuristeCasePage(
     : null;
 
   const envoiEvent = evenements.find((e) => e.type === "ENVOI");
+
+  // Forclusion 48SI : recours à engager dans les 60 jours francs de la
+  // notification — signal bloquant côté juriste (jamais inventé sans date).
+  const forclusion48si =
+    item.type === "SUSPENSION" && data?.docType === "48SI"
+      ? controlerForclusion48si(
+          typeof data.dateNotification === "string"
+            ? data.dateNotification
+            : null,
+        )
+      : null;
 
   const isDemo = item.id.startsWith("pv-") || item.id.startsWith("dec-");
   const editable =
@@ -624,6 +647,21 @@ export default async function JuristeCasePage(
           </div>
         )}
       </div>
+
+      {forclusion48si?.depasse && (
+        <div
+          data-testid="forclusion-48si"
+          className="mt-4 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800"
+        >
+          Forclusion dépassée — le recours contre cette invalidation 48SI
+          devait être engagé avant le{" "}
+          {dateFormat.format(forclusion48si.dateForclusion)} (
+          {forclusion48si.joursDepasse} jour
+          {forclusion48si.joursDepasse > 1 ? "s" : ""} de dépassement). Ne
+          transmettez pas la contestation sans avoir vérifié le délai avec le
+          client.
+        </div>
+      )}
 
       {searchParams.valide === "ok" &&
         (searchParams.lien === "envoye" ? (
@@ -800,6 +838,59 @@ export default async function JuristeCasePage(
                     </div>
                   ) : null}
                 </>
+              )}
+              {/* Pack Télérecours : rendu dans les DEUX modes (lecture et
+                  édition) — un dossier PRET prêt au dépôt doit montrer ses
+                  3 PDF, pas seulement après envoi. */}
+              {(packRequeteUrl || packBordereauUrl) && (
+                <div
+                  data-testid="pack-telerecours"
+                  className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50/50 p-5"
+                >
+                  <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">
+                    Pack Télérecours — pièces du dépôt en ligne
+                  </p>
+                  <p className="mt-1 text-xs text-indigo-700/80">
+                    Requête au fond, référé (art. L. 521-2 CJA) et bordereau :
+                    les 3 documents que le client télécharge pour déposer sur
+                    le portail officiel.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-3">
+                    {packRequeteUrl && (
+                      <a
+                        data-testid="pack-requete"
+                        href={packRequeteUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-block rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700"
+                      >
+                        Requête (PDF)
+                      </a>
+                    )}
+                    {packRefereUrl && (
+                      <a
+                        data-testid="pack-refere"
+                        href={packRefereUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-block rounded-xl border border-indigo-300 bg-white px-5 py-2.5 text-sm font-semibold text-indigo-800 transition hover:bg-indigo-100"
+                      >
+                        Référé L. 521-2 (PDF)
+                      </a>
+                    )}
+                    {packBordereauUrl && (
+                      <a
+                        data-testid="pack-bordereau"
+                        href={packBordereauUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-block rounded-xl border border-indigo-300 bg-white px-5 py-2.5 text-sm font-semibold text-indigo-800 transition hover:bg-indigo-100"
+                      >
+                        Bordereau (PDF)
+                      </a>
+                    )}
+                  </div>
+                </div>
               )}
               {!signatureCourrier && signatureProfil && (
                 <div className="mt-4">
@@ -1129,6 +1220,58 @@ export default async function JuristeCasePage(
                       </dd>
                     </div>
                   )}
+                  {libelleDocType(
+                    typeof data.docType === "string" ? data.docType : null,
+                  ) && (
+                    <div className="flex justify-between">
+                      <dt className="text-zinc-500">Document</dt>
+                      <dd className="font-medium text-indigo-700">
+                        {libelleDocType(
+                          typeof data.docType === "string"
+                            ? data.docType
+                            : null,
+                        )}
+                      </dd>
+                    </div>
+                  )}
+                  {!!data.dateSignatureArrete && (
+                    <div className="flex justify-between">
+                      <dt className="text-zinc-500">Signé le</dt>
+                      <dd className="font-medium">
+                        {String(data.dateSignatureArrete)}
+                        {typeof data.heureSignatureArrete === "string" &&
+                          data.heureSignatureArrete &&
+                          ` à ${String(data.heureSignatureArrete)}`}
+                      </dd>
+                    </div>
+                  )}
+                  {!!data.dateNotification && (
+                    <div className="flex justify-between">
+                      <dt className="text-zinc-500">Notifiée le</dt>
+                      <dd className="font-medium">
+                        {String(data.dateNotification)}
+                      </dd>
+                    </div>
+                  )}
+                  {!!data.dateStage && (
+                    <div className="flex justify-between">
+                      <dt className="text-zinc-500">Stage suivi le</dt>
+                      <dd className="font-medium">
+                        {String(data.dateStage)}
+                      </dd>
+                    </div>
+                  )}
+                  {data.pointsRetiresMemesDate != null &&
+                    data.pointsRetiresMemesDate !== "" && (
+                      <div className="flex justify-between">
+                        <dt className="text-zinc-500">
+                          Points retirés le même jour
+                        </dt>
+                        <dd className="font-medium">
+                          {String(data.pointsRetiresMemesDate)}
+                        </dd>
+                      </div>
+                    )}
                   <div className="flex justify-between">
                     <dt className="text-zinc-500">Prix</dt>
                     <dd className="font-medium">{item.prix.toString()} €</dd>

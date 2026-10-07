@@ -3,6 +3,7 @@
 import { useActionState, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
+  activerFailleProposee,
   activerToutesPropositions,
   basculerFaille,
   importerFaillesDepuisSources,
@@ -456,6 +457,10 @@ function FailleRow({
     validerPropositionFaille,
     undefined,
   );
+  const [actState, actAction, actPending] = useActionState(
+    activerFailleProposee,
+    undefined,
+  );
 
   useEffect(() => {
     if (toggleState?.ok && toggleState.statut) {
@@ -468,6 +473,12 @@ function FailleRow({
       onStatutLocal(faille.id, propState.statut);
     }
   }, [propState, faille.id, onStatutLocal]);
+
+  useEffect(() => {
+    if (actState?.ok && actState.statut) {
+      onStatutLocal(faille.id, actState.statut);
+    }
+  }, [actState, faille.id, onStatutLocal]);
 
   const activeAll =
     forceActive === true && (faille.statut as StatutFaille) === "PROPOSEE";
@@ -566,12 +577,11 @@ function FailleRow({
             {editing ? "Fermer" : "Modifier"}
           </button>
           {effectiveStatut === "PROPOSEE" ? (
-            <form action={propAction}>
+            <form action={actAction}>
               <input type="hidden" name="id" value={faille.id} />
-              <input type="hidden" name="action" value="ACTIVE" />
               <button
                 type="submit"
-                disabled={propPending}
+                disabled={actPending}
                 className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
               >
                 Valider (Active)
@@ -620,6 +630,16 @@ function FailleRow({
         </p>
       )}
       {propState?.ok && (
+        <p className="mt-3 rounded-xl bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
+          Faille mise à jour.
+        </p>
+      )}
+      {actState?.error && (
+        <p className="mt-3 rounded-xl bg-red-50 px-4 py-2 text-sm text-red-700">
+          {actState.error}
+        </p>
+      )}
+      {actState?.ok && (
         <p className="mt-3 rounded-xl bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
           Faille mise à jour.
         </p>
