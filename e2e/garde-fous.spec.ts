@@ -49,6 +49,7 @@ test.describe("Garde-fous audit (lot 5)", () => {
 
     // Contrôles réservés à l'ADMIN : absents pour un juriste.
     await expect(page.getByText("Synchroniser et activer")).toHaveCount(0);
+    await expect(page.getByText("Lancer l'auto-alimentation")).toHaveCount(0);
     await expect(page.getByText("Propositions à valider")).toHaveCount(0);
 
     // Les failles seedées restent visibles en consultation.

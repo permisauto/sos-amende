@@ -10,6 +10,8 @@ import type { JurisprudenceRef } from "@/lib/catalogue-sources";
 import { CATALOGUE_SOURCES } from "@/lib/catalogue-sources";
 import {
   enregistrerTraceAutoAlimentation,
+  executerAutoAlimentation,
+  listerMisesAJourCatalogue,
   synchroniserCatalogue,
 } from "@/lib/auto-alimentation";
 import { validateMockFaille } from "@/lib/mock-failles";
@@ -22,6 +24,7 @@ export type FailleState =
       count?: number;
       activees?: number;
       ignorees?: number;
+      message?: string;
       statut?: "ACTIVE" | "INACTIVE";
     }
   | undefined;
@@ -228,6 +231,39 @@ export async function importerFaillesDepuisSources(
 }
 
 const PROPOSEE_ACTIONS = ["ACTIVE", "INACTIVE"] as const;
+
+/**
+ * Bouton « Lancer l'auto-alimentation » : déclenche **manuellement** le
+ * même passage que le cron quotidien `/api/cron/auto-alimentation`
+ * (`executerAutoAlimentation`) — synchronisation du catalogue en statut
+ * PROPOSEE + détection de l'édition du JORF, avec traces écrites. **Aucune
+ * activation** : seuls les boutons « Synchroniser et activer » / « Activer
+ * les propositions » changent un statut.
+ */
+export async function lancerAutoAlimentation(
+  _prev: FailleState,
+  _formData: FormData,
+): Promise<FailleState> {
+  await requireAdmin();
+
+  try {
+    const res = await executerAutoAlimentation();
+    const misesAJour = await listerMisesAJourCatalogue();
+    const veille = res.veilleEdition
+      ? `${res.veilleEdition}${res.veilleNouvelle ? " (NOUVELLE édition)" : " (déjà connue)"}`
+      : "index injoignable";
+
+    revalidatePath("/dashboard/juriste/failles");
+    return {
+      ok: true,
+      count: res.catalogue,
+      message: `Auto-alimentation exécutée : ${res.catalogue} entrée(s) du catalogue synchronisée(s)${misesAJour.length > 0 ? ` · ${misesAJour.length} mise(s) à jour disponible(s) à appliquer` : ""} · édition JORF : ${veille}. Aucune faille activée (validation humaine inchangée).`,
+    };
+  } catch (e) {
+    console.error("lancerAutoAlimentation: échec", e);
+    return { error: "Échec de l'auto-alimentation — réessayez (voir logs serveur)." };
+  }
+}
 
 /**
  * Option B de l'auto-alimentation : applique **explicitement** à une faille

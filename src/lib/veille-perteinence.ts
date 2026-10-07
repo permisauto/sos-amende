@@ -57,6 +57,16 @@ export const MOTS_CLES_CORE: ReadonlyArray<{ terme: string; poids: number }> = [
   { terme: "contrôle automatique", poids: 4 },
   { terme: "réglementation routière", poids: 4 },
   { terme: "code de la sécurité intérieure", poids: 3 },
+  // Excès de vitesse : la famille, directement qualifiante.
+  { terme: "excès de vitesse", poids: 8 },
+  { terme: "limitation de vitesse", poids: 7 },
+  { terme: "vitesse réglementaire", poids: 6 },
+  // Stationnement (verbalisation, zone, gênant/interdit).
+  { terme: "stationnement", poids: 8 },
+  { terme: "stationner", poids: 6 },
+  // Suspension / invalidation du permis (variantes au-delà de « suspension du permis »).
+  { terme: "suspension de permis", poids: 8 },
+  { terme: "invalidation du permis", poids: 8 },
 ];
 
 export const MOTS_CLES_AMBIGUS: ReadonlyArray<{ terme: string; poids: number }> = [
@@ -64,6 +74,7 @@ export const MOTS_CLES_AMBIGUS: ReadonlyArray<{ terme: string; poids: number }> 
   { terme: "alcoolémie", poids: 5 },
   { terme: "radar", poids: 2 },
   { terme: "procès-verbal", poids: 2 },
+  { terme: "parking", poids: 2 },
 ];
 
 
@@ -81,6 +92,12 @@ export const MOTS_CLES_APPUI: ReadonlyArray<{ terme: string; poids: number }> = 
   { terme: "clémence", poids: 1 },
   { terme: "récusation", poids: 1 },
   { terme: "poursuite", poids: 1 },
+  // Procédure contentieuse de l'amende (commande de payer / injonction de payer)
+  // et contestation liée à la signalisation (balisage, travaux, panneaux).
+  { terme: "injonction de payer", poids: 3 },
+  { terme: "commande de payer", poids: 3 },
+  { terme: "signalisation", poids: 1 },
+  { terme: "signalement", poids: 1 },
 ];
 
 export const SEUIL_PERTINENCE = 12;

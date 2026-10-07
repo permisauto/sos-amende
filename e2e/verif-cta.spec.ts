@@ -288,11 +288,17 @@ test.describe("Admin — base & radars", () => {
     await expect(page.getByRole("link", { name: "Bibliothèque juridique" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Radars" })).toBeVisible();
 
-    // Bibliothèque juridique : bouton synchroniser
+    // Bibliothèque juridique : bouton synchroniser + lancement manuel
     await page.getByRole("link", { name: "Bibliothèque juridique" }).click();
     await expect(page).toHaveURL(/\/dashboard\/juriste\/failles/);
     const syncBtn = page.getByRole("button", { name: "Synchroniser et activer" });
     await expect(syncBtn).toBeVisible();
+    const autoBtn = page.getByRole("button", { name: "Lancer l'auto-alimentation" });
+    await expect(autoBtn).toBeVisible();
+    await autoBtn.click();
+    await expect(
+      page.getByText(/Auto-alimentation exécutée : \d+ entrée\(s\) du catalogue synchronisée\(s\)/),
+    ).toBeVisible();
 
     // Radars : formulaire + bouton enregistrer
     await page.getByRole("link", { name: "Radars" }).click();

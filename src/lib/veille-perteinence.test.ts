@@ -180,6 +180,64 @@ retrait devant le tribunal administratif.`;
   });
 });
 
+describe("veille-perteinence — familles routières (vitesse, stationnement, suspension)", () => {
+  /** Excès de vitesse : texte type JADE/JORF sur un contrôle de vitesse. */
+  const CONTENU_VITESSE = `Le conducteur conteste l'excès de vitesse constaté par contrôle
+automatique sur une voie concernée par une limitation de vitesse de 50 km/h. Le dépassement
+de la vitesse réglementaire a été établi par le procès-verbal de l'agent verbalisateur.
+Le délai de contestation de l'amende forfaitaire n'a pas été méconnu.`;
+
+  /** Stationnement : verbalisation de stationnement gênant/interdit. */
+  const CONTENU_STATIONNEMENT = `Le procès-verbal de constatation d'infraction relève un
+stationnement sur la voie publique en double file, constitutif de stationnement gênant.
+L'agent verbalisateur a adressé la commande de payer au gestionnaire du véhicule.
+Le conducteur demande l'annulation au motif que la zone de stationnement n'était pas
+correctement délimitée : la signalisation réglementaire était absente sur la chaussée.`;
+
+  /** Suspension / invalidation du permis. */
+  const CONTENU_SUSPENSION = `La suspension de permis prononcée est contestée.
+Le conducteur invoque l'irrégularité de la procédure de retrait de points et demande
+l'annulation de la décision de suspension du permis. L'invalidation du permis de conduire
+n'était pas encourue au vu de l'historique du conducteur.`;
+
+  it("retient un texte sur l'excès de vitesse", () => {
+    const p = scorerPertinence(source({ contenu: CONTENU_VITESSE }));
+    expect(p.matchsCore).toContain("excès de vitesse");
+    expect(p.matchsCore).toContain("limitation de vitesse");
+    expect(p.matchsCore).toContain("vitesse réglementaire");
+    expect(estPertinente(p)).toBe(true);
+  });
+
+  it("retient un texte sur le stationnement", () => {
+    const p = scorerPertinence(source({ contenu: CONTENU_STATIONNEMENT }));
+    expect(p.matchsCore).toContain("stationnement");
+    expect(p.matchsAppui).toContain("commande de payer");
+    expect(p.matchsAppui).toContain("signalisation");
+    expect(estPertinente(p)).toBe(true);
+  });
+
+  it("retient un texte sur la suspension / invalidation du permis", () => {
+    const p = scorerPertinence(source({ contenu: CONTENU_SUSPENSION }));
+    expect(p.matchsCore).toContain("suspension de permis");
+    expect(p.matchsCore).toContain("invalidation du permis");
+    expect(p.matchsCore).toContain("retrait de points");
+    expect(estPertinente(p)).toBe(true);
+  });
+
+  it("ne laisse pas « parking » (ambigu) qualifier seul une publication", () => {
+    const p = scorerPertinence(
+      source({
+        contenu:
+          "Le parking de l'entreprise est fermé pour travaux. Le parking visiteurs " +
+          "reste accessible aux salariés autorisés. Un accès parking secondaire existe.",
+      }),
+    );
+    expect(p.matchsCore).toEqual([]);
+    expect(p.matchsAppui).toContain("parking");
+    expect(estPertinente(p)).toBe(false);
+  });
+});
+
 describe("veille-perteinence — filtre de pertinence", () => {
   it("écarte la jurisprudence administrative générique (le vrai piège)", () => {
     // Regression : avant la séparation core/appui, ce texte passait le filtre

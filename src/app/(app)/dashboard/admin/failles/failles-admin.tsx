@@ -6,6 +6,7 @@ import {
   activerToutesPropositions,
   basculerFaille,
   importerFaillesDepuisSources,
+  lancerAutoAlimentation,
   modifierFaille,
   validerPropositionFaille,
 } from "../actions";
@@ -81,6 +82,10 @@ export function FaillesAdmin({
     importerFaillesDepuisSources,
     undefined,
   );
+  const [autoState, autoAction, autoPending] = useActionState(
+    lancerAutoAlimentation,
+    undefined,
+  );
   const [activerToutesState, activerToutesPropositionsAction, activerToutesPending] = useActionState(
     activerToutesPropositions,
     undefined,
@@ -116,12 +121,26 @@ export function FaillesAdmin({
               <strong>« Synchroniser et activer »</strong> importe le catalogue
               et fait passer en <strong>Active</strong>, en une seule fois, toutes
               les propositions déjà complètes (règle + lettre) : elles deviennent
-              alors des failles utilisées par le moteur. Seules les propositions
+              alors des failles utilisées par le moteur. Le bouton{" "}
+              <strong>« Lancer l&apos;auto-alimentation »</strong> déclenche à
+              la demande le même passage que la synchronisation automatique
+              quotidienne (catalogue → propositions, détection de
+              l&apos;édition du Journal officiel) : aucun statut n&apos;est
+              modifié. Seules les propositions
               incomplètes (lettre à rédiger) restent à valider une par une — le
               moteur n&apos;utilise jamais une proposition tant qu&apos;elle
               n&apos;est pas Active.
             </p>
           </div>
+          <form action={autoAction}>
+            <button
+              type="submit"
+              disabled={autoPending}
+              className="rounded-full border border-zinc-300 px-5 py-2.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-50"
+            >
+              {autoPending ? "Exécution…" : "Lancer l'auto-alimentation"}
+            </button>
+          </form>
           <form action={sourcesAction}>
             <button
               type="submit"
@@ -145,6 +164,16 @@ export function FaillesAdmin({
             </form>
           )}
         </div>
+        {autoState?.error && (
+          <p className="mt-3 rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700">
+            {autoState.error}
+          </p>
+        )}
+        {autoState?.ok && (
+          <p className="mt-3 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800">
+            {autoState.message}
+          </p>
+        )}
         {sourcesState?.error && (
           <p className="mt-3 rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700">
             {sourcesState.error}
