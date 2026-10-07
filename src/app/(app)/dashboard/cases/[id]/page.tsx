@@ -620,6 +620,21 @@ export default async function CaseDetailPage(
                   {item.createdAt.toLocaleDateString("fr-FR")}
                 </dd>
               </div>
+              {typeof item.extractedData === "object" &&
+                item.extractedData !== null &&
+                !!(
+                  item.extractedData as Record<string, unknown>
+                ).dateVerificationAppareil && (
+                  <div className="flex justify-between">
+                    <dt className="text-zinc-500">Vérification radar</dt>
+                    <dd className="font-medium">
+                      {String(
+                        (item.extractedData as Record<string, unknown>)
+                          .dateVerificationAppareil,
+                      )}
+                    </dd>
+                  </div>
+                )}
             </dl>
           </div>
 

@@ -25,7 +25,7 @@ Sources de vérité à garder synchronisées :
 | 1 | `faille-prescription-1-an` | Prescription de l'action publique (1 an) | art. 9 du Code de procédure pénale | Code de procédure pénale | `{type: "datePrescrite"}` |
 | 2 | `faille-mentions-obligatoires` | Défaut de mentions obligatoires sur l'avis de contravention | art. R. 246-1 et s. du Code de la route | Code de la route | `{type: "champAbsent", champ: "numTelePaiement"}` **ou** `{type: "champAbsent", champ: "cle"}` |
 | 3 | `faille-erreur-plaque` | Erreur de plaque d'immatriculation | art. 530-1 du Code de procédure pénale | Code de procédure pénale | `{type: "plaqueIncorrecte"}` |
-| 4 | `faille-certificat-etalonnage` | Demande de communication du certificat d'étalonnage du cinémomètre | art. L. 130-3 du Code de la route + arrêté du 27 mars 2007 | Code de la route / Arrêté du 27 mars 2007 | `{type: "etalonnageExpire"}` (radar connu, certificat expiré le jour de l'infraction) |
+| 4 | `faille-certificat-etalonnage` | Demande de communication du certificat d'étalonnage du cinémomètre | art. L. 130-3 du Code de la route + arrêté du 27 mars 2007 | Code de la route / Arrêté du 27 mars 2007 | `{type: "etalonnageExpire"}` (échéance expirée le jour de l'infraction : registre admin `RadarCalibration` en priorité, sinon date de vérification **lue sur le PV** — `dateVerificationAppareil`, rubrique « Appareil de contrôle homologué » — échéance +1 an, exception +2 ans des postes fixes récents) |
 
 **Variables disponibles dans les templates** : `{nom}`, `{plaque}`, `{num_pv}`.
 **Statut** : templates présents mais **à relire par un juriste avant lancement public**
@@ -211,8 +211,12 @@ dossier à partir :
 - du **texte brut scanné** du PV (`Dossier.pvTexte`, règle `texteContient` /
   `texteAbsent`) — par ex. détecter une faille « vitesse » quand le texte
   contient « excès de vitesse » ;
-- du **contexte étalonnage** (radar connu → certificat expiré le jour de
-  l'infraction).
+- du **contexte étalonnage** (`contexteEtalonnage` : registre admin
+  `RadarCalibration` en priorité, sinon date de vérification du cinémomètre
+  lue sur le PV — rubrique « Appareil de contrôle homologué », extrait par
+  l'OCR ; échéance +1 an, exception +2 ans des postes fixes récents selon la
+  date d'installation data.gouv.fr) → certificat expiré le jour de
+  l'infraction.
 
 Flux :
 1. `analyserDossier` stocke chaque candidat dans `DossierFaille` (statut

@@ -1121,6 +1121,14 @@ export default async function JuristeCasePage(
                     <dt className="text-zinc-500">Date</dt>
                     <dd className="font-medium">{String(data.date ?? "—")}</dd>
                   </div>
+                  {!!data.dateVerificationAppareil && (
+                    <div className="flex justify-between">
+                      <dt className="text-zinc-500">Vérification radar</dt>
+                      <dd className="font-medium">
+                        {String(data.dateVerificationAppareil)}
+                      </dd>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <dt className="text-zinc-500">Prix</dt>
                     <dd className="font-medium">{item.prix.toString()} €</dd>

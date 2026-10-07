@@ -21,6 +21,9 @@ export type ExtractedData = {
   plaqueIncorrecte?: boolean;
   adresseIncorrecte?: boolean;
   preuveEtalonnage?: string;
+  /** Date de vérification périodique du cinémomètre, lue sur le PV (rubrique
+   * « Appareil de contrôle homologué ») — base de la preuve d'entretien. */
+  dateVerificationAppareil?: string;
   // Questionnaire ciblé (flux A, étape 2) : contexte apporté par le client,
   // exploité par le juriste lors de la validation humaine.
   paiementDejaFait?: boolean;
@@ -104,6 +107,53 @@ export function etalonnageExpire(
   const pv = new Date(`${datePv}T00:00:00Z`);
   if (Number.isNaN(exp.getTime()) || Number.isNaN(pv.getTime())) return false;
   return pv.getTime() > exp.getTime();
+}
+
+/** Date « yyyy-mm-dd » ou « dd/mm/yyyy » → Date UTC à minuit ; null si
+ * illisible (jamais de date fabriquée). */
+function versDateUtc(valeur: string): Date | null {
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(valeur.trim());
+  const fr = iso
+    ? null
+    : /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(valeur.trim());
+  const isoFinal = iso
+    ? `${iso[1]}-${iso[2]}-${iso[3]}`
+    : fr
+      ? `${fr[3]}-${fr[2].padStart(2, "0")}-${fr[1].padStart(2, "0")}`
+      : null;
+  if (!isoFinal) return null;
+  const d = new Date(`${isoFinal}T00:00:00Z`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Échéance de la vérification périodique d'un cinémomètre : date de
+ * vérification **+1 an** (vérification annuelle obligatoire), sauf exception
+ * des postes fixes — les 2 premières vérifications suivant la mise en service
+ * peuvent être espacées de 2 ans (arrêté du 4 juin 2009) : on applique alors
+ * +2 ans quand la date d'installation (liste officielle data.gouv.fr) est
+ * connue et que la vérification lue a lieu dans les 26 mois de cette
+ * installation. Retourne null si une date est absente ou illisible.
+ */
+export function echeanceVerificationRadar(
+  dateVerification?: string | null,
+  dateInstallation?: string | null,
+): Date | null {
+  const verif = dateVerification ? versDateUtc(dateVerification) : null;
+  if (!verif) return null;
+  const echeance = new Date(verif);
+  echeance.setUTCFullYear(echeance.getUTCFullYear() + 1);
+  if (dateInstallation) {
+    const inst = versDateUtc(dateInstallation.slice(0, 10));
+    if (inst) {
+      const moisEcoules =
+        (verif.getTime() - inst.getTime()) / (30 * 24 * 3600 * 1000);
+      if (moisEcoules >= 0 && moisEcoules <= 26) {
+        echeance.setUTCFullYear(echeance.getUTCFullYear() + 1);
+      }
+    }
+  }
+  return echeance;
 }
 
 /** Rafales (km/h) à partir desquelles le résumé météo est retenu : seuil

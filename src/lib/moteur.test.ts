@@ -5,6 +5,7 @@ import {
   datePrescrite,
   detecterFaille,
   detecterFailles,
+  echeanceVerificationRadar,
   etalonnageExpire,
   joursRestants,
   meteoDefavorable,
@@ -191,6 +192,37 @@ describe("etalonnageExpire", () => {
     expect(etalonnageExpire(null, "2026-06-15")).toBe(false);
     expect(etalonnageExpire("2026-01-01", undefined)).toBe(false);
     expect(etalonnageExpire("pas-une-date", "2026-06-15")).toBe(false);
+  });
+});
+
+describe("echeanceVerificationRadar", () => {
+  const jour = (d: Date | null) => d?.toISOString().slice(0, 10) ?? null;
+
+  it("+1 an par défaut (vérification annuelle obligatoire)", () => {
+    expect(jour(echeanceVerificationRadar("2023-05-12"))).toBe("2024-05-12");
+  });
+
+  it("exception poste fixe : +2 ans quand la vérification suit la mise en service (≤ 26 mois)", () => {
+    expect(
+      jour(echeanceVerificationRadar("2023-05-12", "2022-06-01T00:00:00Z")),
+    ).toBe("2025-05-12");
+  });
+
+  it("+1 an passé les 26 mois (vérifications suivantes redevenues annuelles)", () => {
+    expect(
+      jour(echeanceVerificationRadar("2025-05-12", "2022-06-01T00:00:00Z")),
+    ).toBe("2026-05-12");
+  });
+
+  it("accepte le format français dd/mm/yyyy l'OCR peut produire", () => {
+    expect(jour(echeanceVerificationRadar("12/05/2023"))).toBe("2024-05-12");
+  });
+
+  it("refuse les dates absentes ou illisibles (jamais de date fabriquée)", () => {
+    expect(echeanceVerificationRadar(null)).toBeNull();
+    expect(echeanceVerificationRadar(undefined)).toBeNull();
+    expect(echeanceVerificationRadar("pas-une-date")).toBeNull();
+    expect(echeanceVerificationRadar("2023-13-45")).toBeNull();
   });
 });
 

@@ -718,6 +718,12 @@ const LIEU_FALLBACK_RE = /(?:à|au|lieu)\s+([A-ZÉÈÀÂÊÎÔÛÇa-zéèàâê�
 const NOM_RE = /\b(?:nom\s*\/\s*pr[eé]nom|nom\s+du\s+titulaire|titulaire|propri[eé]taire|destinataire|conducteur|pr[eé]nom|nom)\s*[:\-]\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'’\- \t]{1,59})/iu;
 /** Radar : « Appareil : RADAR TYPE MESTA 210C - N° 1248 » (avis de vitesse). */
 const RADAR_RE = /\b(?:appareil(?:\s+de\s+mesure)?|cin[eé]mom[eè]tre|radar)\s*[:\-]\s*([^\n]{3,70})/i;
+/** Date de vérification périodique du cinémomètre — libellé obligatoire
+ * (« Appareil de contrôle homologué » : « Date de vérification : … »,
+ * « Vérification périodique du … », « Dernière vérification le … »). Jamais
+ * de date déduite sans libellé : c'est la preuve d'entretien annuel. */
+const DATE_VERIF_RE =
+  /\b(?:derni[eè]re\s+)?(?:date\s+de\s+v[ée]rification(?:\s+p[ée]riodique)?|v[ée]rification\s+p[ée]riodique)\s*(?:du|le)?\s*[:\-]?\s*(\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}|\d{4}-\d{2}-\d{2}|\d{1,2}\s+[A-Za-zÀ-ÿ]{3,9}\.?\s+\d{4})/i;
 
 /** Segment lettre : chiffres d'OCR (0→O, 1→I) réparés ; null si autre chiffre. */
 function segLettres(s: string): string | null {
@@ -895,6 +901,15 @@ export function normaliserPv(texte: string): Partial<ExtractedData> {
     if (type) result.typeRadar = type.slice(0, 60);
     const idM = ligne.match(/\bn[°º]\s*(\d{2,8})\b/i);
     if (idM) result.radarId = idM[1];
+  }
+
+  // Vérification périodique du cinémomètre (preuve d'entretien annuel) :
+  // uniquement près du libellé officiel, sinon la date d'infraction ou un
+  // montant pourrait être captés à tort.
+  const verifM = texte.match(DATE_VERIF_RE);
+  if (verifM) {
+    const iso = extraireDate(verifM[1]);
+    if (iso) result.dateVerificationAppareil = iso;
   }
 
   const date = extraireDate(texte);

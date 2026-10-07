@@ -25,6 +25,7 @@ import {
   typesPreuvesPourFailles,
 } from "@/lib/preuves-api";
 import { lireReponses, preuvesPourReponses } from "@/lib/questions";
+import { contexteEtalonnage } from "@/lib/etalonnage";
 import {
   activerDepotEnLigne,
   marquerDepotEnvoye,
@@ -221,24 +222,27 @@ export async function analyserDossier(
     where: { statut: "ACTIVE", typeInfraction: dossier.type },
   });
 
+  // Champs OCR non éditables (ex : date de vérification du cinémomètre) :
+  // repris du pré-remplissage du dépôt pour survivre à la réécriture du
+  // formulaire (human-in-the-loop sur les champs visibles seulement).
+  const anterieur = (dossier.extractedData ?? {}) as Record<string, unknown>;
+
   const data: ExtractedData = {
     ...parsed.data,
     // Questionnaire ciblé dynamique (registre `questions.ts`) : seules les
     // cases cochées écrivent une clé — contexte juriste + preuves externes.
     ...lireReponses(formData),
     plaqueIncorrecte: formData.get("plaqueIncorrecte") === "on",
+    ...(typeof anterieur.dateVerificationAppareil === "string"
+      ? { dateVerificationAppareil: anterieur.dateVerificationAppareil }
+      : {}),
   };
 
-  // Contexte étalonnage : si un radar est connu, sa date d'expiration permet
-  // au moteur de détecter la faille « certificat d'étalonnage » avec preuve.
-  let dateExpirationEtalonnage: Date | null = null;
-  if (data.radarId) {
-    const cal = await prisma.radarCalibration.findFirst({
-      where: { radarId: data.radarId },
-      orderBy: { dateExpiration: "desc" },
-    });
-    if (cal) dateExpirationEtalonnage = cal.dateExpiration;
-  }
+  // Contexte étalonnage (preuve d'entretien du radar) : registre admin
+  // prioritaire, sinon date de vérification lue sur le PV — permet au moteur
+  // de détecter la faille « certificat d'étalonnage » avec échéance.
+  const { dateExpiration: dateExpirationEtalonnage, preuveUrl: preuveRegistre } =
+    await contexteEtalonnage(data);
 
   // Détection par scan (données extraites + texte brut du PV) : toutes les
   // failles candidates sont enregistrées ; le juriste confirme/rejette ensuite.
@@ -259,12 +263,8 @@ export async function analyserDossier(
     ? failles.find((f) => f.id === principalId) ?? null
     : null;
 
-  if (principalId === FAILLE_IDS.etalonnage && data.radarId) {
-    const cal = await prisma.radarCalibration.findFirst({
-      where: { radarId: data.radarId },
-      orderBy: { dateExpiration: "desc" },
-    });
-    if (cal) data.preuveEtalonnage = cal.preuveUrl;
+  if (principalId === FAILLE_IDS.etalonnage && preuveRegistre) {
+    data.preuveEtalonnage = preuveRegistre;
   }
 
   // Lettre multi-arguments : toutes les failles candidates sont juxtaposées

@@ -27,6 +27,7 @@ import {
   type MajSuggestion,
 } from "@/lib/verif-failles";
 import { verifierAvecIa } from "@/lib/verif-ia";
+import { contexteEtalonnage } from "@/lib/etalonnage";
 
 export type ValidationState = { error?: string; ok?: boolean } | undefined;
 
@@ -621,18 +622,12 @@ export async function verifierFailles(
     faits.conditions_meteo = dossier.conditions_meteo;
   }
 
-  let dateExpirationEtalonnage: Date | null = null;
-  let preuveEtalonnageRadar: string | null = null;
-  if (faits.radarId) {
-    const cal = await prisma.radarCalibration.findFirst({
-      where: { radarId: faits.radarId },
-      orderBy: { dateExpiration: "desc" },
-    });
-    if (cal) {
-      dateExpirationEtalonnage = cal.dateExpiration;
-      preuveEtalonnageRadar = cal.preuveUrl;
-    }
-  }
+  // Preuve d'entretien du radar : registre admin prioritaire, sinon date de
+  // vérification lue sur le PV (même logique que l'analyse — `contexteEtalonnage`).
+  const {
+    dateExpiration: dateExpirationEtalonnage,
+    preuveUrl: preuveEtalonnageRadar,
+  } = await contexteEtalonnage(faits);
 
   // 1. Détection par règles sur le contexte enrichi (texte OCR inchangé).
   const detectesRegles = detecterFailles(

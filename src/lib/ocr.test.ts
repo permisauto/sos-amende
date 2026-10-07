@@ -65,6 +65,30 @@ describe("normaliserPv", () => {
   it("renvoie un objet vide sur un texte illisible", () => {
     expect(normaliserPv("aucune donnée exploitable !")).toEqual({});
   });
+
+  it("extrait la date de vérification du cinémomètre (preuve d'entretien annuel)", () => {
+    const d = normaliserPv(`${PV_OFFICIEL}\nDate de vérification : 12/05/2022`);
+    expect(d.dateVerificationAppareil).toBe("2022-05-12");
+  });
+
+  it("gère « Vérification périodique du … » (sans deux-points)", () => {
+    expect(
+      normaliserPv("Vérification périodique du 12/05/2022\nAppareil n° 1248")
+        .dateVerificationAppareil,
+    ).toBe("2022-05-12");
+  });
+
+  it("n'extrait aucune date de vérification sans libellé explicite", () => {
+    // La date d'infraction et la date de l'avis ne doivent jamais être
+    // confondues avec la vérification de l'appareil (anti-hallucination).
+    expect(normaliserPv(PV_OFFICIEL).dateVerificationAppareil).toBeUndefined();
+  });
+
+  it("ignore une « date de vérification » sans date lisible", () => {
+    expect(
+      normaliserPv("Date de vérification : sans objet").dateVerificationAppareil,
+    ).toBeUndefined();
+  });
 });
 
 describe("getOcrProvider", () => {
