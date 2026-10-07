@@ -72,7 +72,7 @@ const TRAVAUX_OPENDATA_BASE =
  * (séparateur virgule) permet de surveiller plusieurs départements à la fois ;
  * à défaut, `TRAVAUX_OPENDATA_BASE` (défaut : Sarthe) est utilisé seul.
  */
-function basesTravaux(): string[] {
+export function basesTravaux(): string[] {
   const multi = process.env.TRAVAUX_OPENDATA_BASES;
   if (multi?.trim()) {
     return multi.split(",").map((s) => s.trim()).filter(Boolean);
@@ -85,6 +85,17 @@ const RADARS_TTL_MS = 6 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 10_000;
 const RADAR_DISTANCE_MAX_M = 1500;
 
+/* ---------------------------- Suivi des sources --------------------------- */
+
+/**
+ * Suivi de santé des sources : `alertes` distingue « source injoignable » de
+ * « rien trouvé ». Sans ce suivi, un blackout réseau et un résultat vide
+ * rendaient exactement le même retour au juriste (« aucune preuve ») — il ne
+ * pouvait pas décider s'il fallait réessayer. Les alertes ne créent jamais de
+ * preuve : diagnostic seul (audit P2 transparence).
+ */
+export type SuiviSources = { alertes: string[] };
+
 /* ------------------------------- Géocodage ------------------------------- */
 
 export type Coordonnees = {
@@ -95,8 +106,14 @@ export type Coordonnees = {
 
 export async function geocoderAdresse(
   adresse: string | null | undefined,
+  suivi?: SuiviSources,
 ): Promise<Coordonnees | null> {
-  if (!adresse || adresse.trim().length < 3) return null;
+  if (!adresse || adresse.trim().length < 3) {
+    suivi?.alertes.push(
+      "Adresse absente ou trop courte : géocodage impossible (météo et travaux non cherchés).",
+    );
+    return null;
+  }
   try {
     const res = await fetch(
       `${BAN_ENDPOINT}?q=${encodeURIComponent(adresse)}&limit=1`,
@@ -105,7 +122,12 @@ export async function geocoderAdresse(
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       },
     );
-    if (!res.ok) return null;
+    if (!res.ok) {
+      suivi?.alertes.push(
+        `Géocodage (BAN) injoignable (HTTP ${res.status}) : météo et travaux non cherchés.`,
+      );
+      return null;
+    }
     const data = (await res.json()) as {
       features?: Array<{
         geometry?: { coordinates?: number[] };
@@ -114,13 +136,21 @@ export async function geocoderAdresse(
     };
     const feature = data.features?.[0];
     const coords = feature?.geometry?.coordinates;
-    if (!feature || !coords || coords.length < 2) return null;
+    if (!feature || !coords || coords.length < 2) {
+      suivi?.alertes.push(
+        "Adresse non localisée par la BAN : météo et travaux non cherchés.",
+      );
+      return null;
+    }
     return {
       latitude: coords[1],
       longitude: coords[0],
       label: feature.properties?.label ?? adresse,
     };
   } catch {
+    suivi?.alertes.push(
+      "Géocodage (BAN) injoignable (réseau/timeout) : météo et travaux non cherchés.",
+    );
     return null;
   }
 }
@@ -229,12 +259,15 @@ function resumerMeteo(data: unknown, heure?: number | null): string | null {
   return parts.join(" • ");
 }
 
-export async function preuveMeteo(opts: {
-  latitude: number;
-  longitude: number;
-  date: string;
-  heure?: number | null;
-}): Promise<string | null> {
+export async function preuveMeteo(
+  opts: {
+    latitude: number;
+    longitude: number;
+    date: string;
+    heure?: number | null;
+  },
+  suivi?: SuiviSources,
+): Promise<string | null> {
   try {
     const hourly =
       opts.heure != null && opts.heure >= 0 && opts.heure <= 23
@@ -242,9 +275,17 @@ export async function preuveMeteo(opts: {
         : "";
     const url = `${OPENMETEO_ENDPOINT}?latitude=${opts.latitude}&longitude=${opts.longitude}&start_date=${opts.date}&end_date=${opts.date}&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,rain_sum,snowfall_sum,windspeed_10m_max,windgusts_10m_max${hourly}&timezone=Europe/Paris`;
     const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
-    if (!res.ok) return null;
-    return resumerMeteo(await res.json(), opts.heure ?? null);
+    if (!res.ok) {
+      suivi?.alertes.push(`Météo (Open-Meteo) injoignable (HTTP ${res.status}).`);
+      return null;
+    }
+    const resume = resumerMeteo(await res.json(), opts.heure ?? null);
+    if (!resume) {
+      suivi?.alertes.push("Météo : aucune donnée disponible pour cette date.");
+    }
+    return resume;
   } catch {
+    suivi?.alertes.push("Météo (Open-Meteo) injoignable (réseau/timeout).");
     return null;
   }
 }
@@ -267,19 +308,30 @@ type RadarCsvRow = {
 
 let radarsCache: { at: number; rows: RadarCsvRow[] } | null = null;
 
-async function chargerRadars(): Promise<RadarCsvRow[]> {
+async function chargerRadars(suivi?: SuiviSources): Promise<RadarCsvRow[]> {
   const now = Date.now();
   if (radarsCache && now - radarsCache.at < RADARS_TTL_MS) {
     return radarsCache.rows;
   }
+  // Alerte seulement si on repart sans aucune donnée : un cache encore valable
+  // sert les fiches, inutile d'inquiéter pour un simple échec de rafraîchir.
+  const indispo = (motif: string) => {
+    if (!radarsCache?.rows?.length) suivi?.alertes.push(motif);
+  };
   try {
     const res = await fetch(RADARS_CSV_URL, {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
-    if (!res.ok) return radarsCache?.rows ?? [];
+    if (!res.ok) {
+      indispo(`Liste des radars (data.gouv.fr) injoignable (HTTP ${res.status}).`);
+      return radarsCache?.rows ?? [];
+    }
     const txt = await res.text();
     const lignes = txt.split(/\r?\n/);
-    if (lignes.length < 2) return [];
+    if (lignes.length < 2) {
+      indispo("Liste des radars (data.gouv.fr) illisible (CSV vide ou tronqué).");
+      return [];
+    }
     const entete = lignes[0].split(",");
     const idx = (name: string) => entete.indexOf(name);
     const i = {
@@ -318,6 +370,7 @@ async function chargerRadars(): Promise<RadarCsvRow[]> {
     radarsCache = { at: now, rows };
     return rows;
   } catch {
+    indispo("Liste des radars (data.gouv.fr) injoignable (réseau/timeout).");
     return radarsCache?.rows ?? [];
   }
 }
@@ -369,13 +422,16 @@ function toFiche(r: RadarCsvRow): FicheRadar {
   };
 }
 
-export async function rechercherRadar(opts: {
-  radarId?: string | null;
-  latitude?: number | null;
-  longitude?: number | null;
-}): Promise<FicheRadar | null> {
+export async function rechercherRadar(
+  opts: {
+    radarId?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+  },
+  suivi?: SuiviSources,
+): Promise<FicheRadar | null> {
   try {
-    const rows = await chargerRadars();
+    const rows = await chargerRadars(suivi);
     if (!rows.length) return null;
     if (opts.radarId) {
       const id = opts.radarId.trim();
@@ -414,15 +470,24 @@ export type ChantierTrouve = {
   source: string;
 };
 
-export async function rechercherTravaux(opts: {
-  latitude: number;
-  longitude: number;
-  date: string;
-}): Promise<ChantierTrouve[]> {
+export async function rechercherTravaux(
+  opts: {
+    latitude: number;
+    longitude: number;
+    date: string;
+  },
+  suivi?: SuiviSources,
+): Promise<ChantierTrouve[]> {
   const bases = basesTravaux();
-  if (!bases.length) return [];
+  if (!bases.length) {
+    suivi?.alertes.push(
+      "Travaux : aucune base OpendataSoft configurée (TRAVAUX_OPENDATA_BASES).",
+    );
+    return [];
+  }
   const vus = new Set<string>();
   const resultats: ChantierTrouve[] = [];
+  let echecs = 0;
   for (const base of bases) {
     const sansSlash = base.replace(/\/+$/, "");
     try {
@@ -434,7 +499,10 @@ export async function rechercherTravaux(opts: {
         headers: { Accept: "application/json" },
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
-      if (!res.ok) continue;
+      if (!res.ok) {
+        echecs += 1;
+        continue;
+      }
       const data = (await res.json()) as {
         results?: Array<Record<string, unknown>>;
       };
@@ -462,8 +530,16 @@ export async function rechercherTravaux(opts: {
         });
       }
     } catch {
+      echecs += 1;
       continue;
     }
+  }
+  if (echecs > 0) {
+    suivi?.alertes.push(
+      echecs === bases.length
+        ? `Travaux (OpendataSoft) : ${echecs}/${bases.length} base(s) injoignable(s) — aucun chantier vérifié.`
+        : `Travaux (OpendataSoft) : ${echecs}/${bases.length} base(s) injoignable(s) — vérification partielle.`,
+    );
   }
   return resultats;
 }
@@ -545,25 +621,31 @@ export async function lirePiecesJointesPourDossierId(
  * déjà identifiée n'est jamais ré-ajoutée (doublons impossibles). `verifiees`
  * liste les types déjà couverts (revérifiés sans ajout) ; `ajoutees` ne
  * contient QUE les preuves non encore identifiées.
+ *
+ * `alertes` = sources injoignables (réseau/timeout/HTTP en erreur) ou adresse
+ * non localisée — à distinguer de « rien trouvé », qui n'est pas une panne
+ * (retour juriste affiche les deux séparément, audit P2 transparence).
  */
 export async function recupererPreuvesPourDossierId(
   dep: Pick<PrismaClient, "dossier" | "preuve">,
   dossierId: string,
   opts?: { types?: Set<TypePreuveExterne> },
-): Promise<{ ajoutees: string[]; verifiees: string[] }> {
+): Promise<{ ajoutees: string[]; verifiees: string[]; alertes: string[] }> {
   const ajoutees: string[] = [];
   const verifiees: string[] = [];
+  const alertes: string[] = [];
+  const suivi: SuiviSources = { alertes };
   const besoins = opts?.types;
   const besoin = (t: TypePreuveExterne) => !besoins || besoins.has(t);
   try {
     const dossier = await dep.dossier.findUnique({ where: { id: dossierId } });
-    if (!dossier) return { ajoutees, verifiees };
+    if (!dossier) return { ajoutees, verifiees, alertes };
     if (
       dossier.statut === "REJETE" ||
       dossier.statut === "RESOLU" ||
       dossier.statut === "ANNULE"
     ) {
-      return { ajoutees, verifiees };
+      return { ajoutees, verifiees, alertes };
     }
 
     // Preuves déjà répertoriées : un type déjà couvert est seulement revérifié,
@@ -584,6 +666,11 @@ export async function recupererPreuvesPourDossierId(
       /^\d{4}-\d{2}-\d{2}$/.test(data["date"])
         ? (data["date"] as string)
         : null;
+    if (!date && (besoin("METEO") || besoin("TRAVAUX"))) {
+      alertes.push(
+        "Date d'infraction absente ou invalide : météo et travaux non cherchés.",
+      );
+    }
     // Heure de l'infraction (« 14h32 ») : permet une météo relevée à l'heure
     // près (preuve visibilité quand la condition défavorable s'est produite à
     // l'heure exacte du PV, même si la journée était globalement clémente).
@@ -601,29 +688,31 @@ export async function recupererPreuvesPourDossierId(
 
     const coordsUtiles =
       besoin("METEO") || besoin("TRAVAUX") || besoin("RADAR");
-    if (
-      coordsUtiles &&
-      (latitude === null || longitude === null) &&
-      (data["adresse"] || data["lieu"])
-    ) {
-      const adresse = String(data["adresse"] ?? data["lieu"] ?? "");
-      const coords = await geocoderAdresse(adresse);
-      if (coords) {
-        latitude = coords.latitude;
-        longitude = coords.longitude;
-        await dep.dossier
-          .update({
-            where: { id: dossierId },
-            data: {
-              extractedData: {
-                ...data,
-                latitude,
-                longitude,
-                adresse_geocodee: coords.label,
+    if (coordsUtiles && (latitude === null || longitude === null)) {
+      if (data["adresse"] || data["lieu"]) {
+        const adresse = String(data["adresse"] ?? data["lieu"] ?? "");
+        const coords = await geocoderAdresse(adresse, suivi);
+        if (coords) {
+          latitude = coords.latitude;
+          longitude = coords.longitude;
+          await dep.dossier
+            .update({
+              where: { id: dossierId },
+              data: {
+                extractedData: {
+                  ...data,
+                  latitude,
+                  longitude,
+                  adresse_geocodee: coords.label,
+                },
               },
-            },
-          })
-          .catch(() => {});
+            })
+            .catch(() => {});
+        }
+      } else {
+        alertes.push(
+          "Adresse absente du dossier : météo et travaux non cherchés (fiche radar vérifiée via le n° de radar).",
+        );
       }
     }
 
@@ -632,12 +721,15 @@ export async function recupererPreuvesPourDossierId(
         if (dejaIdentifiee("METEO")) {
           verifiees.push("météo déjà identifiée (revérifiée)");
         } else {
-          const resume = await preuveMeteo({
-            latitude,
-            longitude,
-            date,
-            heure,
-          });
+          const resume = await preuveMeteo(
+            {
+              latitude,
+              longitude,
+              date,
+              heure,
+            },
+            suivi,
+          );
           // La preuve météo ne caractérise la faille « visibilité » QUE si les
           // conditions récupérées sont réellement défavorables (pluie, neige,
           // brouillard, verglas, orage). Une journée ensoleillée ou neutre ne
@@ -669,7 +761,16 @@ export async function recupererPreuvesPourDossierId(
         if (dejaIdentifiee("TRAVAUX")) {
           verifiees.push("travaux déjà identifiés (revérifiés)");
         } else {
-          const chantiers = await rechercherTravaux({ latitude, longitude, date });
+          const avant = alertes.length;
+          const chantiers = await rechercherTravaux(
+            { latitude, longitude, date },
+            suivi,
+          );
+          if (!chantiers.length && alertes.length === avant) {
+            verifiees.push(
+              "travaux : aucun chantier actif ce jour dans la zone (base(s) interrogée(s) — vérifié)",
+            );
+          }
           const nouveaux = chantiers.filter(
             (c) => !nomsTravauxExistants.has(`Travaux — ${c.localisation}`),
           );
@@ -705,7 +806,11 @@ export async function recupererPreuvesPourDossierId(
       if (dejaIdentifiee("RADAR")) {
         verifiees.push("radar déjà identifié (revérifié)");
       } else {
-        const radar = await rechercherRadar({ radarId, latitude, longitude });
+        const avant = alertes.length;
+        const radar = await rechercherRadar(
+          { radarId, latitude, longitude },
+          suivi,
+        );
         if (radar) {
           await dep.preuve
             .create({
@@ -718,11 +823,19 @@ export async function recupererPreuvesPourDossierId(
             })
             .catch(() => {});
           ajoutees.push(`radar (${radar.type})`);
+        } else if (alertes.length === avant) {
+          verifiees.push(
+            "radar : aucune fiche correspondante dans la liste officielle (n° ou position — vérifié)",
+          );
         }
       }
     }
   } catch {
-    // best-effort : ne bloque jamais un flux.
+    // best-effort : ne bloque jamais un flux — mais on ne laisse pas croire
+    // que « rien n'a été trouvé » quand c'est la récupération qui a échoué.
+    alertes.push(
+      "Récupération interrompue (erreur serveur) : réessayez, détails en journal.",
+    );
   }
-  return { ajoutees, verifiees };
+  return { ajoutees, verifiees, alertes };
 }

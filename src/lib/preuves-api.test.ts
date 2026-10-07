@@ -208,6 +208,7 @@ describe("recupererPreuvesPourDossierId — anti-redondance (vérification, pas 
     const dep = depAvecExistant([]);
     const res = await recupererPreuvesPourDossierId(dep as never, "d1");
     expect(res.verifiees).toEqual([]);
+    expect(res.alertes).toEqual([]);
     expect(res.ajoutees.some((a) => a.startsWith("météo"))).toBe(true);
     expect(res.ajoutees.some((a) => a.startsWith("radar"))).toBe(true);
     expect(res.ajoutees.some((a) => a.startsWith("travaux"))).toBe(true);
@@ -347,5 +348,173 @@ describe("recupererPreuvesPourDossierId — anti-redondance (vérification, pas 
     expect(travaux.map((t) => t.nom)).toContain("Travaux — RD 100");
     expect(travaux.map((t) => t.nom)).toContain("Travaux — BF 45");
     expect(res.ajoutees.some((a) => a.startsWith("travaux (2"))).toBe(true);
+  });
+});
+
+describe("recupererPreuvesPourDossierId — alertes : source injoignable ≠ rien trouvé", () => {
+  const dossier = {
+    id: "d1",
+    statut: "EN_ATTENTE_VALIDATION",
+    type: "AMENDE",
+    conditions_meteo: null,
+    extractedData: {
+      date: "2026-05-10",
+      latitude: 48.8,
+      longitude: 2.3,
+      radarId: "7576",
+      adresse: "12 rue de la Paix 75001 PARIS",
+    },
+  };
+
+  function dep(existantes: Array<{ type: string; nom: string }> = []) {
+    const creates: Array<{ type: string; nom: string }> = [];
+    return {
+      dossier: {
+        findUnique: vi.fn(
+          async (): Promise<Record<string, unknown>> => dossier,
+        ),
+        update: vi.fn(async () => ({})),
+      },
+      preuve: {
+        findMany: vi.fn(async () => existantes),
+        create: vi.fn(async (args: { data: { type: string; nom: string } }) => {
+          creates.push({ type: args.data.type, nom: args.data.nom });
+          return args.data;
+        }),
+      },
+      __creates: creates,
+    };
+  }
+
+  /** Routage des appels : `overrides` (substring → handler) sinon défaut OK. */
+  function routerFetch(overrides: Record<string, () => Response>) {
+    return vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      for (const [cle, handler] of Object.entries(overrides)) {
+        if (url.includes(cle)) return handler();
+      }
+      if (url.includes("archive-api.open-meteo.com")) {
+        return new Response(
+          JSON.stringify({
+            daily: {
+              weathercode: [61],
+              temperature_2m_max: [12],
+              temperature_2m_min: [8],
+              precipitation_sum: [5],
+            },
+          }),
+        );
+      }
+      if (url.includes("radars.csv")) {
+        return new Response(
+          [
+            "id,departement,latitude,longitude,type,route,emplacement,date_installation",
+            "7576,75,48.8,2.3,radar fixe,A6,km 42,2020-01-01",
+          ].join("\n"),
+        );
+      }
+      if (url.includes("data.sarthe.fr")) {
+        return new Response(JSON.stringify({ results: [] }));
+      }
+      return new Response("{}", { status: 404 });
+    });
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it("chemin sain : aucune alerte (rien trouvé reste un résultat, pas une panne)", async () => {
+    vi.stubGlobal("fetch", routerFetch({}));
+    const res = await recupererPreuvesPourDossierId(dep() as never, "d1");
+    expect(res.alertes).toEqual([]);
+  });
+
+  it("météo injoignable (HTTP 503) : alerte explicite, pas de preuve, les autres sources continuent", async () => {
+    vi.stubGlobal(
+      "fetch",
+      routerFetch({
+        "archive-api.open-meteo.com": () =>
+          new Response("{}", { status: 503 }),
+      }),
+    );
+    const d = dep();
+    const res = await recupererPreuvesPourDossierId(d as never, "d1");
+    expect(res.alertes.some((a) => a.includes("Météo") && a.includes("503"))).toBe(true);
+    expect(d.__creates.map((c) => c.type)).not.toContain("METEO");
+    // radar et travaux ne sont pas impactés par la panne météo : le radar est
+    // créé, le chemin travaux s'exécute (0 chantier dans la zone = vérifié,
+    // sans aucune alerte travaux).
+    expect(d.__creates.map((c) => c.type)).toContain("RADAR");
+    expect(res.alertes.filter((a) => a.includes("Travaux"))).toEqual([]);
+    expect(res.verifiees.some((v) => v.includes("travaux"))).toBe(true);
+  });
+
+  it("toutes les bases travaux injoignables : alerte « aucun chantier vérifié »", async () => {
+    vi.stubGlobal(
+      "fetch",
+      routerFetch({
+        "data.sarthe.fr": () => new Response("{}", { status: 500 }),
+      }),
+    );
+    const d = dep();
+    const res = await recupererPreuvesPourDossierId(d as never, "d1");
+    expect(
+      res.alertes.some(
+        (a) => a.includes("Travaux") && a.includes("aucun chantier vérifié"),
+      ),
+    ).toBe(true);
+    expect(d.__creates.map((c) => c.type)).not.toContain("TRAVAUX");
+  });
+
+  it("BAN injoignable : alerte géocodage, météo/travaux abandonnés, radar toujours vérifié", async () => {
+    vi.stubGlobal(
+      "fetch",
+      routerFetch({
+        "api-adresse.data.gouv.fr": () => new Response("{}", { status: 503 }),
+      }),
+    );
+    const d = dep();
+    d.dossier.findUnique.mockImplementation(async () => ({
+      ...dossier,
+      extractedData: { date: "2026-05-10", radarId: "7576", adresse: "12 rue de la Paix 75001 PARIS" },
+    }));
+    const res = await recupererPreuvesPourDossierId(d as never, "d1");
+    expect(res.alertes.some((a) => a.includes("Géocodage (BAN)"))).toBe(true);
+    const types = d.__creates.map((c) => c.type);
+    expect(types).toEqual(["RADAR"]);
+  });
+
+  it("adresse absente du dossier : alerte explicite (pas de silence)", async () => {
+    vi.stubGlobal("fetch", routerFetch({}));
+    const d = dep();
+    d.dossier.findUnique.mockImplementation(async () => ({
+      ...dossier,
+      extractedData: { date: "2026-05-10", radarId: "7576" },
+    }));
+    const res = await recupererPreuvesPourDossierId(d as never, "d1");
+    expect(res.alertes.some((a) => a.includes("Adresse absente du dossier"))).toBe(true);
+  });
+
+  it("radar sans correspondance : « rien trouvé » tracé comme vérification, pas comme panne", async () => {
+    vi.stubGlobal("fetch", routerFetch({}));
+    const d = dep();
+    d.dossier.findUnique.mockImplementation(async () => ({
+      ...dossier,
+      extractedData: {
+        date: "2026-05-10",
+        latitude: 41.4,
+        longitude: 9.2,
+        radarId: "9999",
+        adresse: "Ajaccio",
+      },
+    }));
+    const res = await recupererPreuvesPourDossierId(d as never, "d1");
+    expect(d.__creates.map((c) => c.type)).not.toContain("RADAR");
+    expect(
+      res.verifiees.some((v) => v.includes("aucune fiche correspondante")),
+    ).toBe(true);
+    expect(res.alertes.filter((a) => a.includes("radars"))).toEqual([]);
   });
 });

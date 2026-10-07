@@ -8,6 +8,7 @@ import { storageWrite, storageDelete } from "@/lib/storage";
 import { consommerCreneau } from "@/lib/rate-limit";
 import { secretsEgaux } from "@/lib/cron-auth";
 import { getOcrProvider } from "@/lib/ocr";
+import { basesTravaux } from "@/lib/preuves-api";
 
 export type HealthStatus = "healthy" | "degraded" | "unhealthy";
 
@@ -247,6 +248,94 @@ async function checkOpenMeteo(): Promise<HealthCheckResult> {
   }
 }
 
+/**
+ * Géocodage BAN (api-adresse.data.gouv.fr) : indispensable aux preuves météo
+ * et travaux (adresse du PV → coordonnées). Sans lui, l'analyse continue mais
+ * ces preuves n'existent jamais — d'où le suivi en full.
+ */
+async function checkBan(): Promise<HealthCheckResult> {
+  const start = Date.now();
+  const name = "api-adresse.data.gouv.fr (BAN)";
+  try {
+    const res = await fetch(
+      "https://api-adresse.data.gouv.fr/search/?q=Paris&limit=1",
+      { signal: AbortSignal.timeout(5000) },
+    );
+    if (!res.ok) {
+      return {
+        name,
+        status: "degraded",
+        latencyMs: Date.now() - start,
+        error: `HTTP ${res.status}`,
+        details: { message: "API externe, toléré en degraded" },
+      };
+    }
+    return {
+      name,
+      status: "healthy",
+      latencyMs: Date.now() - start,
+      details: { message: "Géocodage BAN accessible (preuves météo/travaux)" },
+    };
+  } catch (err) {
+    return {
+      name,
+      status: "degraded",
+      latencyMs: Date.now() - start,
+      error: err instanceof Error ? err.message : "Timeout/réseau",
+      details: { message: "API externe, toléré en degraded" },
+    };
+  }
+}
+
+/**
+ * Bases OpendataSoft des travaux (preuves TRAVAUX) — interrogée sur la
+ * première base configurée. Sans elle, la faille « panneau non conforme »
+ * ne reçoit jamais sa preuve de chantier.
+ */
+async function checkTravaux(): Promise<HealthCheckResult> {
+  const start = Date.now();
+  const name = "OpendataSoft (travaux)";
+  const base = basesTravaux()[0];
+  if (!base) {
+    return {
+      name,
+      status: "degraded",
+      latencyMs: 0,
+      error: "Aucune base configurée (TRAVAUX_OPENDATA_BASES vide)",
+      details: { message: "Défaut Sarthe actif côté code si variable absente" },
+    };
+  }
+  try {
+    const res = await fetch(`${base.replace(/\/+$/, "")}/records?limit=1`, {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) {
+      return {
+        name,
+        status: "degraded",
+        latencyMs: Date.now() - start,
+        error: `HTTP ${res.status}`,
+        details: { message: "API externe, toléré en degraded" },
+      };
+    }
+    return {
+      name,
+      status: "healthy",
+      latencyMs: Date.now() - start,
+      details: { message: "Base travaux OpendataSoft accessible" },
+    };
+  } catch (err) {
+    return {
+      name,
+      status: "degraded",
+      latencyMs: Date.now() - start,
+      error: err instanceof Error ? err.message : "Timeout/réseau",
+      details: { message: "API externe, toléré en degraded" },
+    };
+  }
+}
+
 async function checkStorage(): Promise<HealthCheckResult> {
   const start = Date.now();
   const cle = `health-check-${Date.now()}.txt`;
@@ -325,14 +414,14 @@ function checkOcr(): HealthCheckResult {
 
 /**
  * `full` (défaut) = toutes les vérifications, y compris les externes coûteuses
- * (radars.csv data.gouv, Open-Meteo, Groq, écriture storage). `lite` = checks
- * sans effet de bord (base + config e-mail) — c'est ce que reçoit un appelant
- * anonyme : `/api/health` public ne doit pas servir de relais de spam vers les
- * API tierces (audit lot 3).
+ * (radars.csv data.gouv, Open-Meteo, BAN, OpendataSoft travaux, Groq, écriture
+ * storage). `lite` = checks sans effet de bord (base + config e-mail) — c'est
+ * ce que reçoit un appelant anonyme : `/api/health` public ne doit pas servir
+ * de relais de spam vers les API tierces (audit lot 3).
  */
 export async function runHealthChecks(full = true): Promise<HealthCheckResponse> {
   const checksEnVue = full
-    ? [checkSupabase(), checkGroq(), checkResend(), checkDataGouv(), checkOpenMeteo(), checkStorage(), Promise.resolve(checkOcr())]
+    ? [checkSupabase(), checkGroq(), checkResend(), checkDataGouv(), checkOpenMeteo(), checkBan(), checkTravaux(), checkStorage(), Promise.resolve(checkOcr())]
     : [checkSupabase(), checkResend()];
   const results = await Promise.allSettled(checksEnVue);
 

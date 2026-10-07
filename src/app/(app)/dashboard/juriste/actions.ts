@@ -1464,13 +1464,16 @@ export type PreuvesApiState = {
   error?: string;
   ajoutees?: string[];
   verifiees?: string[];
+  /** Sources injoignables / données absentes — distinct de « rien trouvé ». */
+  alertes?: string[];
 };
 
 /**
  * Vérification des preuves externes (météo, fiche radar, travaux) pour un
  * dossier, depuis les sources publiques. Anti-redondance : les preuves déjà
  * identifiées sont revérifiées mais jamais re-créées — seules les preuves non
- * encore répertoriées sont ajoutées. Best-effort.
+ * encore répertoriées sont ajoutées. Best-effort. `alertes` distingue une
+ * source injoignable d'un résultat vide (P2 transparence).
  */
 export async function recupererPreuvesApi(
   dossierId: string,
@@ -1485,11 +1488,11 @@ export async function recupererPreuvesApi(
   });
   if (!dossier) return { error: "Dossier introuvable." };
 
-  const { ajoutees, verifiees } = await recupererPreuvesPourDossierId(
+  const { ajoutees, verifiees, alertes } = await recupererPreuvesPourDossierId(
     prisma,
     dossierId,
   );
   revalidatePath(`/dashboard/juriste/${dossierId}`);
   revalidatePath(`/dashboard/cases/${dossierId}`);
-  return { ok: true, ajoutees, verifiees };
+  return { ok: true, ajoutees, verifiees, alertes };
 }

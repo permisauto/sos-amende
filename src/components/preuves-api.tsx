@@ -19,6 +19,7 @@ export function PreuvesApiBlock({
 
   const ajoutees = state && "ajoutees" in state ? state.ajoutees : undefined;
   const verifiees = state && "verifiees" in state ? state.verifiees : undefined;
+  const alertes = state && "alertes" in state ? state.alertes : undefined;
   const error = state && "error" in state ? state.error : undefined;
   const rienDeNouveau = !!state && ajoutees && ajoutees.length === 0;
 
@@ -40,6 +41,19 @@ export function PreuvesApiBlock({
         revérifiées (aucune redondance) ; seules les preuves non encore
         répertoriées sont ajoutées.
       </p>
+
+      {alertes && alertes.length > 0 && (
+        <div className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <p className="font-semibold">
+            Source(s) indisponible(s) — ce n&apos;est pas « aucune preuve » :
+          </p>
+          <ul className="mt-1 space-y-0.5">
+            {alertes.map((a) => (
+              <li key={a}>• {a}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {conditionsMeteo && (
         <p className="mt-3 rounded-xl bg-sky-50 px-3 py-2 text-xs text-sky-900">
