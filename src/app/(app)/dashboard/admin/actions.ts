@@ -249,15 +249,29 @@ export async function lancerAutoAlimentation(
   try {
     const res = await executerAutoAlimentation();
     const misesAJour = await listerMisesAJourCatalogue();
-    const veille = res.veilleEdition
-      ? `${res.veilleEdition}${res.veilleNouvelle ? " (NOUVELLE édition)" : " (déjà connue)"}`
-      : "index injoignable";
+
+    // On ne remonte que le delta : la base est déjà synchronisée la plupart
+    // du temps (idempotent comme le cron) — dire explicitement « rien de
+    // nouveau » évite de laisser croire que le bouton n'a rien fait.
+    const parties: string[] = [];
+    if (res.catalogue > 0) {
+      parties.push(`${res.catalogue} entrée(s) du catalogue synchronisée(s)`);
+    }
+    if (misesAJour.length > 0) {
+      parties.push(`${misesAJour.length} mise(s) à jour disponible(s) à appliquer`);
+    }
+    if (res.veilleNouvelle && res.veilleEdition) {
+      parties.push(`nouvelle édition JORF : ${res.veilleEdition}`);
+    }
 
     revalidatePath("/dashboard/juriste/failles");
     return {
       ok: true,
       count: res.catalogue,
-      message: `Auto-alimentation exécutée : ${res.catalogue} entrée(s) du catalogue synchronisée(s)${misesAJour.length > 0 ? ` · ${misesAJour.length} mise(s) à jour disponible(s) à appliquer` : ""} · édition JORF : ${veille}. Aucune faille activée (validation humaine inchangée).`,
+      message:
+        parties.length > 0
+          ? `Auto-alimentation exécutée : ${parties.join(" · ")}. Aucune faille activée (validation humaine inchangée).`
+          : `Aucun changement : tout est déjà à jour${res.veilleEdition ? ` (édition JORF ${res.veilleEdition} déjà connue)` : " (index JORF injoignable — réessayez plus tard)"}. Aucune faille activée (validation humaine inchangée).`,
     };
   } catch (e) {
     console.error("lancerAutoAlimentation: échec", e);

@@ -296,8 +296,10 @@ test.describe("Admin — base & radars", () => {
     const autoBtn = page.getByRole("button", { name: "Lancer l'auto-alimentation" });
     await expect(autoBtn).toBeVisible();
     await autoBtn.click();
+    // Les deux issues possibles (nouveautés détectées / tout déjà à jour)
+    // se terminent toutes les deux par cette phrase : l'action a bien tourné.
     await expect(
-      page.getByText(/Auto-alimentation exécutée : \d+ entrée\(s\) du catalogue synchronisée\(s\)/),
+      page.getByText(/Aucune faille activée \(validation humaine inchangée\)/),
     ).toBeVisible();
 
     // Radars : formulaire + bouton enregistrer
