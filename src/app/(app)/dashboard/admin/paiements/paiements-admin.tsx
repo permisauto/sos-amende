@@ -1,11 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { validerVirement, refuserVirement } from "../actions";
 import { estOffreSuspension, PRIX_OPTION_LRAR } from "@/lib/tarifs";
+import { BADGES_PAIEMENT } from "@/lib/admin-statuts";
+import { AvancementPaiement } from "@/components/avancement";
 
 type Paiement = {
   id: string;
+  userId: string;
   amount: unknown;
   status: string;
   kind: string;
@@ -18,15 +22,6 @@ type Paiement = {
   preuveNom?: string | null;
   preuveUploadedAt?: Date | null;
   user: { email: string; name: string | null; telephone: string | null };
-};
-
-const BADGES: Record<string, { label: string; classe: string }> = {
-  PENDING_VIREMENT: {
-    label: "En attente",
-    classe: "bg-amber-100 text-amber-800",
-  },
-  PAID: { label: "Validé", classe: "bg-emerald-100 text-emerald-800" },
-  REFUSED: { label: "Refusé", classe: "bg-red-100 text-red-800" },
 };
 
 const vide = (v: string | null | undefined) => v && v.trim() ? v : "—";
@@ -73,14 +68,16 @@ export function PaiementsAdmin({
     return (
       <div className="flex flex-col gap-3">
         {messages}
-        <div className="rounded-2xl border border-dashed p-8 text-center text-sm text-zinc-500">
-          {q
-            ? `Aucun paiement pour « ${q} » dans ce filtre.`
-            : filtre === "REFUSES"
-              ? "Aucun virement refusé."
-              : filtre === "VALIDES"
-                ? "Aucun virement validé."
-                : "Aucun virement en attente. Les demandes de virement apparaissent ici après « Valider et recevoir le RIB »."}
+        <div className="rounded-2xl border border-dashed border-zinc-300 p-12 text-center">
+          <p className="text-zinc-600">
+            {q
+              ? `Aucun paiement pour « ${q} » dans ce filtre.`
+              : filtre === "REFUSES"
+                ? "Aucun virement refusé."
+                : filtre === "VALIDES"
+                  ? "Aucun virement validé."
+                  : "Aucun virement en attente. Les demandes de virement apparaissent ici après « Valider et recevoir le RIB »."}
+          </p>
         </div>
       </div>
     );
@@ -89,7 +86,7 @@ export function PaiementsAdmin({
   return (
     <div className="flex flex-col gap-3">
       {messages}
-      <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white">
+      <div className="overflow-hidden rounded-2xl border border-zinc-200">
         <table className="w-full text-left text-sm">
           <thead className="bg-zinc-50 text-xs uppercase text-zinc-500">
             <tr>
@@ -97,6 +94,7 @@ export function PaiementsAdmin({
               <th className="px-4 py-3 font-medium">Type</th>
               <th className="px-4 py-3 font-medium">Montant</th>
               <th className="px-4 py-3 font-medium">Preuve</th>
+              <th className="px-4 py-3 font-medium">État</th>
               <th className="px-4 py-3 font-medium">Statut</th>
               <th className="px-4 py-3 font-medium">Décision</th>
               <th className="px-4 py-3 text-right font-medium">Actions</th>
@@ -104,7 +102,7 @@ export function PaiementsAdmin({
           </thead>
           <tbody className="divide-y divide-zinc-100">
             {paiements.map((p) => {
-              const badge = BADGES[p.status] ?? {
+              const badge = BADGES_PAIEMENT[p.status] ?? {
                 label: p.status,
                 classe: "bg-zinc-100 text-zinc-700",
               };
@@ -113,7 +111,12 @@ export function PaiementsAdmin({
               return (
                 <tr key={p.id} className="hover:bg-zinc-50">
                   <td className="px-4 py-3 align-top">
-                    <p className="font-medium">{vide(p.user.name)}</p>
+                    <Link
+                      href={`/dashboard/admin/paiements/${p.userId}`}
+                      className="font-medium hover:text-emerald-700"
+                    >
+                      {p.user.name ?? p.user.email}
+                    </Link>
                     <p className="text-xs text-zinc-600">{p.user.email}</p>
                     <p className="text-xs text-zinc-500">
                       {vide(p.user.telephone)}
@@ -153,6 +156,9 @@ export function PaiementsAdmin({
                     ) : (
                       <span className="text-xs text-zinc-400">Aucune</span>
                     )}
+                  </td>
+                  <td className="px-4 py-3 align-top">
+                    <AvancementPaiement status={p.status} />
                   </td>
                   <td className="px-4 py-3 align-top">
                     <span

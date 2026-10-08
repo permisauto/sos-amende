@@ -24,6 +24,7 @@ const STATUT_PAR_FILTRE: Record<Filtre, string | undefined> = {
 
 type LignePaiement = {
   id: string;
+  userId: string;
   amount: unknown;
   status: string;
   kind: string;
