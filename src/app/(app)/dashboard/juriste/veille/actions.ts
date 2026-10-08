@@ -3,10 +3,18 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { requireJuriste } from "@/lib/dal";
+import { requireAdmin, requireJuriste } from "@/lib/dal";
 import { Prisma } from "@/generated/prisma/client";
-import { executerVeilleDila } from "@/lib/veille-ingestion";
+import {
+  executerVeilleDila,
+  extrairePropositionSource,
+  extrairePropositionsEnAttente,
+} from "@/lib/veille-ingestion";
+import type { PropositionVeille } from "@/lib/veille-extraction";
 import type { JurisprudenceRef } from "@/lib/catalogue-sources";
+
+/** Budget du bouton « Extraire les propositions » (plus large que le lot auto). */
+const BUDGET_EXTRACTION_LOT = 30;
 
 export type VeilleState =
   | { error?: string; ok?: boolean; message?: string }
@@ -120,5 +128,127 @@ export async function relancerVeille(_prev: VeilleState): Promise<VeilleState> {
       res.totalRetenues > 0
         ? `${res.totalRetenues} nouvelle(s) publication(s) pertinente(s).`
         : "Aucune nouvelle publication pertinente.",
+  };
+}
+
+/**
+ * Extrait la proposition structurée (articles retenus + règle dégagée) d'une
+ * publication — bouton unitaire. L'extraction ne valide rien : l'admin décide
+ * ensuite (valider → PROPOSEE, ou écarter).
+ */
+export async function extrairePropositionAction(
+  _prev: VeilleState,
+  formData: FormData,
+): Promise<VeilleState> {
+  await requireJuriste();
+  const id = String(formData.get("id") ?? "");
+  if (!id) return { error: "Source introuvable." };
+
+  const res = await extrairePropositionSource(id);
+  revalidatePath("/dashboard/juriste/veille");
+  if (!res.ok) return { error: res.motif ?? "Extraction impossible." };
+  return res.proposition?.etat === "incomplet"
+    ? {
+        error: `Proposition incomplète : ${res.proposition.motif ?? "à vérifier"}. Le bouton Valider reste désactivé.`,
+      }
+    : {
+        ok: true,
+        message:
+          "Proposition extraite : articles retenus par la juridiction et règle dégagée — à valider ou écarter.",
+      };
+}
+
+/** Extrait toutes les propositions en attente (lot à budget élargi). */
+export async function extrairePropositionsLot(
+  _prev: VeilleState,
+): Promise<VeilleState> {
+  await requireJuriste();
+  const bilan = await extrairePropositionsEnAttente(BUDGET_EXTRACTION_LOT);
+  revalidatePath("/dashboard/juriste/veille");
+  const total = bilan.extraites + bilan.incompletes + bilan.echecs;
+  if (total === 0) {
+    return {
+      message:
+        "Rien à extraire : toutes les publications sont déjà traitées, ou l'IA est indisponible.",
+    };
+  }
+  return {
+    ok: true,
+    message: `${bilan.extraites} proposition(s) extraite(s), ${bilan.incompletes} incomplète(s), ${bilan.echecs} en échec.`,
+  };
+}
+
+/**
+ * Valide la proposition extraite d'une publication : crée la faille en
+ * **PROPOSEE** (pré-remplie : articles + règle + jurisprudence) — jamais en
+ * ACTIVE. Décision **admin seul** (`requireAdmin`) ; le template de lettre
+ * reste à rédiger dans la bibliothèque, l'activation suivant la procédure
+ * habituelle (`estActivable`).
+ */
+export async function validerPropositionSource(
+  _prev: VeilleState,
+  formData: FormData,
+): Promise<VeilleState> {
+  const user = await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  if (!id) return { error: "Source introuvable." };
+
+  const source = await prisma.sourceJuridique.findUnique({ where: { id } });
+  if (!source) return { error: "Source introuvable." };
+  if (source.statut !== "NOUVEAU") {
+    return { error: "Publication déjà traitée (promue ou écartée)." };
+  }
+  const prop = source.proposition as PropositionVeille | null;
+  if (!prop || prop.etat !== "extrait") {
+    return {
+      error:
+        "Proposition absente ou incomplète : relancez l'extraction, puis vérifiez-la avant validation.",
+    };
+  }
+
+  const titreFaille =
+    prop.titre.length >= 5 ? prop.titre : source.titre.slice(0, 120);
+  const articleLoi = prop.articles.join(" ; ");
+  if (articleLoi.length < 2) return { error: "Aucun article retenu." };
+
+  const ref: JurisprudenceRef = {
+    reference: [source.ecli ?? source.reference ?? source.idDila]
+      .filter(Boolean)
+      .join(" — "),
+    juridiction: source.juridiction ?? source.source,
+    date: source.dateSource ? source.dateSource.toISOString().slice(0, 10) : null,
+    url: source.url,
+    verifiee: false,
+    resume: prop.resume || prop.extraits[0] || null,
+  };
+
+  const faille = await prisma.failleJuridique.create({
+    data: {
+      typeInfraction: prop.typeInfraction,
+      titreFaille,
+      articleLoi,
+      regle: prop.regle,
+      templateLettre: "",
+      source: source.url ?? source.archive,
+      jurisprudence: [ref] as unknown as Prisma.InputJsonValue,
+      statut: "PROPOSEE",
+    },
+  });
+
+  await prisma.sourceJuridique.update({
+    where: { id },
+    data: {
+      statut: "PROMU",
+      failleId: faille.id,
+      reviewedAt: new Date(),
+      reviewedBy: user.id,
+    },
+  });
+
+  revalidatePath("/dashboard/juriste/veille");
+  revalidatePath("/dashboard/juriste/failles");
+  return {
+    ok: true,
+    message: `Proposition validée : « ${titreFaille} » créée en PROPOSEE. Rédigez le template dans la bibliothèque, puis activez-la.`,
   };
 }

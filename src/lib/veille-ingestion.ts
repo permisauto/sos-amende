@@ -37,6 +37,16 @@ import {
   urlArchiveTa,
 } from "@/lib/veille-ta";
 import {
+  BUDGET_EXTRACTION,
+  BUDGET_TEMPS_EXTRACTION_MS,
+  SCORE_SEUIL_EXTRACTION,
+  extraireProposition,
+  extractionDispo,
+  propositionEchec,
+  type PropositionVeille,
+  type PublicationVeille,
+} from "@/lib/veille-extraction";
+import {
   estPertinente,
   redigerBrouillonRegle,
   scorerPertinence,
@@ -393,10 +403,158 @@ export async function executerVeilleDila(
     sources.push(await ingererSource(code));
   }
   if (!filtre || filtre.has("TA")) sources.push(await ingererSourceTa());
+  // Extraction des propositions (règle + articles) sur les publications
+  // retenues : best-effort, bornée en nombre et en temps, jamais bloquante
+  // — les appels restent stockés au fil de l'eau.
+  await extraireApresIngestion();
   return {
     sources,
     totalRetenues: sources.reduce((n, s) => n + s.retenues, 0),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Extraction des propositions (lot L) : règle dégagée + articles retenus
+// ---------------------------------------------------------------------------
+
+export type BilanExtraction = {
+  extraites: number;
+  incompletes: number;
+  echecs: number;
+};
+
+const BILAN_VIDE: BilanExtraction = { extraites: 0, incompletes: 0, echecs: 0 };
+
+function publicationDepuisRow(row: SourceJuridique): PublicationVeille {
+  return {
+    titre: row.titre,
+    juridiction: row.juridiction,
+    dateSource: row.dateSource ? row.dateSource.toISOString().slice(0, 10) : null,
+    ecli: row.ecli,
+    url: row.url,
+    source: row.source,
+    contenu: row.contenu,
+    citations: Array.isArray(row.citations) ? (row.citations as string[]) : [],
+  };
+}
+
+function propositionEnregistree(row: SourceJuridique): { etat?: string } | null {
+  return row.proposition as { etat?: string } | null;
+}
+
+/**
+ * Extrait la proposition d'une publication et la stocke (`SourceJuridique
+ * .proposition`) : état `extrait`/`incomplet`, ou `echec` avec motif pour
+ * relance ultérieure. Ne lève jamais (null = écriture impossible).
+ */
+async function extraireEtStocker(
+  row: SourceJuridique,
+): Promise<PropositionVeille | null> {
+  try {
+    const res = await extraireProposition(publicationDepuisRow(row));
+    const proposition: PropositionVeille = res.ok
+      ? res.proposition
+      : propositionEchec(res.motif);
+    await prisma.sourceJuridique.update({
+      where: { id: row.id },
+      data: { proposition: proposition as unknown as Prisma.InputJsonValue },
+    });
+    return proposition;
+  } catch (e) {
+    console.error(`veille-extraction: ${row.id} impossible`, e);
+    return null;
+  }
+}
+
+/**
+ * Extrait les propositions des publications NOUVEAU encore non extraites
+ * (ou en échec), mieux scorées d'abord : `limite` au plus, score >= `minScore`,
+ * boîte de temps `BUDGET_TEMPS_EXTRACTION_MS`. Sans IA (off/sans clé) : no-op.
+ */
+export async function extrairePropositionsEnAttente(
+  limite = BUDGET_EXTRACTION,
+  minScore = SCORE_SEUIL_EXTRACTION,
+): Promise<BilanExtraction> {
+  const dispo = extractionDispo();
+  if (dispo === "off" || dispo === "absent") return { ...BILAN_VIDE };
+
+  let rows: SourceJuridique[];
+  try {
+    rows = await prisma.sourceJuridique.findMany({
+      where: { statut: "NOUVEAU", score: { gte: minScore } },
+      orderBy: [{ score: "desc" }, { createdAt: "desc" }],
+      take: 100,
+    });
+  } catch (e) {
+    console.error("veille-extraction: lecture des candidats impossible", e);
+    return { ...BILAN_VIDE };
+  }
+
+  const candidats = rows
+    .filter((r) => {
+      const p = propositionEnregistree(r);
+      return !p || p.etat === "echec";
+    })
+    .slice(0, limite);
+
+  const bilan = { ...BILAN_VIDE };
+  const fin = Date.now() + BUDGET_TEMPS_EXTRACTION_MS;
+  for (const row of candidats) {
+    if (Date.now() > fin) break;
+    const prop = await extraireEtStocker(row);
+    if (prop?.etat === "extrait") bilan.extraites++;
+    else if (prop?.etat === "incomplet") bilan.incompletes++;
+    else bilan.echecs++;
+  }
+  return bilan;
+}
+
+/** Extrait la proposition d'une publication précise (bouton unitaire). */
+export async function extrairePropositionSource(
+  id: string,
+): Promise<{ ok: boolean; proposition?: PropositionVeille; motif?: string }> {
+  const dispo = extractionDispo();
+  if (dispo === "off" || dispo === "absent") {
+    return {
+      ok: false,
+      motif:
+        dispo === "off"
+          ? "extraction IA désactivée (VERIF_IA_PROVIDER=off)"
+          : "IA indisponible (GEMINI_API_KEY absente)",
+    };
+  }
+  let row: SourceJuridique | null;
+  try {
+    row = await prisma.sourceJuridique.findUnique({ where: { id } });
+  } catch {
+    row = null;
+  }
+  if (!row) return { ok: false, motif: "Publication introuvable." };
+  if (row.statut !== "NOUVEAU") {
+    return { ok: false, motif: "Publication déjà traitée (promue ou écartée)." };
+  }
+  const prop = await extraireEtStocker(row);
+  if (!prop) return { ok: false, motif: "Extraction impossible (base)." };
+  if (prop.etat === "echec") return { ok: false, motif: prop.motif ?? "extraction en échec" };
+  return { ok: true, proposition: prop };
+}
+
+/** Extraction automatique post-ingestion : bornée, tracée, best-effort. */
+async function extraireApresIngestion(): Promise<void> {
+  try {
+    const bilan = await extrairePropositionsEnAttente();
+    const traitees = bilan.extraites + bilan.incompletes + bilan.echecs;
+    if (traitees === 0) return;
+    await enregistrerTraceAutoAlimentation({
+      campagne: "extraction-veille",
+      statut: bilan.echecs === 0 ? "OK" : "ECHEC",
+      traitees,
+      nouvelles: bilan.extraites,
+      detail: `extraites=${bilan.extraites} incompletes=${bilan.incompletes} echecs=${bilan.echecs}`,
+    });
+  } catch (e) {
+    console.error("veille-extraction: extraction automatique impossible", e);
+  }
 }
 
 // ---------------------------------------------------------------------------

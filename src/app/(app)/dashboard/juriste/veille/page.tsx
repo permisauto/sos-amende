@@ -16,7 +16,7 @@ export default async function VeillePage({
 }: {
   searchParams: Promise<{ s?: string | string[] }>;
 }) {
-  await requireJuriste();
+  const user = await requireJuriste();
   const { s } = await searchParams;
   const filtre = typeof s === "string" ? s.toUpperCase() : "NOUVEAU";
   const compteurs: Record<"NOUVEAU" | "PROMU" | "ECARTE", number> = {
@@ -48,6 +48,7 @@ export default async function VeillePage({
     compteurs.ECARTE = groupes.find((g) => g.statut === "ECARTE")?._count ?? 0;
     sources = rows.map((r) => ({
       id: r.id,
+      statut: r.statut,
       source: r.source,
       nature: r.nature,
       titre: r.titre,
@@ -61,6 +62,7 @@ export default async function VeillePage({
       matchsAppui: Array.isArray(r.matchsAppui) ? (r.matchsAppui as string[]) : [],
       score: r.score,
       brouillonRegle: r.brouillonRegle,
+      proposition: (r.proposition as SourceDto["proposition"]) ?? null,
       archive: r.archive,
     }));
   } catch (e) {
@@ -82,9 +84,11 @@ export default async function VeillePage({
       <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
         <strong>Gardez-vous de l&apos;avis juridique.</strong> Une publication
         retenue l&apos;est parce qu&apos;elle contient un terme de votre domaine,
-        pas parce qu&apos;elle constitue une faille. Lire la source primaire,
-        vérifier l&apos;article, puis rédiger la règle et la lettre : la
-        promotion crée une simple proposition, jamais une faille active.
+        pas parce qu&apos;elle constitue une faille. L&apos;extraction IA propose
+        les articles retenus par la juridiction et une règle dégagée,{" "}
+        <strong>bornées aux verbatims du texte</strong> : un administrateur
+        valide (→ proposition de faille) ou écarte. Jamais de faille active sans
+        rédaction du template et activation humaines.
       </p>
 
       <nav className="mt-4 flex flex-wrap gap-2 text-xs">
@@ -111,7 +115,7 @@ export default async function VeillePage({
 
       <div className="mt-5">
         {dbOk ? (
-          <VeilleList sources={sources} />
+          <VeilleList sources={sources} role={user.role} />
         ) : (
           <p className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-800">
             Base indisponible : impossible de charger la veille.

@@ -16,6 +16,8 @@ function libelleCampagne(campagne: string): string {
   const labels: Record<string, string> = {
     catalogue: "Catalogue des failles",
     "veille-jorf": "Veille JORF (éditions)",
+    "veille-ta": "Veille TA (tribunaux administratifs)",
+    "extraction-veille": "Extraction des propositions IA (veille)",
     "auto-enrichissement": "Auto-enrichissement IA (post-OCR)",
   };
   return labels[campagne] ?? campagne;

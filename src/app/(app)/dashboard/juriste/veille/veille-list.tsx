@@ -3,13 +3,18 @@
 import { useActionState, useState } from "react";
 import {
   ecarterSource,
+  extrairePropositionAction,
+  extrairePropositionsLot,
   promouvoirSource,
   relancerVeille,
+  validerPropositionSource,
   type VeilleState,
 } from "./actions";
+import type { PropositionVeille } from "@/lib/veille-extraction";
 
 export type SourceDto = {
   id: string;
+  statut: string;
   source: string;
   nature: string;
   titre: string;
@@ -23,6 +28,7 @@ export type SourceDto = {
   matchsAppui: string[];
   score: number;
   brouillonRegle: string | null;
+  proposition: PropositionVeille | null;
   archive: string | null;
 };
 
@@ -57,6 +63,200 @@ function Bandeau({ state }: { state: VeilleState }) {
   }
   return null;
 }
+
+function dateCourteFr(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
+}
+
+type ActionEtat = {
+  action: (formData: FormData) => void;
+  pending: boolean;
+  state: VeilleState;
+};
+
+/**
+ * Proposition structurée extraite par IA (règle dégagée + articles retenus),
+ * bornée aux verbatims du texte. L'extraction est ouverte au juriste comme à
+ * l'admin ; la **validation** (→ faille PROPOSEE) est réservée à l'admin.
+ */
+function BlocProposition({
+  s,
+  role,
+  extract,
+  valider,
+}: {
+  s: SourceDto;
+  role: string;
+  extract: ActionEtat;
+  valider: ActionEtat;
+}) {
+  const p = s.proposition;
+
+  const messages = (
+    <>
+      {extract.state?.error && (
+        <p className="mt-2 text-xs text-red-700">{extract.state.error}</p>
+      )}
+      {extract.state?.message && (
+        <p className="mt-2 text-xs text-emerald-700">{extract.state.message}</p>
+      )}
+      {valider.state?.error && (
+        <p className="mt-2 text-xs text-red-700">{valider.state.error}</p>
+      )}
+      {valider.state?.message && (
+        <p className="mt-2 text-xs text-emerald-700">{valider.state.message}</p>
+      )}
+    </>
+  );
+
+  const boutonExtraire = s.statut === "NOUVEAU" && (
+    <form action={extract.action}>
+      <input type="hidden" name="id" value={s.id} />
+      <button
+        type="submit"
+        disabled={extract.pending}
+        data-testid="extraire-proposition"
+        className="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-white disabled:opacity-50"
+      >
+        {extract.pending
+          ? "Extraction…"
+          : p
+            ? "Relancer l'extraction"
+            : "Extraire la proposition"}
+      </button>
+    </form>
+  );
+
+  if (!p) {
+    return (
+      <div
+        className="mt-4 rounded-xl border border-dashed border-zinc-300 bg-zinc-50 p-4"
+        data-testid="proposition-encart"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs text-zinc-600">
+            <strong className="text-zinc-800">
+              Proposition IA (articles + règle dégagée) : non extraite.
+            </strong>
+            {s.score < SCORE_SEUIL_UI &&
+              " L'extraction automatique cible les publications mieux notées : lancez-la manuellement."}
+          </p>
+          {boutonExtraire}
+        </div>
+        {messages}
+      </div>
+    );
+  }
+
+  if (p.etat === "echec") {
+    return (
+      <div
+        className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4"
+        data-testid="proposition-encart"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs text-red-800">
+            <strong>Extraction en échec</strong> — {p.motif}
+          </p>
+          {boutonExtraire}
+        </div>
+        {messages}
+      </div>
+    );
+  }
+
+  const complet = p.etat === "extrait";
+  return (
+    <div
+      className={`mt-4 rounded-xl border p-4 ${
+        complet ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"
+      }`}
+      data-testid="proposition-encart"
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <span
+          className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+            complet
+              ? "bg-emerald-100 text-emerald-800"
+              : "bg-amber-100 text-amber-800"
+          }`}
+        >
+          {complet
+            ? `Proposition extraite (IA) — ${dateCourteFr(p.extraitLe)}`
+            : "Proposition incomplète (IA)"}
+        </span>
+        <span className="rounded-full border border-zinc-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-zinc-700">
+          {p.typeInfraction === "SUSPENSION" ? "Suspension" : "Amende"}
+        </span>
+        {p.articles.map((a) => (
+          <span
+            key={a}
+            className="rounded-full border border-emerald-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-emerald-900"
+          >
+            {a}
+          </span>
+        ))}
+      </div>
+
+      {!complet && (
+        <p className="mt-2 text-xs font-medium text-amber-800">{p.motif}</p>
+      )}
+
+      <p className="mt-3 text-xs font-semibold text-zinc-800">Règle dégagée</p>
+      <p className="mt-0.5 text-sm text-zinc-700">{p.regle || "—"}</p>
+
+      {p.resume && (
+        <>
+          <p className="mt-2 text-xs font-semibold text-zinc-800">
+            Objet de la décision
+          </p>
+          <p className="mt-0.5 text-sm text-zinc-700">{p.resume}</p>
+        </>
+      )}
+
+      {p.extraits.length > 0 && (
+        <ul className="mt-2 space-y-1 border-l-2 border-zinc-200 pl-3">
+          {p.extraits.map((e, i) => (
+            <li key={i} className="text-xs text-zinc-600">
+              « {e} »
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {complet && s.statut === "NOUVEAU" && role === "ADMIN" && (
+          <form action={valider.action}>
+            <input type="hidden" name="id" value={s.id} />
+            <button
+              type="submit"
+              disabled={valider.pending}
+              data-testid="valider-proposition"
+              className="rounded-full bg-emerald-700 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-800 disabled:opacity-50"
+            >
+              {valider.pending
+                ? "Validation…"
+                : "Valider la proposition (→ faille PROPOSEE)"}
+            </button>
+          </form>
+        )}
+        {complet && s.statut === "NOUVEAU" && role !== "ADMIN" && (
+          <p className="text-[11px] text-zinc-600">
+            En attente de validation par un administrateur.
+          </p>
+        )}
+        {boutonExtraire}
+      </div>
+      {messages}
+    </div>
+  );
+}
+
+/** Score minimal partagé avec l'extraction automatique (`veille-extraction`). */
+const SCORE_SEUIL_UI = 12;
 
 /** Formulaire de promotion : crée une proposition de faille à compléter. */
 function Promotion({ s }: { s: SourceDto }) {
@@ -137,10 +337,18 @@ function Promotion({ s }: { s: SourceDto }) {
   );
 }
 
-function CarteSource({ s }: { s: SourceDto }) {
+function CarteSource({ s, role }: { s: SourceDto; role: string }) {
   const [ouvert, setOuvert] = useState(false);
   const [stateEcart, actionEcart, pendingEcart] = useActionState<VeilleState, FormData>(
     ecarterSource,
+    undefined,
+  );
+  const [stateExtract, actionExtract, pendingExtract] = useActionState<VeilleState, FormData>(
+    extrairePropositionAction,
+    undefined,
+  );
+  const [stateValider, actionValider, pendingValider] = useActionState<VeilleState, FormData>(
+    validerPropositionSource,
     undefined,
   );
 
@@ -193,6 +401,21 @@ function CarteSource({ s }: { s: SourceDto }) {
         </ul>
       )}
 
+      <BlocProposition
+        s={s}
+        role={role}
+        extract={{
+          action: actionExtract,
+          pending: pendingExtract,
+          state: stateExtract,
+        }}
+        valider={{
+          action: actionValider,
+          pending: pendingValider,
+          state: stateValider,
+        }}
+      />
+
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -237,11 +460,26 @@ function CarteSource({ s }: { s: SourceDto }) {
   );
 }
 
-export function VeilleList({ sources }: { sources: SourceDto[] }) {
+export function VeilleList({
+  sources,
+  role,
+}: {
+  sources: SourceDto[];
+  role: string;
+}) {
   const [state, action, pending] = useActionState<VeilleState, FormData>(
     relancerVeille,
     undefined,
   );
+  const [stateLot, actionLot, pendingLot] = useActionState<VeilleState, FormData>(
+    extrairePropositionsLot,
+    undefined,
+  );
+  const candidatsExtraction = sources.filter(
+    (s) =>
+      s.statut === "NOUVEAU" &&
+      (!s.proposition || s.proposition.etat === "echec"),
+  ).length;
 
   return (
     <div className="space-y-4">
@@ -250,18 +488,36 @@ export function VeilleList({ sources }: { sources: SourceDto[] }) {
           {sources.length} publication{sources.length > 1 ? "s" : ""} en attente
           de lecture
         </p>
-        <form action={action}>
-          <button
-            type="submit"
-            disabled={pending}
-            className="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-50"
-          >
-            {pending ? "Interrogation en cours…" : "Relancer la veille maintenant"}
-          </button>
-        </form>
+        <div className="flex flex-wrap items-center gap-2">
+          {candidatsExtraction > 0 && (
+            <form action={actionLot}>
+              <button
+                type="submit"
+                disabled={pendingLot}
+                data-testid="extraire-lot"
+                className="rounded-full border border-emerald-300 bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-100 disabled:opacity-50"
+              >
+                {pendingLot
+                  ? "Extraction en cours…"
+                  : `Extraire les propositions (${candidatsExtraction})`}
+              </button>
+            </form>
+          )}
+          <form action={action}>
+            <button
+              type="submit"
+              disabled={pending}
+              className="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-50"
+            >
+              {pending ? "Interrogation en cours…" : "Relancer la veille maintenant"}
+            </button>
+          </form>
+        </div>
       </div>
 
       {state?.message && <Bandeau state={state} />}
+      {stateLot?.message && <Bandeau state={stateLot} />}
+      {stateLot?.error && <Bandeau state={stateLot} />}
 
       {sources.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-zinc-300 p-6 text-sm text-zinc-500">
@@ -271,7 +527,7 @@ export function VeilleList({ sources }: { sources: SourceDto[] }) {
           touchent la contestation d&apos;amendes routières.
         </p>
       ) : (
-        sources.map((s) => <CarteSource key={s.id} s={s} />)
+        sources.map((s) => <CarteSource key={s.id} s={s} role={role} />)
       )}
     </div>
   );

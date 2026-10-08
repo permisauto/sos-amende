@@ -580,3 +580,78 @@ refusé : types KBIS/attestation, n° Pièce 1/2/3 du bordereau).
 - `verif-ia.test.ts` (+2) : retry 503 -> 200 en 2 appels (source `ia`), 404 non
   retente (1 seul appel, motif `HTTP 404`).
 - Bilan : **541 tests unitaires** (tsc / lint / tests verts), e2e 51/51.
+
+---
+
+## L. VEILLE — PROPOSITIONS EXTRAITES PAR IA, DÉCISION HUMAINE (2026-10-08)
+
+Arbitrages validés par le client : déclenchement **auto + borné** (extraction en
+fin d'ingestion, budget borné, boutons manuels pour le reste) et décision
+**admin seul** (le juriste propose/relance, jamais valide).
+
+### L1 — Extraction bornée (`src/lib/veille-extraction.ts`)
+
+- Module pur (aucun accès DB) : `PropositionVeille {etat: "extrait" |
+  "incomplet" | "echec", titre, typeInfraction, articles[], regle, resume,
+  extraits[], motif?, extraitLe}`, `PublicationVeille`, constantes
+  `SCORE_SEUIL_EXTRACTION = 12`, `BUDGET_EXTRACTION = 15`,
+  `BUDGET_TEMPS_EXTRACTION_MS = 150 000`.
+- `construteurPromptExtraction` demande un **JSON strict** (titre,
+  typeInfraction, articles, règle dégagée, résumé, extraits) et interdit
+  explicitement d'inventer un article absent du texte.
+- `parserExtraction` = garde-fou anti-hallucination : **chaque article doit
+  figurer verbatim dans le contenu** (citations « … » acceptées avec un seul
+  suffixe retiré) sinon il est retiré ; **chaque extrait fondamental doit être
+  retrouvé** dans le contenu, sinon l'état est `incomplet` (bouton Valider
+  masqué côté UI) ; dédoublonnage, bornes sur les longueurs.
+- `extractionMock` (dev/E2E, `VERIF_IA_PROVIDER=mock`) : regex d'article
+  `(?:article|art\.)\s*([LRDC]…)` sur le contenu, typeInfraction deviné par
+  mots-clés, règle mock — déterministe, zéro appel réseau.
+- `extractionDispo()` : `off`/clé `GEMINI_API_KEY` absente = no-op (rien
+  stocké), mock = simulé, sinon Gemini.
+- `src/lib/ia-gemini.ts` (nouveau) : `appelerGeminiJson(prompt, etiquette)` —
+  timeout 30 s (`AbortSignal.timeout`), 3 tentatives sur 429/5xx (backoff
+  400/800 ms), 4xx jamais retenté, jamais d'exception (résultat
+  `{ok, texte, motif}`) ; **`verif-ia.ts` refactorisé dessus** (19 tests
+  préservés).
+
+### L2 — Circuit complet (`veille-ingestion` + actions + UI)
+
+- **Stockage** : `SourceJuridique.proposition` (Json) — migration
+  `20261008000000_add_proposition_veille`.
+- **Déclenchement auto** : `extraireApresIngestion()` est appelé en fin
+  d'`executerVeilleDila` (best-effort, jamais bloquant) →
+  `extrairePropositionsEnAttente(15)` : sources `NOUVEAU`, score ≥ 12, sans
+  proposition ou `etat = "echec"` (les échecs réseau sont donc relancés au
+  passage suivant), boîte de temps 150 s, trace `AutoAlimentationTrace`
+  (campagne `extraction-veille`).
+- **Déclenchement manuel** : `extrairePropositionSource(id)` (unitaire, tout
+  score, statut `NOUVEAU` exigé) + bouton de lot `extraire-lot` (budget 30).
+- **Actions** (`veille/actions.ts`) : `extrairePropositionAction`
+  (`requireJuriste`), `extrairePropositionsLot`,
+  **`validerPropositionSource` = `requireAdmin`** → crée la `FailleJuridique`
+  en `PROPOSEE` (titre/règle/articles pré-remplis depuis la proposition,
+  `templateLettre: ""`, `jurisprudence` `verifiee: false`) et passe la source
+  en `PROMU` (`reviewedBy`/`reviewedAt`) — **jamais `ACTIVE`** : l'activation
+  reste le circuit existant (rédaction du template + `estActivable`).
+- **UI** (`veille-list.tsx`, `BlocProposition`) : testids
+  `proposition-encart` / `extraire-proposition` / `valider-proposition` /
+  `extraire-lot` ; états affichés « non extraite » → « Proposition extraite
+  (IA) » (titre, articles, règle dégagée, résumé) ou « incomplète » /
+  « échec » ; le non-admin ne voit **jamais** le bouton Valider et lit
+  « En attente de validation par un administrateur » ; `page.tsx` transmet le
+  `role` ; libellés de campagne ajoutés : `veille-ta`, `extraction-veille`.
+
+### Tests
+
+- `veille-extraction.test.ts` (15) : normalisation/verbatim, prompt, parser
+  (articles hors contenu retirés, extrait manquant → `incomplet`, bornes),
+  mock déterministe, providers (`off` = no-op).
+- `verif-ia.test.ts` (19, inchangés après refacto `ia-gemini`).
+- `e2e/veille-proposition.spec.ts` : publication grainée **en début de test**
+  (SQL idempotent, retry déterministe — le seed a été sorti de
+  `global-setup.cjs`) → juriste extrait sans pouvoir valider → **déconnexion**
+  avant le 2ᵉ `loginAs` (sinon `/login` redirige vers le dashboard ouvert) →
+  admin valide → sortie de « À lire » + badge « Proposition
+  (auto-alimentation) » en bibliothèque.
+- Bilan : **556 tests unitaires** (tsc / lint / verts), **e2e 52/52**.
