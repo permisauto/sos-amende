@@ -4,6 +4,7 @@ import {
   MOTS_CLES_AMBIGUS,
   MOTS_CLES_APPUI,
   MOTS_CLES_CORE,
+  MOTS_CLES_EXCLUS,
   SEUIL_PERTINENCE,
   estPertinente,
   extraireCitations,
@@ -57,6 +58,13 @@ describe("veille-perteinence — dictionnaire", () => {
     expect(MOTS_CLES_AMBIGUS.filter((m) => core.has(m.terme) || appui.has(m.terme))).toEqual(
       [],
     );
+    // Les exclusions ne se confondent jamais avec un terme qualifiant/appui.
+    const excl = new Set(MOTS_CLES_EXCLUS);
+    expect(MOTS_CLES_CORE.filter((m) => excl.has(m.terme))).toEqual([]);
+    expect(MOTS_CLES_APPUI.filter((m) => excl.has(m.terme))).toEqual([]);
+    expect(MOTS_CLES_AMBIGUS.filter((m) => excl.has(m.terme))).toEqual([]);
+    expect(MOTS_CLES_EXCLUS.length).toBeGreaterThanOrEqual(10);
+    expect(new Set(MOTS_CLES_EXCLUS).size).toBe(MOTS_CLES_EXCLUS.length);
   });
 
   it("donne un poids positif à tous les termes", () => {
@@ -148,8 +156,10 @@ retrait devant le tribunal administratif.`;
     expect(p.matchsAppui).toContain("éthylotest");
     expect(p.matchsAppui).toContain("alcoolémie");
     expect(p.matchsAppui).toContain("notification");
-    // …mais aucun terme qualifiant du domaine routier n'est présent.
+    // …aucun terme qualifiant du domaine routier n'est présent…
     expect(p.matchsCore).toEqual([]);
+    // …et la famille droit du travail rejette par exclusion.
+    expect(p.matchsExclus).toContain("inspection du travail");
     expect(estPertinente(p)).toBe(false);
   });
 
@@ -258,6 +268,7 @@ describe("veille-perteinence — filtre de pertinence", () => {
       matchsCore: [] as string[],
       matchsAppui: ["contestation"] as string[],
       matchs: ["contestation"] as string[],
+      matchsExclus: [] as string[],
       citations: ["une phrase assez longue pour être retenue par le filtre"],
     };
     expect(estPertinente(p)).toBe(false);
@@ -266,6 +277,162 @@ describe("veille-perteinence — filtre de pertinence", () => {
   it("écarte une publication pertinente en score mais sans passage citable", () => {
     const p = scorerPertinence(source({ contenu: "code de la route" }));
     expect(p.matchsCore.length).toBeGreaterThan(0);
+    expect(estPertinente(p)).toBe(false);
+  });
+});
+
+describe("veille-perteinence — preuve de sujet stricte", () => {
+  it("retient un unique terme core fort (poids ≥ 6) sous réserve du score", () => {
+    // « code de la route » seul suffit : c'est le cas du texte alcoolémie.
+    const p = scorerPertinence(source({ contenu: CONTENU_ALCOOL }));
+    expect(p.matchsCore).toEqual(["code de la route"]);
+    expect(estPertinente(p)).toBe(true);
+  });
+
+  it("rejette un unique terme core faible, même répété et même score haut", () => {
+    // Motif réel des 18 écartés : « code de la sécurité intérieure » seul
+    // (CAA Lyon 25LY00276, CE référé 519906, Cass. criminelle du 08/09).
+    const p = scorerPertinence(
+      source({
+        contenu:
+          "Le code de la sécurité intérieure s'applique à la présente procédure. ".repeat(5) +
+          "Le tribunal administratif, après mise en demeure et notification, a écarté la contestation et la prescription soulevée. ".repeat(3),
+      }),
+    );
+    expect(p.matchsCore).toEqual(["code de la sécurité intérieure"]);
+    expect(p.score).toBeGreaterThanOrEqual(SEUIL_PERTINENCE);
+    expect(estPertinente(p)).toBe(false);
+  });
+
+  it("retient deux termes core distincts même faibles", () => {
+    const p = scorerPertinence(
+      source({
+        contenu:
+          "La décision contestée porte sur le retrait de points et l'application du code de la sécurité intérieure. ".repeat(3) +
+          "Le tribunal administratif a mis en demeure le requérant après notification. ".repeat(3),
+      }),
+    );
+    expect(p.matchsCore).toContain("retrait de points");
+    expect(p.matchsCore).toContain("code de la sécurité intérieure");
+    expect(estPertinente(p)).toBe(true);
+  });
+
+  it("ne laisse jamais un terme ambigu (éthylomètre) qualifier seul", () => {
+    const p = scorerPertinence(
+      source({ contenu: "L'éthylomètre a été réquisitionné lors du contrôle. ".repeat(6) }),
+    );
+    expect(p.matchsCore).toEqual([]);
+    expect(p.matchsAppui).toContain("éthylomètre");
+    expect(estPertinente(p)).toBe(false);
+  });
+});
+
+describe("veille-perteinence — termes hors-sujet (rétro-calibration, 18 publications réelles)", () => {
+  /**
+   * Chaque fixture rejoue le profil réel d'une publication ingérée puis
+   * écartée à la main par le juriste (prod, 2026-10) : sous l'ancien filtre
+   * elle était retenue (score ≥ 12 + ≥ 1 terme core), sous le filtre strict
+   * elle est rejetée par les exclusions ou par la preuve de sujet.
+   */
+  it("écarte la fiscalité malgré un core fort (CAA Versailles 26VE00475)", () => {
+    const p = scorerPertinence(
+      source({
+        titre: "CAA de VERSAILLES, 1ère chambre, 29/09/2026, 26VE00475",
+        contenu:
+          "La société conteste la redevance de stationnement instituée par la commune : " +
+          "le stationnement sur la voie publique est facturé au titre d'un impôt local. " +
+          "Le stationnement résidentiel relève de la fiscalité municipale et la majoration de l'impôt est contestée. " +
+          "La redevance de stationnement s'applique au stationnement des véhicules légers.",
+      }),
+    );
+    expect(p.matchsCore).toContain("stationnement");
+    expect(p.matchsExclus).toContain("impôt");
+    expect(p.matchsExclus).toContain("fiscal");
+    expect(estPertinente(p)).toBe(false);
+  });
+
+  it("écarte l'urbanisme malgré deux cores (CAA Lyon 25LY01154)", () => {
+    const p = scorerPertinence(
+      source({
+        titre: "CAA de LYON, 5ème chambre, 01/10/2026, 25LY01154",
+        contenu:
+          "La société demande l'annulation du refus de permis d'aménager pris au motif " +
+          "que le terrain n'est pas en zone constructible selon le plan local d'urbanisme. " +
+          "L'urbanisme communal organise le stationnement de même que le code de la route organise la circulation. " +
+          "Le stationnement résidentiel fait l'objet d'un arrêté municipal.",
+      }),
+    );
+    expect(p.matchsCore).toContain("stationnement");
+    expect(p.matchsCore).toContain("code de la route");
+    expect(p.matchsExclus).toContain("urbanisme");
+    expect(p.matchsExclus).toContain("permis d'aménager");
+    expect(estPertinente(p)).toBe(false);
+  });
+
+  it("écarte le séjour des étrangers même avec une famille alcool forte (CAA Paris 26PA00484)", () => {
+    const p = scorerPertinence(
+      source({
+        titre: "CAA de PARIS, 8ème chambre, 06/10/2026, 26PA00484",
+        contenu:
+          "La requête tend au renouvellement du titre de séjour du demandeur d'asile. " +
+          "Il fait valoir que sa conduite en état d'ivresse et l'interdiction de conduire prononcée " +
+          "sont sans incidence sur son séjour en France et conteste la décision au titre du code de la sécurité intérieure.",
+      }),
+    );
+    expect(p.matchsCore).toContain("conduite en état d'ivresse");
+    expect(p.matchsCore).toContain("interdiction de conduire");
+    expect(p.matchsExclus).toContain("titre de séjour");
+    expect(p.matchsExclus).toContain("asile");
+    expect(estPertinente(p)).toBe(false);
+  });
+
+  it("écarte la formation professionnelle dont le libellé cite code de la route et permis de conduire (CAA Marseille ×3)", () => {
+    const p = scorerPertinence(
+      source({
+        titre: "CAA de MARSEILLE, 5ème chambre, 02/10/2026, 26MA00112",
+        contenu:
+          "La société de formation conteste l'interprétation des dispositifs de formation professionnelle " +
+          "au titre de l'article D. 6323-7 du code du travail. " +
+          "La prise en charge couvre notamment la préparation de l'épreuve théorique du code de la route " +
+          "et de l'épreuve pratique du permis de conduire des véhicules du groupe léger, " +
+          "ainsi que les actions de formation subventionnées par l'État.",
+      }),
+    );
+    expect(p.matchsCore).toContain("code de la route");
+    expect(p.matchsCore).toContain("permis de conduire");
+    expect(p.matchsExclus).toContain("formation professionnelle");
+    expect(p.matchsExclus).toContain("code du travail");
+    expect(estPertinente(p)).toBe(false);
+  });
+
+  it("écarte un agrément de centre de contrôle technique (CAA Bordeaux 24BX01993)", () => {
+    const p = scorerPertinence(
+      source({
+        titre: "CAA de BORDEAUX, 4ème chambre, 23/09/2026, 24BX01993",
+        contenu:
+          "La société exploitante conteste l'arrêté par lequel la préfète a suspendu l'agrément " +
+          "du centre de contrôle technique pour véhicules légers qu'elle exploite. Vu le code de la route ; " +
+          "le ministre des transports conclut au rejet de la requête.",
+      }),
+    );
+    expect(p.matchsCore).toContain("code de la route");
+    expect(p.matchsExclus).toContain("agrément");
+    expect(p.matchsExclus).toContain("contrôle technique");
+    expect(estPertinente(p)).toBe(false);
+  });
+
+  it("écarte le contentieux des armes (CAA Lyon 25LY00276)", () => {
+    const p = scorerPertinence(
+      source({
+        titre: "CAA de LYON, 3ème chambre, 30/09/2026, 25LY00276",
+        contenu:
+          "L'arrêté du préfet du Rhône ordonne la remise des armes et munitions de toute catégorie " +
+          "et le retrait de la validation du permis de chasse. Le requérant conteste cette mesure prise " +
+          "sur le fondement du code de la sécurité intérieure.",
+      }),
+    );
+    expect(p.matchsExclus).toContain("munitions");
+    expect(p.matchsExclus).toContain("permis de chasse");
     expect(estPertinente(p)).toBe(false);
   });
 });

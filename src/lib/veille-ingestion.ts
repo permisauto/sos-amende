@@ -2,7 +2,7 @@
  * Ingestion de la veille juridique DILA (auto-alimentation §H).
  *
  * Ce que fait le cron, pour chaque source surveillée (JADE quotidien, CASS
- * hebdomadaire, JORF quotidien) :
+ * hebdomadaire, JORF quotidien, TA mensuel — cf. `veille-ta.ts`) :
  *   1. lit l'index du répertoire officiel et extrait les noms d'archives ;
  *   2. ignore les archives déjà ingérées (déduplication par nom de fichier) ;
  *   3. télécharge les nouvelles, les décompresse en mémoire, les analyse ;
@@ -31,6 +31,12 @@ import {
   type SourceDila,
 } from "@/lib/veille-dila";
 import {
+  archiveTaCible,
+  lirePublicationsTa,
+  MARQUEUR_TA_RE,
+  urlArchiveTa,
+} from "@/lib/veille-ta";
+import {
   estPertinente,
   redigerBrouillonRegle,
   scorerPertinence,
@@ -39,6 +45,9 @@ import { enregistrerTraceAutoAlimentation } from "@/lib/auto-alimentation";
 
 const TIMEOUT_LISTING_MS = 15_000;
 const TIMEOUT_ARCHIVE_MS = 60_000;
+/** Le zip mensuel TA fait ~64 Mo : on laisse largement la marge. */
+const TIMEOUT_ARCHIVE_TA_MS = 180_000;
+export const TAILLE_MAX_ZIP_TA = 200 * 1024 * 1024;
 
 export const SOURCES_VEILLE: CodeSource[] = ["JADE", "CASS", "JORF"];
 
@@ -178,7 +187,7 @@ export async function enregistrerSource(
 }
 
 export type BilanSource = {
-  source: CodeSource;
+  source: CodeSource | "TA";
   archives: number;
   archive: string | null;
   publiees: number;
@@ -270,7 +279,111 @@ export type BilanVeille = {
   totalRetenues: number;
 };
 
-/** Exécution complète : toutes les sources surveillées, en série. */
+// ---------------------------------------------------------------------------
+// Source TA (tribunaux administratifs, zip mensuel)
+// ---------------------------------------------------------------------------
+
+/** Dernière archive mensuelle réellement ingérée (`TA_AAAAMM.zip`), ou null. */
+export async function derniereArchiveTa(): Promise<string | null> {
+  try {
+    const traces = await prisma.autoAlimentationTrace.findMany({
+      where: { campagne: "veille-ta" },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      select: { detail: true },
+    });
+    return dernierTokenValide(
+      traces.map((t) => t.detail),
+      MARQUEUR_TA_RE,
+    );
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Ingère le zip mensuel des TA, **une fois par mois, à partir du 8ᵉ jour**
+ * (`archiveTaCible`) et seulement s'il n'a pas déjà été traité (marqueur
+ * `derniere=`). Aucune trace hors fenêtre ni quand le mois est déjà ingéré :
+ * les traces ne disent que ce qui s'est réellement passé (téléchargement ou
+ * échec), utile pour l'encart « Dernières campagnes ».
+ *
+ * Journalisme ligne à ligne (générateur) : chaque XML est scoré et éventuel-
+ * lement persisté avant d'en lire un autre — jamais les 19 000 en mémoire.
+ * Ne lève jamais : échec réseau = trace ECHEC **sans** avancer le marqueur
+ * (le zip sera retéléchargé au prochain passage), analyse corrompue = trace
+ * ECHEC (le mois ne sera pas repassé, à reprendre à la main si besoin).
+ */
+export async function ingererSourceTa(): Promise<BilanSource> {
+  const bilan: BilanSource = {
+    source: "TA",
+    archives: 0,
+    archive: null,
+    publiees: 0,
+    retenues: 0,
+    erreur: null,
+  };
+
+  const cible = archiveTaCible(new Date());
+  if (!cible) return bilan; // jours 1→7 : zip pas encore stabilisé
+  const derniere = await derniereArchiveTa();
+  if (cible === derniere) return bilan; // mois déjà ingéré
+
+  let zip: Buffer | null = null;
+  try {
+    const res = await fetch(urlArchiveTa(cible), {
+      signal: AbortSignal.timeout(TIMEOUT_ARCHIVE_TA_MS),
+    });
+    if (res.ok) {
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (buf.length > 0 && buf.length <= TAILLE_MAX_ZIP_TA) zip = buf;
+    }
+  } catch {
+    zip = null;
+  }
+
+  if (!zip) {
+    bilan.erreur = `archive ${cible} illisible ou trop grosse`;
+    await enregistrerTraceAutoAlimentation({
+      campagne: "veille-ta",
+      statut: "ECHEC",
+      traitees: 0,
+      nouvelles: 0,
+      detail: `0 archive(s), derniere=${derniere ?? "aucune"}, 0 publication(s) — ERREUR: ${bilan.erreur}`,
+    });
+    return bilan;
+  }
+
+  bilan.archives = 1;
+  try {
+    for (const pub of lirePublicationsTa(zip)) {
+      bilan.publiees += 1;
+      if (await enregistrerSource(pub, cible)) bilan.retenues += 1;
+    }
+  } catch (e) {
+    console.error("veille-ta: archive illisible", cible, e);
+    bilan.erreur = `analyse ${cible} impossible — archive non marquée traitée`;
+  }
+  // Marqueur avancé seulement si l'archive a été lue en entier : sur un zip
+  // corrompu, le mois reste à reprendre.
+  if (!bilan.erreur) bilan.archive = cible;
+
+  await enregistrerTraceAutoAlimentation({
+    campagne: "veille-ta",
+    statut: bilan.erreur ? "ECHEC" : "OK",
+    traitees: bilan.publiees,
+    nouvelles: bilan.retenues,
+    detail: `${bilan.archives} archive(s), derniere=${
+      bilan.archive ?? derniere ?? "aucune"
+    }, ${bilan.retenues} publication(s) pertinente(s)${
+      bilan.erreur ? ` — ERREUR: ${bilan.erreur}` : ""
+    }`,
+  });
+
+  return bilan;
+}
+
+/** Exécution complète : les 3 sources quotidiennes DILA, puis la source TA. */
 export async function executerVeilleDila(
   filtre?: ReadonlySet<string>,
 ): Promise<BilanVeille> {
@@ -279,6 +392,7 @@ export async function executerVeilleDila(
     if (filtre && !filtre.has(code)) continue;
     sources.push(await ingererSource(code));
   }
+  if (!filtre || filtre.has("TA")) sources.push(await ingererSourceTa());
   return {
     sources,
     totalRetenues: sources.reduce((n, s) => n + s.retenues, 0),

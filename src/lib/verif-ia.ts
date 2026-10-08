@@ -232,31 +232,63 @@ export async function verifierAvecIa(
 
   try {
     const model = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": cle,
-        },
-        cache: "no-store",
-        body: JSON.stringify({
-          contents: [
-            { parts: [{ text: construirePrompt(faits, catalogue) }] },
-          ],
-          generationConfig: {
-            response_mime_type: "application/json",
-            temperature: 0.2,
+    const TIMEOUT_IA_MS = 30_000;
+    const TENTATIVES_IA = 3;
+    const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    let res: Response | undefined;
+    let statut = 0;
+    // Un 503 Gemini est presque toujours une surcharge transitoire : comme
+    // pour l'OCR, on retente avant d'abandonner sur la vérification par règles.
+    for (let essai = 1; essai <= TENTATIVES_IA; essai++) {
+      try {
+        res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-goog-api-key": cle,
+            },
+            cache: "no-store",
+            signal: AbortSignal.timeout(TIMEOUT_IA_MS),
+            body: JSON.stringify({
+              contents: [
+                { parts: [{ text: construirePrompt(faits, catalogue) }] },
+              ],
+              generationConfig: {
+                response_mime_type: "application/json",
+                temperature: 0.2,
+              },
+            }),
           },
-        }),
-      },
-    );
-    if (!res.ok) {
-      console.error("[verif-ia] generateContent HTTP", res.status);
+        );
+      } catch (e) {
+        // Timeout ou coupure réseau : même politique de retry.
+        console.error(
+          `[verif-ia] appel échoué (essai ${essai}/${TENTATIVES_IA}) :`,
+          e instanceof Error ? `${e.name}: ${e.message}` : String(e),
+        );
+        res = undefined;
+        if (essai === TENTATIVES_IA) throw e;
+        await pause(400 * essai);
+        continue;
+      }
+      if (res.ok) break;
+      statut = res.status;
+      const detail = (await res.text().catch(() => "")).slice(0, 400);
+      console.error(
+        `[verif-ia] generateContent HTTP ${statut} (essai ${essai}/${TENTATIVES_IA})${
+          detail ? ` — ${detail}` : ""
+        }`,
+      );
+      const transitoire = statut === 429 || statut >= 500;
+      if (!transitoire || essai === TENTATIVES_IA) break;
+      await pause(400 * essai);
+    }
+    if (!res?.ok) {
       return {
         source: "indisponible",
-        motif: `appel IA en échec (HTTP ${res.status}) — vérification par règles seule`,
+        motif: `appel IA en échec${statut ? ` (HTTP ${statut})` : ""} — vérification par règles seule`,
       };
     }
     const body = (await res.json()) as {

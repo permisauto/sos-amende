@@ -24,13 +24,13 @@ export async function ecarterSource(
   _prev: VeilleState,
   formData: FormData,
 ): Promise<VeilleState> {
-  await requireJuriste();
+  const user = await requireJuriste();
   const id = String(formData.get("id") ?? "");
   if (!id) return { error: "Source introuvable." };
 
   await prisma.sourceJuridique.update({
     where: { id },
-    data: { statut: "ECARTE", reviewedAt: new Date() },
+    data: { statut: "ECARTE", reviewedAt: new Date(), reviewedBy: user.id },
   });
   revalidatePath("/dashboard/juriste/veille");
   return { ok: true, message: "Publication écartée." };

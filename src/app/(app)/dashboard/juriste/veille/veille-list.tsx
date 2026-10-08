@@ -30,6 +30,7 @@ const SOURCE_LABEL: Record<string, string> = {
   JADE: "Jurisprudence administrative",
   CASS: "Cour de cassation",
   JORF: "Journal officiel",
+  TA: "Tribunaux administratifs",
 };
 
 function dateFr(iso: string | null): string {

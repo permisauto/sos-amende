@@ -486,3 +486,97 @@ refusé : types KBIS/attestation, n° Pièce 1/2/3 du bordereau).
   template, article absent → `""`, dédup, plafond `MAX_MOTIFS_NOUVEAUX`, id
   déterministe, observation courte écartée.
 - Bilan : **510 tests unitaires** (tsc ✓ / lint ✓), e2e 50/50 inchangés.
+
+## K. VEILLE JURIDIQUE — FILTRE STRICT, 4e SOURCE TA, IA ROBUSTE (2026-10-08)
+
+### K1 — Filtre anti-hors-sujet strict (`veille-perteinence.ts`)
+
+- Quatre verrous désormais **cumulatifs**, calibrés sur les 18 publications
+  réellement écartées à la main : (1) `MOTS_CLES_EXCLUS` — présence d'un terme
+  hors-sujet = rejet **net**, quel que soit le score (fiscal, urbanisme,
+  étranger/asile, travail/formation professionnelle, fonction publique, armes
+  composées, agréments/contrôle technique — chaque entrée sourcée doc par doc
+  sur le corpus) ; (2) **preuve de sujet** : au moins 2 cores distincts, ou 1 seul
+  core de poids >= `POIDS_PREUVE_SUJET` (6) ; (3) score >= 12 ; (4) au moins une
+  citation verbatim. `matchsExclus` exposé sur `Pertinence` (non stocké en base).
+- Arbitrages : `amende` / `contravention` **nus volontairement hors CORE**
+  (marqueurs de bruit présents dans le corpus asile/fiscal/fp/armes) ;
+  `éthylomètre` ajouté en AMBIGUS ; `interdiction de conduire`,
+  `conduite en etat d'ivresse`, `etat d'ivresse`, `avis de contravention` ajoutes
+  en CORE (poids 6/6/5/6).
+- Retro-calibration SQL plein texte sur les 18 documents reels : **18/18 rejetes**
+  (16 par exclusions, 2 par preuve de sujet seule) — tous etaient retenus par
+  l'ancien filtre (scores 13-30).
+
+### K2 — 4e source : tribunaux administratifs (zip mensuel)
+
+- Source retenue : `opendata.justice-administrative.fr/DTA/AAAAMM/TA_AAAAMM.zip`
+  (~64 Mo, ~19 000 XML par mois, un fichier par decision, repertoires `TA06/`…
+  `TA97/`, deux prefixes : `DTA_` decisions, `ORTA_` ordonnances). **JURICA est
+  absent de l'opendata DILA** (index : CASS/CIRCULAIRES/INCA/JADE/JORF/
+  JORFSIMPLE/KALI/LEGI) — l'alternative validee par le client est ce portail,
+  ingestion **1x/mois, le 8 du mois M+1** (choix « Zip mensuel »).
+- Fenetre : `archiveTaCible(date)` renvoie **null les jours 1 à 7** (le zip du
+  mois M est encore reecrit jusqu'a ~une semaine apres fin de mois), puis le zip
+  du mois precedent. Point de reprise = `derniere=TA_AAAAMM.zip` dans les traces
+  `veille-ta` (meme logique `dernierTokenValide` que la DILA). Trace ecrite
+  **seulement** au telechargement ou en echec : hors fenetre ou mois deja ingere
+  = silencieux (zéro bruit dans l'encart « Dernieres campagnes »), echec reseau
+  = ECHEC sans avancer le marqueur (retentente au passage suivant), analyse
+  corrompue = ECHEC non marquee traitee (le mois reste a reprendre).
+- `src/lib/zip.ts` : lecteur ZIP pur, sans dependance (table du repertoire
+  central — seule place ou les tailles existent quand le bit « data descriptor »
+  est leve), **generateur** (les 19k XML ne stationnent jamais en memoire),
+  methodes stored (0) / deflate (8), garde-fous anti zip-bomb (entree <= 50 Mo,
+  total <= 512 Mo, zip64 refuse, repertoire central corrompu refuse).
+- `src/lib/veille-ta.ts` (pur) : `analyserXmlTa` lit `Identification`,
+  `Nom_Juridiction`, `Numero_Dossier`, `Date_Lecture`, `Type_Decision`,
+  `Type_Recours`, `Solution`, `Texte_Integral` ; titre = metadonnees concatenees
+  telles que publiees (« Tribunal Administratif de Nice — Decision — Exces de
+  pouvoir — … »), `url`/`ecli` = null (pas d'URL perenne sur ce format), cle de
+  dedup = nom d'identification ; `lirePublicationsTa` = flux zip -> publications.
+- Branche dans `executerVeilleDila` (`ingererSourceTa`, code source `TA`,
+  filtre `?sources=TA` accepte mais reste soumis a la fenetre) ; cron
+  `/api/cron/veille-dila` : `maxDuration = 300` (plafond Hobby/Vercel = 300 s).
+- Bench reel (zip `TA_202609.zip` telecharge le 2026-10-08) : **18 943 XML lus,
+  524 retenues (2,8 %)** en ~52 s — histogramme des cores retenus : permis de
+  conduire 265, stationnement 246, code de la route 220, retrait de points 79,
+  amende forfaitaire 49, avis de contravention 39… (aucun fiscal/urbanisme :
+  les exclusions fonctionnent sur ce corpus aussi). La page veille affiche le
+  top 100 par score, le digest est borne a 50 : le volume est gere.
+
+### K3 — Auto-alimentation visible + IA robuste
+
+- **Diagnostic 503** : `verifierAvecIa` n'avait ni timeout ni retry — un 503
+  Gemini (surcharge transitoire) rendait immediatement « indisponible ».
+  Correctif : `AbortSignal.timeout(30 s)` + **3 tentatives sur 429/5xx**
+  (backoff 400/800 ms) + `console.error` avec extrait du corps HTTP (400 car.) ;
+  4xx jamais retente ; motif reste court (`appel IA en echec (HTTP 503) —
+  verification par regles seule`).
+- **Bibliothecaire visible** : sur `/dashboard/juriste/failles` (JURISTE et
+  ADMIN) — **bandeau « Veille : N nouvelle(s) source(s) »**
+  (`data-testid="bandeau-veille"`, compte `SourceJuridique` NOUVEAU, lien vers
+  `/dashboard/juriste/veille`) + **encart « Dernieres campagnes
+  d'auto-alimentation »** (`data-testid="campagnes-veille"` : 5 dernieres
+  `AutoAlimentationTrace` — libelle de campagne pret-a-lire (`Veille DILA —
+  JADE`, `Veille TA`…), badge OK/Echec, `N traitees -> M retenues`, horodatage,
+  detail au survol). Les deux blocs disparaissent si la DB est en rade.
+- `ecarterSource` (veille) pose desormais `reviewedBy` = utilisateur courant
+  (comme `promouvoirSource`) — la trace de relecture est completee.
+- Libelles : `SOURCE_LABEL.TA = « Tribunaux administratifs »` (liste veille),
+  intro de la page veille mise a jour (opendata de la justice administrative).
+
+### Tests
+
+- `veille-perteinence.test.ts` : disjointite exclus/cores, 6 fixtures hors-sujet
+  (rétro-calibration), preuve de sujet stricte (fort seul / core faible seul
+  rejette / deux cores faibles / ambigus seul).
+- `zip.test.ts` (5) : stored + deflate + repertoire ignoree, entree vide, EOCD
+  absent, zip64 refuse, central corrompu — fixtures ZIP construites a la main
+  (en-tetes locaux + central + EOCD).
+- `veille-ta.test.ts` (11) : fenetre du 8 (jours 1-7 null), janvier -> decembre
+  N-1, URL DTA, parse d'un Document type, Identification absente, Texte_Integral
+  vide, parcours zip (repertoire + XML + non-XML), marqueur `derniere=`.
+- `verif-ia.test.ts` (+2) : retry 503 -> 200 en 2 appels (source `ia`), 404 non
+  retente (1 seul appel, motif `HTTP 404`).
+- Bilan : **541 tests unitaires** (tsc / lint / tests verts), e2e 51/51.

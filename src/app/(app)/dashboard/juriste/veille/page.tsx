@@ -72,7 +72,8 @@ export default async function VeillePage({
     <div className="mx-auto max-w-4xl">
       <h1 className="text-2xl font-bold">Veille juridique</h1>
       <p className="mt-1 text-sm text-zinc-600">
-        Relevé automatique des publications officielles (DILA) : jurisprudence
+        Relevé automatique des publications officielles (DILA et opendata de la
+        justice administrative) : tribunaux administratifs, jurisprudence
         administrative, Cour de cassation, Journal officiel. Seules les
         publications touchant la contestation d&apos;amendes routières ou la
         suspension de permis sont remontées, avec leurs passages cités.

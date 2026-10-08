@@ -12,6 +12,18 @@
  *     explicitement vide et à rédiger par le juriste. La machine ne rédige
  *     jamais de raisonnement juridique.
  *
+ * Filtre strict (révision 2026-10-08, calibré sur les 18 publications
+ * réellement écartées par le juriste) — une publication n'est retenue que si
+ * **toutes** ces conditions sont réunies :
+ *
+ *  1. **Aucun terme hors-sujet** (`MOTS_CLES_EXCLUS`) : fiscal, urbanisme,
+ *     étranger/asile, droit du travail, fonction publique, armes, agréments —
+ *     présence = rejet net, quelle que soit la suite ;
+ *  2. **Preuve de sujet** : au moins **2 termes core distincts**, ou **1 seul
+ *     terme core de poids ≥ `POIDS_PREUVE_SUJET`** ;
+ *  3. le score ≥ `SEUIL_PERTINENCE` ;
+ *  4. au moins un passage citable verbatim.
+ *
  * Fonctions pures, testées.
  */
 
@@ -40,7 +52,8 @@ import type { SourceDila } from "@/lib/veille-dila";
  * déjà qualifiées, celles qui touchent la procédure de contestation.
  *
  * Les poids sont calibrés sur des archives réelles (CASS/JADE/JORF) — voir
- * `veille-perteinence.test.ts`.
+ * `veille-perteinence.test.ts`, dont la rétro-calibration rejoue les 18
+ * publications réelles écartées à la main par le juriste (2026-10).
  */
 export const MOTS_CLES_CORE: ReadonlyArray<{ terme: string; poids: number }> = [
   { terme: "amende forfaitaire", poids: 8 },
@@ -67,14 +80,81 @@ export const MOTS_CLES_CORE: ReadonlyArray<{ terme: string; poids: number }> = [
   // Suspension / invalidation du permis (variantes au-delà de « suspension du permis »).
   { terme: "suspension de permis", poids: 8 },
   { terme: "invalidation du permis", poids: 8 },
+  // Alcool : les formules réelles du contentieux (« en état d'ivresse » est la
+  // rédaction usuelle de l'article R. 234-1). « conduite en état d'ivresse »
+  // contient « état d'ivresse » : les deux peuvent cumuler sur un même passage,
+  // sans effet sur la preuve de sujet (borne ≥ 6 déjà remplie par le premier).
+  { terme: "conduite en état d'ivresse", poids: 6 },
+  { terme: "état d'ivresse", poids: 5 },
+  // Mesure administrative prise contre le conducteur.
+  { terme: "interdiction de conduire", poids: 6 },
+  // Procédure d'amende : l'avis de contravention qualifie à lui seul (jamais
+  // rencontré hors sujet sur le corpus de calibration).
+  { terme: "avis de contravention", poids: 6 },
 ];
 
 export const MOTS_CLES_AMBIGUS: ReadonlyArray<{ terme: string; poids: number }> = [
   { terme: "éthylotest", poids: 5 },
+  { terme: "éthylomètre", poids: 5 },
   { terme: "alcoolémie", poids: 5 },
   { terme: "radar", poids: 2 },
   { terme: "procès-verbal", poids: 2 },
   { terme: "parking", poids: 2 },
+];
+
+/**
+ * Termes hors-sujet : leur **présence seule** rejette la publication, quel que
+ * soit le score (`MOTS_CLES_EXCLUS`). Chaque entrée est sourcée sur le corpus
+ * de calibration — les 18 publications écartées à la main par le juriste
+ * (2026-10) contenaient toutes au moins un de ces marqueurs, sauf deux cas de
+ * droit pénal/CE que la preuve de sujet rejette seule.
+ *
+ * Ils désignent des domaines **étrangers au produit** (amendes routières +
+ * suspension de permis) dont le vocabulaire invahissait le score : ces familles
+ * apparaissent aussi dans les décisions sur la fiscalité, l'urbanisme, le
+ * séjour des étrangers, le droit du travail, la fonction publique, les armes
+ * et les agréments — jamais dans un vrai contentieux routier à qualifier.
+ * Biais assumé du filtre « strict » : mieux vaut rater une publication limite
+ * que présenter au juriste du hors-sujet.
+ */
+export const MOTS_CLES_EXCLUS: ReadonlyArray<string> = [
+  // Fiscalité (CAA Douai 25DA01297, CAA Versailles 26VE00475, CAA Lyon 26LY00237).
+  "impôt",
+  "fiscal",
+  // Urbanisme (CAA Lyon 25LY01154 : stationnement + « code de la route » cités
+  // incidemment dans une décision sur un permis d'aménager).
+  "urbanisme",
+  "permis de construire",
+  "permis d'aménager",
+  "lotissement",
+  "plan local d'urbanisme",
+  // Séjour des étrangers / asile (CAA Paris 26PA00484, CAA Nantes 25NT02243…).
+  "asile",
+  "réfugié",
+  "titre de séjour",
+  "nationalité",
+  // Droit du travail / formation professionnelle (CAA Marseille 26MA00112,
+  // 25MA01867, 25MA00066 — « code de la route » et « permis de conduire » ne
+  // figurent que dans la liste des actions de formation subventionnées ;
+  // CAA Marseille 25MA03161 — licenciement après perte du permis).
+  "code du travail",
+  "formation professionnelle",
+  "actions de formation",
+  "licenciement",
+  "inspection du travail",
+  "convention collective",
+  // Fonction publique (CAA Marseille 26MA00402).
+  "fonction publique",
+  // Armes (CAA Lyon 25LY00276 : interdiction de détenir des armes — le mot
+  // « armes » nu est exclu car il se retrouve dans « alarmes » ; composés only).
+  "munitions",
+  "permis de chasse",
+  "armes à feu",
+  "détention d'armes",
+  // Agréments / contrôle technique (CAA Bordeaux 24BX01993 : suspension de
+  // l'agrément d'un centre de contrôle technique).
+  "agrément",
+  "contrôle technique",
 ];
 
 
@@ -101,6 +181,8 @@ export const MOTS_CLES_APPUI: ReadonlyArray<{ terme: string; poids: number }> = 
 ];
 
 export const SEUIL_PERTINENCE = 12;
+/** Poids minimal d'un terme core pour qu'il suffise seul à prouver le sujet. */
+export const POIDS_PREUVE_SUJET = 6;
 export const MAX_CITATIONS = 5;
 export const LONGUEUR_CITATION = 420;
 
@@ -139,6 +221,8 @@ export type Pertinence = {
   matchsAppui: string[];
   /** Tous les termes trouvés, core d'abord. */
   matchs: string[];
+  /** Termes hors-sujet détectés (MOTS_CLES_EXCLUS) : leur présence rejette. */
+  matchsExclus: string[];
   citations: string[];
 };
 
@@ -186,6 +270,7 @@ export function scorerPertinence(source: SourceDila): Pertinence {
   const corps = normaliser(`${source.titre} ${source.titre} ${source.contenu}`);
   const matchsCore: string[] = [];
   const matchsAppui: string[] = [];
+  const matchsExclus: string[] = [];
   let score = 0;
 
   const cumuler = (terme: string, poids: number, cible: string[], facteur: number) => {
@@ -199,23 +284,38 @@ export function scorerPertinence(source: SourceDila): Pertinence {
   for (const { terme, poids } of MOTS_CLES_APPUI) cumuler(terme, poids, matchsAppui, 0.5);
   for (const { terme, poids } of MOTS_CLES_AMBIGUS) cumuler(terme, poids, matchsAppui, 0.5);
 
+  // Les marqueurs hors-sujet ne participent jamais au score : ils rejettent.
+  for (const terme of MOTS_CLES_EXCLUS) {
+    if (occurrences(corps, normaliser(terme)) > 0) matchsExclus.push(terme);
+  }
+
   const matchs = [...matchsCore, ...matchsAppui];
   return {
     score,
     matchsCore,
     matchsAppui,
     matchs,
+    matchsExclus,
     citations: extraireCitations(source.contenu, matchs),
   };
 }
 
+const POIDS_CORE = new Map(MOTS_CLES_CORE.map((m) => [m.terme, m.poids]));
+
 /**
- * Une publication est retenue si elle contient **au moins un terme
- * qualifiant** ET atteint le seuil. Le test du terme qualifiant est ce qui
- * élimine le bruit de la jurisprudence administrative.
+ * Une publication n'est retenue que si elle passe les **quatre** verrous du
+ * filtre strict : aucun terme hors-sujet, preuve de sujet (au moins deux
+ * termes core distincts, ou un seul d'au moins `POIDS_PREUVE_SUJET`), score au
+ * seuil, et un passage citable. Le test de preuve de sujet est ce qui élimine
+ * le bruit : « code de la sécurité intérieure » seul (poids 3) ne qualifie
+ * jamais, même répété, même accompagné de termes d'appui.
  */
 export function estPertinente(p: Pertinence): boolean {
-  return p.matchsCore.length > 0 && p.score >= SEUIL_PERTINENCE && p.citations.length > 0;
+  if (p.matchsExclus.length > 0) return false;
+  const sujetProuve =
+    p.matchsCore.length >= 2 ||
+    p.matchsCore.some((t) => (POIDS_CORE.get(t) ?? 0) >= POIDS_PREUVE_SUJET);
+  return sujetProuve && p.score >= SEUIL_PERTINENCE && p.citations.length > 0;
 }
 
 function dateLisible(iso: string | null): string {

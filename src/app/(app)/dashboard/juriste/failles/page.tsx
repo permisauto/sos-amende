@@ -10,6 +10,22 @@ import { FaillesAdmin, type FailleDto } from "../../admin/failles/failles-admin"
 import { MisesAJourCatalogue } from "../../admin/failles/mises-a-jour-catalogue";
 import { FaillesList } from "./FaillesList";
 
+/** Libellé lisible d'une campagne d'auto-alimentation (`veille-dila:JADE`…). */
+function libelleCampagne(campagne: string): string {
+  if (campagne.startsWith("veille-dila:")) return `Veille DILA — ${campagne.slice(12)}`;
+  const labels: Record<string, string> = {
+    catalogue: "Catalogue des failles",
+    "veille-jorf": "Veille JORF (éditions)",
+    "auto-enrichissement": "Auto-enrichissement IA (post-OCR)",
+  };
+  return labels[campagne] ?? campagne;
+}
+
+const dateCourte = new Intl.DateTimeFormat("fr-FR", {
+  dateStyle: "short",
+  timeStyle: "short",
+});
+
 export default async function BibliothequeFaillesPage(
   props: PageProps<"/dashboard/juriste/failles">,
 ) {
@@ -66,6 +82,33 @@ export default async function BibliothequeFaillesPage(
     aSuspensionActive = getSuspensionActiveCount() > 0;
   }
 
+  // Transparence de l'auto-alimentation : publications en attente de relecture
+  // + dernières campagnes (cron ou manuelles). Masqués si la DB est en rade —
+  // la bibliothèque reste consultable.
+  let nbSourcesNouvelles = 0;
+  let campagnes: Array<{
+    id: string;
+    campagne: string;
+    statut: string;
+    traitees: number;
+    nouvelles: number;
+    detail: string | null;
+    createdAt: Date;
+  }> = [];
+  try {
+    const [n, traces] = await Promise.all([
+      prisma.sourceJuridique.count({ where: { statut: "NOUVEAU" } }),
+      prisma.autoAlimentationTrace.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 5,
+      }),
+    ]);
+    nbSourcesNouvelles = n;
+    campagnes = traces;
+  } catch {
+    // Rien à afficher : le bandeau et l'encart disparaissent.
+  }
+
   if (filter !== "ALL") {
     failles = failles.filter((f) => f.statut === filter);
   }
@@ -96,6 +139,79 @@ export default async function BibliothequeFaillesPage(
 
   return (
     <div className="mx-auto max-w-5xl">
+      {nbSourcesNouvelles > 0 && (
+        <div
+          data-testid="bandeau-veille"
+          className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-sky-200 bg-sky-50 p-4"
+        >
+          <div>
+            <p className="text-sm font-semibold text-sky-900">
+              Veille : {nbSourcesNouvelles} nouvelle
+              {nbSourcesNouvelles > 1 ? "s" : ""} source
+              {nbSourcesNouvelles > 1 ? "s" : ""} à examiner
+            </p>
+            <p className="mt-0.5 text-xs text-sky-700">
+              Publications retenues par la veille quotidienne, en attente de
+              votre relecture.
+            </p>
+          </div>
+          <Link
+            href="/dashboard/juriste/veille"
+            className="rounded-full bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-700"
+          >
+            Ouvrir la veille
+          </Link>
+        </div>
+      )}
+
+      {campagnes.length > 0 && (
+        <section
+          data-testid="campagnes-veille"
+          className="mt-4 rounded-2xl border border-zinc-200 bg-white p-5"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-zinc-800">
+              Dernières campagnes d&apos;auto-alimentation
+            </h2>
+            <span className="text-xs text-zinc-500">
+              Cron quotidiennes et actions manuelles
+            </span>
+          </div>
+          <ul className="mt-3 divide-y divide-zinc-100">
+            {campagnes.map((c) => (
+              <li key={c.id} className="py-2.5">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                  <span className="font-medium text-zinc-800">
+                    {libelleCampagne(c.campagne)}
+                  </span>
+                  <span
+                    className={
+                      c.statut === "OK"
+                        ? "rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800"
+                        : "rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800"
+                    }
+                  >
+                    {c.statut === "OK" ? "OK" : "Échec"}
+                  </span>
+                  <span className="text-zinc-600">
+                    {c.traitees} traitée{c.traitees > 1 ? "s" : ""} →{" "}
+                    {c.nouvelles} retenue{c.nouvelles > 1 ? "s" : ""}
+                  </span>
+                  <span className="ml-auto text-xs text-zinc-400">
+                    {dateCourte.format(c.createdAt)}
+                  </span>
+                </div>
+                {c.detail && (
+                  <p className="mt-0.5 truncate text-xs text-zinc-500" title={c.detail}>
+                    {c.detail}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {isAdmin ? (
         <div>
           <h1 className="text-2xl font-bold">Bibliothèque juridique</h1>

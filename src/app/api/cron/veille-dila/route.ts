@@ -5,10 +5,11 @@ import { executerVeilleDila } from "@/lib/veille-ingestion";
 
 /**
  * Veille juridique automatique (auto-alimentation §H) : télécharge les
- * nouvelles publications officielles DILA (JADE quotidien, CASS
- * hebdomadaire, JORF quotidien), ne conserve que celles qui sont pertinentes
- * pour la contestation d'amendes routières, et les dépose en lecture dans
- * l'espace « Veille juridique ».
+ * nouvelles publications officielles (JADE quotidien, CASS hebdomadaire,
+ * JORF quotidien, + le zip mensuel des tribunaux administratifs dès le 8 du
+ * mois), ne conserve que celles qui sont pertinentes pour la contestation
+ * d'amendes routières, et les dépose en lecture dans l'espace « Veille
+ * juridique ».
  *
  * Appelé quotidiennement (Vercel Cron). Uniquement de la **matière sourcée**
  * est remontée : métadonnées, liens Légifrance et citations littérales. Aucune
@@ -16,8 +17,13 @@ import { executerVeilleDila } from "@/lib/veille-ingestion";
  * est une décision humaine.
  *
  * Hors dev, `CRON_SECRET` est requis (header `Authorization: Bearer <secret>`).
- * `?sources=JADE,CASS` permet de restreindre l'exécution (utile en test).
+ * `?sources=JADE,CASS` permet de restreindre l'exécution (utile en test ;
+ * `TA` est accepté, mais reste soumis à la fenêtre mensuelle).
  */
+
+/** Le zip TA (~19 000 XML) pèse sur la durée : plafond de plateforme (Hobby = 300 s max). */
+export const maxDuration = 300;
+
 export async function GET(req: Request) {
   const auth = verifierSecretCron(req);
   if (auth === "secret-absent") {

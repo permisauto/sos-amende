@@ -20,9 +20,9 @@ export type { EntreeTar };
 export type SourceDila = {
   /** Clé de dédup stable : l'ECLI si présent, sinon l'identifiant DILA. */
   cle: string;
-  /** Identifiant DILA (JURITEXT…, CETATEXT…, JORFTEXT…). */
+  /** Identifiant DILA (JURITEXT…, CETATEXT…, JORFTEXT…, DTA_…). */
   id: string;
-  source: "CASS" | "JADE" | "JORF";
+  source: "CASS" | "JADE" | "JORF" | "TA";
   /** ARRET, LOI, DECRET, ARRETE… tel que publié. */
   nature: string;
   titre: string;
@@ -102,7 +102,7 @@ export function texteDeXml(inner: string): string {
 }
 
 /** Raccourci : texte normalisé de la première balise demandée. */
-function texteTag(xml: string, tag: string): string | null {
+export function texteTag(xml: string, tag: string): string | null {
   const inner = extraireTag(xml, tag);
   return inner === null ? null : texteDeXml(inner) || null;
 }

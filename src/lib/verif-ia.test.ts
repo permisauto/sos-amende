@@ -191,6 +191,57 @@ describe("verifierAvecIa — providers", () => {
     );
     const r = await verifierAvecIa({}, catalogue);
     expect(r.source).toBe("indisponible");
+    // Les 503 sont transitoires : la politique de retry est bien appliquée.
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(3);
+  });
+
+  it("réessaie sur un 503 transitoire puis réussit à la tentative suivante", async () => {
+    vi.stubEnv("VERIF_IA_PROVIDER", "");
+    vi.stubEnv("GEMINI_API_KEY", "cle-test");
+    const ok = new Response(
+      JSON.stringify({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify({
+                    suggestions: [
+                      {
+                        id: "faille-prescription-1-an",
+                        pertinence: "forte",
+                        justification: "La date du PV dépasse le délai d'un an",
+                      },
+                    ],
+                    signalements: [],
+                  }),
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      { status: 200 },
+    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("overloaded", { status: 503 }))
+      .mockResolvedValueOnce(ok);
+    vi.stubGlobal("fetch", fetchMock);
+    const r = await verifierAvecIa({}, catalogue);
+    expect(r.source).toBe("ia");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("n'aborde pas les erreurs non transitoires (404 = modèle inconnu)", async () => {
+    vi.stubEnv("VERIF_IA_PROVIDER", "");
+    vi.stubEnv("GEMINI_API_KEY", "cle-test");
+    const fetchMock = vi.fn(async () => new Response("model not found", { status: 404 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const r = await verifierAvecIa({}, catalogue);
+    expect(r.source).toBe("indisponible");
+    if (r.source === "indisponible") expect(r.motif).toContain("HTTP 404");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 
