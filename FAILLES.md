@@ -592,21 +592,24 @@ fin d'ingestion, budget borné, boutons manuels pour le reste) et décision
 ### L1 — Extraction bornée (`src/lib/veille-extraction.ts`)
 
 - Module pur (aucun accès DB) : `PropositionVeille {etat: "extrait" |
-  "incomplet" | "echec", titre, typeInfraction, articles[], regle, resume,
-  extraits[], motif?, extraitLe}`, `PublicationVeille`, constantes
+  "incomplet" | "echec", titre, typeInfraction, articles[], regle,
+  conditions[], resume, extraits[], motif?, extraitLe}` — `conditions[]`
+  ajouté au **lot M** (cf. §M2), `PublicationVeille`, constantes
   `SCORE_SEUIL_EXTRACTION = 12`, `BUDGET_EXTRACTION = 15`,
   `BUDGET_TEMPS_EXTRACTION_MS = 150 000`.
 - `construteurPromptExtraction` demande un **JSON strict** (titre,
-  typeInfraction, articles, règle dégagée, résumé, extraits) et interdit
-  explicitement d'inventer un article absent du texte.
+  typeInfraction, articles, règle dégagée, conditions d'application, résumé,
+  extraits) et interdit explicitement d'inventer un article absent du texte.
 - `parserExtraction` = garde-fou anti-hallucination : **chaque article doit
   figurer verbatim dans le contenu** (citations « … » acceptées avec un seul
   suffixe retiré) sinon il est retiré ; **chaque extrait fondamental doit être
   retrouvé** dans le contenu, sinon l'état est `incomplet` (bouton Valider
-  masqué côté UI) ; dédoublonnage, bornes sur les longueurs.
+  masqué côté UI) ; **≥ 1 condition d'application verbatim** exigée pour
+  `extrait` (lot M) ; dédoublonnage, bornes sur les longueurs.
 - `extractionMock` (dev/E2E, `VERIF_IA_PROVIDER=mock`) : regex d'article
   `(?:article|art\.)\s*([LRDC]…)` sur le contenu, typeInfraction deviné par
-  mots-clés, règle mock — déterministe, zéro appel réseau.
+  mots-clés, règle mock + condition mock (citation valide, sinon 1ʳᵉ tranche
+  du contenu) — déterministe, zéro appel réseau.
 - `extractionDispo()` : `off`/clé `GEMINI_API_KEY` absente = no-op (rien
   stocké), mock = simulé, sinon Gemini.
 - `src/lib/ia-gemini.ts` (nouveau) : `appelerGeminiJson(prompt, etiquette)` —
@@ -630,10 +633,8 @@ fin d'ingestion, budget borné, boutons manuels pour le reste) et décision
 - **Actions** (`veille/actions.ts`) : `extrairePropositionAction`
   (`requireJuriste`), `extrairePropositionsLot`,
   **`validerPropositionSource` = `requireAdmin`** → crée la `FailleJuridique`
-  en `PROPOSEE` (titre/règle/articles pré-remplis depuis la proposition,
-  `templateLettre: ""`, `jurisprudence` `verifiee: false`) et passe la source
-  en `PROMU` (`reviewedBy`/`reviewedAt`) — **jamais `ACTIVE`** : l'activation
-  reste le circuit existant (rédaction du template + `estActivable`).
+  **`ACTIVE` immédiate** (choix produit — cf. §M3) et passe la source en
+  `PROMU` (`reviewedBy`/`reviewedAt`).
 - **UI** (`veille-list.tsx`, `BlocProposition`) : testids
   `proposition-encart` / `extraire-proposition` / `valider-proposition` /
   `extraire-lot` ; états affichés « non extraite » → « Proposition extraite
@@ -644,14 +645,118 @@ fin d'ingestion, budget borné, boutons manuels pour le reste) et décision
 
 ### Tests
 
-- `veille-extraction.test.ts` (15) : normalisation/verbatim, prompt, parser
-  (articles hors contenu retirés, extrait manquant → `incomplet`, bornes),
-  mock déterministe, providers (`off` = no-op).
+- `veille-extraction.test.ts` (16) : normalisation/verbatim, prompt, parser
+  (articles hors contenu retirés, extrait manquant → `incomplet`, **condition
+  absente/inventée → `incomplet`**, bornes), mock déterministe, providers
+  (`off` = no-op).
 - `verif-ia.test.ts` (19, inchangés après refacto `ia-gemini`).
 - `e2e/veille-proposition.spec.ts` : publication grainée **en début de test**
   (SQL idempotent, retry déterministe — le seed a été sorti de
-  `global-setup.cjs`) → juriste extrait sans pouvoir valider → **déconnexion**
-  avant le 2ᵉ `loginAs` (sinon `/login` redirige vers le dashboard ouvert) →
-  admin valide → sortie de « À lire » + badge « Proposition
-  (auto-alimentation) » en bibliothèque.
-- Bilan : **556 tests unitaires** (tsc / lint / verts), **e2e 52/52**.
+  `global-setup.cjs`) → juriste lit dans le drawer sans pouvoir valider →
+  **déconnexion** avant le 2ᵉ `loginAs` (sinon `/login` redirige vers le
+  dashboard ouvert) → admin valide **depuis le drawer** → sortie de « À lire »
+  + faille **ACTIVE** avec chip « Template à rédiger » en bibliothèque (détail
+  §M5).
+- Bilan : **562 tests unitaires** (tsc / lint / verts).
+
+## M. LECTURE CÔTE À CÔTE — DRAWER, VALIDATION → ACTIVE, GARDE-FOUS LETTRE (2026-10-08)
+
+Arbitrages validés par le client (outil question) : **drawer** côte à côté
+(plutôt qu'une page dédiée), validation admin = faille **`ACTIVE` immédiate**
+(plutôt que PROPOSEE), structure de la règle = **1 règle + 2 à 5 conditions**
+ancrées en verbatim.
+
+### M1 — Texte de la décision (`src/lib/veille-texte.ts` + route API)
+
+- `extraireDispositif(contenu)` : module **pur**, zéro IA — repère le
+  dispositif (`DÉCIDE :` / `ORDONNE :` / `ARRÊTE :` / `Dit et jugé :`),
+  **tolérant aux espacements de lettres** de la typographie judiciaire
+  (« O R D O N N E : », « D É C I D E : »), coupe aux formules de clôture
+  (`Délibéré…`, `Signé :`, `La République mande et ordonne…`,
+  `Pour expédition conforme…`, `Rendu public…`) ou au marqueur suivant ;
+  extrait < 40 caractères ou aucun marqueur → `null` (l'UI affiche le texte
+  intégral avec la notice « Dispositif non repéré »).
+- Route `GET /api/veille/[id]/texte` (`src/app/api/veille/[id]/texte/route.ts`,
+  `requireJuriste`) : `{contenu, dispositif}` — le `contenu` (7 à 16 ko en
+  prod) **ne circule jamais** dans le DTO de la liste des cartes (chargement
+  paresseux à l'ouverture du drawer), 404 publication inconnue.
+
+### M2 — Conditions d'application (extraction, `veille-extraction.ts`)
+
+- `PropositionVeille.conditions[]` : 2 à 5 conditions d'application de la
+  règle (ce que le cas d'espèce doit vérifier pour que la règle joue),
+  **recopiées mot pour mot** — le parser applique le même garde-fou verbatim
+  que les extraits (`contenuVerbatim`, 15-300 car., dédup, max 5).
+- `extrait` exige désormais **≥ 1 condition** ; sinon `incomplet` avec motif
+  « aucune condition d'application textuellement trouvée » (Valider masqué).
+- Prompt enrichi (champ `conditions` dans le JSON attendu), mock : citation
+  valide du contenu, sinon la 1ʳᵉ tranche du contenu (toujours verbatim).
+
+### M3 — Validation admin → faille `ACTIVE` (`validerPropositionSource`)
+
+- `requireAdmin`, gate statut `NOUVEAU` + proposition `extrait` inchangés ;
+  la faille est créée **`ACTIVE`** avec `templateLettre: ""`, `regle`
+  **composée** (règle dégagée + bloc « Conditions d'application : » listant
+  les conditions), `articleLoi` = articles retenus, `jurisprudence`
+  `[ref verifiee: false]` (ECLI/juridiction/date/URL + résumé), source =
+  URL Légifrance ou archive ; source veille → `PROMU`.
+- Message : « créée et **ACTIVÉE** — rédigez le template de lettre dans la
+  bibliothèque juridique ; sans template, elle ne peut pas encore alimenter
+  une contestation ». Boutons : carte `valider-proposition` « Valider la
+  proposition (→ faille ACTIVE) » et drawer `lecture-valider` « Valider la
+  lecture (→ faille ACTIVE) ».
+- **Inchangé** : `promouvoirSource` (promotion manuelle juriste) crée
+  toujours une `PROPOSEE` (circuit juriste propose → admin active, §H3) ;
+  seules les **propositions extraites validées après lecture** passent
+  ACTIVE.
+
+### M4 — Garde-fous : une `ACTIVE` sans template ne produit jamais de lettre
+
+Une faille veille `ACTIVE` sans `templateLettre` ne peut pas devenir
+principale nulle part :
+
+- `analyserDossier` (`cases/actions.ts`) : faille principale = **1ʳᵉ
+  candidate avec template non vide** (sinon ni lettre ni débit — voie « sans
+  faille ») ; la lettre multi-arguments n'assemble que les candidates
+  templateées ; les candidates sans template restent enregistrées en
+  `DossierFaille` (visibles côté juriste, confirmables une fois le template
+  rédigé) ;
+- `confirmerFaille` (`juriste/actions.ts`) : refuse une faille ACTIVE sans
+  template (« Template de lettre à rédiger dans la bibliothèque juridique
+  avant de retenir cette faille ») ;
+- `genererVarianteLettre` et les previews du détail juriste filtrent déjà
+  les templates vides (inchangé) ;
+- **chip « Template à rédiger »** (`data-testid="chip-template-manquant"`,
+  rouge) sur chaque carte `ACTIVE` sans template — bibliothèque juriste
+  (`FaillesList`) **et** admin (`FaillesAdmin`).
+
+Le moteur reste indifférent : une faille veille sans `reglesDetection` n'est
+jamais candidate (`predicatHerite` default `false`) tant que l'admin n'a pas
+édité ses règles — les garde-fous ci-dessus couvrent le cas « règles ajoutées
+avant le template ».
+
+### M5 — Drawer de lecture (`lecture-drawer.tsx`)
+
+- Bouton **« Lire la décision »** (`data-testid="lire-decision"`) sur chaque
+  carte de la veille (tout statut, avec ou sans proposition).
+- Overlay plein écran 2 colonnes (`lecture-drawer`) : à gauche le texte
+  (chargement lazy via la route M1, bascule **Dispositif ↔ Texte intégral**,
+  texte `lecture-texte`) ; à droite la **règle dégagée** (`lecture-regle`),
+  les **conditions d'application** en checklist (`lecture-conditions`),
+  les références (articles retenus, type, ECLI, lien source primaire), le
+  résumé et les extraits verbatim.
+- Footer : admin — `lecture-valider` (→ ACTIVE) + `lecture-ecarter` ;
+  juriste — « En attente de validation par un administrateur ». Fermeture
+  `lecture-fermer` ou `Échap`.
+
+### Tests / E2E
+
+- `veille-texte.test.ts` (5) : marqueur espacé (typo TA), `DÉCIDE :`,
+  coupe à la formule d'exécution, pas de marqueur → `null`, premier marqueur
+  retenu quand plusieurs existent.
+- `veille-extraction.test.ts` (16, cf. §L).
+- `e2e/veille-proposition.spec.ts` étendu : juriste ouvre le drawer →
+  dispositif du seed affiché par défaut → bascule « Texte intégral » → règle
+  mock + 1 condition → aucun `lecture-valider` → fermeture ; admin ouvre le
+  drawer → `lecture-valider` → publication promue → bibliothèque : faille
+  **ACTIVE** + chip `chip-template-manquant`.

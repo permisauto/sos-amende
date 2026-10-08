@@ -54,6 +54,7 @@ describe("construirePromptExtraction", () => {
     expect(p).toContain("Réponds UNIQUEMENT par un objet JSON");
     expect(p).toContain("Jamais d'article inventé");
     expect(p).toContain("citations VERBATIM");
+    expect(p).toContain("conditions d'application");
     expect(p).toContain("Excès de vitesse");
     expect(p).toContain("=== TEXTE INTÉGRAL ===");
     expect(construirePromptExtraction({ ...PUB, contenu: "x".repeat(20_000) }))
@@ -67,6 +68,10 @@ describe("parserExtraction", () => {
     typeInfraction: "AMENDE",
     articles: ["article L. 224-16 du code de la route"],
     regle: "Le constat d'infraction ne peut être reçu si le certificat d'étalonnage de l'appareil était expiré au moment des faits, l'autorité devant justifier du contrôle en vigueur.",
+    conditions: [
+      "certificat de vérification périodique avait expiré le 12 janvier 2026",
+      "l'autorité n'ayant pas justifié du contrôle d'étalonnage en vigueur",
+    ],
     resume: "Contestation d'un avis fondé sur un cinémomètre au certificat expiré.",
     extraits: [CONTENU.slice(0, 200) + "…"],
   });
@@ -77,6 +82,7 @@ describe("parserExtraction", () => {
     expect(p!.etat).toBe("extrait");
     expect(p!.articles).toEqual(["article L. 224-16 du code de la route"]);
     expect(p!.extraits).toHaveLength(1);
+    expect(p!.conditions.length).toBeGreaterThanOrEqual(1);
     expect(p!.motif).toBeUndefined();
   });
 
@@ -111,6 +117,25 @@ describe("parserExtraction", () => {
     );
     expect(sansExtrait!.etat).toBe("incomplet");
     expect(sansExtrait!.motif).toContain("extrait");
+  });
+
+  it("exige au moins une condition d'application textuelle", () => {
+    const sansCondition = parserExtraction(
+      JSON.stringify({ ...JSON.parse(brut), conditions: [] }),
+      CONTENU,
+    );
+    expect(sansCondition!.etat).toBe("incomplet");
+    expect(sansCondition!.motif).toContain("condition");
+
+    const conditionInventee = parserExtraction(
+      JSON.stringify({
+        ...JSON.parse(brut),
+        conditions: ["Le conducteur était en état d'ivresse au moment du constat"],
+      }),
+      CONTENU,
+    );
+    expect(conditionInventee!.conditions).toEqual([]);
+    expect(conditionInventee!.etat).toBe("incomplet");
   });
 
   it("déduplique articles et extraits", () => {

@@ -3,18 +3,20 @@ import { Client } from "pg";
 import { loginAs } from "./helpers";
 
 /**
- * Lot L — veille juridique : extraction proposée (articles retenus + règle
- * dégagée, bornés aux verbatims) puis décision humaine.
+ * Lot L + M — veille juridique : extraction proposée (articles retenus + règle
+ * dégagée + conditions, bornés aux verbatims) puis décision humaine après
+ * **lecture côte à côté** (drawer : texte/dispositif à gauche, règle à droite).
  *
  * Publication grainée **en début de test** (même approche que `veille.spec.ts`)
  * : chaque tentative repart d'un état vierge, le retry reste déterministe.
  * L'extraction tourne en mock (`VERIF_IA_PROVIDER=mock` du webServer) : aucun
  * appel réseau.
  *
- * Scénario : le juriste voit et lance l'extraction mais ne valide PAS ; le
- * rôle admin est pris après déconnexion (`/login` redirige sinon vers le
- * dashboard déjà ouvert) → validation → la publication quitte « À lire » pour
- * « Promues » et la faille apparaît en PROPOSEE dans la bibliothèque.
+ * Scénario : le juriste lit dans le drawer (dispositif + conditions) mais ne
+ * valide PAS ; le rôle admin est pris après déconnexion (`/login` redirige
+ * sinon vers le dashboard déjà ouvert) → **validation depuis le drawer** → la
+ * publication quitte « À lire » pour « Promues » et la faille apparaît
+ * **ACTIVE** (template encore à rédiger — chip rouge) dans la bibliothèque.
  */
 
 const TITRE = "Annulation avis contravention — défaut de motivation E2E veille";
@@ -29,10 +31,13 @@ function databaseUrl(): string {
 /**
  * Le contenu contient un article littéral (« article L. 121-1 ») : l'extraction
  * mock en repère un, et la citation stockée est une tranche verbatim du contenu
- * (exigée par le garde-fou anti-hallucination du parser).
+ * (exigée par le garde-fou anti-hallucination du parser). Le **dispositif**
+ * (« DÉCIDE : ») est aussi présent : le drawer l'affiche par défaut (extraction
+ * locale, sans IA).
  */
 const CONTENU =
-  "Le Tribunal administratif de Nice, statuant sur la contestation d'un avis de contravention dressé au titre de l'article L. 121-1 du code de la route pour excès de vitesse, a annulé la décision attaquée en raison d'un défaut de motivation de l'arrêté attaqué, la juridiction retenant que l'autorité n'avait pas établi la régularité du contrôle effectué par l'agent assermenté au moment des faits, ni la concordance des relevés produits avec l'appareil de contrôle utilisé.";
+  "Le Tribunal administratif de Nice, statuant sur la contestation d'un avis de contravention dressé au titre de l'article L. 121-1 du code de la route pour excès de vitesse, a annulé la décision attaquée en raison d'un défaut de motivation de l'arrêté attaqué, la juridiction retenant que l'autorité n'avait pas établi la régularité du contrôle effectué par l'agent assermenté au moment des faits, ni la concordance des relevés produits avec l'appareil de contrôle utilisé." +
+  "\n\nDÉCIDE :\nArticle 1er : La décision attaquée est annulée et l'avis de contravention contesté est refusé.";
 
 async function grainerSource(): Promise<void> {
   const citation = CONTENU.slice(0, 220) + "…";
@@ -96,7 +101,35 @@ test("veille : extraction proposée puis validation admin", async ({ page }) => 
     "En attente de validation par un administrateur",
   );
 
-  // --- Admin : validation → PROPOSEE, sortie de « À lire » ----------------
+  // --- Juriste : lecture côte à côté (drawer) ------------------------------
+  await carte.getByTestId("lire-decision").click();
+  const drawer = page.getByTestId("lecture-drawer");
+  await expect(drawer).toBeVisible();
+  // Dispositif extrait localement affiché par défaut (« DÉCIDE : » du seed).
+  await expect(page.getByTestId("lecture-texte")).toContainText(
+    "Article 1er : La décision attaquée est annulée",
+  );
+  // Bascule vers le texte intégral.
+  await drawer.getByRole("button", { name: "Texte intégral" }).click();
+  await expect(page.getByTestId("lecture-texte")).toContainText(
+    "Tribunal administratif de Nice",
+  );
+  // Règle dégagée + conditions d'application à droite.
+  await expect(page.getByTestId("lecture-regle")).toContainText(
+    "Simulation (mock)",
+  );
+  await expect(page.getByTestId("lecture-conditions").locator("li")).toHaveCount(
+    1,
+  );
+  // Le juriste lit mais ne valide jamais depuis le drawer.
+  await expect(page.getByTestId("lecture-valider")).toHaveCount(0);
+  await expect(drawer).toContainText(
+    "En attente de validation par un administrateur",
+  );
+  await page.getByTestId("lecture-fermer").click();
+  await expect(drawer).toHaveCount(0);
+
+  // --- Admin : lecture puis validation **depuis le drawer** → ACTIVE -------
   // Changement de rôle : on se déconnecte d'abord, sinon `/login` redirige
   // vers le dashboard déjà ouvert et `loginAs` n'y trouve plus de formulaire.
   await page.getByRole("button", { name: "Déconnexion" }).click();
@@ -110,7 +143,14 @@ test("veille : extraction proposée puis validation admin", async ({ page }) => 
   await expect(carteAdmin.getByTestId("proposition-encart")).toContainText(
     "Proposition extraite (IA)",
   );
-  await carteAdmin.getByTestId("valider-proposition").click();
+  await carteAdmin.getByTestId("lire-decision").click();
+  const drawerAdmin = page.getByTestId("lecture-drawer");
+  await expect(drawerAdmin).toBeVisible();
+  await expect(page.getByTestId("lecture-texte")).toContainText("DÉCIDE :");
+  await expect(page.getByTestId("lecture-conditions").locator("li")).toHaveCount(
+    1,
+  );
+  await page.getByTestId("lecture-valider").click();
 
   // La publication est promue : elle quitte l'onglet « À lire ».
   await expect(page.locator("article", { hasText: TITRE })).toHaveCount(0, {
@@ -121,14 +161,15 @@ test("veille : extraction proposée puis validation admin", async ({ page }) => 
     page.locator("article", { hasText: TITRE }).first(),
   ).toBeVisible();
 
-  // La faille créée est en PROPOSEE (jamais ACTIVE) dans la bibliothèque —
-  // l'admin y voit le badge « Proposition (auto-alimentation) ».
+  // La faille créée est **ACTIVE** (validation = faille active immédiate) mais
+  // sans template : la bibliothèque affiche le chip « Template à rédiger » —
+  // elle ne peut pas encore alimenter une lettre.
   await page.goto(
     "/dashboard/juriste/failles?q=" +
       encodeURIComponent("défaut de motivation E2E"),
   );
-  await expect(
-    page.getByText("Proposition (auto-alimentation)").first(),
-  ).toBeVisible();
   await expect(page.getByText(TITRE).first()).toBeVisible();
+  await expect(
+    page.getByTestId("chip-template-manquant").first(),
+  ).toBeVisible();
 });

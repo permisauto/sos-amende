@@ -206,10 +206,12 @@ model SourceJuridique {
   /// Brouillon assemblé : métadonnées + citations, articulation à rédiger.
   brouillonRegle String? @db.Text
   /// Proposition structurée extraite par IA (lot L) : articles retenus par la
-  /// juridiction + règle dégagée, bornés aux verbatims du texte.
+  /// juridiction + règle dégagée + conditions d'application (lot M), bornés
+  /// aux verbatims du texte.
   /// {etat: "extrait"|"incomplet"|"echec", titre, typeInfraction, articles[],
-  ///  regle, resume, extraits[], motif?, extraitLe}. Jamais une faille : la
-  /// validation humaine (admin) crée la PROPOSEE, l'activation reste admin.
+  ///  regle, conditions[], resume, extraits[], motif?, extraitLe}. Jamais une
+  /// faille : la validation de lecture (admin, lot M) crée l'ACTIVE sans
+  /// template ; `promouvoirSource` (manuel) reste en PROPOSEE.
   proposition   Json?
   statut       SourceJuridiqueStatut @default(NOUVEAU)
   /// Faille créée à partir de cette source, le cas échéant.

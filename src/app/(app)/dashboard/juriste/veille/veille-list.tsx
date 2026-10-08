@@ -11,6 +11,7 @@ import {
   type VeilleState,
 } from "./actions";
 import type { PropositionVeille } from "@/lib/veille-extraction";
+import { LectureDrawer } from "./lecture-drawer";
 
 export type SourceDto = {
   id: string;
@@ -76,11 +77,13 @@ type ActionEtat = {
   pending: boolean;
   state: VeilleState;
 };
+export type { ActionEtat };
 
 /**
- * Proposition structurée extraite par IA (règle dégagée + articles retenus),
- * bornée aux verbatims du texte. L'extraction est ouverte au juriste comme à
- * l'admin ; la **validation** (→ faille PROPOSEE) est réservée à l'admin.
+ * Proposition structurée extraite par IA (règle dégagée + conditions +
+ * articles retenus), bornée aux verbatims du texte. L'extraction est ouverte
+ * au juriste comme à l'admin ; la **validation** (→ faille ACTIVE immédiate)
+ * est réservée à l'admin.
  */
 function BlocProposition({
   s,
@@ -239,7 +242,7 @@ function BlocProposition({
             >
               {valider.pending
                 ? "Validation…"
-                : "Valider la proposition (→ faille PROPOSEE)"}
+                : "Valider la proposition (→ faille ACTIVE)"}
             </button>
           </form>
         )}
@@ -339,6 +342,7 @@ function Promotion({ s }: { s: SourceDto }) {
 
 function CarteSource({ s, role }: { s: SourceDto; role: string }) {
   const [ouvert, setOuvert] = useState(false);
+  const [lecture, setLecture] = useState(false);
   const [stateEcart, actionEcart, pendingEcart] = useActionState<VeilleState, FormData>(
     ecarterSource,
     undefined,
@@ -419,6 +423,14 @@ function CarteSource({ s, role }: { s: SourceDto; role: string }) {
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <button
           type="button"
+          onClick={() => setLecture(true)}
+          data-testid="lire-decision"
+          className="rounded-full bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-700"
+        >
+          Lire la décision
+        </button>
+        <button
+          type="button"
           onClick={() => setOuvert((v) => !v)}
           className="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
         >
@@ -455,6 +467,29 @@ function CarteSource({ s, role }: { s: SourceDto; role: string }) {
             </p>
           )}
         </div>
+      )}
+
+      {lecture && (
+        <LectureDrawer
+          s={s}
+          role={role}
+          extract={{
+            action: actionExtract,
+            pending: pendingExtract,
+            state: stateExtract,
+          }}
+          valider={{
+            action: actionValider,
+            pending: pendingValider,
+            state: stateValider,
+          }}
+          ecart={{
+            action: actionEcart,
+            pending: pendingEcart,
+            state: stateEcart,
+          }}
+          onClose={() => setLecture(false)}
+        />
       )}
     </article>
   );

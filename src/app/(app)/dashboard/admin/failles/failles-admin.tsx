@@ -508,6 +508,14 @@ function FailleRow({
             >
               {meta.label}
             </span>
+            {effectiveStatut === "ACTIVE" && !faille.templateLettre.trim() && (
+              <span
+                className="rounded-full bg-red-100 px-2.5 py-0.5 font-medium text-red-700"
+                data-testid="chip-template-manquant"
+              >
+                Template à rédiger
+              </span>
+            )}
             <span>{faille.typeInfraction}</span>
             {faille.source && <span>Source : {faille.source}</span>}
             <span>

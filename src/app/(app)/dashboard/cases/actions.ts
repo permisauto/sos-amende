@@ -299,7 +299,17 @@ export async function analyserDossier(
     { dateExpirationEtalonnage },
   );
 
-  const principalId = candidats[0] ?? null;
+  // Garde-fou lettre vide (lot M) : la faille principale — celle qui déclenche
+  // le débit et porte la lettre — doit avoir un template rédigé. Une faille
+  // ACTIVE sans template (ex. faille validée depuis la veille avant rédaction
+  // du modèle) reste enregistrée candidate, visible côté juriste, mais
+  // n'alimente jamais une lettre ni aucun débit.
+  const principalId =
+    candidats.find(
+      (id) =>
+        (failles.find((f) => f.id === id)?.templateLettre ?? "").trim().length >
+        0,
+    ) ?? null;
   const faille = principalId
     ? failles.find((f) => f.id === principalId) ?? null
     : null;
@@ -308,12 +318,15 @@ export async function analyserDossier(
     data.preuveEtalonnage = preuveRegistre;
   }
 
-  // Lettre multi-arguments : toutes les failles candidates sont juxtaposées
-  // dans une seule lettre (chaque section reste un template admin validé).
-  // La première candidate reste la faille principale (failleJuridiqueId).
+  // Lettre multi-arguments : toutes les failles candidates **avec template**
+  // sont juxtaposées dans une seule lettre (chaque section reste un template
+  // admin validé). La première candidate templateée reste la principale.
   const candidatsFailles = candidats
     .map((id) => failles.find((f) => f.id === id))
-    .filter((f): f is NonNullable<typeof f> => !!f);
+    .filter(
+      (f): f is NonNullable<typeof f> =>
+        !!f && f.templateLettre.trim().length > 0,
+    );
   const lettre = remplirLettreMulti(
     candidatsFailles.map((f) => ({
       id: f.id,

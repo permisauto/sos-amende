@@ -134,7 +134,7 @@ export async function relancerVeille(_prev: VeilleState): Promise<VeilleState> {
 /**
  * Extrait la proposition structurée (articles retenus + règle dégagée) d'une
  * publication — bouton unitaire. L'extraction ne valide rien : l'admin décide
- * ensuite (valider → PROPOSEE, ou écarter).
+ * ensuite (valider → faille ACTIVE au template à rédiger, ou écarter).
  */
 export async function extrairePropositionAction(
   _prev: VeilleState,
@@ -179,11 +179,13 @@ export async function extrairePropositionsLot(
 }
 
 /**
- * Valide la proposition extraite d'une publication : crée la faille en
- * **PROPOSEE** (pré-remplie : articles + règle + jurisprudence) — jamais en
- * ACTIVE. Décision **admin seul** (`requireAdmin`) ; le template de lettre
- * reste à rédiger dans la bibliothèque, l'activation suivant la procédure
- * habituelle (`estActivable`).
+ * Valide la proposition extraite d'une publication après lecture (lot M) :
+ * crée la faille **ACTIVE immédiate** (choix produit explicite), pré-remplie —
+ * règle dégagée + conditions d'application + articles + jurisprudence. Le
+ * template de lettre reste vide : sans template, la faille ne peut **jamais**
+ * nourrir une lettre (garde-fous `analyserDossier`/`confirmerFaille`) —
+ * l'admin rédige le template dans la bibliothèque. Décision **admin seul**
+ * (`requireAdmin`).
  */
 export async function validerPropositionSource(
   _prev: VeilleState,
@@ -211,6 +213,16 @@ export async function validerPropositionSource(
   const articleLoi = prop.articles.join(" ; ");
   if (articleLoi.length < 2) return { error: "Aucun article retenu." };
 
+  const conditions = prop.conditions ?? [];
+  const regle = [
+    prop.regle.trim(),
+    conditions.length
+      ? `Conditions d'application :\n${conditions.map((c) => `- ${c}`).join("\n")}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
   const ref: JurisprudenceRef = {
     reference: [source.ecli ?? source.reference ?? source.idDila]
       .filter(Boolean)
@@ -227,11 +239,11 @@ export async function validerPropositionSource(
       typeInfraction: prop.typeInfraction,
       titreFaille,
       articleLoi,
-      regle: prop.regle,
+      regle,
       templateLettre: "",
       source: source.url ?? source.archive,
       jurisprudence: [ref] as unknown as Prisma.InputJsonValue,
-      statut: "PROPOSEE",
+      statut: "ACTIVE",
     },
   });
 
@@ -249,6 +261,6 @@ export async function validerPropositionSource(
   revalidatePath("/dashboard/juriste/failles");
   return {
     ok: true,
-    message: `Proposition validée : « ${titreFaille} » créée en PROPOSEE. Rédigez le template dans la bibliothèque, puis activez-la.`,
+    message: `Lecture validée : faille « ${titreFaille} » créée et ACTIVÉE. Rédigez son template de lettre dans la bibliothèque juridique — sans template, elle ne peut pas encore alimenter une contestation.`,
   };
 }

@@ -1352,6 +1352,15 @@ export async function confirmerFaille(
       error: "Cette faille n'est pas validée par la base juridique (ACTIVE).",
     };
   }
+  // Garde-fou lettre vide (lot M) : une faille ACTIVE dont le template n'est
+  // pas encore rédigé (faille de la veille validée avant rédaction) ne peut
+  // pas devenir principale — elle ne produirait aucune contestation.
+  if (!faille.templateLettre.trim()) {
+    return {
+      error:
+        "Template de lettre à rédiger dans la bibliothèque juridique avant de retenir cette faille.",
+    };
+  }
 
   const data = (dossier.extractedData ?? {}) as ExtractedData;
 
