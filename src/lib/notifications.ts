@@ -134,6 +134,38 @@ export async function notifierPaiementValide(email: string, name?: string | null
 }
 
 /**
+ * Notifie le client qu'un virement a été refusé par l'admin, avec le motif
+ * exigé au refus — le client sait ce qu'il doit corriger pour refaire un
+ * virement. Défensif : no-op sans AUTH_RESEND_KEY.
+ */
+export async function notifierPaiementRefuse(
+  email: string,
+  name: string | null,
+  motif: string,
+): Promise<boolean> {
+  if (!resend) return false;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://recours-permis-pv.com";
+  const prenom = (name ?? email).split(" ")[0];
+  try {
+    await resend.emails.send({
+      from: EMAIL_FROM,
+      to: email,
+      subject: "SOS Amende — virement non validé",
+      html: `
+        <p>Bonjour ${prenom},</p>
+        <p>Votre virement n'a pas pu être validé par notre équipe.</p>
+        <p><strong>Motif :</strong> ${motif.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>")}</p>
+        <p>Vous pouvez refaire un virement depuis votre espace ; votre demande
+        sera de nouveau examinée.</p>
+        <p><a href="${appUrl}/dashboard">Accéder à mon espace</a></p>`,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Notifie le client qu'un juriste lui a adressé un message sur son dossier
  * (demande de complément d'information ou de preuve). Défensif : no-op sans
  * AUTH_RESEND_KEY.

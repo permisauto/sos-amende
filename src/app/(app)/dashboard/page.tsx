@@ -4,6 +4,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/dal";
+import { BandeauPaiement } from "@/components/bandeau-paiement";
 import { joursRestants } from "@/lib/moteur";
 import { suggestionsPreuvesClient } from "@/lib/questions";
 import { libellePreuve } from "@/lib/preuve-labels";
@@ -96,6 +97,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-5xl">
+      <BandeauPaiement userId={user.id} />
       {/* Hero */}
       <section className="rounded-3xl bg-gradient-to-br from-emerald-600 via-emerald-600 to-teal-700 px-8 py-10 text-white shadow-sm">
         <p className="text-sm font-medium text-emerald-100">

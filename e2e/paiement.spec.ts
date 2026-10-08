@@ -10,12 +10,10 @@ async function validerVirementAdmin(browser: Browser, email: string) {
   await expect(page.getByRole("link", { name: "Bibliothèque juridique" })).toBeVisible();
 
   await page.goto("/dashboard/admin/paiements");
-  // Le paiement du client jetable apparaît dans la file d'attente.
-  const ligne = page
-    .locator("div")
-    .filter({ hasText: email })
-    .filter({ has: page.getByRole("button", { name: /Valider →/ }) })
-    .last();
+  // Le paiement du client jetable apparaît dans la file d'attente (tableau).
+  const ligne = page.getByRole("row").filter({ hasText: email });
+  // Identité complète affichée : nom, email et téléphone saisis au paiement.
+  await expect(ligne.getByText("+33612345678")).toBeVisible();
   await ligne.getByRole("button", { name: /Valider →/ }).click();
   await expect(page.getByText("Action effectuée.")).toBeVisible();
 
@@ -62,6 +60,8 @@ test("paiement virement (inscription inversée) : payer → compte créé → cr
   await expect(
     page.getByText("1 crédit disponible", { exact: true }),
   ).toBeVisible();
+  // Bandeau espace client : le virement validé est notifié in-app.
+  await expect(page.getByTestId("bandeau-paiement-valide")).toBeVisible();
   await expect(
     page.getByRole("link", { name: "Téléverser un PV — gratuit" }),
   ).toBeVisible();

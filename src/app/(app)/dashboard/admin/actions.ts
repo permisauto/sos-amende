@@ -570,7 +570,7 @@ export async function validerVirement(
     // un PENDING_VIREMENT → PAID est accepté — un seul crédit incrémenté.
     const verrou = await tx.payment.updateMany({
       where: { id, status: "PENDING_VIREMENT" },
-      data: { status: "PAID" },
+      data: { status: "PAID", valideLe: new Date() },
     });
     if (verrou.count === 0) return true;
 
@@ -630,6 +630,11 @@ export async function refuserVirement(
 ): Promise<FailleState> {
   await requireAdmin();
   const id = String(formData.get("id") ?? "");
+  const motif = String(formData.get("motif") ?? "").trim();
+  // Motif obligatoire : le client le reçoit par e-mail et dans le bandeau de
+  // son espace — il doit savoir ce qu'il faut corriger pour refaire un virement.
+  if (motif.length < 3) return { error: "Le motif de refus est obligatoire." };
+
   const payment = await prisma.payment.findUnique({ where: { id } });
   if (!payment) {
     if (id.startsWith("pay-mock-")) {
@@ -640,8 +645,46 @@ export async function refuserVirement(
   }
   if (payment.status !== "PENDING_VIREMENT") return { error: "Seuls les virements en attente peuvent être refusés." };
 
-  await prisma.payment.update({ where: { id }, data: { status: "REFUSED" } });
+  // Verrou anti double-clic (identique à la validation) : seul un
+  // PENDING_VIREMENT → REFUSED est accepté — un seul refus enregistré.
+  const dejaRefuse = await prisma.$transaction(async (tx) => {
+    const verrou = await tx.payment.updateMany({
+      where: { id, status: "PENDING_VIREMENT" },
+      data: { status: "REFUSED", refuseLe: new Date(), refusMotif: motif },
+    });
+    if (verrou.count === 0) return true;
+
+    // Transparence côté client : le refus apparaît dans la timeline du dossier
+    // (le dossier reste en attente de paiement — un nouveau virement est possible).
+    if (payment.dossierId) {
+      const dossierLie = await tx.dossier.findUnique({
+        where: { id: payment.dossierId },
+        select: { id: true, statut: true },
+      });
+      if (dossierLie && dossierLie.statut === "EN_ATTENTE_PAIEMENT") {
+        await tx.dossierEvent.create({
+          data: {
+            dossierId: dossierLie.id,
+            type: "EN_ATTENTE",
+            detail: `Virement refusé par l'équipe — ${motif}`,
+          },
+        });
+      }
+    }
+    return false;
+  });
+  if (dejaRefuse) {
+    return { error: "Seuls les virements en attente peuvent être refusés." };
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: payment.userId } });
+  if (user) {
+    const { notifierPaiementRefuse } = await import("@/lib/notifications");
+    await notifierPaiementRefuse(user.email, user.name, motif);
+  }
+
   revalidatePath("/dashboard/admin/paiements");
+  revalidatePath("/dashboard");
   return { ok: true };
 }
 

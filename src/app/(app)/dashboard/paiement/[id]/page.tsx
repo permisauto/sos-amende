@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/dal";
+import { BandeauPaiement } from "@/components/bandeau-paiement";
 import { PaiementForm } from "./paiement-form";
 
 export default async function PaiementPage(props: PageProps<"/dashboard/paiement/[id]">) {
@@ -21,6 +22,9 @@ export default async function PaiementPage(props: PageProps<"/dashboard/paiement
     <div className="mx-auto max-w-3xl">
       <Link href={`/dashboard/cases/${id}`} className="text-sm text-zinc-500 hover:text-zinc-900">← Retour au dossier</Link>
       <h1 className="mt-2 text-2xl font-bold">Finaliser — {dossier.type === "AMENDE" ? "Contestation d'amende" : "Recours suspension"}</h1>
+      <div className="mt-4">
+        <BandeauPaiement userId={user.id} />
+      </div>
       <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
         <p className="text-sm font-semibold text-emerald-900">✓ Faille détectée : {dossier.failleJuridique?.titreFaille ?? `${dossier.faillesRetenues.length} faille(s) candidate(s)`}</p>
         <p className="mt-1 text-sm text-emerald-800">Le scan et la détection des failles sont gratuits. La génération et la validation de la lettre sont payantes.</p>

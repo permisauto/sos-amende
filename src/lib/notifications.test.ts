@@ -227,3 +227,32 @@ describe("notifierLienDepot", () => {
     expect(arg.html).not.toContain("ANTAI");
   });
 });
+
+describe("notifierPaiementRefuse (lot I)", () => {
+  it("renvoie false sans clé Resend et n'envoie rien", async () => {
+    const { notifierPaiementRefuse } = await charger({ key: undefined });
+    expect(await notifierPaiementRefuse("client@test.local", "Alex Martin", "Montant incorrect")).toBe(false);
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("envoie le motif au client avec un subject de refus", async () => {
+    const { notifierPaiementRefuse } = await charger({ key: "re_test", from: "test@example.org" });
+    expect(await notifierPaiementRefuse("client@test.local", "Alex Martin", "Montant incorrect")).toBe(true);
+    expect(send).toHaveBeenCalledTimes(1);
+    const arg = send.mock.calls[0][0] as { to: string; subject: string; html: string };
+    expect(arg.to).toBe("client@test.local");
+    expect(arg.subject).toContain("non validé");
+    expect(arg.html).toContain("Montant incorrect");
+    expect(arg.html).toContain("Alex");
+    // Repli sur l'email quand le compte n'a pas de nom.
+    expect((arg.html.match(/Bonjour /g) ?? []).length).toBe(1);
+  });
+
+  it("échappe le motif (aucune injection HTML)", async () => {
+    const { notifierPaiementRefuse } = await charger({ key: "re_test" });
+    await notifierPaiementRefuse("client@test.local", null, "<script>alert(1)</script>");
+    const arg = send.mock.calls[0][0] as { html: string };
+    expect(arg.html).not.toContain("<script>");
+    expect(arg.html).toContain("&lt;script&gt;");
+  });
+});

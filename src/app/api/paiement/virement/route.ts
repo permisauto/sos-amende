@@ -44,8 +44,8 @@ export async function POST(req: Request) {
   try {
     const user = await prisma.user.upsert({
       where: { email },
-      update: { name: `${prenom} ${nom}` },
-      create: { email, name: `${prenom} ${nom}`, credits: 0 },
+      update: { name: `${prenom} ${nom}`, telephone: whatsapp },
+      create: { email, name: `${prenom} ${nom}`, telephone: whatsapp, credits: 0 },
     });
     if (dossierId) {
       const dossier = await prisma.dossier.findFirst({ where: { id: dossierId, userId: user.id } });

@@ -26,6 +26,9 @@ model User {
   // signature de chaque dossier — le client n'a pas à retracer sa signature à
   // chaque contestation (stockage local/S3, comme les autres pièces).
   signatureUrl     String?
+  // Contact recueilli dès le paiement (formulaire virement) — source unique
+  // affichée au tableau de bord admin des paiements (identité complète client).
+  telephone        String?
 
   accounts       Account[]
   sessions       Session[]
@@ -398,6 +401,11 @@ model Payment {
   preuveUrl        String? // /uploads/... — preuve du virement téléversée par le client
   preuveNom        String? // nom du fichier d'origine
   preuveUploadedAt DateTime?
+  // Décision de l'admin : horodatage + motif de refus (motif obligatoire au
+  // refus — affiché au client par e-mail et par le bandeau de son espace).
+  valideLe         DateTime?
+  refuseLe         DateTime?
+  refusMotif       String?
 
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   dossier Dossier? @relation(fields: [dossierId], references: [id], onDelete: SetNull)

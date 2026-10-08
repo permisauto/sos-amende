@@ -47,7 +47,7 @@ export async function payerParVirement(_prev: VirementState, formData: FormData)
       where: { id: dossier.id },
       data: { extractedData: { ...data, contactNom: nom, contactPrenom: prenom, contactEmail: email, contactWhatsapp: whatsapp } as object },
     }),
-    prisma.user.update({ where: { id: user.id }, data: { name: `${prenom} ${nom}` } }),
+    prisma.user.update({ where: { id: user.id }, data: { name: `${prenom} ${nom}`, telephone: whatsapp } }),
     prisma.dossierEvent.create({ data: { dossierId: dossier.id, type: "EN_ATTENTE", detail: `Virement demandé — ${prenom} ${nom} / ${whatsapp}${optionLrar ? " (+ LRAR)" : ""}` } }),
   ]);
 
