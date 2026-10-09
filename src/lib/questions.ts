@@ -7,10 +7,12 @@
 // (N2 : météo / travaux) — elle ne fabrique JAMAIS un fondement. Le moteur ne
 // sélectionne que des `FailleJuridique` ACTIVE (FAILLES.md §B).
 //
-// L'affichage dépend de la **nature du document** (texte OCR scanné), jamais
-// des règles des failles : un groupe vide est impossible par construction
-// (échec du questionnaire dynamique du 2026-10-01, FAILLES.md §B).
+// L'affichage dépend de la **nature du document** (texte OCR scanné) et du
+// **sous-type** (`docType` : 3F vs 48SI — questions dérivées des failles du
+// pack), jamais des règles des failles : un groupe vide est impossible par
+// construction (échec du questionnaire dynamique du 2026-10-01, FAILLES.md §B).
 
+import { lireDocType, type DocTypeAnalyse } from "./envoi";
 import type { InfractionType } from "./envoi";
 import type { ExtractedData } from "./moteur";
 import type { TypePreuveExterne } from "./preuves-api";
@@ -19,7 +21,13 @@ import type { TypePreuveExterne } from "./preuves-api";
 export type PreuveCible = TypePreuveExterne;
 
 /** Pièces que le **client** peut apporter lui-même quand la réponse est cochée. */
-export type PreuveClient = "RELEVE_PAIEMENT" | "ATTESTATION_CESSION" | "ATTESTATION_VOL";
+export type PreuveClient =
+  | "RELEVE_PAIEMENT"
+  | "ATTESTATION_CESSION"
+  | "ATTESTATION_VOL"
+  | "COPIE_DECISION"
+  | "RELEVE_POINTS"
+  | "ATTESTATION_STAGE";
 
 /** Nature du document détectée dans le texte scanné. */
 export type Nature = "stationnement" | "travaux" | "radar" | "visibilite" | "alcool";
@@ -43,7 +51,12 @@ export type ChampReponse =
   | "suspObservations"
   | "suspEthylometreCarnet"
   | "suspSecondSouffle"
-  | "suspRefereEngage";
+  | "suspRefereEngage"
+  | "suspSignataireNonPrefet"
+  | "suspPrecedentsNonRecapitules"
+  | "suspPointsCumulesJour"
+  | "suspStageAvantNotif"
+  | "suspSoldeInexact";
 
 export type QuestionCiblee = {
   /** Nom du champ dans le formulaire (FormData). */
@@ -57,6 +70,8 @@ export type QuestionCiblee = {
   types: readonly InfractionType[];
   /** Le groupe n'apparaît que si le texte du document correspond. */
   natures?: readonly Nature[];
+  /** Sous-type du document (3F / 48SI) — absent = tous les types. */
+  docTypes?: readonly DocTypeAnalyse[];
   /** La réponse rend pertinente ce type de preuve externe (N2). */
   preuve?: PreuveCible;
   /** La réponse appelle une pièce que le **client** ajoute lui-même. */
@@ -217,6 +232,66 @@ export const QUESTIONS_CIBLEES: readonly QuestionCiblee[] = [
     groupe: "Recours engagés",
     types: ["SUSPENSION"],
   },
+
+  // ── SUSPENSION — 3F (arrêté préfectoral) ─────────────────────────────────
+  // Questions dérivées des failles pack 3F : elles captent les faits que
+  // l'OCR ne lit pas (signataire de l'arrêté) et corroborent celles qu'il lit
+  // (délai de notification, motivation) — jamais un fondement inventé.
+  {
+    cle: "suspSignataireNonPrefet",
+    champ: "suspSignataireNonPrefet",
+    libelle:
+      "L'arrêté n'est pas signé par le préfet mais par un autre signataire (secrétaire général, sous-préfet)",
+    groupe: "Arrêté préfectoral (3F)",
+    types: ["SUSPENSION"],
+    docTypes: ["3F"],
+    preuveClient: "COPIE_DECISION",
+  },
+
+  // ── SUSPENSION — 48SI (invalidation solde nul) ───────────────────────────
+  // Dérivées des failles 48SI (défaut d'information L. 223-3, plafond de
+  // 8 points, stage avant notification) : chaque question corrobore le fait
+  // que la règle de détection lit dans le document.
+  {
+    cle: "suspPrecedentsNonRecapitules",
+    champ: "suspPrecedentsNonRecapitules",
+    libelle:
+      "La décision ne détaille pas les retraits de points antérieurs ayant conduit au solde nul",
+    groupe: "Calcul du solde de points (48 SI)",
+    types: ["SUSPENSION"],
+    docTypes: ["48SI"],
+    preuveClient: "COPIE_DECISION",
+  },
+  {
+    cle: "suspPointsCumulesJour",
+    champ: "suspPointsCumulesJour",
+    libelle:
+      "Plusieurs infractions ont été commises le même jour (cumul de retraits de points)",
+    groupe: "Calcul du solde de points (48 SI)",
+    types: ["SUSPENSION"],
+    docTypes: ["48SI"],
+    preuveClient: "RELEVE_POINTS",
+  },
+  {
+    cle: "suspStageAvantNotif",
+    champ: "suspStageAvantNotif",
+    libelle:
+      "J'ai suivi un stage de sensibilisation AVANT la notification de cette décision",
+    groupe: "Calcul du solde de points (48 SI)",
+    types: ["SUSPENSION"],
+    docTypes: ["48SI"],
+    preuveClient: "ATTESTATION_STAGE",
+  },
+  {
+    cle: "suspSoldeInexact",
+    champ: "suspSoldeInexact",
+    libelle:
+      "Je conteste le nombre de points restants / le calcul du solde affiché",
+    groupe: "Calcul du solde de points (48 SI)",
+    types: ["SUSPENSION"],
+    docTypes: ["48SI"],
+    preuveClient: "RELEVE_POINTS",
+  },
 ];
 
 const MOTIFS_NATURE: Record<Nature, RegExp> = {
@@ -247,19 +322,24 @@ export function naturesPv(
 export type GroupeQuestions = { groupe: string; questions: QuestionCiblee[] };
 
 /**
- * Questions à afficher pour un dossier : filtrées sur le type d'infraction et
- * sur la nature du document. Les groupes sont regroupés dans l'ordre du
- * registre et **un groupe vide n'est jamais retourné**.
+ * Questions à afficher pour un dossier : filtrées sur le type d'infraction,
+ * sur la **nature du document** (texte) et sur le **sous-type** (`docType` :
+ * 3F vs 48SI — lu via `lireDocType`, inconnu = aucune question spécifique).
+ * Les groupes sont regroupés dans l'ordre du registre et **un groupe vide
+ * n'est jamais retourné**.
  */
 export function questionsPour(opts: {
   type: InfractionType;
   texte?: string | null;
+  docType?: string | null;
 }): GroupeQuestions[] {
   const natures = naturesPv(opts.texte);
+  const docType = lireDocType(opts.docType);
   const groupes = new Map<string, QuestionCiblee[]>();
   for (const q of QUESTIONS_CIBLEES) {
     if (!q.types.includes(opts.type)) continue;
     if (q.natures && !q.natures.some((n) => natures.has(n))) continue;
+    if (q.docTypes && (!docType || !q.docTypes.includes(docType))) continue;
     const liste = groupes.get(q.groupe);
     if (liste) liste.push(q);
     else groupes.set(q.groupe, [q]);

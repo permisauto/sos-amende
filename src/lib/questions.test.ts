@@ -121,6 +121,65 @@ describe("questionsPour — affichage dynamique par nature du document", () => {
   });
 });
 
+describe("questionsPour — sous-type 3F vs 48SI (filtre docTypes)", () => {
+  const texteSusp = "ARRÊTÉ PRÉFECTORAL — suspension du permis de conduire";
+
+  it("3F : groupe Arrêté préfectoral visible, Calcul du solde absent", () => {
+    const groupes = questionsPour({
+      type: "SUSPENSION",
+      texte: texteSusp,
+      docType: "3F",
+    });
+    const noms = groupes.map((g) => g.groupe);
+    expect(noms).toContain("Arrêté préfectoral (3F)");
+    expect(noms).not.toContain("Calcul du solde de points (48 SI)");
+    expect(
+      groupes.find((g) => g.groupe === "Arrêté préfectoral (3F)")?.questions,
+    ).toHaveLength(1);
+  });
+
+  it("48SI : groupe Calcul du solde visible (4 questions), Arrêté préfectoral absent", () => {
+    const groupes = questionsPour({
+      type: "SUSPENSION",
+      texte: texteSusp,
+      docType: "48SI",
+    });
+    const noms = groupes.map((g) => g.groupe);
+    expect(noms).toContain("Calcul du solde de points (48 SI)");
+    expect(noms).not.toContain("Arrêté préfectoral (3F)");
+    expect(
+      groupes.find((g) => g.groupe === "Calcul du solde de points (48 SI)")
+        ?.questions,
+    ).toHaveLength(4);
+  });
+
+  it("docType inconnu ou absent : aucune question spécifique, groupes partagés intacts", () => {
+    for (const docType of [undefined, null, "BIDON", "AMENDE"]) {
+      const groupes = questionsPour({
+        type: "SUSPENSION",
+        texte: texteSusp,
+        docType: docType as string | null | undefined,
+      });
+      const noms = groupes.map((g) => g.groupe);
+      expect(noms).not.toContain("Arrêté préfectoral (3F)");
+      expect(noms).not.toContain("Calcul du solde de points (48 SI)");
+      expect(noms).toContain("Notification de la décision");
+      expect(noms).toContain("Recours engagés");
+    }
+  });
+
+  it("AMENDE : les groupes spécifiques suspension n'apparaissent jamais", () => {
+    const groupes = questionsPour({
+      type: "AMENDE",
+      texte: "Radar fixe 96 km/h",
+      docType: "48SI",
+    });
+    const noms = groupes.map((g) => g.groupe);
+    expect(noms).not.toContain("Arrêté préfectoral (3F)");
+    expect(noms).not.toContain("Calcul du solde de points (48 SI)");
+  });
+});
+
 describe("lireReponses — lecture du FormData", () => {
   it("n'écrit que les cases cochées, avec la valeur du registre", () => {
     const fd = new FormData();
@@ -200,6 +259,35 @@ describe("suggestionsPreuvesClient — pièces attendues du client", () => {
     ).toEqual([
       { type: "RELEVE_PAIEMENT", raison: "J'ai déjà payé cette amende" },
     ]);
+  });
+
+  it("questions pack 3F/48SI → pièces corroborent le fait déclaré", () => {
+    expect(
+      suggestionsPreuvesClient({ suspSignataireNonPrefet: true })[0],
+    ).toEqual({
+      type: "COPIE_DECISION",
+      raison:
+        "L'arrêté n'est pas signé par le préfet mais par un autre signataire (secrétaire général, sous-préfet)",
+    });
+    expect(
+      suggestionsPreuvesClient({ suspPrecedentsNonRecapitules: true })[0]?.type,
+    ).toBe("COPIE_DECISION");
+    expect(
+      suggestionsPreuvesClient({ suspPointsCumulesJour: true })[0]?.type,
+    ).toBe("RELEVE_POINTS");
+    expect(
+      suggestionsPreuvesClient({ suspStageAvantNotif: true })[0]?.type,
+    ).toBe("ATTESTATION_STAGE");
+    expect(suggestionsPreuvesClient({ suspSoldeInexact: true })[0]?.type).toBe(
+      "RELEVE_POINTS",
+    );
+    // Dédup : deux réponses appelant la même pièce → une seule suggestion.
+    expect(
+      suggestionsPreuvesClient({
+        suspPrecedentsNonRecapitules: true,
+        suspSignataireNonPrefet: true,
+      }),
+    ).toHaveLength(1);
   });
 
   it("ne propose jamais un type externe (météo/radar/travaux)", () => {

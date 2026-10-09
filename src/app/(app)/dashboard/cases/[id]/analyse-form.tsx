@@ -47,6 +47,13 @@ export type AnalysePrefill = {
   suspEthylometreCarnet?: boolean;
   suspSecondSouffle?: boolean;
   suspRefereEngage?: boolean;
+  // Pack 3F/48SI — questions dérivées des failles (jamais pré-remplies par
+  // l'OCR : ce sont des faits déclarés par le client).
+  suspSignataireNonPrefet?: boolean;
+  suspPrecedentsNonRecapitules?: boolean;
+  suspPointsCumulesJour?: boolean;
+  suspStageAvantNotif?: boolean;
+  suspSoldeInexact?: boolean;
   // Pack 3F/48SI : classificateur lu à l'OCR (badge informatif — le champ
   // n'est pas éditable ici, il est porté automatiquement à l'analyse).
   docType?: string;
@@ -82,6 +89,9 @@ export function AnalyseForm({
     texte: [pvTexte, prefill?.motif, prefill?.lieu]
       .filter(Boolean)
       .join("\n"),
+    // Sous-type lu à l'OCR (3F / 48SI) : conditionne les questions spécifiques
+    // du pack (Arrêté préfectoral / Calcul du solde de points).
+    docType: prefill?.docType,
   });
 
   return (

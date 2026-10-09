@@ -122,6 +122,12 @@ export type ExtractedData = {
   suspEthylometreCarnet?: boolean;
   suspSecondSouffle?: boolean;
   suspRefereEngage?: boolean;
+  // Pack 3F/48SI — questions dérivées des failles (registre `questions.ts`).
+  suspSignataireNonPrefet?: boolean;
+  suspPrecedentsNonRecapitules?: boolean;
+  suspPointsCumulesJour?: boolean;
+  suspStageAvantNotif?: boolean;
+  suspSoldeInexact?: boolean;
   // Pack 3F/48SI (Télérecours Citoyens) — classificateur de document
   // (AMENDE / 3F / 48SI) et champs temporels du pack. Jamais inventés : extrait
   // par libellé (OCR) ou saisis par l'humain ; le moteur ne conclut que si les
