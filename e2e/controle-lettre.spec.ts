@@ -11,6 +11,9 @@ test.describe("Juriste — contrôle lettre / document", () => {
     page,
     browser,
   }) => {
+    // Deux connexions (client + juriste) + dépôt/analyse : sous charge
+    // (workers parallèles) les relances magic-link dépassent les 30 s.
+    test.slow();
     await loginAs(page, "e2e-client@test.local");
     const dossierId = await createDossier(page);
     await analyserDossier(page);

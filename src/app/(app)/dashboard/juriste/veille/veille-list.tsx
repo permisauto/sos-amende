@@ -128,7 +128,7 @@ function BlocProposition({
           ? "Extraction…"
           : p
             ? "Relancer l'extraction"
-            : "Extraire la proposition"}
+            : "Extraire maintenant"}
       </button>
     </form>
   );
@@ -143,9 +143,9 @@ function BlocProposition({
           <p className="text-xs text-zinc-600">
             <strong className="text-zinc-800">
               Proposition IA (articles + règle dégagée) : non extraite.
-            </strong>
-            {s.score < SCORE_SEUIL_UI &&
-              " L'extraction automatique cible les publications mieux notées : lancez-la manuellement."}
+            </strong>{" "}
+            Extraction automatique au prochain passage du cron (03:30) — ou
+            lancez-la sans attendre.
           </p>
           {boutonExtraire}
         </div>
@@ -163,6 +163,10 @@ function BlocProposition({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-red-800">
             <strong>Extraction en échec</strong> — {p.motif}
+            <br />
+            <span className="text-red-600">
+              Relance automatique au prochain passage (cron 03:30).
+            </span>
           </p>
           {boutonExtraire}
         </div>
@@ -187,9 +191,11 @@ function BlocProposition({
               : "bg-amber-100 text-amber-800"
           }`}
         >
-          {complet
-            ? `Proposition extraite (IA) — ${dateCourteFr(p.extraitLe)}`
-            : "Proposition incomplète (IA)"}
+          {p.corrigeLe
+            ? `Corrigée par l'admin — ${dateCourteFr(p.corrigeLe)}`
+            : complet
+              ? `Proposition extraite (IA) — ${dateCourteFr(p.extraitLe)}`
+              : "Proposition incomplète (IA)"}
         </span>
         <span className="rounded-full border border-zinc-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-zinc-700">
           {p.typeInfraction === "SUSPENSION" ? "Suspension" : "Amende"}
@@ -205,7 +211,13 @@ function BlocProposition({
       </div>
 
       {!complet && (
-        <p className="mt-2 text-xs font-medium text-amber-800">{p.motif}</p>
+        <>
+          <p className="mt-2 text-xs font-medium text-amber-800">{p.motif}</p>
+          <p className="mt-1 text-[11px] text-amber-700">
+            Ouvrez « Lire la décision » : l&apos;admin corrige la proposition
+            (articles, règle, conditions) puis la valide.
+          </p>
+        </>
       )}
 
       <p className="mt-3 text-xs font-semibold text-zinc-800">Règle dégagée</p>
@@ -257,9 +269,6 @@ function BlocProposition({
     </div>
   );
 }
-
-/** Score minimal partagé avec l'extraction automatique (`veille-extraction`). */
-const SCORE_SEUIL_UI = 12;
 
 /** Formulaire de promotion : crée une proposition de faille à compléter. */
 function Promotion({ s }: { s: SourceDto }) {

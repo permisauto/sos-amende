@@ -13,10 +13,12 @@ import { loginAs } from "./helpers";
  * appel réseau.
  *
  * Scénario : le juriste lit dans le drawer (dispositif + conditions) mais ne
- * valide PAS ; le rôle admin est pris après déconnexion (`/login` redirige
- * sinon vers le dashboard déjà ouvert) → **validation depuis le drawer** → la
- * publication quitte « À lire » pour « Promues » et la faille apparaît
- * **ACTIVE** (template encore à rédiger — chip rouge) dans la bibliothèque.
+ * valide PAS et ne corrige PAS ; le rôle admin est pris après déconnexion
+ * (`/login` redirige sinon vers le dashboard déjà ouvert) → l'admin ouvre le
+ * drawer, **corrige la règle via le formulaire d'édition** (brouillon en base,
+ * retour à la consultation) puis **valide depuis le drawer** → la publication
+ * quitte « À lire » pour « Promues », la faille apparaît **ACTIVE** (template
+ * encore à rédiger — chip rouge) dans la bibliothèque, avec la règle corrigée.
  */
 
 const TITRE = "Annulation avis contravention — défaut de motivation E2E veille";
@@ -76,7 +78,26 @@ async function grainerSource(): Promise<void> {
   }
 }
 
+/** Règle de la faille liée à la publication de ce test (assertion SQL déterministe). */
+async function regleFailleLiee(): Promise<string | null> {
+  const c = new Client({ connectionString: databaseUrl() });
+  await c.connect();
+  try {
+    const r = await c.query<{ regle: string | null }>(
+      `SELECT f.regle FROM "SourceJuridique" s
+         JOIN "FailleJuridique" f ON f.id = s."failleId"
+        WHERE s.id = 'e2e-veille-proposition'`,
+    );
+    return r.rows[0]?.regle ?? null;
+  } finally {
+    await c.end();
+  }
+}
+
 test("veille : extraction proposée puis validation admin", async ({ page }) => {
+  // Suite complète en parallèle : extraction + édition + validation + détails
+  // de la bibliothèque dépasseraient les 30 s par défaut.
+  test.slow();
   await grainerSource();
 
   // --- Juriste : extraction possible, validation impossible ---------------
@@ -121,8 +142,9 @@ test("veille : extraction proposée puis validation admin", async ({ page }) => 
   await expect(page.getByTestId("lecture-conditions").locator("li")).toHaveCount(
     1,
   );
-  // Le juriste lit mais ne valide jamais depuis le drawer.
+  // Le juriste lit mais ne valide jamais depuis le drawer (ni ne corrige).
   await expect(page.getByTestId("lecture-valider")).toHaveCount(0);
+  await expect(page.getByTestId("lecture-modifier")).toHaveCount(0);
   await expect(drawer).toContainText(
     "En attente de validation par un administrateur",
   );
@@ -150,6 +172,23 @@ test("veille : extraction proposée puis validation admin", async ({ page }) => 
   await expect(page.getByTestId("lecture-conditions").locator("li")).toHaveCount(
     1,
   );
+
+  // --- Correction par l'admin (lot O) : édition dans le drawer ------------
+  // Lecture seule d'abord, puis « Modifier la proposition » : la règle est
+  // corrigée, enregistrée (brouillon → écrit en base, pas de faille) et
+  // relue depuis la base avant la validation finale.
+  await page.getByTestId("lecture-modifier").click();
+  await expect(page.getByTestId("lecture-form-correction")).toBeVisible();
+  await page.getByTestId("lecture-regle-edit").fill(
+    "La juridiction annule l'avis pour défaut de motivation — règle corrigée par l'admin E2E.",
+  );
+  await page.getByTestId("lecture-enregistrer").click();
+  // Retour automatique à la consultation : la valeur affichée vient de la base.
+  await expect(page.getByTestId("lecture-regle")).toContainText(
+    "règle corrigée par l'admin E2E",
+    { timeout: 15_000 },
+  );
+
   await page.getByTestId("lecture-valider").click();
 
   // La publication est promue : elle quitte l'onglet « À lire ».
@@ -160,6 +199,10 @@ test("veille : extraction proposée puis validation admin", async ({ page }) => 
   await expect(
     page.locator("article", { hasText: TITRE }).first(),
   ).toBeVisible();
+
+  // La faille créée porte la règle **corrigée** (la validation utilise les
+  // valeurs enregistrées, plus la proposition IA brute).
+  expect(await regleFailleLiee()).toContain("règle corrigée par l'admin E2E");
 
   // La faille créée est **ACTIVE** (validation = faille active immédiate) mais
   // sans template : la bibliothèque affiche le chip « Template à rédiger » —

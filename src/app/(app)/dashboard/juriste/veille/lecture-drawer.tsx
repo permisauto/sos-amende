@@ -11,7 +11,12 @@ type TexteData = { contenu: string; dispositif: string | null };
  * `GET /api/veille/[id]/texte` ; à droite la **règle dégagée, ses conditions
  * d'application et les références** (articles, ECLI, juridiction).
  *
- * L'admin valide ou écarte **après lecture** ; le juriste lit et attend.
+ * Lot O — correction admin : dans le drawer, l'admin peut basculer en
+ * édition (`Modifier la proposition`) pour corriger titre, type, articles,
+ * règle, conditions et résumé **avant** de valider : « Enregistrer les
+ * corrections » écrit dans `SourceJuridique.proposition` sans créer de
+ * faille, « Valider » soumet les valeurs corrigées (elles deviennent la
+ * faille ACTIVE). Le juriste lit et attend, jamais d'édition.
  */
 export function LectureDrawer({
   s,
@@ -32,6 +37,7 @@ export function LectureDrawer({
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
   const [mode, setMode] = useState<"dispositif" | "integral">("dispositif");
+  const [edition, setEdition] = useState(false);
 
   useEffect(() => {
     let annule = false;
@@ -68,9 +74,23 @@ export function LectureDrawer({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  // Une fois les corrections enregistrées (ou la validation faite), retour à
+  // la consultation — même cadence que `lettre-edition.tsx` (bascule hors du
+  // cycle de rendu pour éviter un rendu en cascade).
+  useEffect(() => {
+    if (valider.state?.ok) {
+      queueMicrotask(() => setEdition(false));
+    }
+  }, [valider.state]);
+
   const p = s.proposition;
   const conditions = p?.conditions ?? [];
   const complet = p?.etat === "extrait";
+  // Édition réservée à l'admin, sur une publication encore à lire et une
+  // proposition réellement affichable (un `echec` se relance, ne se corrige pas).
+  const modifiable =
+    role === "ADMIN" && s.statut === "NOUVEAU" && !!p && p.etat !== "echec";
+  const enEdition = edition && modifiable && !!p;
   const aDispositif = !!texte?.dispositif;
   const corps =
     texte == null
@@ -175,127 +195,87 @@ export function LectureDrawer({
 
           {/* Colonne droite : règle, conditions, références, décision */}
           <section className="flex min-h-0 flex-col">
-            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-4">
-              {!p && (
-                <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 p-4">
-                  <p className="text-sm font-semibold text-zinc-800">
-                    Aucune proposition extraite.
+            {p && enEdition ? (
+              /* --- Édition (admin) : corriger puis enregistrer/valider --- */
+              <form
+                action={valider.action}
+                data-testid="lecture-form-correction"
+                className="flex min-h-0 flex-1 flex-col"
+              >
+                <input type="hidden" name="id" value={s.id} />
+                <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">
+                  <p className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-900">
+                    Corrigez la proposition suggérée par l&apos;IA, puis
+                    enregistrez ou validez : c&apos;est votre saisie qui
+                    deviendra la faille — jamais un article inventé par la
+                    machine.
                   </p>
-                  <p className="mt-1 text-xs text-zinc-600">
-                    Lancez « Extraire la proposition » sur la carte pour obtenir
-                    la règle dégagée, ses conditions et les articles retenus.
-                  </p>
-                  {extract.state?.error && (
-                    <p className="mt-2 text-xs text-red-700">{extract.state.error}</p>
-                  )}
-                </div>
-              )}
-
-              {p && p.etat === "echec" && (
-                <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-                  <p className="text-sm font-semibold text-red-800">
-                    Extraction en échec
-                  </p>
-                  <p className="mt-1 text-xs text-red-700">{p.motif}</p>
-                </div>
-              )}
-
-              {p && p.etat !== "echec" && (
-                <>
-                  <div>
-                    <p
-                      className="text-xs font-semibold uppercase tracking-wide text-zinc-500"
-                      data-testid="lecture-regle-titre"
+                  <label className="block text-xs font-semibold text-zinc-500">
+                    Titre de la faille
+                    <input
+                      type="text"
+                      name="titre"
+                      defaultValue={p.titre}
+                      data-testid="lecture-titre"
+                      className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                    />
+                  </label>
+                  <label className="block text-xs font-semibold text-zinc-500">
+                    Type d&apos;infraction
+                    <select
+                      name="typeInfraction"
+                      defaultValue={p.typeInfraction}
+                      data-testid="lecture-type"
+                      className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
                     >
-                      Règle dégagée
-                      {p.etat !== "extrait" && (
-                        <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
-                          proposition incomplète
-                        </span>
-                      )}
-                    </p>
-                    <p
-                      className="mt-1.5 text-sm leading-relaxed text-zinc-800"
-                      data-testid="lecture-regle"
-                    >
-                      {p.regle || "—"}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                      Conditions d&apos;application
-                    </p>
-                    {conditions.length > 0 ? (
-                      <ul
-                        className="mt-1.5 space-y-1.5"
-                        data-testid="lecture-conditions"
-                      >
-                        {conditions.map((c, i) => (
-                          <li
-                            key={i}
-                            className="flex gap-2 text-sm text-zinc-800"
-                          >
-                            <span
-                              aria-hidden
-                              className="mt-0.5 font-semibold text-emerald-700"
-                            >
-                              ☐
-                            </span>
-                            <span>{c}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="mt-1.5 text-sm text-zinc-500">
-                        Aucune condition d&apos;application extraite.
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                      Références
-                    </p>
-                    <div className="mt-1.5 flex flex-wrap gap-2">
-                      {p.articles.map((a) => (
-                        <span
-                          key={a}
-                          className="rounded-full border border-emerald-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-emerald-900"
-                        >
-                          {a}
-                        </span>
-                      ))}
-                      <span className="rounded-full border border-zinc-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-zinc-700">
-                        {p.typeInfraction === "SUSPENSION"
-                          ? "Suspension"
-                          : "Amende"}
-                      </span>
-                      {s.ecli && (
-                        <span className="rounded-full border border-zinc-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-zinc-700">
-                          {s.ecli}
-                        </span>
-                      )}
-                      {s.url && (
-                        <a
-                          href={s.url}
-                          target="_blank"
-                          rel="noreferrer noopener"
-                          className="rounded-full border border-sky-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-sky-800 hover:bg-sky-50"
-                        >
-                          Source primaire
-                        </a>
-                      )}
-                    </div>
-                    {p.resume && (
-                      <p className="mt-2 text-xs text-zinc-600">{p.resume}</p>
-                    )}
-                  </div>
-
+                      <option value="AMENDE">Amende</option>
+                      <option value="SUSPENSION">Suspension</option>
+                    </select>
+                  </label>
+                  <label className="block text-xs font-semibold text-zinc-500">
+                    Articles retenus (un par ligne)
+                    <textarea
+                      name="articles"
+                      rows={2}
+                      defaultValue={p.articles.join("\n")}
+                      data-testid="lecture-articles"
+                      className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                    />
+                  </label>
+                  <label className="block text-xs font-semibold text-zinc-500">
+                    Règle dégagée
+                    <textarea
+                      name="regle"
+                      rows={5}
+                      defaultValue={p.regle}
+                      data-testid="lecture-regle-edit"
+                      className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm leading-relaxed text-zinc-900"
+                    />
+                  </label>
+                  <label className="block text-xs font-semibold text-zinc-500">
+                    Conditions d&apos;application (une par ligne)
+                    <textarea
+                      name="conditions"
+                      rows={4}
+                      defaultValue={p.conditions.join("\n")}
+                      data-testid="lecture-conditions-edit"
+                      className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                    />
+                  </label>
+                  <label className="block text-xs font-semibold text-zinc-500">
+                    Objet de la décision (résumé)
+                    <textarea
+                      name="resume"
+                      rows={2}
+                      defaultValue={p.resume}
+                      data-testid="lecture-resume"
+                      className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+                    />
+                  </label>
                   {p.extraits.length > 0 && (
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                        Extraits verbatim
+                        Extraits verbatim (conservés, non modifiables)
                       </p>
                       <ul className="mt-1.5 space-y-1.5 border-l-2 border-zinc-200 pl-3">
                         {p.extraits.map((e, i) => (
@@ -306,62 +286,269 @@ export function LectureDrawer({
                       </ul>
                     </div>
                   )}
-
-                  {extract.state?.message && (
-                    <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">
-                      {extract.state.message}
+                </div>
+                <footer className="flex flex-wrap items-center gap-2 border-t border-zinc-200 px-6 py-4">
+                  <button
+                    type="submit"
+                    name="intention"
+                    value="brouillon"
+                    disabled={valider.pending}
+                    data-testid="lecture-enregistrer"
+                    className="rounded-full border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 disabled:opacity-50"
+                  >
+                    {valider.pending ? "Enregistrement…" : "Enregistrer les corrections"}
+                  </button>
+                  <button
+                    type="submit"
+                    name="intention"
+                    value="valider"
+                    disabled={valider.pending}
+                    data-testid="lecture-valider"
+                    className="rounded-full bg-emerald-700 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-800 disabled:opacity-50"
+                  >
+                    {valider.pending ? "Validation…" : "Valider (→ faille ACTIVE)"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEdition(false)}
+                    disabled={valider.pending}
+                    data-testid="lecture-annuler"
+                    className="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-50"
+                  >
+                    Annuler
+                  </button>
+                  {valider.state?.message && (
+                    <p className="w-full text-xs text-emerald-700">
+                      {valider.state.message}
                     </p>
                   )}
-                </>
-              )}
-            </div>
+                  {valider.state?.error && (
+                    <p className="w-full text-xs text-red-700">
+                      {valider.state.error}
+                    </p>
+                  )}
+                </footer>
+              </form>
+            ) : (
+              <>
+                <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-4">
+                  {!p && (
+                    <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 p-4">
+                      <p className="text-sm font-semibold text-zinc-800">
+                        Aucune proposition extraite.
+                      </p>
+                      <p className="mt-1 text-xs text-zinc-600">
+                        Le cron l&apos;extrait automatiquement au prochain
+                        passage — ou lancez « Extraire maintenant » sur la
+                        carte.
+                      </p>
+                      {extract.state?.error && (
+                        <p className="mt-2 text-xs text-red-700">
+                          {extract.state.error}
+                        </p>
+                      )}
+                    </div>
+                  )}
 
-            {/* Décision (admin) ou attente (juriste) */}
-            {p && complet && s.statut === "NOUVEAU" && (
-              <footer className="flex flex-wrap items-center gap-2 border-t border-zinc-200 px-6 py-4">
-                {role === "ADMIN" ? (
-                  <>
-                    <form action={valider.action}>
-                      <input type="hidden" name="id" value={s.id} />
-                      <button
-                        type="submit"
-                        disabled={valider.pending}
-                        data-testid="lecture-valider"
-                        className="rounded-full bg-emerald-700 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-800 disabled:opacity-50"
-                      >
-                        {valider.pending
-                          ? "Validation…"
-                          : "Valider la lecture (→ faille ACTIVE)"}
-                      </button>
-                    </form>
-                    <form action={ecart.action}>
-                      <input type="hidden" name="id" value={s.id} />
-                      <button
-                        type="submit"
-                        disabled={ecart.pending}
-                        data-testid="lecture-ecarter"
-                        className="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-50"
-                      >
-                        {ecart.pending ? "…" : "Écarter"}
-                      </button>
-                    </form>
-                  </>
-                ) : (
-                  <p className="text-[11px] text-zinc-600">
-                    En attente de validation par un administrateur.
-                  </p>
-                )}
-                {(valider.state?.message || ecart.state?.message) && (
-                  <p className="text-xs text-emerald-700">
-                    {valider.state?.message ?? ecart.state?.message}
-                  </p>
-                )}
-                {(valider.state?.error || ecart.state?.error) && (
-                  <p className="text-xs text-red-700">
-                    {valider.state?.error ?? ecart.state?.error}
-                  </p>
-                )}
-              </footer>
+                  {p && p.etat === "echec" && (
+                    <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                      <p className="text-sm font-semibold text-red-800">
+                        Extraction en échec
+                      </p>
+                      <p className="mt-1 text-xs text-red-700">{p.motif}</p>
+                      <p className="mt-1 text-[11px] text-red-600">
+                        Relance automatique au prochain passage (cron 03:30).
+                      </p>
+                    </div>
+                  )}
+
+                  {p && p.etat !== "echec" && (
+                    <>
+                      <div>
+                        <p
+                          className="text-xs font-semibold uppercase tracking-wide text-zinc-500"
+                          data-testid="lecture-regle-titre"
+                        >
+                          Règle dégagée
+                          {p.etat !== "extrait" && (
+                            <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                              proposition incomplète
+                            </span>
+                          )}
+                        </p>
+                        <p
+                          className="mt-1.5 text-sm leading-relaxed text-zinc-800"
+                          data-testid="lecture-regle"
+                        >
+                          {p.regle || "—"}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                          Conditions d&apos;application
+                        </p>
+                        {conditions.length > 0 ? (
+                          <ul
+                            className="mt-1.5 space-y-1.5"
+                            data-testid="lecture-conditions"
+                          >
+                            {conditions.map((c, i) => (
+                              <li
+                                key={i}
+                                className="flex gap-2 text-sm text-zinc-800"
+                              >
+                                <span
+                                  aria-hidden
+                                  className="mt-0.5 font-semibold text-emerald-700"
+                                >
+                                  ☐
+                                </span>
+                                <span>{c}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="mt-1.5 text-sm text-zinc-500">
+                            Aucune condition d&apos;application extraite.
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                          Références
+                        </p>
+                        <div className="mt-1.5 flex flex-wrap gap-2">
+                          {p.articles.map((a) => (
+                            <span
+                              key={a}
+                              className="rounded-full border border-emerald-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-emerald-900"
+                            >
+                              {a}
+                            </span>
+                          ))}
+                          <span className="rounded-full border border-zinc-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-zinc-700">
+                            {p.typeInfraction === "SUSPENSION"
+                              ? "Suspension"
+                              : "Amende"}
+                          </span>
+                          {s.ecli && (
+                            <span className="rounded-full border border-zinc-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-zinc-700">
+                              {s.ecli}
+                            </span>
+                          )}
+                          {s.url && (
+                            <a
+                              href={s.url}
+                              target="_blank"
+                              rel="noreferrer noopener"
+                              className="rounded-full border border-sky-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-sky-700 hover:bg-sky-50"
+                            >
+                              Source primaire
+                            </a>
+                          )}
+                        </div>
+                        {p.resume && (
+                          <p className="mt-2 text-xs text-zinc-600">{p.resume}</p>
+                        )}
+                      </div>
+
+                      {p.extraits.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                            Extraits verbatim
+                          </p>
+                          <ul className="mt-1.5 space-y-1.5 border-l-2 border-zinc-200 pl-3">
+                            {p.extraits.map((e, i) => (
+                              <li key={i} className="text-xs text-zinc-600">
+                                « {e} »
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {extract.state?.message && (
+                        <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">
+                          {extract.state.message}
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* Décision (admin) ou attente (juriste) */}
+                {p &&
+                  p.etat !== "echec" &&
+                  s.statut === "NOUVEAU" &&
+                  (role === "ADMIN" || complet) && (
+                    <footer className="flex flex-wrap items-center gap-2 border-t border-zinc-200 px-6 py-4">
+                      {role === "ADMIN" ? (
+                        <>
+                          {modifiable && (
+                            <button
+                              type="button"
+                              onClick={() => setEdition(true)}
+                              data-testid="lecture-modifier"
+                              className="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
+                            >
+                              Modifier la proposition
+                            </button>
+                          )}
+                          {complet && (
+                            <form action={valider.action}>
+                              <input type="hidden" name="id" value={s.id} />
+                              <button
+                                type="submit"
+                                disabled={valider.pending}
+                                data-testid="lecture-valider"
+                                className="rounded-full bg-emerald-700 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-800 disabled:opacity-50"
+                              >
+                                {valider.pending
+                                  ? "Validation…"
+                                  : "Valider la lecture (→ faille ACTIVE)"}
+                              </button>
+                            </form>
+                          )}
+                          {!complet && (
+                            <p className="text-[11px] font-medium text-amber-700">
+                              Proposition incomplète : corrigez-la avant
+                              validation.
+                            </p>
+                          )}
+                          <form action={ecart.action}>
+                            <input type="hidden" name="id" value={s.id} />
+                            <button
+                              type="submit"
+                              disabled={ecart.pending}
+                              data-testid="lecture-ecarter"
+                              className="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-50"
+                            >
+                              {ecart.pending ? "…" : "Écarter"}
+                            </button>
+                          </form>
+                        </>
+                      ) : (
+                        complet && (
+                          <p className="text-[11px] text-zinc-600">
+                            En attente de validation par un administrateur.
+                          </p>
+                        )
+                      )}
+                      {(valider.state?.message || ecart.state?.message) && (
+                        <p className="text-xs text-emerald-700">
+                          {valider.state?.message ?? ecart.state?.message}
+                        </p>
+                      )}
+                      {(valider.state?.error || ecart.state?.error) && (
+                        <p className="text-xs text-red-700">
+                          {valider.state?.error ?? ecart.state?.error}
+                        </p>
+                      )}
+                    </footer>
+                  )}
+              </>
             )}
           </section>
         </div>

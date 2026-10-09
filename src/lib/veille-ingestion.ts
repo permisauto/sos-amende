@@ -438,23 +438,46 @@ function publicationDepuisRow(row: SourceJuridique): PublicationVeille {
   };
 }
 
-function propositionEnregistree(row: SourceJuridique): { etat?: string } | null {
-  return row.proposition as { etat?: string } | null;
+function propositionEnregistree(
+  row: SourceJuridique,
+): { etat?: string; tentatives?: number } | null {
+  return row.proposition as { etat?: string; tentatives?: number } | null;
+}
+
+/**
+ * Publication éligible à (ré)extraction automatique :
+ *  - aucune proposition encore (extraction initiale) ;
+ *  - `echec` (relance à chaque passage, tant que l'appel échoue) ;
+ *  - `incomplet` **jamais encore retentée** : une seule reprise automatique
+ *    (anti ping-pong — au-delà, l'humain reprend la main via le bouton
+ *    unitaire ou la correction dans le drawer).
+ */
+export function estCandidatExtraction(
+  p: { etat?: string; tentatives?: number } | null,
+): boolean {
+  if (!p) return true;
+  if (p.etat === "echec") return true;
+  if (p.etat === "incomplet" && (p.tentatives ?? 0) < 1) return true;
+  return false;
 }
 
 /**
  * Extrait la proposition d'une publication et la stocke (`SourceJuridique
  * .proposition`) : état `extrait`/`incomplet`, ou `echec` avec motif pour
- * relance ultérieure. Ne lève jamais (null = écriture impossible).
+ * relance ultérieure. Chaque passage sur une proposition déjà connue
+ * incrémente `tentatives` (bornage des reprises automatiques des `incomplet`).
+ * Ne lève jamais (null = écriture impossible).
  */
 async function extraireEtStocker(
   row: SourceJuridique,
 ): Promise<PropositionVeille | null> {
   try {
+    const avant = propositionEnregistree(row);
     const res = await extraireProposition(publicationDepuisRow(row));
     const proposition: PropositionVeille = res.ok
       ? res.proposition
       : propositionEchec(res.motif);
+    if (avant) proposition.tentatives = (avant.tentatives ?? 0) + 1;
     await prisma.sourceJuridique.update({
       where: { id: row.id },
       data: { proposition: proposition as unknown as Prisma.InputJsonValue },
@@ -467,9 +490,10 @@ async function extraireEtStocker(
 }
 
 /**
- * Extrait les propositions des publications NOUVEAU encore non extraites
- * (ou en échec), mieux scorées d'abord : `limite` au plus, score >= `minScore`,
- * boîte de temps `BUDGET_TEMPS_EXTRACTION_MS`. Sans IA (off/sans clé) : no-op.
+ * Extrait les propositions des publications NOUVEAU encore non extraites,
+ * en échec, ou incomplètes jamais retentées (`estCandidatExtraction`), mieux
+ * scorées d'abord : `limite` au plus, score >= `minScore`, boîte de temps
+ * `BUDGET_TEMPS_EXTRACTION_MS`. Sans IA (off/sans clé) : no-op.
  */
 export async function extrairePropositionsEnAttente(
   limite = BUDGET_EXTRACTION,
@@ -491,10 +515,7 @@ export async function extrairePropositionsEnAttente(
   }
 
   const candidats = rows
-    .filter((r) => {
-      const p = propositionEnregistree(r);
-      return !p || p.etat === "echec";
-    })
+    .filter((r) => estCandidatExtraction(propositionEnregistree(r)))
     .slice(0, limite);
 
   const bilan = { ...BILAN_VIDE };

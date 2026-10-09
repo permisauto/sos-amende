@@ -19,8 +19,9 @@ export default async function VeillePage({
   const user = await requireJuriste();
   const { s } = await searchParams;
   const filtre = typeof s === "string" ? s.toUpperCase() : "NOUVEAU";
-  const compteurs: Record<"NOUVEAU" | "PROMU" | "ECARTE", number> = {
+  const compteurs: Record<"NOUVEAU" | "A_VALIDER" | "PROMU" | "ECARTE", number> = {
     NOUVEAU: 0,
+    A_VALIDER: 0,
     PROMU: 0,
     ECARTE: 0,
   };
@@ -30,20 +31,28 @@ export default async function VeillePage({
     // Compteurs par statut : après une promotion ou un écart, la publication
     // quitte la file « À lire » — sans ce compteur, l'action passerait
     // totalement inaperçue (la carte et son message disparaissent ensemble).
-    const [rows, groupes] = await Promise.all([
+    // `A_VALIDER` = propositions extraites et complètes, prêtes pour l'admin.
+    const propositionComplete = { path: ["etat"], equals: "extrait" } as const;
+    const [rows, groupes, aValider] = await Promise.all([
       prisma.sourceJuridique.findMany({
         where:
           filtre === "TOUTES"
             ? {}
             : filtre === "PROMU" || filtre === "ECARTE"
               ? { statut: filtre }
-              : { statut: "NOUVEAU" },
+              : filtre === "A_VALIDER"
+                ? { statut: "NOUVEAU", proposition: propositionComplete }
+                : { statut: "NOUVEAU" },
         orderBy: [{ score: "desc" }, { createdAt: "desc" }],
         take: 100,
       }),
       prisma.sourceJuridique.groupBy({ by: ["statut"], _count: true }),
+      prisma.sourceJuridique.count({
+        where: { statut: "NOUVEAU", proposition: propositionComplete },
+      }),
     ]);
     compteurs.NOUVEAU = groupes.find((g) => g.statut === "NOUVEAU")?._count ?? 0;
+    compteurs.A_VALIDER = aValider;
     compteurs.PROMU = groupes.find((g) => g.statut === "PROMU")?._count ?? 0;
     compteurs.ECARTE = groupes.find((g) => g.statut === "ECARTE")?._count ?? 0;
     sources = rows.map((r) => ({
@@ -94,6 +103,7 @@ export default async function VeillePage({
       <nav className="mt-4 flex flex-wrap gap-2 text-xs">
         {[
           ["NOUVEAU", "À lire", compteurs.NOUVEAU],
+          ["A_VALIDER", "À valider", compteurs.A_VALIDER],
           ["PROMU", "Promues", compteurs.PROMU],
           ["ECARTE", "Écartées", compteurs.ECARTE],
           ["TOUTES", "Toutes", null],

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { archivesATraiter, listerArchives } from "@/lib/veille-ingestion";
+import { archivesATraiter, estCandidatExtraction, listerArchives } from "@/lib/veille-ingestion";
 
 describe("listerArchives — index DILA", () => {
   it("extrait et trie les archives de la source (ordre chronologique)", () => {
@@ -42,5 +42,25 @@ describe("archivesATraiter — reprise du lot", () => {
 
   it("retourne un lot vide quand tout est déjà traité", () => {
     expect(archivesATraiter(listing, "JADE_20261004-214539.tar.gz")).toEqual([]);
+  });
+});
+
+describe("estCandidatExtraction — reprise automatique (lot O)", () => {
+  it("une publication sans proposition est toujours extraite", () => {
+    expect(estCandidatExtraction(null)).toBe(true);
+  });
+
+  it("un échec est repris à chaque passage", () => {
+    expect(estCandidatExtraction({ etat: "echec", tentatives: 9 })).toBe(true);
+  });
+
+  it("un incomplet n'est repris automatiquement qu'une seule fois", () => {
+    expect(estCandidatExtraction({ etat: "incomplet" })).toBe(true);
+    expect(estCandidatExtraction({ etat: "incomplet", tentatives: 0 })).toBe(true);
+    expect(estCandidatExtraction({ etat: "incomplet", tentatives: 1 })).toBe(false);
+  });
+
+  it("une proposition complète n'est plus retouchée par le cron", () => {
+    expect(estCandidatExtraction({ etat: "extrait", tentatives: 3 })).toBe(false);
   });
 });

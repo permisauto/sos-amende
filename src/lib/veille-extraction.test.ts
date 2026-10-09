@@ -7,8 +7,10 @@ import {
   extraireProposition,
   extractionDispo,
   extractionMock,
+  lignesListe,
   normaliserPourComparaison,
   parserExtraction,
+  propositionDepuisFormulaire,
   type PublicationVeille,
 } from "./veille-extraction";
 
@@ -217,6 +219,110 @@ describe("extraireProposition — providers", () => {
 describe("bornes du lot automatique", () => {
   it("garde le budget et le seuil d'ingestion cohérents avec la page veille", () => {
     expect(SCORE_SEUIL_EXTRACTION).toBe(12);
-    expect(BUDGET_EXTRACTION).toBe(15);
+    // Budget élargi (lot O) : le cron rejoue les candidats restants à chaque
+    // passage — la boîte de temps reste le garde-fou réel.
+    expect(BUDGET_EXTRACTION).toBe(40);
+  });
+});
+
+describe("lignesListe — listes saisies une par ligne", () => {
+  it("découpe CRLF/LF, trime et ignore les lignes vides", () => {
+    expect(lignesListe("C. route, art. L. 121-1\r\n\n  C. route, art. R. 417-2  \n")).toEqual([
+      "C. route, art. L. 121-1",
+      "C. route, art. R. 417-2",
+    ]);
+    expect(lignesListe("   ")).toEqual([]);
+  });
+});
+
+describe("propositionDepuisFormulaire — correction admin (lot O)", () => {
+  const complet = {
+    titre: "Défaut de motivation — annulation de l'avis",
+    typeInfraction: "AMENDE" as const,
+    articles: "C. route, art. L. 121-1",
+    regle:
+      "L'avis de contravention doit être motivé à peine de nullité, la juridiction annulant l'avis régulièrement contesté faute de motivation suffisante.",
+    conditions:
+      "L'avis de contravention contesté ne comporte pas de motif mentionnant les raisons du contrôle.",
+    resume: "Annulation pour défaut de motivation de l'arrêté attaqué.",
+  };
+
+  it("construit une proposition complète et datée avec les extraits conservés", () => {
+    const r = propositionDepuisFormulaire(complet, {
+      extraits: ["la juridiction annule l'avis faute de motivation"],
+      extraitLe: "2026-10-01T10:00:00.000Z",
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.proposition.etat).toBe("extrait");
+    expect(r.proposition.extraitLe).toBe("2026-10-01T10:00:00.000Z");
+    expect(r.proposition.corrigeLe).toBeTruthy();
+    expect(r.proposition.extraits).toEqual([
+      "la juridiction annule l'avis faute de motivation",
+    ]);
+    expect(r.proposition.motif).toBeUndefined();
+  });
+
+  it("déduplique les articles/conditions et bascule en SUSPENSION", () => {
+    const r = propositionDepuisFormulaire({
+      ...complet,
+      typeInfraction: "SUSPENSION",
+      articles: "C. route, art. L. 224-16\nC. route, art. L. 224-16",
+      conditions: `${complet.conditions}\n${complet.conditions}`,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.proposition.articles).toHaveLength(1);
+    expect(r.proposition.conditions).toHaveLength(1);
+    expect(r.proposition.typeInfraction).toBe("SUSPENSION");
+  });
+
+  it("refuse un titre trop court ou un article mal formé (jamais acceptés)", () => {
+    const tropCourt = propositionDepuisFormulaire({ ...complet, titre: "ok" });
+    expect(tropCourt.ok).toBe(false);
+    if (!tropCourt.ok) expect(tropCourt.erreur).toContain("Titre trop court");
+
+    const articleInvalide = propositionDepuisFormulaire({
+      ...complet,
+      articles: "X",
+    });
+    expect(articleInvalide.ok).toBe(false);
+    if (!articleInvalide.ok) expect(articleInvalide.erreur).toContain("Article invalide");
+
+    const conditionCourte = propositionDepuisFormulaire({
+      ...complet,
+      conditions: "trop courte",
+    });
+    expect(conditionCourte.ok).toBe(false);
+    if (!conditionCourte.ok) expect(conditionCourte.erreur).toContain("Condition invalide");
+  });
+
+  it("sauvegarde tolère l'incomplet (motif explicite) pour un brouillon", () => {
+    const sansArticle = propositionDepuisFormulaire({
+      ...complet,
+      articles: "",
+      conditions: "",
+    });
+    expect(sansArticle.ok).toBe(true);
+    if (!sansArticle.ok) return;
+    expect(sansArticle.proposition.etat).toBe("incomplet");
+    expect(sansArticle.proposition.motif).toContain("aucun article");
+    expect(sansArticle.proposition.motif).toContain("aucune condition");
+  });
+
+  it("une règle trop courte rend la proposition incomplète (validable après correction)", () => {
+    const r = propositionDepuisFormulaire({ ...complet, regle: "trop court" });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.proposition.etat).toBe("incomplet");
+    expect(r.proposition.motif).toContain("règle dégagée");
+  });
+
+  it("les extraits verbatim ne bloquent plus la validation après correction", () => {
+    const r = propositionDepuisFormulaire(complet, { extraits: [] });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.proposition.extraits).toEqual([]);
+    expect(r.proposition.etat).toBe("extrait");
   });
 });

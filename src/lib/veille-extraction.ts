@@ -40,6 +40,10 @@ export type PropositionVeille = {
   motif?: string;
   /** Date ISO de l'extraction. */
   extraitLe: string;
+  /** (Ré)extractions automatiques déjà tentées sur cette proposition. */
+  tentatives?: number;
+  /** Date ISO de la dernière correction manuelle (admin). */
+  corrigeLe?: string;
 };
 
 export type PublicationVeille = {
@@ -55,8 +59,13 @@ export type PublicationVeille = {
 
 /** Score minimal pour l'extraction automatique (même seuil de pertinence). */
 export const SCORE_SEUIL_EXTRACTION = 12;
-/** Nombre max de publications extraites par passage automatique. */
-export const BUDGET_EXTRACTION = 15;
+/**
+ * Nombre max de publications extraites par passage automatique. Le cron
+ * rejoue les candidats restants à chaque passage : le lot du jour finit par
+ * se vider tout seul (pic TA mensuel compris), la boîte de temps reste le
+ * garde-fou réel.
+ */
+export const BUDGET_EXTRACTION = 40;
 /** Boîte de temps de l'extraction automatique (le cron veille est à 300 s). */
 export const BUDGET_TEMPS_EXTRACTION_MS = 150_000;
 
@@ -344,5 +353,131 @@ export function propositionEchec(motif: string): PropositionVeille {
     extraits: [],
     motif,
     extraitLe: new Date().toISOString(),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Correction manuelle (admin) — lot O
+// ---------------------------------------------------------------------------
+
+export type ValeursProposition = {
+  titre: string;
+  typeInfraction: "AMENDE" | "SUSPENSION";
+  /** Articles saisis : un par ligne. */
+  articles: string;
+  regle: string;
+  /** Conditions d'application saisies : une par ligne. */
+  conditions: string;
+  resume: string;
+};
+
+export type ResultatFormulation =
+  | { ok: true; proposition: PropositionVeille }
+  | { ok: false; erreur: string };
+
+/** Découpe une liste saisie « un élément par ligne » (CR/LF tolérés). */
+export function lignesListe(brut: string): string[] {
+  return brut
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+}
+
+function dedupLignes(lignes: string[]): string[] {
+  const vus = new Set<string>();
+  const sortie: string[] = [];
+  for (const l of lignes) {
+    const cle = normaliserPourComparaison(l);
+    if (vus.has(cle)) continue;
+    vus.add(cle);
+    sortie.push(l);
+  }
+  return sortie;
+}
+
+/**
+ * Construit (ou corrige) une proposition à partir des valeurs **saisies par
+ * l'admin** dans le formulaire du drawer (lot O).
+ *
+ * Garde-fous :
+ *  - mêmes contrôles de forme que `parserExtraction` (longueurs bornées,
+ *    déduplication) mais **sans** exigence de verbatim : la saisie manuelle
+ *    est signée par l'humain, pas générée par l'IA ;
+ *  - l'état passe à `extrait` (donc validable) dès qu'il y a au moins un
+ *    article, une règle de 15 caractères et une condition — les extraits
+ *    verbatim de l'extraction sont conservés pour transparence mais ne
+ *    bloquent plus la validation **après** correction ;
+ *  - jamais d'article « inventé » : ce champ n'existe que s'il est tapé par
+ *    l'admin qui vient de lire la décision.
+ */
+export function propositionDepuisFormulaire(
+  valeurs: ValeursProposition,
+  options: { extraits?: string[]; extraitLe?: string } = {},
+): ResultatFormulation {
+  const titre = valeurs.titre.trim();
+  if (titre.length < 5) {
+    return { ok: false, erreur: "Titre trop court (5 caractères minimum)." };
+  }
+  if (titre.length > 200) {
+    return { ok: false, erreur: "Titre trop long (200 caractères maximum)." };
+  }
+
+  const articles = dedupLignes(lignesListe(valeurs.articles));
+  if (articles.length > 5) {
+    return { ok: false, erreur: "Au plus 5 articles retenus." };
+  }
+  for (const a of articles) {
+    if (a.length < 3 || a.length > 120) {
+      return {
+        ok: false,
+        erreur: `Article invalide (3 à 120 caractères par ligne) : « ${a.slice(0, 60)} »`,
+      };
+    }
+  }
+
+  const conditions = dedupLignes(lignesListe(valeurs.conditions));
+  if (conditions.length > 6) {
+    return { ok: false, erreur: "Au plus 6 conditions d'application." };
+  }
+  for (const c of conditions) {
+    if (c.length < 15 || c.length > 300) {
+      return {
+        ok: false,
+        erreur: `Condition invalide (15 à 300 caractères par ligne) : « ${c.slice(0, 60)} »`,
+      };
+    }
+  }
+
+  const regle = valeurs.regle.trim();
+  if (regle.length > 2500) {
+    return { ok: false, erreur: "Règle dégagée trop longue (2 500 caractères maximum)." };
+  }
+
+  const complet = articles.length > 0 && regle.length >= 15 && conditions.length > 0;
+  const motif = complet
+    ? undefined
+    : [
+        articles.length === 0 ? "aucun article retenu" : null,
+        regle.length < 15 ? "règle dégagée absente ou trop courte" : null,
+        conditions.length === 0 ? "aucune condition d'application" : null,
+      ]
+        .filter(Boolean)
+        .join(" ; ") || "proposition incomplète";
+
+  return {
+    ok: true,
+    proposition: {
+      etat: complet ? "extrait" : "incomplet",
+      titre,
+      typeInfraction: valeurs.typeInfraction === "SUSPENSION" ? "SUSPENSION" : "AMENDE",
+      articles,
+      regle,
+      conditions,
+      resume: valeurs.resume.trim().slice(0, 1200),
+      extraits: (options.extraits ?? []).slice(0, 3),
+      motif,
+      extraitLe: options.extraitLe ?? new Date().toISOString(),
+      corrigeLe: new Date().toISOString(),
+    },
   };
 }

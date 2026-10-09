@@ -75,7 +75,7 @@ export async function loginAs(page: Page, email: string): Promise<void> {
   for (let attempt = 1; attempt <= 5; attempt++) {
     await unlink(magicFile(email)).catch(() => {});
 
-    await page.goto("/login");
+    await ouvrirFormulaireConnexion(page);
     await page.getByLabel("Adresse e-mail").fill(email);
     await page
       .getByRole("button", { name: "Recevoir mon lien de connexion" })
@@ -106,6 +106,32 @@ export async function loginAs(page: Page, email: string): Promise<void> {
       await page.waitForTimeout(500 * attempt);
     }
   }
+}
+
+/**
+ * Ouvre `/login` avec un contexte vierge.
+ *
+ * Piège sous charge : `@auth/core` re-signe le JWT et renvoie `Set-Cookie` à
+ * CHAQUE évaluation de session — une réponse RSC encore en vol (prefetch du
+ * dashboard précédent) peut donc ré-émettre l'ancien cookie juste après le
+ * purge des cookies, ce qui fait rediriger `/login` vers `/dashboard` et
+ * `loginAs` n'y trouve plus de formulaire. On laisse d'abord le réseau se
+ * calmer (flush des réponses en vol), on purge, et on repurge si la
+ * redirection a eu lieu.
+ */
+async function ouvrirFormulaireConnexion(page: Page): Promise<void> {
+  await page
+    .waitForLoadState("networkidle", { timeout: 3_000 })
+    .catch(() => {});
+  for (let tentative = 1; tentative <= 3; tentative++) {
+    if (tentative > 1) await page.waitForTimeout(500);
+    await page.context().clearCookies();
+    await page.goto("/login");
+    if (!page.url().includes("/dashboard")) return;
+  }
+  throw new Error(
+    `Impossible d'ouvrir /login : redirigé vers ${page.url()} malgré le purge des cookies.`,
+  );
 }
 
 async function readMagicLink(

@@ -10,6 +10,10 @@ import {
   extrairePropositionSource,
   extrairePropositionsEnAttente,
 } from "@/lib/veille-ingestion";
+import {
+  propositionDepuisFormulaire,
+  type ValeursProposition,
+} from "@/lib/veille-extraction";
 import type { PropositionVeille } from "@/lib/veille-extraction";
 import type { JurisprudenceRef } from "@/lib/catalogue-sources";
 
@@ -178,14 +182,41 @@ export async function extrairePropositionsLot(
   };
 }
 
+/** Lit les champs édités du drawer, ou `null` si le bouton n'a envoyé que l'id. */
+function lirePropositionFormulaire(formData: FormData): ValeursProposition | null {
+  if (!formData.has("titre")) return null;
+  return {
+    titre: String(formData.get("titre") ?? ""),
+    typeInfraction:
+      formData.get("typeInfraction") === "SUSPENSION" ? "SUSPENSION" : "AMENDE",
+    articles: String(formData.get("articles") ?? ""),
+    regle: String(formData.get("regle") ?? ""),
+    conditions: String(formData.get("conditions") ?? ""),
+    resume: String(formData.get("resume") ?? ""),
+  };
+}
+
 /**
- * Valide la proposition extraite d'une publication après lecture (lot M) :
- * crée la faille **ACTIVE immédiate** (choix produit explicite), pré-remplie —
- * règle dégagée + conditions d'application + articles + jurisprudence. Le
- * template de lettre reste vide : sans template, la faille ne peut **jamais**
- * nourrir une lettre (garde-fous `analyserDossier`/`confirmerFaille`) —
- * l'admin rédige le template dans la bibliothèque. Décision **admin seul**
- * (`requireAdmin`).
+ * Validation (ou correction seule) de la proposition d'une publication après
+ * lecture dans le drawer — décision **admin seul** (`requireAdmin`). Deux
+ * entrées sur le même formulaire :
+ *
+ *  - **carte** (aucun champ édité) : la proposition stockée doit être
+ *    complète (`etat === "extrait"`) — comportement historique ;
+ *  - **drawer en édition** (champs présents) : les valeurs soumises sont
+ *    recontrôlées par `propositionDepuisFormulaire` (lot O) — l'admin peut
+ *    donc **compléter une proposition `incomplet` puis la valider dans la
+ *    foulée** : le contrôle porte sur les valeurs soumises, plus sur l'état
+ *    de l'extraction.
+ *
+ * `intention=brouillon` : écrit les corrections dans
+ * `SourceJuridique.proposition` **sans créer de faille** (l'admin finira
+ * plus tard). `intention=valider` (défaut) : crée la faille **ACTIVE
+ * immédiate** (choix produit explicite), pré-remplie — règle dégagée +
+ * conditions + articles + jurisprudence. Le template de lettre reste vide :
+ * sans template, la faille ne peut **jamais** nourrir une lettre (garde-fous
+ * `analyserDossier`/`confirmerFaille`) — l'admin rédige le template dans la
+ * bibliothèque.
  */
 export async function validerPropositionSource(
   _prev: VeilleState,
@@ -200,22 +231,69 @@ export async function validerPropositionSource(
   if (source.statut !== "NOUVEAU") {
     return { error: "Publication déjà traitée (promue ou écartée)." };
   }
-  const prop = source.proposition as PropositionVeille | null;
-  if (!prop || prop.etat !== "extrait") {
+  const stockee = source.proposition as PropositionVeille | null;
+  const intention =
+    formData.get("intention") === "brouillon" ? "brouillon" : "valider";
+
+  let proposition: PropositionVeille;
+  let corrigee = false;
+  const formulaire = lirePropositionFormulaire(formData);
+  if (formulaire) {
+    const res = propositionDepuisFormulaire(formulaire, {
+      extraits: stockee && stockee.etat !== "echec" ? stockee.extraits : [],
+      extraitLe: stockee?.extraitLe,
+    });
+    if (!res.ok) return { error: res.erreur };
+    proposition = res.proposition;
+    corrigee = true;
+    if (intention === "brouillon") {
+      await prisma.sourceJuridique.update({
+        where: { id },
+        data: { proposition: proposition as unknown as Prisma.InputJsonValue },
+      });
+      revalidatePath("/dashboard/juriste/veille");
+      return proposition.etat === "extrait"
+        ? {
+            ok: true,
+            message:
+              "Corrections enregistrées : la proposition est complète — validez-la quand vous voulez.",
+          }
+        : {
+            ok: true,
+            message: `Corrections enregistrées — proposition encore incomplète : ${
+              proposition.motif ?? "à compléter"
+            }.`,
+          };
+    }
+  } else {
+    if (intention === "brouillon") {
+      return { error: "Aucune correction soumise." };
+    }
+    if (!stockee || stockee.etat !== "extrait") {
+      return {
+        error:
+          "Proposition absente ou incomplète : corrigez-la depuis « Lire la décision », ou relancez l'extraction.",
+      };
+    }
+    proposition = stockee;
+  }
+
+  if (proposition.etat !== "extrait") {
     return {
-      error:
-        "Proposition absente ou incomplète : relancez l'extraction, puis vérifiez-la avant validation.",
+      error: `Proposition incomplète : ${
+        proposition.motif ?? "à compléter"
+      }. Corrigez-la avant validation.`,
     };
   }
 
   const titreFaille =
-    prop.titre.length >= 5 ? prop.titre : source.titre.slice(0, 120);
-  const articleLoi = prop.articles.join(" ; ");
+    proposition.titre.length >= 5 ? proposition.titre : source.titre.slice(0, 120);
+  const articleLoi = proposition.articles.join(" ; ");
   if (articleLoi.length < 2) return { error: "Aucun article retenu." };
 
-  const conditions = prop.conditions ?? [];
+  const conditions = proposition.conditions ?? [];
   const regle = [
-    prop.regle.trim(),
+    proposition.regle.trim(),
     conditions.length
       ? `Conditions d'application :\n${conditions.map((c) => `- ${c}`).join("\n")}`
       : null,
@@ -231,12 +309,12 @@ export async function validerPropositionSource(
     date: source.dateSource ? source.dateSource.toISOString().slice(0, 10) : null,
     url: source.url,
     verifiee: false,
-    resume: prop.resume || prop.extraits[0] || null,
+    resume: proposition.resume || proposition.extraits[0] || null,
   };
 
   const faille = await prisma.failleJuridique.create({
     data: {
-      typeInfraction: prop.typeInfraction,
+      typeInfraction: proposition.typeInfraction,
       titreFaille,
       articleLoi,
       regle,
@@ -250,6 +328,9 @@ export async function validerPropositionSource(
   await prisma.sourceJuridique.update({
     where: { id },
     data: {
+      ...(corrigee
+        ? { proposition: proposition as unknown as Prisma.InputJsonValue }
+        : {}),
       statut: "PROMU",
       failleId: faille.id,
       reviewedAt: new Date(),
