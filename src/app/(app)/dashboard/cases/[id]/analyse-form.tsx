@@ -302,7 +302,7 @@ export function AnalyseForm({
             </p>
             <div className="mt-2 flex flex-col gap-2.5">
               {groupe.questions.map((q) => (
-                <div key={q.cle}>
+                <div key={q.cle} className="group">
                   <label className="flex items-start gap-2 text-sm text-zinc-700">
                     <input
                       type="checkbox"
@@ -316,10 +316,40 @@ export function AnalyseForm({
                     <p className="ml-6 mt-1 text-xs text-amber-700">
                       Cette réponse appelle un document :{" "}
                       <strong>{libellePreuve(q.preuveClient)}</strong> — vous
-                      pourrez le joindre juste après l&apos;analyse, sur la
-                      fiche de votre dossier (facultatif : le dossier n&apos;est
-                      pas bloqué sans lui).
+                      pourrez le joindre juste après l&apos;analyse, sur la fiche
+                      de votre dossier (facultatif : le dossier n&apos;est pas
+                      bloqué sans lui).
                     </p>
+                  )}
+                  {/* Interstitial « déjà payé » : piloté en CSS (:checked) sur
+                      l'état réel de la case — contrairement à un état React, il
+                      survit au reset natif du formulaire après une action
+                      serveur (React 19), sans jamais désynchroniser l'encart et
+                      ce qui part réellement au serveur. */}
+                  {q.cle === "paiementDejaFait" && (
+                    <div
+                      data-testid="interstitial-paiement"
+                      className="ml-6 mt-2 hidden rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 group-has-[:checked]:block"
+                    >
+                      <p className="font-semibold">
+                        Paiement déjà effectué — à lire avant de continuer
+                      </p>
+                      <p className="mt-1">
+                        Une amende déjà payée peut rendre la contestation sans
+                        objet (ou ouvrir droit à un remboursement). Un juriste
+                        examinera votre dossier avant toute suite : votre crédit
+                        ne sera consommé qu&apos;après sa validation.
+                      </p>
+                      <label className="mt-2 flex items-start gap-2 font-medium">
+                        <input
+                          type="checkbox"
+                          name="paiementConfirme"
+                          className="mt-0.5 h-4 w-4 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+                        />
+                        J&apos;ai bien compris et confirme que ce paiement a été
+                        effectué
+                      </label>
+                    </div>
                   )}
                 </div>
               ))}

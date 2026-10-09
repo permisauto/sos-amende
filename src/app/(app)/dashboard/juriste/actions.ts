@@ -366,48 +366,78 @@ export async function validerDossier(
     }
   }
 
-  await prisma.$transaction([
-    prisma.dossier.update({
-      where: { id: dossier.id },
-      data: {
-        statut: estSigne ? "PRET" : "EN_ATTENTE_PRE_SIGNATURE",
-        valideLe: new Date(),
-        canalEnvoi: canal,
-        lettreGeneree: lettreFinale,
-      },
-    }),
-    ...(pdfSigne
-      ? [
-          prisma.courrier.create({
-            data: {
-              dossierId: dossier.id,
-              signatureUrl: pdfSigne.signatureUrl,
-              pdfUrl: pdfSigne.pdfUrl,
-              ...(packUrls ? { packUrls } : {}),
-            },
-          }),
-        ]
-      : []),
-    // Pack sans nouveau courrier (déjà signé) : rattaché au courrier existant,
-    // ou premier courrier du dossier s'il n'y en a aucun (legs non signé).
-    ...(packUrls && !pdfSigne
-      ? courrier
-        ? [
-            prisma.courrier.update({
-              where: { id: courrier.id },
-              data: { packUrls },
-            }),
-          ]
-        : [
-            prisma.courrier.create({
-              data: { dossierId: dossier.id, packUrls },
-            }),
-          ]
-      : []),
-    prisma.dossierEvent.create({
-      data: { dossierId: dossier.id, type: "VALIDATION" },
-    }),
-  ]);
+  // Débit différé (« paiement déjà signalé ») : le crédit n'a pas été consommé
+  // à l'analyse — il l'est ici, à l'approbation du juriste, le marqueur
+  // `creditConsome` basculant dans la même transaction (jamais l'un sans
+  // l'autre). Un dossier sans marqueur suit le flux historique : ni débit ni
+  // marqueur à la validation.
+  const differeNonConsome = dataExt["creditConsome"] === false;
+  try {
+    await prisma.$transaction(async (tx) => {
+      if (differeNonConsome) {
+        const debit = await tx.user.updateMany({
+          where: { id: dossier.userId, credits: { gte: 1 } },
+          data: { credits: { decrement: 1 } },
+        });
+        if (debit.count === 0) throw new Error("CREDIT_INSUFFISANT");
+      }
+      await tx.dossier.update({
+        where: { id: dossier.id },
+        data: {
+          statut: estSigne ? "PRET" : "EN_ATTENTE_PRE_SIGNATURE",
+          valideLe: new Date(),
+          canalEnvoi: canal,
+          lettreGeneree: lettreFinale,
+          ...(differeNonConsome
+            ? { extractedData: { ...dataExt, creditConsome: true } as object }
+            : {}),
+        },
+      });
+      if (pdfSigne) {
+        await tx.courrier.create({
+          data: {
+            dossierId: dossier.id,
+            signatureUrl: pdfSigne.signatureUrl,
+            pdfUrl: pdfSigne.pdfUrl,
+            ...(packUrls ? { packUrls } : {}),
+          },
+        });
+      } else if (packUrls) {
+        // Pack sans nouveau courrier (déjà signé) : rattaché au courrier
+        // existant, ou premier courrier du dossier s'il n'y en a aucun.
+        if (courrier) {
+          await tx.courrier.update({
+            where: { id: courrier.id },
+            data: { packUrls },
+          });
+        } else {
+          await tx.courrier.create({
+            data: { dossierId: dossier.id, packUrls },
+          });
+        }
+      }
+      await tx.dossierEvent.create({
+        data: {
+          dossierId: dossier.id,
+          type: "VALIDATION",
+          ...(differeNonConsome
+            ? {
+                detail:
+                  "Crédit consommé (dossier « déjà payé » — débit différé à la validation)",
+              }
+            : {}),
+        },
+      });
+    });
+  } catch (e) {
+    if (e instanceof Error && e.message === "CREDIT_INSUFFISANT") {
+      return {
+        error:
+          "Crédit client indisponible : ce dossier « déjà payé » attendait son débit différé. Faites valider son paiement (admin → Paiements) puis relancez la validation.",
+      };
+    }
+    throw e;
+  }
 
   // Canal en ligne (ANTAI/Télérecours) : le client dépose lui-même sa
   // contestation sur le portail officiel via le lien de dépôt assisté
@@ -1280,12 +1310,20 @@ export async function rejeterDossier(
     await tx.dossierEvent.create({
       data: { dossierId: dossier.id, type: "REJET", detail: motif },
     });
-    // Aucune lettre transmise : le crédit consommé au dépôt est rendu au client
-    // (il peut lancer un nouveau dossier sans repayer).
-    await tx.user.update({
-      where: { id: dossier.userId },
-      data: { credits: { increment: 1 } },
-    });
+    // Aucune lettre transmise : le crédit consommé est rendu au client (il peut
+    // lancer un nouveau dossier sans repayer) — **sauf** débit différé jamais
+    // consommé (dossier « déjà payé » : rendre un crédit ici serait offrir une
+    // analyse gratuite). Le marqueur `creditConsome: false` distingue les deux.
+    const differeNonConsome =
+      ((dossier.extractedData ?? {}) as Record<string, unknown>)[
+        "creditConsome"
+      ] === false;
+    if (!differeNonConsome) {
+      await tx.user.update({
+        where: { id: dossier.userId },
+        data: { credits: { increment: 1 } },
+      });
+    }
     return false;
   });
   if (dejaRejete) {

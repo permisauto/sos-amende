@@ -1289,6 +1289,19 @@ export default async function JuristeCasePage(
               )}
             </dl>
             <div className="mt-4 border-t border-zinc-100 pt-4">
+              {data?.paiementDejaFait === true && (
+                <div
+                  data-testid="badge-paiement-deja-paye"
+                  className="mb-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800"
+                >
+                  <span className="font-semibold">
+                    Paiement déjà signalé par le client.
+                  </span>{" "}
+                  {data["creditConsome"] === false
+                    ? "Crédit non consommé : le débit aura lieu à votre validation du dossier (débit différé)."
+                    : "Vérifiez ce paiement avant validation — une amende déjà payée peut rendre la contestation sans objet."}
+                </div>
+              )}
               <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
                 Contexte (questionnaire)
               </h3>

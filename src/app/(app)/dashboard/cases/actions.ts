@@ -324,7 +324,23 @@ export async function analyserDossier(
     ...(Number.isFinite(pointsAnt) && pointsAnt > 0
       ? { pointsRetiresMemesDate: pointsAnt }
       : {}),
+    // Marqueur de débit différé (« paiement déjà signalé ») : survit aux
+    // relances d'analyse — c'est lui qui décide du débit à la validation.
+    ...(typeof anterieur.creditConsome === "boolean"
+      ? { creditConsome: anterieur.creditConsome }
+      : {}),
   };
+
+  // Garde-fou « amende déjà payée » : la case questionnaire impose une
+  // confirmation explicite — recontrôlée ici côté serveur (le formulaire
+  // n'est qu'une guidance : on ne confie jamais un tel contrôle à l'UI).
+  const dejaPaye = data.paiementDejaFait === true;
+  if (dejaPaye && formData.get("paiementConfirme") !== "on") {
+    return {
+      error:
+        "Paiement déjà signalé : prenez connaissance de l'encart puis cochez la confirmation avant de lancer l'analyse.",
+    };
+  }
 
   // OCR v2 : la catégorie est la source de vérité du `docType` (et le supprime
   // pour les catégories hors pack : 48N, annulation, INCONNU). Anciens
@@ -396,6 +412,9 @@ export async function analyserDossier(
   //   zéro) ;
   // - sans faille (aucune lettre) → EN_ATTENTE_VALIDATION sans débit : le
   //   juriste examine le fondement, le crédit n'est jamais débité.
+  // - « déjà payé » signalé       → aucun débit ici (débit différé) : le
+  //   crédit n'est consommé qu'à la validation du juriste, jamais à la
+  //   relance, et un rejet ne rembourse pas un crédit jamais débité.
   // Idempotence financière : le crédit n'est débité qu'à la PREMIÈRE analyse
   // du dossier — une relance après retour du juriste (EN_ANALYSE) ne
   // redébite jamais. Un ANALYSE event existe dès la première analyse passée.
@@ -404,11 +423,18 @@ export async function analyserDossier(
     select: { id: true },
   }));
 
+  // Débit différé : « déjà payé » déclaré à la PREMIÈRE analyse → le crédit
+  // n'est pas consommé ici, `creditConsome: false` marque l'attente — le
+  // juriste le débite à la validation (validerDossier) et un rejet ne
+  // rembourse que ce qui a réellement été débité (rejeterDossier).
+  const differe = dejaPaye && !dejaAnalyse;
+  if (differe) data.creditConsome = false;
+
   let statut: "EN_ATTENTE_VALIDATION" | "EN_ATTENTE_PAIEMENT";
   try {
     statut = await prisma.$transaction(async (tx) => {
       let next: "EN_ATTENTE_VALIDATION" | "EN_ATTENTE_PAIEMENT";
-      if (faille && !dejaAnalyse) {
+      if (faille && !dejaAnalyse && !dejaPaye) {
         const debit = await tx.user.updateMany({
           where: { id: user.id, credits: { gte: 1 } },
           data: { credits: { decrement: 1 } },
@@ -434,7 +460,16 @@ export async function analyserDossier(
       });
       if (maj.count === 0) throw new Error("ANALYSE_DEJA_TRAITEE");
       await tx.dossierEvent.create({
-        data: { dossierId: dossier.id, type: "ANALYSE" },
+        data: {
+          dossierId: dossier.id,
+          type: "ANALYSE",
+          ...(differe
+            ? {
+                detail:
+                  "Paiement déjà signalé — débit du crédit différé à la validation du juriste",
+              }
+            : {}),
+        },
       });
       await tx.dossierEvent.create({
         data: {

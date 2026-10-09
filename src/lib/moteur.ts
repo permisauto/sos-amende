@@ -105,6 +105,10 @@ export type ExtractedData = {
   vehiculeCede?: boolean;
   vehiculeVole?: boolean;
   conducteurDifferent?: boolean;
+  // Débit différé du crédit (« paiement déjà signalé ») : `false` = analysé
+  // sans débit, en attente de la validation juriste ; `true` = débité à la
+  // validation. Absent = flux historique (débit à l'analyse, ou jamais débité).
+  creditConsome?: boolean;
   // Questionnaire dynamique (registre `questions.ts`, écrit par `lireReponses`)
   // — contexte juriste + preuves externes, jamais un fondement à lui seul.
   stationnementPanneau?: boolean;
@@ -758,7 +762,8 @@ export function scoreFaille(
   if (d.vehiculeCede) bonus += 12;
   if (d.vehiculeVole) bonus += 10;
   if (d.conducteurDifferent) bonus += 9;
-  if (d.paiementDejaFait) bonus += 8;
+  // « Déjà payé » ne majorait plus le score : un paiement n'est pas un
+  // argument de contestation (garde-fou « amende déjà payée »).
   if (d.travaux_présents) bonus += 14;
   if (d.conditions_meteo) bonus += 10;
   if (d.adresseIncorrecte) bonus += 8;

@@ -39,6 +39,25 @@ test("questionnaire ciblé AMENDE : groupes selon le document, réponses lues pa
   await page.getByLabel("Numéro de PV", { exact: true }).fill("998877665");
   await page.getByLabel("Date du PV", { exact: true }).fill("2026-07-01");
   await page.getByLabel("J'ai déjà payé cette amende").check();
+
+  // Interstitial « déjà payé » : encart d'avertissement obligatoire — la
+  // soumission est refusée côté serveur sans confirmation explicite.
+  await expect(page.getByTestId("interstitial-paiement")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Analyser et générer la lettre" })
+    .click();
+  await expect(page.getByText(/Paiement déjà signalé/)).toBeVisible();
+
+  // Confirmation cochée → l'analyse repart (human-in-the-loop conservé).
+  // React 19 réinitialise le formulaire après une action serveur (même
+  // refusée) : Nom repart du pré-remplissage (vide) et la case « déjà payé »
+  // est décochée — on ressaisit et re-coche avant de soumettre à nouveau.
+  await page.getByLabel("J'ai déjà payé cette amende").check();
+  await page.getByLabel(/J'ai bien compris et confirme/).check();
+  await page.getByLabel("Nom", { exact: true }).fill("DUPONT");
+  await page.getByLabel("Plaque", { exact: true }).fill("AB-123-CD");
+  await page.getByLabel("Numéro de PV", { exact: true }).fill("998877665");
+  await page.getByLabel("Date du PV", { exact: true }).fill("2026-07-01");
   await page
     .getByRole("button", { name: "Analyser et générer la lettre" })
     .click();
@@ -73,6 +92,8 @@ test("questionnaire ciblé AMENDE : groupes selon le document, réponses lues pa
   await expect(
     juriste.getByText("J'ai déjà payé cette amende", { exact: true }),
   ).toBeVisible();
+  // Badge juriste : signal « déjà payé » + état du débit du crédit.
+  await expect(juriste.getByTestId("badge-paiement-deja-paye")).toBeVisible();
 
   // Bloc juriste « Pièces manquantes » + demande de complément en un clic
   // (messagerie du dossier + e-mail au client).
