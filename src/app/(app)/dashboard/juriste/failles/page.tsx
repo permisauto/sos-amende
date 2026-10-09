@@ -18,6 +18,7 @@ function libelleCampagne(campagne: string): string {
     "veille-jorf": "Veille JORF (éditions)",
     "veille-ta": "Veille TA (tribunaux administratifs)",
     "extraction-veille": "Extraction des propositions IA (veille)",
+    "proposition-veille": "Propositions de failles (veille)",
     "auto-enrichissement": "Auto-enrichissement IA (post-OCR)",
   };
   return labels[campagne] ?? campagne;
@@ -42,7 +43,12 @@ export default async function BibliothequeFaillesPage(
     : "ALL";
   const recherche = (typeof q === "string" ? q : "").trim().slice(0, 100);
 
-  let failles: Awaited<ReturnType<typeof getMockFailles>>;
+  // `deLaVeille` signale l'origine : faille née d'une publication de la veille
+  // (auto-proposition PROPOSEE), tracée via la relation `sources`.
+  type FailleLigne = Awaited<ReturnType<typeof getMockFailles>>[number] & {
+    deLaVeille?: boolean;
+  };
+  let failles: FailleLigne[];
   let stats: Array<{ statut: string; _count: number }>;
   let aSuspensionActive = false;
 
@@ -50,6 +56,7 @@ export default async function BibliothequeFaillesPage(
     const [rows, grouped] = await Promise.all([
       prisma.failleJuridique.findMany({
         orderBy: [{ statut: "asc" }, { createdAt: "desc" }],
+        include: { sources: { select: { id: true } } },
       }),
       prisma.failleJuridique.groupBy({
         by: ["statut"],
@@ -68,6 +75,7 @@ export default async function BibliothequeFaillesPage(
       reglesDetection: r.reglesDetection as RegleDetection[] | null,
       jurisprudence: r.jurisprudence as JurisprudenceRef[] | null,
       createdAt: r.createdAt,
+      deLaVeille: r.sources.length > 0,
     }));
     stats = ["ACTIVE", "PROPOSEE", "INACTIVE"].map((s) => ({
       statut: s,
@@ -137,6 +145,7 @@ export default async function BibliothequeFaillesPage(
     statut: f.statut,
     reglesDetection: f.reglesDetection as RegleDetection[] | null,
     jurisprudence: f.jurisprudence as JurisprudenceRef[] | null,
+    deLaVeille: f.deLaVeille,
   }));
 
   return (

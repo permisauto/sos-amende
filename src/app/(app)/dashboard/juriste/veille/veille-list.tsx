@@ -31,6 +31,8 @@ export type SourceDto = {
   brouillonRegle: string | null;
   proposition: PropositionVeille | null;
   archive: string | null;
+  /** Faille `PROPOSEE` créée automatiquement après extraction (auto-proposition). */
+  failleId: string | null;
 };
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -243,6 +245,14 @@ function BlocProposition({
       )}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
+        {s.statut === "NOUVEAU" && s.failleId && (
+          <span
+            className="rounded-full bg-sky-100 px-2.5 py-0.5 text-[11px] font-medium text-sky-800"
+            data-testid="faille-proposee"
+          >
+            Faille proposée automatiquement (PROPOSEE)
+          </span>
+        )}
         {complet && s.statut === "NOUVEAU" && role === "ADMIN" && (
           <form action={valider.action}>
             <input type="hidden" name="id" value={s.id} />
@@ -455,7 +465,14 @@ function CarteSource({ s, role }: { s: SourceDto; role: string }) {
             {pendingEcart ? "…" : "Écarter"}
           </button>
         </form>
-        <Promotion s={s} />
+        {s.failleId ? (
+          <p className="text-[11px] text-zinc-500">
+            Une faille (PROPOSEE) est déjà liée : gérez-la depuis le drawer de
+            lecture ou la bibliothèque juridique.
+          </p>
+        ) : (
+          <Promotion s={s} />
+        )}
       </div>
 
       {stateEcart?.message && (

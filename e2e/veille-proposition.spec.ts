@@ -22,6 +22,7 @@ import { loginAs } from "./helpers";
  */
 
 const TITRE = "Annulation avis contravention — défaut de motivation E2E veille";
+const TITRE_REFUS = "Refus synchronisé veille — écartement bibliothèque E2E";
 
 function databaseUrl(): string {
   return (
@@ -41,7 +42,7 @@ const CONTENU =
   "Le Tribunal administratif de Nice, statuant sur la contestation d'un avis de contravention dressé au titre de l'article L. 121-1 du code de la route pour excès de vitesse, a annulé la décision attaquée en raison d'un défaut de motivation de l'arrêté attaqué, la juridiction retenant que l'autorité n'avait pas établi la régularité du contrôle effectué par l'agent assermenté au moment des faits, ni la concordance des relevés produits avec l'appareil de contrôle utilisé." +
   "\n\nDÉCIDE :\nArticle 1er : La décision attaquée est annulée et l'avis de contravention contesté est refusé.";
 
-async function grainerSource(): Promise<void> {
+async function grainerSource(id: string, titre: string): Promise<void> {
   const citation = CONTENU.slice(0, 220) + "…";
   const c = new Client({ connectionString: databaseUrl() });
   await c.connect();
@@ -53,10 +54,10 @@ async function grainerSource(): Promise<void> {
         reference, ecli, url, contenu, citations, "matchsCore", "matchsAppui",
         score, "brouillonRegle", statut, "createdAt"
       ) VALUES (
-        'e2e-veille-proposition', 'e2e-veille-proposition', 'JURI-E2E-1', 'JADE',
+        $4, $4, 'JURI-' || $4, 'JADE',
         'ARRET', $1,
         'Cour administrative d''appel de Marseille', '2026-10-01',
-        'E2E-VEILLE-1', 'ECLI:FR:CAA:2026:E2EVEILLE', NULL,
+        'E2E-VEILLE-1', 'ECLI:FR:CAA:2026:' || $4, NULL,
         $2, $3::jsonb, '["excès de vitesse"]'::jsonb, '["motivation"]'::jsonb,
         99, 'Brouillon E2E — à reprendre par le juriste.', 'NOUVEAU', now()
       )
@@ -71,7 +72,7 @@ async function grainerSource(): Promise<void> {
         citations = EXCLUDED.citations,
         titre = EXCLUDED.titre
       `,
-      [TITRE, CONTENU, JSON.stringify([citation])],
+      [titre, CONTENU, JSON.stringify([citation]), id],
     );
   } finally {
     await c.end();
@@ -98,7 +99,7 @@ test("veille : extraction proposée puis validation admin", async ({ page }) => 
   // Suite complète en parallèle : extraction + édition + validation + détails
   // de la bibliothèque dépasseraient les 30 s par défaut.
   test.slow();
-  await grainerSource();
+  await grainerSource("e2e-veille-proposition", TITRE);
 
   // --- Juriste : extraction possible, validation impossible ---------------
   await loginAs(page, "e2e-juriste@test.local");
@@ -116,6 +117,10 @@ test("veille : extraction proposée puis validation admin", async ({ page }) => 
   // Article littéral du contenu, repéré par l'extraction mock.
   await expect(encart).toContainText("article L. 121-1");
   await expect(encart).toContainText("Règle dégagée");
+  // Auto-proposition : la fin de l'extraction crée une faille PROPOSEE liée.
+  await expect(carte.getByTestId("faille-proposee")).toBeVisible({
+    timeout: 15_000,
+  });
   // Le juriste ne voit jamais le bouton de validation.
   await expect(carte.getByTestId("valider-proposition")).toHaveCount(0);
   await expect(carte).toContainText(
@@ -215,4 +220,70 @@ test("veille : extraction proposée puis validation admin", async ({ page }) => 
   await expect(
     page.getByTestId("chip-template-manquant").first(),
   ).toBeVisible();
+  // Faille née de la veille : chip « Proposition (veille) » (flip depuis le
+  // drawer — la source liée est promue en même temps).
+  await expect(page.getByTestId("chip-veille").first()).toBeVisible();
+});
+
+/** État croisé faille/source pour le scénario de refus synchronisé. */
+async function etatRefus(): Promise<{ faille: string | null; source: string }> {
+  const c = new Client({ connectionString: databaseUrl() });
+  await c.connect();
+  try {
+    const r = await c.query<{ faille: string | null; source: string }>(
+      `SELECT f.statut AS faille, s.statut AS source
+         FROM "SourceJuridique" s
+         LEFT JOIN "FailleJuridique" f ON f.id = s."failleId"
+        WHERE s.id = 'e2e-veille-refus'`,
+    );
+    return {
+      faille: r.rows[0]?.faille ?? null,
+      source: r.rows[0]?.source ?? "?",
+    };
+  } finally {
+    await c.end();
+  }
+}
+
+test("veille : le refus depuis la bibliothèque écarte la faille et sa source", async ({ page }) => {
+  test.slow();
+  await grainerSource("e2e-veille-refus", TITRE_REFUS);
+
+  // --- Juriste : extraction → auto-proposition PROPOSEE liée --------------
+  await loginAs(page, "e2e-juriste@test.local");
+  await page.goto("/dashboard/juriste/veille");
+  const carte = page.locator("article", { hasText: TITRE_REFUS }).first();
+  await expect(carte).toBeVisible();
+  await carte.getByTestId("extraire-proposition").click();
+  await expect(carte.getByTestId("faille-proposee")).toBeVisible({
+    timeout: 15_000,
+  });
+  expect(await etatRefus()).toEqual({ faille: "PROPOSEE", source: "NOUVEAU" });
+  // La promotion manuelle est masquée : la faille existe déjà (pas de doublon).
+  await expect(
+    carte.getByRole("button", {
+      name: "Proposer une faille à partir de cette publication",
+    }),
+  ).toHaveCount(0);
+
+  // --- Admin : « Écarter (Inactive) » depuis la bibliothèque --------------
+  await page.getByRole("button", { name: "Déconnexion" }).click();
+  await page.waitForURL("/", { timeout: 5_000 });
+  await loginAs(page, "e2e-admin@test.local");
+
+  await page.goto(
+    "/dashboard/juriste/failles?f=PROPOSEE&q=" +
+      encodeURIComponent(TITRE_REFUS),
+  );
+  const boutonEcarter = page.getByRole("button", {
+    name: "Écarter (Inactive)",
+  });
+  await expect(boutonEcarter.first()).toBeVisible();
+  await expect(page.getByTestId("chip-veille").first()).toBeVisible();
+  await boutonEcarter.first().click();
+
+  // Les deux tables basculent ensemble (invariant « la source suit la faille »).
+  await expect
+    .poll(async () => etatRefus(), { timeout: 15_000 })
+    .toEqual({ faille: "INACTIVE", source: "ECARTE" });
 });

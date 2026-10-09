@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   BUDGET_EXTRACTION,
   SCORE_SEUIL_EXTRACTION,
+  composerRegleProposition,
   construirePromptExtraction,
   contenuVerbatim,
   extraireProposition,
@@ -11,6 +12,7 @@ import {
   normaliserPourComparaison,
   parserExtraction,
   propositionDepuisFormulaire,
+  refPropositionDepuisSource,
   type PublicationVeille,
 } from "./veille-extraction";
 
@@ -324,5 +326,53 @@ describe("propositionDepuisFormulaire — correction admin (lot O)", () => {
     if (!r.ok) return;
     expect(r.proposition.extraits).toEqual([]);
     expect(r.proposition.etat).toBe("extrait");
+  });
+});
+
+describe("composerRegleProposition — format partagé (validation + auto-proposition)", () => {
+  const p = parserExtraction(extractionMock(PUB), CONTENU)!;
+
+  it("assemble la règle et le bloc « Conditions d'application »", () => {
+    const regle = composerRegleProposition({
+      ...p,
+      regle: "Règle X",
+      conditions: ["cond A", "cond B"],
+    });
+    expect(regle).toBe(
+      "Règle X\n\nConditions d'application :\n- cond A\n- cond B",
+    );
+  });
+
+  it("sans condition, retourne la règle seule", () => {
+    expect(composerRegleProposition({ ...p, regle: "Règle Y", conditions: [] })).toBe(
+      "Règle Y",
+    );
+  });
+});
+
+describe("refPropositionDepuisSource — référence au format base juridique", () => {
+  const p = parserExtraction(extractionMock(PUB), CONTENU)!;
+  const source = {
+    ecli: "ECLI:TA:NI:2026:1234",
+    reference: null,
+    idDila: "DILA00001",
+    juridiction: "TA de Nice",
+    source: "JADE",
+    dateSource: new Date("2026-09-15"),
+    url: "https://www.legifrance.gouv.fr/juri/id/123",
+  };
+
+  it("n'est jamais vérifiée sans confirmation humaine", () => {
+    const ref = refPropositionDepuisSource(source, p);
+    expect(ref.verifiee).toBe(false);
+    expect(ref.reference).toContain("ECLI:TA:NI:2026:1234");
+    expect(ref.url).toBe("https://www.legifrance.gouv.fr/juri/id/123");
+    expect(ref.date).toBe("2026-09-15");
+    expect(ref.resume).toBeTruthy();
+  });
+
+  it("replie sur l'id DILA sans ecli ni référence", () => {
+    const ref = refPropositionDepuisSource({ ...source, ecli: null, reference: null }, p);
+    expect(ref.reference).toBe("DILA00001");
   });
 });

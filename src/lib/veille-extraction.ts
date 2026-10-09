@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { appelerGeminiJson } from "@/lib/ia-gemini";
+import type { JurisprudenceRef } from "@/lib/catalogue-sources";
 
 /**
  * Extraction de propositions structurées sur les publications de la veille
@@ -479,5 +480,52 @@ export function propositionDepuisFormulaire(
       extraitLe: options.extraitLe ?? new Date().toISOString(),
       corrigeLe: new Date().toISOString(),
     },
+  };
+}
+
+/**
+ * Règle dégagée + bloc « Conditions d'application » — format **partagé** entre
+ * la validation depuis le drawer (`validerPropositionSource`) et la création
+ * automatique de proposition (`proposerFaillesDepuisExtraction`) : les deux
+ * chemins doivent produire exactement le même contenu en base.
+ */
+export function composerRegleProposition(p: PropositionVeille): string {
+  const conditions = p.conditions ?? [];
+  return [
+    p.regle.trim(),
+    conditions.length
+      ? `Conditions d'application :\n${conditions.map((c) => `- ${c}`).join("\n")}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+type ChampsSourceRef = {
+  ecli: string | null;
+  reference: string | null;
+  idDila: string;
+  juridiction: string | null;
+  source: string;
+  dateSource: Date | null;
+  url: string | null;
+};
+
+/**
+ * Référence de jurisprudence au format de la base juridique, depuis la
+ * publication source (partagée validation drawer / auto-proposition) :
+ * `verifiee: false` tant qu'aucun humain n'a confirmé sur la source primaire.
+ */
+export function refPropositionDepuisSource(
+  s: ChampsSourceRef,
+  p: PropositionVeille,
+): JurisprudenceRef {
+  return {
+    reference: [s.ecli ?? s.reference ?? s.idDila].filter(Boolean).join(" — "),
+    juridiction: s.juridiction ?? s.source,
+    date: s.dateSource ? s.dateSource.toISOString().slice(0, 10) : null,
+    url: s.url,
+    verifiee: false,
+    resume: p.resume || p.extraits[0] || null,
   };
 }

@@ -11,7 +11,9 @@ import {
   extrairePropositionsEnAttente,
 } from "@/lib/veille-ingestion";
 import {
+  composerRegleProposition,
   propositionDepuisFormulaire,
+  refPropositionDepuisSource,
   type ValeursProposition,
 } from "@/lib/veille-extraction";
 import type { PropositionVeille } from "@/lib/veille-extraction";
@@ -40,11 +42,25 @@ export async function ecarterSource(
   const id = String(formData.get("id") ?? "");
   if (!id) return { error: "Source introuvable." };
 
+  const source = await prisma.sourceJuridique.findUnique({ where: { id } });
+  if (!source) return { error: "Source introuvable." };
+
   await prisma.sourceJuridique.update({
     where: { id },
     data: { statut: "ECARTE", reviewedAt: new Date(), reviewedBy: user.id },
   });
+  // Refus synchronisé : si une faille PROPOSEE est déjà liée à cette
+  // publication (auto-proposition), elle est écartée au même instant — sans
+  // quoi elle resterait en attente dans la bibliothèque alors que sa source
+  // est traitée.
+  if (source.failleId) {
+    await prisma.failleJuridique.updateMany({
+      where: { id: source.failleId, statut: "PROPOSEE" },
+      data: { statut: "INACTIVE" },
+    });
+  }
   revalidatePath("/dashboard/juriste/veille");
+  revalidatePath("/dashboard/juriste/failles");
   return { ok: true, message: "Publication écartée." };
 }
 
@@ -77,6 +93,14 @@ export async function promouvoirSource(
   if (!source) return { error: "Source introuvable." };
   if (source.statut === "PROMU" && source.failleId) {
     return { error: "Cette publication a déjà été promue." };
+  }
+  if (source.failleId) {
+    // Auto-proposition déjà posée par l'extraction : la promotion manuelle
+    // créerait un doublon. On oriente vers les gestes existants.
+    return {
+      error:
+        "Une proposition de faille est déjà liée à cette publication (créée automatiquement après l'extraction) : validez-la ou écartez-la depuis le drawer ou la bibliothèque juridique.",
+    };
   }
 
   // Référence de jurisprudence au format de la base juridique, `verifiee: false`
@@ -291,39 +315,38 @@ export async function validerPropositionSource(
   const articleLoi = proposition.articles.join(" ; ");
   if (articleLoi.length < 2) return { error: "Aucun article retenu." };
 
-  const conditions = proposition.conditions ?? [];
-  const regle = [
-    proposition.regle.trim(),
-    conditions.length
-      ? `Conditions d'application :\n${conditions.map((c) => `- ${c}`).join("\n")}`
-      : null,
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+  const regle = composerRegleProposition(proposition);
+  const ref = refPropositionDepuisSource(source, proposition);
 
-  const ref: JurisprudenceRef = {
-    reference: [source.ecli ?? source.reference ?? source.idDila]
-      .filter(Boolean)
-      .join(" — "),
-    juridiction: source.juridiction ?? source.source,
-    date: source.dateSource ? source.dateSource.toISOString().slice(0, 10) : null,
-    url: source.url,
-    verifiee: false,
-    resume: proposition.resume || proposition.extraits[0] || null,
+  const donnees = {
+    typeInfraction: proposition.typeInfraction,
+    titreFaille,
+    articleLoi,
+    regle,
+    source: source.url ?? source.archive,
+    jurisprudence: [ref] as unknown as Prisma.InputJsonValue,
+    statut: "ACTIVE" as const,
   };
 
-  const faille = await prisma.failleJuridique.create({
-    data: {
-      typeInfraction: proposition.typeInfraction,
-      titreFaille,
-      articleLoi,
-      regle,
-      templateLettre: "",
-      source: source.url ?? source.archive,
-      jurisprudence: [ref] as unknown as Prisma.InputJsonValue,
-      statut: "ACTIVE",
-    },
-  });
+  // Deuxième entrée (auto-proposition de la veille) : la faille existe déjà
+  // en PROPOSEE — on la **met à jour et l'active** (flip) au lieu d'en créer
+  // une seconde. Un template déjà rédigé dans la bibliothèque est conservé.
+  const dejaLiee = source.failleId
+    ? await prisma.failleJuridique.findUnique({ where: { id: source.failleId } })
+    : null;
+  let failleId: string;
+  if (dejaLiee) {
+    failleId = dejaLiee.id;
+    await prisma.failleJuridique.update({
+      where: { id: dejaLiee.id },
+      data: { ...donnees, templateLettre: dejaLiee.templateLettre },
+    });
+  } else {
+    const faille = await prisma.failleJuridique.create({
+      data: { ...donnees, templateLettre: "" },
+    });
+    failleId = faille.id;
+  }
 
   await prisma.sourceJuridique.update({
     where: { id },
@@ -332,7 +355,7 @@ export async function validerPropositionSource(
         ? { proposition: proposition as unknown as Prisma.InputJsonValue }
         : {}),
       statut: "PROMU",
-      failleId: faille.id,
+      failleId,
       reviewedAt: new Date(),
       reviewedBy: user.id,
     },
@@ -342,6 +365,8 @@ export async function validerPropositionSource(
   revalidatePath("/dashboard/juriste/failles");
   return {
     ok: true,
-    message: `Lecture validée : faille « ${titreFaille} » créée et ACTIVÉE. Rédigez son template de lettre dans la bibliothèque juridique — sans template, elle ne peut pas encore alimenter une contestation.`,
+    message: `Lecture validée : faille « ${titreFaille} » ${
+      dejaLiee ? "mise à jour et ACTIVÉE" : "créée et ACTIVÉE"
+    }. Rédigez son template de lettre dans la bibliothèque juridique — sans template, elle ne peut pas encore alimenter une contestation.`,
   };
 }

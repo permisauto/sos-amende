@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { archivesATraiter, estCandidatExtraction, listerArchives } from "@/lib/veille-ingestion";
+import {
+  archivesATraiter,
+  estCandidatExtraction,
+  listerArchives,
+  normaliserTitreProposition,
+} from "@/lib/veille-ingestion";
 
 describe("listerArchives — index DILA", () => {
   it("extrait et trie les archives de la source (ordre chronologique)", () => {
@@ -62,5 +67,22 @@ describe("estCandidatExtraction — reprise automatique (lot O)", () => {
 
   it("une proposition complète n'est plus retouchée par le cron", () => {
     expect(estCandidatExtraction({ etat: "extrait", tentatives: 3 })).toBe(false);
+  });
+});
+
+describe("normaliserTitreProposition — dédup des auto-propositions", () => {
+  it("ignore la casse, les espaces multiples et les espaces de bord", () => {
+    expect(normaliserTitreProposition("  Excès   de Vitesse ")).toBe(
+      "excès de vitesse",
+    );
+    expect(normaliserTitreProposition("Excès de Vitesse")).toBe(
+      normaliserTitreProposition("EXCÈS DE VITESSE"),
+    );
+  });
+
+  it("différencie deux titres réellement distincts", () => {
+    expect(normaliserTitreProposition("Prescription de l'action")).not.toBe(
+      normaliserTitreProposition("Étiquetage des appareils"),
+    );
   });
 });

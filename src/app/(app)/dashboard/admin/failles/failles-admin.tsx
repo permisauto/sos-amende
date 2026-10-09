@@ -29,6 +29,7 @@ export type FailleDto = {
   statut: string;
   reglesDetection: RegleDetection[] | null;
   jurisprudence: JurisprudenceRef[] | null;
+  deLaVeille?: boolean;
 };
 
 type StatutFaille = "ACTIVE" | "INACTIVE" | "PROPOSEE";
@@ -514,6 +515,14 @@ function FailleRow({
                 data-testid="chip-template-manquant"
               >
                 Template à rédiger
+              </span>
+            )}
+            {faille.deLaVeille && (
+              <span
+                className="rounded-full bg-sky-100 px-2.5 py-0.5 font-medium text-sky-800"
+                data-testid="chip-veille"
+              >
+                Proposition (veille)
               </span>
             )}
             <span>{faille.typeInfraction}</span>

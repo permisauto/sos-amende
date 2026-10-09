@@ -27,6 +27,7 @@ interface FailleDto {
   reglesDetection: Array<{ type: string; motif?: string; champ?: string }> | null;
   jurisprudence: JurisprudenceRef[] | null;
   createdAt: Date;
+  deLaVeille?: boolean;
 }
 
 interface FaillesListProps {
@@ -155,6 +156,14 @@ export function FaillesList({
                             Template à rédiger
                           </span>
                         )}
+                      {faille.deLaVeille && (
+                        <span
+                          className="rounded-full bg-sky-100 px-2.5 py-0.5 font-medium text-sky-800"
+                          data-testid="chip-veille"
+                        >
+                          Proposition (veille)
+                        </span>
+                      )}
                       <span>{faille.typeInfraction}</span>
                       {faille.source && <span>Source : {faille.source}</span>}
                       <span>

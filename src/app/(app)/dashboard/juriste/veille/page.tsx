@@ -73,6 +73,7 @@ export default async function VeillePage({
       brouillonRegle: r.brouillonRegle,
       proposition: (r.proposition as SourceDto["proposition"]) ?? null,
       archive: r.archive,
+      failleId: r.failleId,
     }));
   } catch (e) {
     console.error("veille: lecture des sources impossible", e);

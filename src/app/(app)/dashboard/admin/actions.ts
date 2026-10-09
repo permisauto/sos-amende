@@ -16,6 +16,7 @@ import {
 } from "@/lib/auto-alimentation";
 import { validateMockFaille } from "@/lib/mock-failles";
 import { messageActivationBloquee, activerPropositionsCompletes } from "@/lib/failles";
+import { synchroniserSourceLiee } from "@/lib/veille-ingestion";
 
 export type FailleState =
   | {
@@ -161,7 +162,7 @@ export async function basculerFaille(
   _prev: FailleState,
   formData: FormData,
 ): Promise<FailleState> {
-  await requireAdmin();
+  const admin = await requireAdmin();
 
   const id = String(formData.get("id") ?? "");
   const faille = await prisma.failleJuridique.findUnique({ where: { id } });
@@ -183,6 +184,9 @@ export async function basculerFaille(
       statut: devientActive ? "ACTIVE" : "INACTIVE",
     },
   });
+  // Faille née de la veille : la publication liée suit la décision de l'admin
+  // (invariant « la source suit sa faille », best-effort).
+  await synchroniserSourceLiee(id, devientActive ? "PROMU" : "ECARTE", admin.id);
 
   revalidatePath("/dashboard/juriste/failles");
   return { ok: true, statut: devientActive ? "ACTIVE" : "INACTIVE" };
@@ -356,7 +360,7 @@ export async function validerPropositionFaille(
   _prev: FailleState,
   formData: FormData,
 ): Promise<FailleState> {
-  await requireAdmin();
+  const admin = await requireAdmin();
 
   const id = String(formData.get("id") ?? "");
   const action = PROPOSEE_ACTIONS.find((a) => a === formData.get("action"));
@@ -384,6 +388,9 @@ export async function validerPropositionFaille(
     validateMockFaille(id, action);
   }
 
+  // Faille née de la veille : la publication liée suit la décision.
+  await synchroniserSourceLiee(id, action === "ACTIVE" ? "PROMU" : "ECARTE", admin.id);
+
   revalidatePath("/dashboard/juriste/failles");
   return { ok: true, statut: action };
 }
@@ -403,7 +410,7 @@ export async function activerFailleProposee(
   _prev: FailleState,
   formData: FormData,
 ): Promise<FailleState> {
-  await requireAdmin();
+  const admin = await requireAdmin();
 
   const id = String(formData.get("id") ?? "");
   const faille = await prisma.failleJuridique.findUnique({ where: { id } });
@@ -422,6 +429,9 @@ export async function activerFailleProposee(
   if (maj.count === 0) {
     return { error: "Cette proposition a déjà été activée ou écartée." };
   }
+
+  // Faille née de la veille : la publication liée suit la décision.
+  await synchroniserSourceLiee(id, "PROMU", admin.id);
 
   revalidatePath("/dashboard/juriste/failles");
   return { ok: true, statut: "ACTIVE" };
@@ -692,10 +702,15 @@ export async function activerToutesPropositions(
   _prev: FailleState,
   _formData: FormData,
 ): Promise<FailleState> {
-  await requireAdmin();
+  const admin = await requireAdmin();
 
   try {
     const { activees, ignorees, examinees } = await activerPropositionsCompletes(prisma);
+
+    // Failles nées de la veille : la publication liée suit l'activation.
+    for (const id of activees) {
+      await synchroniserSourceLiee(id, "PROMU", admin.id);
+    }
 
     if (examinees === 0) {
       return { error: "Aucune proposition à activer." };

@@ -16,7 +16,10 @@
  *  - échec d'une source = échec silencieux pour cette source, les autres
  *    continuent ; le cron ne lève jamais d'erreur ;
  *  - **aucun contenu juridique n'est fabriqué** : ce module ne fait que
- *    transporter des métadonnées et des citations déjà publiées.
+ *    transporter des métadonnées et des citations déjà publiées ; les
+ *    propositions structurées extraites (IA) sont bornées aux verbatims et
+ *    leur promotion automatique s'arrête à `PROPOSEE` (décision humaine
+ *    obligatoire — cf. `proposerFaillesDepuisExtraction`).
  */
 
 import { prisma } from "@/lib/prisma";
@@ -40,9 +43,11 @@ import {
   BUDGET_EXTRACTION,
   BUDGET_TEMPS_EXTRACTION_MS,
   SCORE_SEUIL_EXTRACTION,
+  composerRegleProposition,
   extraireProposition,
   extractionDispo,
   propositionEchec,
+  refPropositionDepuisSource,
   type PropositionVeille,
   type PublicationVeille,
 } from "@/lib/veille-extraction";
@@ -527,6 +532,9 @@ export async function extrairePropositionsEnAttente(
     else if (prop?.etat === "incomplet") bilan.incompletes++;
     else bilan.echecs++;
   }
+  // Après chaque lot d'extraction : les propositions complètes non encore
+  // liées deviennent des failles PROPOSEE (auto-proposition, cf. plus bas).
+  await proposerFaillesDepuisExtraction();
   return bilan;
 }
 
@@ -557,7 +565,141 @@ export async function extrairePropositionSource(
   const prop = await extraireEtStocker(row);
   if (!prop) return { ok: false, motif: "Extraction impossible (base)." };
   if (prop.etat === "echec") return { ok: false, motif: prop.motif ?? "extraction en échec" };
+  await proposerFaillesDepuisExtraction();
   return { ok: true, proposition: prop };
+}
+
+// ---------------------------------------------------------------------------
+// Auto-proposition de failles (PROPOSEE) — « la veille propose, l'admin tranche »
+// ---------------------------------------------------------------------------
+
+/**
+ * Titre normalisé pour la déduplication des propositions en attente : casse +
+ * espaces réduits, sans ponctuation de fin. Un même arrêt repris par deux
+ * extractions successives ne doit jamais produire deux propositions jumelles.
+ */
+export function normaliserTitreProposition(t: string): string {
+  return t.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Propose **automatiquement** une faille en statut `PROPOSEE` pour chaque
+ * publication dont l'extraction est complète (`etat = extrait`) et qui n'est
+ * encore liée à aucune faille.
+ *
+ * Garde-fous (assouplissement documenté de « la veille ne crée jamais de
+ * faille » — cf. AGENTS.md) :
+ *  - uniquement `PROPOSEE`, jamais `ACTIVE` : le moteur est aveugle à ce
+ *    statut et la `templateLettre` reste vide → ni détection ni lettre ;
+ *  - seule l'administration tranche (drawer de la veille → flip
+ *    `PROPOSEE → ACTIVE`, ou bibliothèque → « Écarter ») ;
+ *  - idempotent : liason par `SourceJuridique.failleId` + dédup par titre
+ *    normalisé sur les seules `PROPOSEE` en attente ;
+ *  - borné (50 par passage), best-effort, ne lève jamais ;
+ *  - trace `AutoAlimentationTrace` (`proposition-veille`) si création.
+ */
+export async function proposerFaillesDepuisExtraction(): Promise<{
+  creees: number;
+  liees: number;
+}> {
+  try {
+    const propositionComplete = { path: ["etat"], equals: "extrait" } as const;
+    const rows = await prisma.sourceJuridique.findMany({
+      where: {
+        statut: "NOUVEAU",
+        failleId: null,
+        proposition: propositionComplete,
+      },
+      orderBy: [{ score: "desc" }, { createdAt: "desc" }],
+      take: 50,
+    });
+    if (rows.length === 0) return { creees: 0, liees: 0 };
+
+    // Dédup par titre : une proposition en attente déjà posée pour le même
+    // objet → on relie la source au lieu de créer un doublon.
+    const proposees = await prisma.failleJuridique.findMany({
+      where: { statut: "PROPOSEE" },
+      select: { id: true, titreFaille: true },
+    });
+    const parTitre = new Map(
+      proposees.map((f) => [normaliserTitreProposition(f.titreFaille), f.id]),
+    );
+
+    let creees = 0;
+    let liees = 0;
+    for (const row of rows) {
+      const p = row.proposition as PropositionVeille | null;
+      if (!p || p.etat !== "extrait" || !Array.isArray(p.articles)) continue;
+      const titre =
+        p.titre && p.titre.length >= 5 ? p.titre : row.titre.slice(0, 120);
+      const articleLoi = p.articles.join(" ; ");
+      if (articleLoi.length < 2) continue; // rien d'invoquable : on retentera
+      const cleTitre = normaliserTitreProposition(titre);
+
+      let failleId = parTitre.get(cleTitre);
+      if (!failleId) {
+        const faille = await prisma.failleJuridique.create({
+          data: {
+            typeInfraction: p.typeInfraction,
+            titreFaille: titre,
+            articleLoi,
+            regle: composerRegleProposition(p),
+            templateLettre: "",
+            source: row.url ?? row.archive,
+            jurisprudence: [refPropositionDepuisSource(row, p)] as unknown as Prisma.InputJsonValue,
+            statut: "PROPOSEE",
+          },
+        });
+        failleId = faille.id;
+        parTitre.set(cleTitre, faille.id);
+        creees++;
+      } else {
+        liees++;
+      }
+      // Update conditionnel : si un autre passage (cron + bouton en parallèle)
+      // a déjà lié la source, on ne recolle pas par-dessus.
+      await prisma.sourceJuridique.updateMany({
+        where: { id: row.id, failleId: null },
+        data: { failleId },
+      });
+    }
+
+    if (creees + liees > 0) {
+      await enregistrerTraceAutoAlimentation({
+        campagne: "proposition-veille",
+        statut: "OK",
+        traitees: creees + liees,
+        nouvelles: creees,
+        detail: `creees=${creees} liees=${liees}`,
+      });
+    }
+    return { creees, liees };
+  } catch (e) {
+    console.error("veille-extraction: auto-proposition de failles impossible", e);
+    return { creees: 0, liees: 0 };
+  }
+}
+
+/**
+ * Invariant « la source suit sa faille » : quand l'admin tranche **depuis la
+ * bibliothèque** (valider / écarter / activer une faille liée à une
+ * publication), celle-ci quitte la file « À lire » — `NOUVEAU → PROMU`
+ * (faille activée) ou `NOUVEAU → ECARTE` (faille écartée). Best-effort et
+ * idempotent : ne touche qu'aux sources encore `NOUVEAU`.
+ */
+export async function synchroniserSourceLiee(
+  failleId: string,
+  decision: "PROMU" | "ECARTE",
+  userId: string,
+): Promise<void> {
+  try {
+    await prisma.sourceJuridique.updateMany({
+      where: { failleId, statut: "NOUVEAU" },
+      data: { statut: decision, reviewedAt: new Date(), reviewedBy: userId },
+    });
+  } catch (e) {
+    console.error("veille: synchronisation de la source liée impossible", e);
+  }
 }
 
 /** Extraction automatique post-ingestion : bornée, tracée, best-effort. */
