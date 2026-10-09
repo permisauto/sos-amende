@@ -10,8 +10,8 @@
  *
  * C'est notamment le cas des propositions issues de la **veille juridique** :
  * elles arrivent avec la référence de la source et ses citations, mais `regle` et
- * `templateLettre` sont volontairement vides (cf. `promouvoirSource`). Le juriste
- * doit les rédiger avant validation.
+ * `templateLettre` peuvent être vides (extraction locale ou correction admin
+ * partielle). Le juriste doit les rédiger avant validation.
  *
  * La synchronisation manuelle de l'admin active d'office les propositions
  * **complètes** (`activerPropositionsCompletes`) ; les incomplètes restent en

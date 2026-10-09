@@ -25,7 +25,7 @@ describe("failles — activation", () => {
   });
 
   it("refuse une proposition de veille (règle et template vides)", () => {
-    // Cas réel produit par `promouvoirSource` : seuls titre/source sont repris.
+    // Cas réel d'une proposition dont la rédaction reste à faire.
     const veille = { regle: null, templateLettre: "" };
     expect(manquantsPourActivation(veille)).toEqual(["regle", "templateLettre"]);
     expect(estActivable(veille)).toBe(false);

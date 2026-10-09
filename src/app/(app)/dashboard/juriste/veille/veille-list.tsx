@@ -3,9 +3,7 @@
 import { useActionState, useState } from "react";
 import {
   ecarterSource,
-  extrairePropositionAction,
   extrairePropositionsLot,
-  promouvoirSource,
   relancerVeille,
   validerPropositionSource,
   type VeilleState,
@@ -82,32 +80,24 @@ type ActionEtat = {
 export type { ActionEtat };
 
 /**
- * Proposition structurée extraite par IA (règle dégagée + conditions +
- * articles retenus), bornée aux verbatims du texte. L'extraction est ouverte
- * au juriste comme à l'admin ; la **validation** (→ faille ACTIVE immédiate)
- * est réservée à l'admin.
+ * Proposition structurée extraite automatiquement (IA ou secours local) :
+ * articles retenus + règle dégagée + conditions, bornée aux verbatims du
+ * texte. L'extraction est **toujours automatique** (ingestion + cron + lot) ;
+ * la **validation** (→ faille ACTIVE immédiate) est réservée à l'admin.
  */
 function BlocProposition({
   s,
   role,
-  extract,
   valider,
 }: {
   s: SourceDto;
   role: string;
-  extract: ActionEtat;
   valider: ActionEtat;
 }) {
   const p = s.proposition;
 
   const messages = (
     <>
-      {extract.state?.error && (
-        <p className="mt-2 text-xs text-red-700">{extract.state.error}</p>
-      )}
-      {extract.state?.message && (
-        <p className="mt-2 text-xs text-emerald-700">{extract.state.message}</p>
-      )}
       {valider.state?.error && (
         <p className="mt-2 text-xs text-red-700">{valider.state.error}</p>
       )}
@@ -117,40 +107,18 @@ function BlocProposition({
     </>
   );
 
-  const boutonExtraire = s.statut === "NOUVEAU" && (
-    <form action={extract.action}>
-      <input type="hidden" name="id" value={s.id} />
-      <button
-        type="submit"
-        disabled={extract.pending}
-        data-testid="extraire-proposition"
-        className="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-white disabled:opacity-50"
-      >
-        {extract.pending
-          ? "Extraction…"
-          : p
-            ? "Relancer l'extraction"
-            : "Extraire maintenant"}
-      </button>
-    </form>
-  );
-
   if (!p) {
     return (
       <div
         className="mt-4 rounded-xl border border-dashed border-zinc-300 bg-zinc-50 p-4"
         data-testid="proposition-encart"
       >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-xs text-zinc-600">
-            <strong className="text-zinc-800">
-              Proposition IA (articles + règle dégagée) : non extraite.
-            </strong>{" "}
-            Extraction automatique au prochain passage du cron (03:30) — ou
-            lancez-la sans attendre.
-          </p>
-          {boutonExtraire}
-        </div>
+        <p className="text-xs text-zinc-600">
+          <strong className="text-zinc-800">
+            Proposition (articles + règle dégagée) : non extraite.
+          </strong>{" "}
+          Extraction automatique au prochain passage du cron (03:30).
+        </p>
         {messages}
       </div>
     );
@@ -162,16 +130,13 @@ function BlocProposition({
         className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4"
         data-testid="proposition-encart"
       >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-xs text-red-800">
-            <strong>Extraction en échec</strong> — {p.motif}
-            <br />
-            <span className="text-red-600">
-              Relance automatique au prochain passage (cron 03:30).
-            </span>
-          </p>
-          {boutonExtraire}
-        </div>
+        <p className="text-xs text-red-800">
+          <strong>Extraction en échec</strong> — {p.motif}
+          <br />
+          <span className="text-red-600">
+            Relance automatique au prochain passage (cron 03:30).
+          </span>
+        </p>
         {messages}
       </div>
     );
@@ -277,89 +242,9 @@ function BlocProposition({
             En attente de validation par un administrateur.
           </p>
         )}
-        {boutonExtraire}
       </div>
       {messages}
     </div>
-  );
-}
-
-/** Formulaire de promotion : crée une proposition de faille à compléter. */
-function Promotion({ s }: { s: SourceDto }) {
-  const [state, action, pending] = useActionState<VeilleState, FormData>(
-    promouvoirSource,
-    undefined,
-  );
-  const [ouvert, setOuvert] = useState(false);
-
-  if (!ouvert) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOuvert(true)}
-        className="rounded-full bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-700"
-      >
-        Proposer une faille à partir de cette publication
-      </button>
-    );
-  }
-
-  return (
-    <form action={action} className="mt-3 space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
-      <p className="text-xs text-zinc-600">
-        Seuls la référence de la source et son résumé seront repris. La règle
-        dégagée et le template de lettre resteront <strong>vides</strong> : à
-        rédiger, puis à faire valider.
-      </p>
-      <label className="block text-xs font-medium text-zinc-700">
-        Type d&apos;infraction
-        <select
-          name="typeInfraction"
-          defaultValue="AMENDE"
-          className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
-        >
-          <option value="AMENDE">AMENDE</option>
-          <option value="SUSPENSION">SUSPENSION</option>
-        </select>
-      </label>
-      <label className="block text-xs font-medium text-zinc-700">
-        Titre de la faille
-        <input
-          name="titreFaille"
-          required
-          minLength={5}
-          defaultValue={s.titre.slice(0, 120)}
-          className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm"
-        />
-      </label>
-      <label className="block text-xs font-medium text-zinc-700">
-        Article de référence
-        <input
-          name="articleLoi"
-          required
-          placeholder="ex. C. route, art. L. 224-16"
-          className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm"
-        />
-      </label>
-      <input type="hidden" name="id" value={s.id} />
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-full bg-amber-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-amber-700 disabled:opacity-50"
-        >
-          {pending ? "Création…" : "Créer la proposition"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setOuvert(false)}
-          className="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700"
-        >
-          Annuler
-        </button>
-      </div>
-      <Bandeau state={state} />
-    </form>
   );
 }
 
@@ -368,10 +253,6 @@ function CarteSource({ s, role }: { s: SourceDto; role: string }) {
   const [lecture, setLecture] = useState(false);
   const [stateEcart, actionEcart, pendingEcart] = useActionState<VeilleState, FormData>(
     ecarterSource,
-    undefined,
-  );
-  const [stateExtract, actionExtract, pendingExtract] = useActionState<VeilleState, FormData>(
-    extrairePropositionAction,
     undefined,
   );
   const [stateValider, actionValider, pendingValider] = useActionState<VeilleState, FormData>(
@@ -431,11 +312,6 @@ function CarteSource({ s, role }: { s: SourceDto; role: string }) {
       <BlocProposition
         s={s}
         role={role}
-        extract={{
-          action: actionExtract,
-          pending: pendingExtract,
-          state: stateExtract,
-        }}
         valider={{
           action: actionValider,
           pending: pendingValider,
@@ -469,13 +345,11 @@ function CarteSource({ s, role }: { s: SourceDto; role: string }) {
             {pendingEcart ? "…" : "Écarter"}
           </button>
         </form>
-        {s.failleId ? (
+        {s.failleId && (
           <p className="text-[11px] text-zinc-500">
             Une faille (PROPOSEE) est déjà liée : gérez-la depuis le drawer de
             lecture ou la bibliothèque juridique.
           </p>
-        ) : (
-          <Promotion s={s} />
         )}
       </div>
 
@@ -503,11 +377,6 @@ function CarteSource({ s, role }: { s: SourceDto; role: string }) {
         <LectureDrawer
           s={s}
           role={role}
-          extract={{
-            action: actionExtract,
-            pending: pendingExtract,
-            state: stateExtract,
-          }}
           valider={{
             action: actionValider,
             pending: pendingValider,

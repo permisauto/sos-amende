@@ -110,8 +110,10 @@ test("veille : extraction proposée puis validation admin", async ({ page }) => 
   const encart = carte.getByTestId("proposition-encart");
   await expect(encart).toContainText("non extraite");
 
-  await carte.getByTestId("extraire-proposition").click();
-  await expect(encart).toContainText("Proposition extraite (IA)", {
+  // L'extraction n'est plus un bouton unitaire : le juriste lance le lot
+  // « Extraire les propositions » en haut de la file.
+  await page.getByTestId("extraire-lot").click();
+  await expect(encart).toContainText("Proposition extraite", {
     timeout: 15_000,
   });
   // Article littéral du contenu, repéré par l'extraction mock.
@@ -254,17 +256,11 @@ test("veille : le refus depuis la bibliothèque écarte la faille et sa source",
   await page.goto("/dashboard/juriste/veille");
   const carte = page.locator("article", { hasText: TITRE_REFUS }).first();
   await expect(carte).toBeVisible();
-  await carte.getByTestId("extraire-proposition").click();
+  await page.getByTestId("extraire-lot").click();
   await expect(carte.getByTestId("faille-proposee")).toBeVisible({
     timeout: 15_000,
   });
   expect(await etatRefus()).toEqual({ faille: "PROPOSEE", source: "NOUVEAU" });
-  // La promotion manuelle est masquée : la faille existe déjà (pas de doublon).
-  await expect(
-    carte.getByRole("button", {
-      name: "Proposer une faille à partir de cette publication",
-    }),
-  ).toHaveCount(0);
 
   // --- Admin : « Écarter (Inactive) » depuis la bibliothèque --------------
   await page.getByRole("button", { name: "Déconnexion" }).click();

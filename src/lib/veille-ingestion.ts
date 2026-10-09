@@ -536,27 +536,6 @@ export async function extrairePropositionsEnAttente(
   return bilan;
 }
 
-/** Extrait la proposition d'une publication précise (bouton unitaire). */
-export async function extrairePropositionSource(
-  id: string,
-): Promise<{ ok: boolean; proposition?: PropositionVeille; motif?: string }> {
-  let row: SourceJuridique | null;
-  try {
-    row = await prisma.sourceJuridique.findUnique({ where: { id } });
-  } catch {
-    row = null;
-  }
-  if (!row) return { ok: false, motif: "Publication introuvable." };
-  if (row.statut !== "NOUVEAU") {
-    return { ok: false, motif: "Publication déjà traitée (promue ou écartée)." };
-  }
-  const prop = await extraireEtStocker(row);
-  if (!prop) return { ok: false, motif: "Extraction impossible (base)." };
-  if (prop.etat === "echec") return { ok: false, motif: prop.motif ?? "extraction en échec" };
-  await proposerFaillesDepuisExtraction();
-  return { ok: true, proposition: prop };
-}
-
 // ---------------------------------------------------------------------------
 // Auto-proposition de failles (PROPOSEE) — « la veille propose, l'admin tranche »
 // ---------------------------------------------------------------------------

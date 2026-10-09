@@ -21,14 +21,12 @@ type TexteData = { contenu: string; dispositif: string | null };
 export function LectureDrawer({
   s,
   role,
-  extract,
   valider,
   ecart,
   onClose,
 }: {
   s: SourceDto;
   role: string;
-  extract: ActionEtat;
   valider: ActionEtat;
   ecart: ActionEtat;
   onClose: () => void;
@@ -339,14 +337,8 @@ export function LectureDrawer({
                       </p>
                       <p className="mt-1 text-xs text-zinc-600">
                         Le cron l&apos;extrait automatiquement au prochain
-                        passage — ou lancez « Extraire maintenant » sur la
-                        carte.
+                        passage (03:30).
                       </p>
-                      {extract.state?.error && (
-                        <p className="mt-2 text-xs text-red-700">
-                          {extract.state.error}
-                        </p>
-                      )}
                     </div>
                   )}
 
@@ -467,12 +459,6 @@ export function LectureDrawer({
                             ))}
                           </ul>
                         </div>
-                      )}
-
-                      {extract.state?.message && (
-                        <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">
-                          {extract.state.message}
-                        </p>
                       )}
                     </>
                   )}

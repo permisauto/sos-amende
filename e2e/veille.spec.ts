@@ -3,14 +3,18 @@ import { Client } from "pg";
 import { loginAs } from "./helpers";
 
 /**
- * Veille juridique (DILA) — parcours de qualification puis activation.
+ * Veille juridique (DILA) — parcours de qualification.
  *
  * Scénario complet, avec de vrais clics :
  *   1. le juriste lit une publication retenue par la veille, avec ses citations
- *      littérales, et la promeut en proposition de faille ;
- *   2. la promotion produit une proposition VIDE (règle + template à rédiger) ;
+ *      littérales et son brouillon de règle ;
+ *   2. l'extraction (IA ou secours local) propose une faille PROPOSEE liée ;
  *   3. l'activation d'une proposition incomplète est REFUSÉE (garde-fou) ;
  *   4. après rédaction via l'édition, la validation admin passe.
+ *
+ * La promotion manuelle (« Proposer une faille à partir de cette
+ * publication ») a été retirée : l'extraction est automatique (cron +
+ * bouton lot) et la décision humaine se limite à valider ou écarter.
  *
  * La publication est insérée en SQL brut (même approche que `global-setup.cjs`)
  * plutôt que récupérée de DILA : la spec reste déterministe et ne dépend pas
@@ -94,27 +98,30 @@ async function insererSource(cle: string, suffixe: string): Promise<void> {
   });
 }
 
-async function failleLiee(cle: string): Promise<{
-  statut: string;
-  regle: string | null;
-  templateLettre: string;
-  statutSource: string;
-} | null> {
-  return avecClient(async (c) => {
-    const r = await c.query<{
-      statut: string;
-      regle: string | null;
-      templateLettre: string;
-      statutSource: string;
-    }>(
-      `SELECT f.statut, f.regle, f."templateLettre", s.statut AS "statutSource"
-         FROM "SourceJuridique" s
-         JOIN "FailleJuridique" f ON f.id = s."failleId"
-        WHERE s."cle" = $1`,
-      [cle],
+/** Faille PROPOSEE liée à la publication (mimite l'auto-proposition de l'extraction). */
+async function creerFailleProposee(
+  cle: string,
+  suffixe: string,
+): Promise<string> {
+  const titre = `CAA de Bordeaux, 2ème chambre, 15/09/2026, 24BX0099${suffixe}`;
+  const id = `e2e-veille-faille-${suffixe}`;
+  await avecClient(async (c) => {
+    await c.query(
+      `INSERT INTO "FailleJuridique"
+        (id, "typeInfraction", "titreFaille", "articleLoi", "regle",
+         "templateLettre", source, jurisprudence, "reglesDetection", statut,
+         "createdAt", "updatedAt")
+       VALUES ($1, 'SUSPENSION', $2, 'C. route, art. L. 224-16', NULL,
+               '', 'E2E veille', '[]'::jsonb, '[]'::jsonb, 'PROPOSEE', now(), now())
+       ON CONFLICT (id) DO NOTHING`,
+      [id, titre],
     );
-    return r.rows[0] ?? null;
+    await c.query(
+      `UPDATE "SourceJuridique" SET "failleId" = $2 WHERE "cle" = $1`,
+      [cle, id],
+    );
   });
+  return id;
 }
 
 async function nettoyer(cle: string): Promise<void> {
@@ -125,16 +132,6 @@ async function nettoyer(cle: string): Promise<void> {
       [cle],
     );
     await c.query(`DELETE FROM "SourceJuridique" WHERE "cle" = $1`, [cle]);
-  });
-}
-
-/** Nombre de publications promues, avant/après — insensible au parallélisme. */
-async function nbPromues(): Promise<number> {
-  return avecClient(async (c) => {
-    const r = await c.query<{ n: string }>(
-      `SELECT count(*)::text AS n FROM "SourceJuridique" WHERE statut = 'PROMU'`,
-    );
-    return Number(r.rows[0]?.n ?? 0);
   });
 }
 
@@ -166,7 +163,7 @@ test("veille : garde d'auth (un client n'accède pas à la veille)", async ({ pa
   await expect(page).not.toHaveURL(/\/dashboard\/juriste\/veille/);
 });
 
-test("veille : publication retenue, citations littérales et promotion", async ({ page }) => {
+test("veille : publication retenue, citations littérales et brouillon", async ({ page }) => {
   test.slow();
   const cle = "E2E-VEILLE-JADE-PROMO-0001";
   await insererSource(cle, "01");
@@ -203,26 +200,11 @@ test("veille : publication retenue, citations littérales et promotion", async (
       c.getByText("Brouillon généré par extraction", { exact: false }),
     ).toBeVisible();
 
-    // Promotion
-    const avant = await nbPromues();
-    await c
-      .getByRole("button", { name: "Proposer une faille à partir de cette publication" })
-      .click();
-    await c.getByLabel("Article de référence").fill("C. route, art. L. 224-16");
-    await c.getByRole("button", { name: "Créer la proposition" }).click();
-
-    // La publication sort de la file « À lire » (le compteur la confirme).
-    await expect(c).toHaveCount(0);
-    await expect
-      .poll(async () => await nbPromues(), { timeout: 15_000 })
-      .toBe(avant + 1);
-
-    // La promotion ne crée qu'une PROPOSEE incomplète : jamais ACTIVE.
-    const etat = await failleLiee(cle);
-    expect(etat?.statut).toBe("PROPOSEE");
-    expect(etat?.regle).toBeNull();
-    expect(etat?.templateLettre).toBe("");
-    expect(etat?.statutSource).toBe("PROMU");
+    // Pas de bouton de promotion manuelle (feature retirée) : l'extraction est
+    // automatique, la décision humaine se limite à valider/écarter.
+    await expect(
+      c.getByRole("button", { name: "Proposer une faille à partir de cette publication" }),
+    ).toHaveCount(0);
   } finally {
     await nettoyer(cle);
   }
@@ -232,16 +214,12 @@ test("veille : l'activation est refusée tant que la proposition est incomplète
   test.slow();
   const cle = "E2E-VEILLE-JADE-GARDE-0002";
   await insererSource(cle, "02");
+  // La faille PROPOSEE est créée directement (comme le ferait
+  // l'auto-proposition de l'extraction) : le parcours de rédaction admin
+  // reste identique, seule la promotion manuelle a été retirée.
+  await creerFailleProposee(cle, "02");
   try {
     await loginAs(page, "e2e-admin@test.local");
-    await page.goto("/dashboard/juriste/veille");
-    const c = carte(page, "02");
-    await c
-      .getByRole("button", { name: "Proposer une faille à partir de cette publication" })
-      .click();
-    await c.getByLabel("Article de référence").fill("C. route, art. L. 224-16");
-    await c.getByRole("button", { name: "Créer la proposition" }).click();
-    await expect(c).toHaveCount(0);
 
     // Bibliothèque juridique : la proposition y attend validation.
     await page.goto("/dashboard/juriste/failles?f=PROPOSEE");
@@ -255,7 +233,17 @@ test("veille : l'activation est refusée tant que la proposition est incomplète
     ).toBeVisible();
     // Le statut n'a pas bougé.
     await expect(ligne.getByText("Proposition (auto-alimentation)")).toBeVisible();
-    expect((await failleLiee(cle))?.statut).toBe("PROPOSEE");
+    expect(
+      await avecClient(async (c) => {
+        const r = await c.query<{ statut: string }>(
+          `SELECT f.statut FROM "SourceJuridique" s
+            JOIN "FailleJuridique" f ON f.id = s."failleId"
+           WHERE s."cle" = $1`,
+          [cle],
+        );
+        return r.rows[0]?.statut ?? "?";
+      }),
+    ).toBe("PROPOSEE");
 
     // Rédaction puis validation : là, ça passe.
     await ligne.getByRole("button", { name: "Modifier" }).click();
@@ -278,7 +266,19 @@ test("veille : l'activation est refusée tant que la proposition est incomplète
 
     await ligne.getByRole("button", { name: "Valider (Active)" }).click();
     await expect
-      .poll(async () => (await failleLiee(cle))?.statut, { timeout: 15_000 })
+      .poll(
+        async () =>
+          avecClient(async (c) => {
+            const r = await c.query<{ statut: string }>(
+              `SELECT f.statut FROM "SourceJuridique" s
+                JOIN "FailleJuridique" f ON f.id = s."failleId"
+               WHERE s."cle" = $1`,
+              [cle],
+            );
+            return r.rows[0]?.statut ?? "?";
+          }),
+        { timeout: 15_000 },
+      )
       .toBe("ACTIVE");
 
     // Une fois active, la faille quitte le filtre « Propositions » : on la
