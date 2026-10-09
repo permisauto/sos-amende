@@ -205,8 +205,32 @@ const REPONSE_OK = {
           {
             text: JSON.stringify({
               texte: "CONTRAVENTION N° 123456789",
-              plaque: "AB-123-CD",
-              date: "2026-07-01",
+              categorie: "AMENDE_ANTAI",
+              statut_import: {
+                identifiant_document: "37592048152634",
+                numero_neph_dossier: null,
+                date_emission_officielle: "2026-04-14",
+                date_notification_mentionnee: null,
+              },
+              profil_client: {
+                nom: "MARTIN",
+                prenom: "Jean",
+                adresse_postale_brute: null,
+              },
+              faits_et_infraction: {
+                date_faits: "2026-07-01",
+                heure_faits: "14:32",
+                lieu_exact: null,
+                nature_infraction_libelle: null,
+                immatriculation_vehicule: "AB-123-CD",
+              },
+              impact_et_sanctions_financieres: {
+                montant_amende_euros: 135,
+                retrait_points_encouru: null,
+                solde_points_apres_infraction: null,
+                duree_retrait_permis_mois: null,
+                mesure_technique: null,
+              },
             }),
           },
         ],
@@ -801,5 +825,157 @@ describe("provider mock — document simulé choisi par le nom de fichier (dev/E
     const dpv = normaliserPv(pv?.texte ?? "");
     expect(dpv.docType).toBe("AMENDE");
     expect(dpv.numTelePaiement).toBe("12345678902");
+  });
+});
+
+describe("OCR v2 — contrat Gemini (4 sections)", () => {
+  it("parse les sections et expose le miroir clés plates", async () => {
+    process.env.OCR_PROVIDER = "gemini-flash";
+    process.env.GEMINI_API_KEY = "test-key";
+    simulerGemini([{ status: 200, body: REPONSE_OK }]);
+
+    const res = await extrairePv(PNG_1PX);
+
+    expect(res?.extrait?.categorie).toBe("AMENDE_ANTAI");
+    expect(res?.extrait?.plaque).toBe("AB-123-CD");
+    expect(res?.extrait?.date).toBe("2026-07-01");
+    expect(res?.extrait?.heure).toBe("14h32");
+    expect(res?.extrait?.nom).toBe("MARTIN Jean");
+    expect(res?.extrait?.num_pv).toBe("37592048152634");
+    expect(res?.extrait?.montant).toBe("135,00 €");
+    expect(res?.extrait?.dateEmission).toBe("2026-04-14");
+    expect(res?.extrait?.doc_v2?.categorie).toBe("AMENDE_ANTAI");
+    expect(res?.extrait?.doc_v2?.faits_et_infraction?.heure_faits).toBe(
+      "14:32",
+    );
+    // Le miroir ne pose jamais `docType` : il est dérivé de la catégorie par
+    // `alignerDocType` au dépôt (source de vérité unique).
+    expect(res?.extrait?.docType).toBeUndefined();
+  });
+
+  it("réponse sans catégorie → texte seul, aucun extrait (anti-hallucination)", async () => {
+    process.env.OCR_PROVIDER = "gemini-flash";
+    process.env.GEMINI_API_KEY = "test-key";
+    simulerGemini([
+      {
+        status: 200,
+        body: {
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    text: JSON.stringify({
+                      texte: "CONTRAVENTION N° 123456789",
+                    }),
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      },
+    ]);
+
+    const res = await extrairePv(PNG_1PX);
+
+    expect(res?.texte).toBe("CONTRAVENTION N° 123456789");
+    expect(res?.extrait).toBeUndefined();
+  });
+});
+
+describe("OCR v2 — classification de catégorie (6 documents)", () => {
+  it("les six documents mock se classent en catégorie + docType cohérent", async () => {
+    process.env.OCR_PROVIDER = "mock";
+    const cas: Array<[string, string, string | undefined]> = [
+      ["pv.png", "AMENDE_ANTAI", "AMENDE"],
+      ["arrete-suspension.png", "SUSPENSION_PREFECTORALE", "3F"],
+      ["48si.png", "INVALIDATION_48SI", "48SI"],
+      ["retention-permis.png", "RETENTION_TERRAIN", "3F"],
+      ["48n-points.png", "PERTE_POINTS_48", undefined],
+      ["annulation-tribunal.png", "ANNULATION_JUDICIAIRE", undefined],
+    ];
+    for (const [nom, cat, docType] of cas) {
+      const r = await extrairePv(Buffer.from("x"), nom);
+      const d = normaliserPv(r?.texte ?? "");
+      expect(d.categorie, nom).toBe(cat);
+      expect(d.docType, nom).toBe(docType);
+    }
+  });
+
+  it("« 48 n° … » (renvoi d'article) n'est jamais une lettre 48N", () => {
+    const d = normaliserPv("Rappel de l'article 48 n° 12 du code de la route");
+    expect(d.categorie).toBeUndefined();
+    expect(d.docType).toBeUndefined();
+  });
+
+  it("un texte non reconnu garde la catégorie absente (jamais fabriquée)", () => {
+    expect(
+      normaliserPv("Bonjour, ce texte ne contient aucun repère.").categorie,
+    ).toBeUndefined();
+  });
+
+  it("champs des nouveaux documents (rétention, 48N, annulation)", async () => {
+    process.env.OCR_PROVIDER = "mock";
+
+    const dr = normaliserPv(
+      (await extrairePv(Buffer.from("x"), "retention-permis.png"))?.texte ?? "",
+    );
+    expect(dr.categorie).toBe("RETENTION_TERRAIN");
+    expect(dr.docType).toBe("3F");
+    expect(dr.duree).toBe("3 mois");
+
+    const dn = normaliserPv(
+      (await extrairePv(Buffer.from("x"), "48n-points.png"))?.texte ?? "",
+    );
+    expect(dn.categorie).toBe("PERTE_POINTS_48");
+    expect(dn.docType).toBeUndefined(); // 48N hors pack : jamais de docType
+    expect(dn.soldePoints).toBe(4);
+    expect(dn.pointsEncourus).toBe(2);
+    expect(dn.dateEmission).toBe("2026-06-15");
+
+    const da = normaliserPv(
+      (await extrairePv(Buffer.from("x"), "annulation-tribunal.png"))
+        ?.texte ?? "",
+    );
+    expect(da.categorie).toBe("ANNULATION_JUDICIAIRE");
+    expect(da.docType).toBeUndefined();
+  });
+});
+
+describe("OCR v2 — extractions complémentaires (libellé obligatoire)", () => {
+  it("NEPH : capturée près de son libellé, nettoyée, jamais ailleurs", () => {
+    expect(normaliserPv("Dossier NEPH : 1A2B3C4D5E6F").neph).toBe(
+      "1A2B3C4D5E6F",
+    );
+    expect(normaliserPv("NEPH : ABCDE").neph).toBeUndefined(); // < 6 car.
+    expect(normaliserPv("aucun repère ici").neph).toBeUndefined();
+  });
+
+  it("solde de points : nulle acceptée, « NUL » jamais lu", () => {
+    expect(normaliserPv("Solde restant : 4 points").soldePoints).toBe(4);
+    expect(normaliserPv("SOLDE DE POINTS NUL").soldePoints).toBeUndefined();
+    expect(normaliserPv("il reste 0 point sur mon compte").soldePoints).toBe(0);
+  });
+
+  it("points retirés (48N) : une seule valeur, sinon ignoré (ambigu)", () => {
+    expect(normaliserPv("Il est retiré 2 points").pointsEncourus).toBe(2);
+    expect(normaliserPv("2 points retirés").pointsEncourus).toBe(2);
+    // Plusieurs retraits distincts → ambiguïté, jamais de nombre inventé.
+    expect(normaliserPv(LETTRE_48SI).pointsEncourus).toBeUndefined();
+  });
+
+  it("date d'émission par libellé explicite (distincte de la notification)", () => {
+    expect(normaliserPv(PV_OFFICIEL).dateEmission).toBe("2026-04-14");
+    expect(normaliserPv("Date de la décision : 15/06/2026").dateEmission).toBe(
+      "2026-06-15",
+    );
+    expect(normaliserPv("Notifiée le 20/03/2026").dateEmission).toBeUndefined();
+  });
+
+  it("nature de l'infraction : ligne complète, tirets de fin retirés", () => {
+    expect(normaliserPv(PV_OFFICIEL).libelleInfraction).toBe(
+      "Excès de vitesse inférieur à 20 km/h par conducteur de véhicule à moteur",
+    );
   });
 });

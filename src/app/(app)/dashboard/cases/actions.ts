@@ -18,6 +18,7 @@ import {
 } from "@/lib/moteur";
 import { generateLettrePdf } from "@/lib/lettre-pdf";
 import { extrairePv, getOcrProvider, fusionnerPrefill } from "@/lib/ocr";
+import { alignerDocType, lireCategorie } from "@/lib/doc-v2";
 import { notifierStatut } from "@/lib/notifications";
 import { prixBase } from "@/lib/tarifs";
 import { formaterLettreOfficielle } from "@/lib/envoi";
@@ -146,10 +147,22 @@ export async function createDossier(
       // complément par les regex locales — l'ancien « struct OU regex »
       // laissait « Nom » vide sur les PDF à couche texte (lecture locale
       // sans extrait) et perdait prefecture/duree/motif sans Gemini.
-      const prefill = fusionnerPrefill(ocr.extrait, ocr.texte);
+      const prefill: Record<string, unknown> = fusionnerPrefill(
+        ocr.extrait,
+        ocr.texte,
+      );
+      // Objets du contrat OCR v2 : `fusionnerPrefill` ne duplique que les
+      // chaînes — le document structuré et la mesure technique sont repris
+      // tels quels du provider, puis `docType` est aligné sur la catégorie
+      // (source de vérité : jamais de mismatch catégorie/docType).
+      const dv = ocr.extrait?.doc_v2;
+      if (dv && typeof dv === "object") prefill.doc_v2 = dv;
+      const mesure = ocr.extrait?.mesure;
+      if (mesure && typeof mesure === "object") prefill.mesure = mesure;
+      alignerDocType(prefill);
       await prisma.dossier.update({
         where: { id: dossier.id },
-        data: { pvTexte: ocr.texte, extractedData: prefill },
+        data: { pvTexte: ocr.texte, extractedData: prefill as object },
       });
       ocrOk = true;
     }
@@ -245,8 +258,24 @@ export async function analyserDossier(
   // règles à docType/horodatage ne matcheraient jamais.
   const chaine = (v: unknown): string | undefined =>
     typeof v === "string" && v.trim() ? v.trim() : undefined;
+  const nombre = (v: unknown): number | undefined => {
+    if (typeof v === "number") return Number.isFinite(v) ? v : undefined;
+    if (typeof v === "string" && v.trim()) {
+      const n = Number(v.trim().replace(",", "."));
+      if (Number.isFinite(n)) return n;
+    }
+    return undefined;
+  };
   const docTypeAnt = chaine(anterieur.docType);
   const pointsAnt = Number(anterieur.pointsRetiresMemesDate);
+  // OCR v2 (lots N1+N2) : classification, miroirs numériques et structures —
+  // portés explicitement (jamais génériquement : `analyseSchema` strip les
+  // clés inconnues, et un portage total recopierait les cases cochées).
+  const categorieAnt = lireCategorie(anterieur.categorie);
+  const soldeAnt = nombre(anterieur.soldePoints);
+  const retraitAnt = nombre(anterieur.pointsEncourus);
+  const docV2Ant = anterieur.doc_v2;
+  const mesureAnt = anterieur.mesure;
 
   const data: ExtractedData = {
     ...parsed.data,
@@ -254,6 +283,24 @@ export async function analyserDossier(
     // cases cochées écrivent une clé — contexte juriste + preuves externes.
     ...lireReponses(formData),
     plaqueIncorrecte: formData.get("plaqueIncorrecte") === "on",
+    ...(categorieAnt ? { categorie: categorieAnt } : {}),
+    ...(chaine(anterieur.neph) ? { neph: chaine(anterieur.neph) } : {}),
+    ...(chaine(anterieur.libelleInfraction)
+      ? { libelleInfraction: chaine(anterieur.libelleInfraction) }
+      : {}),
+    ...(chaine(anterieur.dateEmission)
+      ? { dateEmission: chaine(anterieur.dateEmission) }
+      : {}),
+    ...(soldeAnt !== undefined ? { soldePoints: soldeAnt } : {}),
+    ...(retraitAnt !== undefined ? { pointsEncourus: retraitAnt } : {}),
+    ...(typeof docV2Ant === "object" && docV2Ant !== null
+      ? { doc_v2: docV2Ant as ExtractedData["doc_v2"] }
+      : {}),
+    ...(typeof mesureAnt === "object" &&
+    mesureAnt !== null &&
+    "valeur" in mesureAnt
+      ? { mesure: mesureAnt as ExtractedData["mesure"] }
+      : {}),
     ...(typeof anterieur.dateVerificationAppareil === "string"
       ? { dateVerificationAppareil: anterieur.dateVerificationAppareil }
       : {}),
@@ -278,6 +325,11 @@ export async function analyserDossier(
       ? { pointsRetiresMemesDate: pointsAnt }
       : {}),
   };
+
+  // OCR v2 : la catégorie est la source de vérité du `docType` (et le supprime
+  // pour les catégories hors pack : 48N, annulation, INCONNU). Anciens
+  // dossiers sans catégorie → no-op (leur docType survit).
+  alignerDocType(data as Record<string, unknown>);
 
   // Contexte étalonnage (preuve d'entretien du radar) : registre admin
   // prioritaire, sinon date de vérification lue sur le PV — permet au moteur

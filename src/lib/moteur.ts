@@ -1,6 +1,80 @@
 import { formaterDateFr } from "./envoi";
 import { ajouterJoursFrances, reporterJourOuvrable } from "./delais";
 
+/**
+ * Catégories documentaires (OCR v2, lots N1+N2) : classement sémantique du
+ * document scanné, plus fin que le `docType` pack (3F/48SI). Les deux restent
+ * alignés par `docTypePourCategorie`/`alignerDocType` (`doc-v2.ts`) : une
+ * catégorie sans équivalent pack (48N, annulation judiciaire) n'impose aucun
+ * `docType` — le moteur n'applique alors aucune règle cloisonnée.
+ * Jamais fabriquée : les regex n'écrivent une catégorie que si le texte est
+ * reconnu ; `INCONNU` vient uniquement du provider structuré (Gemini).
+ */
+export const CATEGORIES_DOCUMENT = [
+  "AMENDE_ANTAI",
+  "RETENTION_TERRAIN",
+  "SUSPENSION_PREFECTORALE",
+  "INVALIDATION_48SI",
+  "PERTE_POINTS_48",
+  "ANNULATION_JUDICIAIRE",
+  "INCONNU",
+] as const;
+export type CategorieDocument = (typeof CATEGORIES_DOCUMENT)[number];
+
+/** Mesure technique lue sur le document (alcootest mg/L, vitesse km/h). */
+export type Mesure = {
+  valeur: number;
+  unite: "mg/L" | "g/L" | "km/h";
+  /** Valeur retenue par l'administration si distincte de la mesure (optionnelle). */
+  retenu?: number;
+};
+
+/** Section « statut_import » du contrat OCR v2 (identification du document). */
+export type DocV2StatutImport = {
+  identifiant_document?: string;
+  numero_neph_dossier?: string;
+  date_emission_officielle?: string;
+  date_notification_mentionnee?: string;
+};
+
+/** Section « profil_client » du contrat OCR v2 (titulaire). */
+export type DocV2ProfilClient = {
+  nom?: string;
+  prenom?: string;
+  adresse_postale_brute?: string;
+};
+
+/** Section « faits_et_infraction » du contrat OCR v2. */
+export type DocV2FaitsInfraction = {
+  date_faits?: string;
+  heure_faits?: string;
+  lieu_exact?: string;
+  nature_infraction_libelle?: string;
+  immatriculation_vehicule?: string;
+};
+
+/** Section « impact_et_sanctions_financieres » du contrat OCR v2. */
+export type DocV2ImpactSanctions = {
+  montant_amende_euros?: number;
+  retrait_points_encouru?: number;
+  solde_points_apres_infraction?: number;
+  duree_retrait_permis_mois?: number;
+  mesure_technique?: Mesure;
+};
+
+/**
+ * Document structuré extrait par l'OCR v2 : le prompt impose ces 4 sections
+ * (valeurs absentes = null), le parser (`doc-v2.ts`) isole chaque champ et
+ * n'indexe une section que si elle porte au moins une donnée.
+ */
+export type DocV2 = {
+  categorie: CategorieDocument;
+  statut_import?: DocV2StatutImport;
+  profil_client?: DocV2ProfilClient;
+  faits_et_infraction?: DocV2FaitsInfraction;
+  impact_et_sanctions_financieres?: DocV2ImpactSanctions;
+};
+
 export type ExtractedData = {
   nom?: string;
   plaque?: string;
@@ -59,6 +133,22 @@ export type ExtractedData = {
   pointsRetiresMemesDate?: number | string;
   dateStage?: string; // date d'attestation de stage de récupération
   dateNotification?: string; // date de notification de la décision 48SI
+  // OCR v2 (lots N1+N2) : classification documentaire + contrat à 4 sections.
+  // `categorie` est écrite par les regex seulement si le texte est reconnu
+  // (jamais INCONNU côté regex) ; `doc_v2` conserve la structure d'origine du
+  // provider. Les clés plates (neph, libelleInfraction, dateEmission,
+  // soldePoints, pointsEncourus) sont le miroir exploitable par les règles —
+  // miroir assuré par `aplatirDocV2` + alignement par `alignerDocType`.
+  categorie?: CategorieDocument;
+  doc_v2?: DocV2;
+  neph?: string;
+  libelleInfraction?: string;
+  dateEmission?: string;
+  /** Nombre (provider) ou chaîne (après `fusionnerPrefill`) — comme
+   * `pointsRetiresMemesDate`, `valeurSuperieure` lit les deux formes. */
+  soldePoints?: number | string;
+  pointsEncourus?: number | string;
+  mesure?: Mesure;
   // Référé-suspension (art. L. 521-2 CJA) — **noms identiques aux variables
   // du template** (`{metier}`, `{entreprise}`, `{risque_licenciement}`) : un
   // renommage en `urgence*` casserait `remplirTemplate` (jamais de copie

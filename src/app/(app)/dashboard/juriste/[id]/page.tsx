@@ -37,6 +37,7 @@ import {
   libelleDocType,
 } from "@/lib/envoi";
 import { faillesPourTypePreuve, listePiecesJointes } from "@/lib/preuves-api";
+import { libelleCategorie, lireCategorie } from "@/lib/doc-v2";
 import { FilMessages, type MessageDto } from "@/components/messages";
 import {
   FilEquipe,
@@ -423,6 +424,16 @@ export default async function JuristeCasePage(
     process.env.VERIF_IA_PROVIDER === "mock";
 
   const data = item.extractedData as Record<string, unknown> | null;
+
+  // Classification OCR v2 (catégorie) prioritaire sur le simple `docType`
+  // pack : elle couvre aussi la 48N, la rétention et l'annulation judiciaire.
+  // Anciens dossiers sans catégorie → repli sur le libellé `docType`.
+  const categorieDoc = data ? lireCategorie(data.categorie) : undefined;
+  const libelleDocument = categorieDoc
+    ? libelleCategorie(categorieDoc)
+    : data
+      ? libelleDocType(typeof data.docType === "string" ? data.docType : null)
+      : null;
 
   const dataLettres = (item.extractedData ?? {}) as ExtractedData;
   // Habillage professionnel des propositions (en-tête, Objet, Madame/Monsieur,
@@ -1222,17 +1233,11 @@ export default async function JuristeCasePage(
                       </dd>
                     </div>
                   )}
-                  {libelleDocType(
-                    typeof data.docType === "string" ? data.docType : null,
-                  ) && (
+                  {libelleDocument && (
                     <div className="flex justify-between">
                       <dt className="text-zinc-500">Document</dt>
                       <dd className="font-medium text-indigo-700">
-                        {libelleDocType(
-                          typeof data.docType === "string"
-                            ? data.docType
-                            : null,
-                        )}
+                        {libelleDocument}
                       </dd>
                     </div>
                   )}

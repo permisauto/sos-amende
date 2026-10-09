@@ -1,4 +1,5 @@
-import type { ExtractedData } from "@/lib/moteur";
+import type { CategorieDocument, ExtractedData } from "@/lib/moteur";
+import { aplatirDocV2, docTypePourCategorie, parserDocV2 } from "@/lib/doc-v2";
 
 export type OcrResult = {
   texte: string;
@@ -56,9 +57,11 @@ function delaiOcr(env: string | undefined, defaut: number): number {
  * null et le client saisit à la main — jamais d'exception, jamais de hang.
  *
  * `nomFichier` ne sert qu'au provider mock (dev/E2E) : il choisit le document
- * simulé (« arrete-… » → arrêté 3F, « 48si… » → lettre 48SI, sinon le PV
- * d'amende de référence). Seul « arrete » ouvre la voie 3F : « decision »
- * reste sur le PV par défaut pour ne pas basculer `suspension.spec.ts`. */
+ * simulé (« arrete-… » → arrêté 3F, « 48si… » → lettre 48SI, « retention-… »
+ * → notification de rétention, « 48n-… » → lettre 48N, « annulation-… » →
+ * ordonnance de justice, sinon le PV d'amende de référence). Seul « arrete »
+ * ouvre la voie 3F : « decision » reste sur le PV par défaut pour ne pas
+ * basculer `suspension.spec.ts`. */
 export async function extrairePv(
   buffer: Buffer,
   nomFichier?: string,
@@ -394,33 +397,13 @@ async function geminiFlashOcrUnEssai(buffer: Buffer): Promise<OcrResult | null> 
       return null;
     }
     const texte = typeof parse.texte === "string" && parse.texte.trim() ? parse.texte.trim() : brut;
-    const extrait: Partial<ExtractedData> = {};
-    for (const champ of [
-      "nom",
-      "plaque",
-      "num_pv",
-      "date",
-      "heure",
-      "montant",
-      "typeRadar",
-      "radarId",
-      "adresse",
-      "lieu",
-      "prefecture",
-      "duree",
-      "motif",
-    ] as const) {
-      const v = parse[champ];
-      if (typeof v === "string" && v.trim()) extrait[champ] = v.trim().slice(0, 140);
-    }
-    if (parse["numTelePaiement"]) {
-      const t = String(parse["numTelePaiement"]).trim().slice(0, 20);
-      if (t) extrait.numTelePaiement = t;
-    }
-    if (typeof parse["cle"] === "string" && parse["cle"].trim()) {
-      extrait.cle = parse["cle"].trim().slice(0, 4);
-    }
-    return { texte, extrait: Object.keys(extrait).length ? extrait : undefined };
+    // Contrat v2 (4 sections) : parser tolérant + miroir clés plates. Les
+    // champs hors contrat (prefecture, motif, radar, télépaiement…) sont
+    // comblés par les regex de `fusionnerPrefill` sur `texte` — plus aucune
+    // clé plate n'est lue ici : le prompt est la source unique du structuré.
+    const docV2 = parserDocV2(parse);
+    if (!docV2) return { texte };
+    return { texte, extrait: aplatirDocV2(docV2) };
   } catch (err) {
     // Les échecs transitoires doivent remonter à avecRetry : c'est exactement
     // le cas à réessayer (503 « high demand »). Les autres renvoient null.
@@ -447,23 +430,50 @@ function parseJsonBorne(brut: string): Record<string, unknown> | null {
   }
 }
 
-const PROMPT_EXTRACTION_JSON = `Lis cet avis de contravention (ou cette décision de suspension) et réponds UNIQUEMENT par un objet JSON valide, sans commentaire, avec EXACTEMENT ces clés (chaque valeur : la donnée telle qu'imprimée, ou "" si absente) :
-- "texte" : le texte brute intégral du document, lettre par lettre, sans reformuler ni résumer
-- "nom" : nom du titulaire (ex : MARTIN Jean)
-- "plaque" : immatriculation exacte (ex : AA-123-BB)
-- "num_pv" : numéro de l'avis complet (ex : 37592048152634)
-- "date" : date de l'avis/infraction au format AAAA-MM-JJ
-- "heure" : heure au format HHhMM
-- "montant" : montant de l'amende en euros avec 2 décimales (ex : "135,00 €")
-- "typeRadar" : modèle de l'appareil (ex : RADAR MESTA 210C)
-- "radarId" : numéro d'identification du radar (ex : 1248)
-- "lieu" : lieu de l'infraction (ex : Avenue de la République - METZ)
-- "adresse" : adresse du titulaire (rue + code postal + ville)
-- "prefecture" : préfecture émettrice de la décision si mentionnée (ex : Préfecture de la Gironde)
-- "duree" : durée de suspension ou de rétention si mentionnée (ex : 6 mois)
-- "motif" : motif de la suspension si mentionné (ex : alcoolémie)
-- "numTelePaiement" : numéro de télépaiement complet s'il figure
-- "cle" : clé de télépaiement (1 chiffre) si elle figure`;
+const PROMPT_EXTRACTION_JSON = `Lis ce document (avis de contravention, arrêté préfectoral, lettre 48, décision de justice…) et réponds UNIQUEMENT par un objet JSON valide : ni commentaire, ni balisage Markdown.
+
+Règles impératives :
+- chaque valeur absente ou illisible = null (jamais "", "inconnu" ou "N/A") ;
+- "texte" : le texte brut intégral du document, lettre par lettre, sans reformuler ni résumer ;
+- "categorie" : une seule valeur parmi AMENDE_ANTAI, RETENTION_TERRAIN, SUSPENSION_PREFECTORALE, INVALIDATION_48SI, PERTE_POINTS_48, ANNULATION_JUDICIAIRE, INCONNU ;
+- dates au format AAAA-MM-JJ, heure au format HH:MM, montants en euros décimaux (ex : 135.0) ;
+- "nom" en MAJUSCULES, "prenom" tel qu'imprimé.
+
+Objet attendu :
+{
+  "texte": "…",
+  "categorie": "…",
+  "statut_import": {
+    "identifiant_document": null,
+    "numero_neph_dossier": null,
+    "date_emission_officielle": null,
+    "date_notification_mentionnee": null
+  },
+  "profil_client": {
+    "nom": null,
+    "prenom": null,
+    "adresse_postale_brute": null
+  },
+  "faits_et_infraction": {
+    "date_faits": null,
+    "heure_faits": null,
+    "lieu_exact": null,
+    "nature_infraction_libelle": null,
+    "immatriculation_vehicule": null
+  },
+  "impact_et_sanctions_financieres": {
+    "montant_amende_euros": null,
+    "retrait_points_encouru": null,
+    "solde_points_apres_infraction": null,
+    "duree_retrait_permis_mois": null,
+    "mesure_technique": {
+      "chiffre_mesure": null,
+      "unite": null,
+      "chiffre_retenu": null
+    }
+  }
+}
+(unités de mesure autorisées : "mg/L", "g/L", "km/h")`;
 
 /**
  * Téléverse un fichier (PDF) sur la Gemini Files API et renvoie son URI.
@@ -671,10 +681,10 @@ async function tesseractOcr(buffer: Buffer): Promise<OcrResult | null> {
 }
 
 /** Provider de dev/E2E : retourne un texte de PV fictif déterministe.
- * Trois documents de référence — le nom du fichier téléversé (optionnel)
- * permet aux specs E2E de déposer un vrai document de pack (arrêté 3F ou
- * lettre 48SI) au lieu du PV d'amende, sans jamais toucher aux autres specs
- * (fichier « pv.png » par défaut). */
+ * Six documents de référence — le nom du fichier téléversé (optionnel)
+ * permet aux specs E2E de déposer un vrai document de pack (arrêté 3F,
+ * lettre 48SI, rétention, 48N, ordonnance) au lieu du PV d'amende, sans
+ * jamais toucher aux autres specs (fichier « pv.png » par défaut). */
 const MOCK_PV_AMENDE = `CONTRAVENTION
 N° 123456789
 Vous êtes avisé d'une infraction commise le 01/07/2026 à 14h32.
@@ -698,12 +708,31 @@ Récapitulatif des retraits :
 05/03/2026 : retrait de 4 points
 Notifiée le 20/03/2026`;
 
+const MOCK_RETENTION = `NOTIFICATION DE RÉTENTION DU PERMIS DE CONDUIRE
+Préfecture du Rhône
+Rétention immédiate du permis
+Durée : 3 mois
+Notifiée le 01/08/2026`;
+
+const MOCK_48N = `LETTRE 48 N
+NOTIFICATION DE RETRAIT DE POINTS
+Solde restant : 4 points
+Il est retiré 2 points
+Date de la décision : 15/06/2026`;
+
+const MOCK_ANNULATION = `TRIBUNAL ADMINISTRATIF DE LYON
+ORDONNANCE N° 2026-114
+Le juge des référés annule la décision de suspension du permis de conduire`;
+
 async function mockOcr(nomFichier?: string): Promise<OcrResult | null> {
   const nom = (nomFichier ?? "").toLowerCase();
   if (nom.includes("48si")) return { texte: MOCK_LETTRE_48SI, confiance: 100 };
   if (nom.includes("arrete")) {
     return { texte: MOCK_ARRETE_3F, confiance: 100 };
   }
+  if (nom.includes("retention")) return { texte: MOCK_RETENTION, confiance: 100 };
+  if (nom.includes("48n")) return { texte: MOCK_48N, confiance: 100 };
+  if (nom.includes("annulation")) return { texte: MOCK_ANNULATION, confiance: 100 };
   return { texte: MOCK_PV_AMENDE, confiance: 100 };
 }
 
@@ -771,6 +800,21 @@ const NOTIFICATION_RE =
 /** Heure française « 14h30 » (séparateur h/H seulement : un point de date
  * comme « 12.03.2026 » ne doit jamais être lu en heure). */
 const HEURE_H_RE = /\b([0-2]?\d)[hH]([0-5]\d)\b/;
+// --- OCR v2 (lots N1/N1d) : champs complémentaires, libellé obligatoire ----
+/** NEPH : numéro d'inscription au fichier national — libellé exigé, puis
+ * alphanumérique nettoyé (6 à 20 après nettoyage, jamais un montant). */
+const NEPH_RE = /\bn\.?e\.?p\.?h\.?\s*[:\-]?\s*([A-Za-z0-9][A-Za-z0-9 .-]{5,19})/i;
+/** Solde de points : « Solde restant : 4 », « solde de points : 0 » —
+ * « SOLDE DE POINTS NUL » n'a aucun chiffre et n'est donc jamais lu. */
+const SOLDE_POINTS_RE =
+  /\bsolde(?:\s+de\s+points)?(?:\s+restant)?\s*[:\-]?\s*(\d{1,2})\b/i;
+const IL_RESTE_POINTS_RE = /\bil\s+reste\s+(\d{1,2})\s+points?\b/i;
+/** Date d'émission officielle (« Date de l'avis : … », « Date de la décision :
+ * … », « émis le … ») — distincte de la notification (libellé différent). */
+const DATE_EMISSION_RE =
+  /\b(?:date\s+de\s+(?:l['’]avis|la\s+d[ée]cision|l['’][eé]mission)|[ée]mis\s+le)\s*[:\-]?\s*([^\n]{0,35})/i;
+/** Nature de l'infraction : « Nature : Excès de vitesse … » (même ligne). */
+const NATURE_INFRACTION_RE = /\bnature\s*[:\-]\s*([^\n]{3,140})/i;
 
 /** Segment lettre : chiffres d'OCR (0→O, 1→I) réparés ; null si autre chiffre. */
 function segLettres(s: string): string | null {
@@ -910,34 +954,61 @@ function extraireNumPv(texte: string): string | undefined {
 }
 
 /**
- * Classe le document scanné : « 48SI » (invalidation, solde de points nul),
- * « 3F » (arrêté/décision de suspension préfectorale) ou « AMENDE » (avis de
- * contravention). Ordre décroissant de spécificité : 48SI d'abord (motif très
- * spécifique), puis 3F — un courrier 48SI ne doit jamais retomber sur 3F, ni
- * un arrêté sur AMENDE. Un texte non reconnu garde `docType` absent (jamais de
- * classement fabriqué) : le moteur n'applique alors aucune règle à docType
- * imposé (anti-faux-positifs : jamais de pack hors pack).
+ * Classe le document scanné en catégorie OCR v2 (contrat 7 valeurs) :
+ * « INVALIDATION_48SI » (solde de points nul), « PERTE_POINTS_48 »
+ * (notification 48N), « RETENTION_TERRAIN » (rétention immédiate),
+ * « ANNULATION_JUDICIAIRE » (juridiction + annulation), « SUSPENSION_
+ * PREFECTORALE » (arrêté 3F), « AMENDE_ANTAI » (avis de contravention) —
+ * sinon indéfini (jamais de classement fabriqué ; le miroir `docType` en
+ * découle via `docTypePourCategorie`, cf. `doc-v2.ts`).
+ *
+ * Ordre décroissant de spécificité : 48SI d'abord (motif très spécifique),
+ * puis 48N — un courrier 48SI ne doit jamais retomber sur 48N ni sur le
+ * pack 3F ; l'annulation judiciaire avant la suspension (une ordonnance
+ * annulant une suspension mentionne « décision de suspension »).
  */
-function classifierDocType(
+function classifierCategorie(
   texte: string,
-): "AMENDE" | "3F" | "48SI" | undefined {
+): CategorieDocument | undefined {
   if (
     /\b48\s*si\b/i.test(texte) ||
     /solde\s+(?:de\s+points\s+)?nul/i.test(texte) ||
     (/(?:invalidation|invalider)/i.test(texte) &&
       /nombre\s+de\s+points[^\n]{0,60}nul/i.test(texte))
   ) {
-    return "48SI";
+    return "INVALIDATION_48SI";
+  }
+  if (
+    // « 48 n°… » (renvoi d'article) n'est jamais une lettre 48N.
+    /\b48\s*n(?![°º\d])/i.test(texte) ||
+    /(?:notification|lettre)[^\n]{0,60}retrait\s+de\s+points/i.test(texte)
+  ) {
+    return "PERTE_POINTS_48";
+  }
+  if (
+    /r[ée]tention[^\n]{0,80}(?:permis|d[ée]cision|imm[ée]diat|mesure)|(?:permis|d[ée]cision)[^\n]{0,60}r[ée]tention/i.test(
+      texte,
+    )
+  ) {
+    return "RETENTION_TERRAIN";
+  }
+  if (
+    /(?:ordonnance|juge\s+des\s+r[ée]f[ée]r[ée]s|tribunal\s+administratif|conseil\s+d['’]état)/i.test(
+      texte,
+    ) &&
+    /annul/i.test(texte)
+  ) {
+    return "ANNULATION_JUDICIAIRE";
   }
   if (
     /arr[eê]t[eé][^\n]{0,60}suspension|avis\s+de\s+suspension|suspension[^\n]{0,60}permis|d[ée]cision[^\n]{0,60}suspension/i.test(
       texte,
     )
   ) {
-    return "3F";
+    return "SUSPENSION_PREFECTORALE";
   }
   if (/avis\s+de\s+contravention|proc[eè]s[-\s]verbal|contravention|amende\s+forfaitaire/i.test(texte)) {
-    return "AMENDE";
+    return "AMENDE_ANTAI";
   }
   return undefined;
 }
@@ -1096,8 +1167,12 @@ export function normaliserPv(texte: string): Partial<ExtractedData> {
   // Les courriers 48SI ne mentionnent ni « suspension » ni « préfet » : ces
   // extractions doivent tourner sur TOUS les documents (libellés explicites
   // uniquement — jamais une date fabriquée).
-  const docType = classifierDocType(texte);
-  if (docType) result.docType = docType;
+  const categorie = classifierCategorie(texte);
+  if (categorie) {
+    result.categorie = categorie;
+    const docType = docTypePourCategorie(categorie);
+    if (docType) result.docType = docType;
+  }
 
   const sigM = texte.match(SIGNATURE_RE);
   if (sigM) {
@@ -1147,6 +1222,54 @@ export function normaliserPv(texte: string): Partial<ExtractedData> {
   }
   if (cumuls.size) {
     result.pointsRetiresMemesDate = Math.max(...cumuls.values());
+  }
+
+  // --- OCR v2 (lots N1/N1d) : champs complémentaires ------------------------
+  // Tous par libellé explicite, bornés — jamais une valeur déduite.
+  const nephM = texte.match(NEPH_RE);
+  if (nephM) {
+    const neph = nephM[1].toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (neph.length >= 6 && neph.length <= 20) result.neph = neph;
+  }
+
+  // Solde de points : deux formes, borné 0-14 (plafond du compte).
+  const soldeM =
+    texte.match(SOLDE_POINTS_RE) ?? texte.match(IL_RESTE_POINTS_RE);
+  if (soldeM) {
+    const n = Number(soldeM[1]);
+    if (Number.isFinite(n) && n >= 0 && n <= 14) result.soldePoints = n;
+  }
+
+  // Points retirés (48N) : « retrait de N points », « retiré N points »,
+  // « N points retirés » — ambigu (plusieurs valeurs distinctes) → ignoré
+  // (le cumul daté `pointsRetiresMemesDate` reste la mesure fiable).
+  // `[…^\s]*` et non `\w*` : « retiré » porte un accent hors classe \w.
+  const pointsVus = new Set<number>();
+  for (const m of texte.matchAll(
+    /(?:retrait|retir[^\s]*|décompt[^\s]*)\s+(?:de\s+)?(\d{1,2})\s*points?\b/gi,
+  )) {
+    pointsVus.add(Number(m[1]));
+  }
+  for (const m of texte.matchAll(
+    /(\d{1,2})\s+points?\s+(?:retir[^\s]*|décompt[^\s]*)/gi,
+  )) {
+    pointsVus.add(Number(m[1]));
+  }
+  if (pointsVus.size === 1) {
+    const n = [...pointsVus][0];
+    if (n >= 1 && n <= 14) result.pointsEncourus = n;
+  }
+
+  const dateEmM = texte.match(DATE_EMISSION_RE);
+  if (dateEmM) {
+    const iso = extraireDate(dateEmM[1]);
+    if (iso) result.dateEmission = iso;
+  }
+
+  const natureM = texte.match(NATURE_INFRACTION_RE);
+  if (natureM) {
+    const libelle = natureM[1].replace(/\s*[-–—]+$/, "").trim();
+    if (libelle.length >= 3) result.libelleInfraction = libelle.slice(0, 140);
   }
 
   return result;
