@@ -196,8 +196,12 @@ function BlocProposition({
           {p.corrigeLe
             ? `Corrigée par l'admin — ${dateCourteFr(p.corrigeLe)}`
             : complet
-              ? `Proposition extraite (IA) — ${dateCourteFr(p.extraitLe)}`
-              : "Proposition incomplète (IA)"}
+              ? `Proposition extraite (${
+                  p.methode === "locale" ? "locale — sans IA" : "IA"
+                }) — ${dateCourteFr(p.extraitLe)}`
+              : `Proposition incomplète (${
+                  p.methode === "locale" ? "locale — sans IA" : "IA"
+                })`}
         </span>
         <span className="rounded-full border border-zinc-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-zinc-700">
           {p.typeInfraction === "SUSPENSION" ? "Suspension" : "Amende"}

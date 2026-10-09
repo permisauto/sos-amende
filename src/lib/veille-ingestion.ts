@@ -45,7 +45,6 @@ import {
   SCORE_SEUIL_EXTRACTION,
   composerRegleProposition,
   extraireProposition,
-  extractionDispo,
   propositionEchec,
   refPropositionDepuisSource,
   type PropositionVeille,
@@ -498,15 +497,14 @@ async function extraireEtStocker(
  * Extrait les propositions des publications NOUVEAU encore non extraites,
  * en échec, ou incomplètes jamais retentées (`estCandidatExtraction`), mieux
  * scorées d'abord : `limite` au plus, score >= `minScore`, boîte de temps
- * `BUDGET_TEMPS_EXTRACTION_MS`. Sans IA (off/sans clé) : no-op.
+ * `BUDGET_TEMPS_EXTRACTION_MS`. IA indisponible ou en échec : **secours local**
+ * (`extractionLocale`, sans réseau) — la proposition reste immédiatement
+ * disponible pour l'admin.
  */
 export async function extrairePropositionsEnAttente(
   limite = BUDGET_EXTRACTION,
   minScore = SCORE_SEUIL_EXTRACTION,
 ): Promise<BilanExtraction> {
-  const dispo = extractionDispo();
-  if (dispo === "off" || dispo === "absent") return { ...BILAN_VIDE };
-
   let rows: SourceJuridique[];
   try {
     rows = await prisma.sourceJuridique.findMany({
@@ -542,16 +540,6 @@ export async function extrairePropositionsEnAttente(
 export async function extrairePropositionSource(
   id: string,
 ): Promise<{ ok: boolean; proposition?: PropositionVeille; motif?: string }> {
-  const dispo = extractionDispo();
-  if (dispo === "off" || dispo === "absent") {
-    return {
-      ok: false,
-      motif:
-        dispo === "off"
-          ? "extraction IA désactivée (VERIF_IA_PROVIDER=off)"
-          : "IA indisponible (GEMINI_API_KEY absente)",
-    };
-  }
   let row: SourceJuridique | null;
   try {
     row = await prisma.sourceJuridique.findUnique({ where: { id } });

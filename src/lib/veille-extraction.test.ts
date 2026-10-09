@@ -7,6 +7,7 @@ import {
   contenuVerbatim,
   extraireProposition,
   extractionDispo,
+  extractionLocale,
   extractionMock,
   lignesListe,
   normaliserPourComparaison,
@@ -201,20 +202,69 @@ describe("extraireProposition — providers", () => {
     if (r.ok) expect(r.proposition.etat).toBe("extrait");
   });
 
-  it("off : désactivé, jamais d'appel", async () => {
+  it("off : secours local immédiat, sans appel réseau", async () => {
     vi.stubEnv("VERIF_IA_PROVIDER", "off");
     const r = await extraireProposition(PUB);
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.motif).toContain("désactivée");
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.proposition.methode).toBe("locale");
+      expect(r.proposition.etat).toBe("extrait");
+      expect(r.proposition.articles.length).toBeGreaterThan(0);
+    }
   });
 
-  it("sans clé : indisponible", async () => {
+  it("sans clé : secours local immédiat (jamais de proposition muette)", async () => {
     vi.stubEnv("VERIF_IA_PROVIDER", "");
     vi.stubEnv("GEMINI_API_KEY", "");
     expect(extractionDispo()).toBe("absent");
     const r = await extraireProposition(PUB);
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.motif).toContain("GEMINI_API_KEY");
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.proposition.methode).toBe("locale");
+  });
+
+  it("gemini en échec (429 quota) : bascule sur le secours local", async () => {
+    vi.stubEnv("VERIF_IA_PROVIDER", "gemini");
+    vi.stubEnv("GEMINI_API_KEY", "cle-test");
+    const fetchSpy = vi.fn(async () =>
+      new Response(JSON.stringify({ error: { code: 429, message: "quota" } }), {
+        status: 429,
+      }),
+    );
+    vi.stubGlobal("fetch", fetchSpy);
+    try {
+      const r = await extraireProposition(PUB);
+      expect(fetchSpy).toHaveBeenCalled();
+      expect(r.ok).toBe(true);
+      if (r.ok) {
+        expect(r.proposition.methode).toBe("locale");
+        expect(r.proposition.etat).toBe("extrait");
+      }
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe("extractionLocale — secours sans IA", () => {
+  it("repère les articles par regex et garde les citations verbatim", () => {
+    const p = parserExtraction(extractionLocale(PUB), CONTENU);
+    expect(p).not.toBeNull();
+    expect(p!.etat).toBe("extrait");
+    expect(p!.articles.length).toBeGreaterThan(0);
+    expect(p!.regle).toContain("Extraction locale (sans IA)");
+  });
+
+  it("sans article cité, la proposition est incomplète (rien n'est inventé)", () => {
+    const pub: PublicationVeille = {
+      ...PUB,
+      titre: "Décision sans référence légale explicite",
+      contenu: "Aucune référence légale identifiable dans ce texte court.",
+      citations: [],
+    };
+    const p = parserExtraction(extractionLocale(pub), pub.contenu);
+    expect(p).not.toBeNull();
+    expect(p!.etat).toBe("incomplet");
+    expect(p!.articles).toEqual([]);
   });
 });
 

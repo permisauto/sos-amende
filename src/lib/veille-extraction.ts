@@ -39,6 +39,13 @@ export type PropositionVeille = {
   extraits: string[];
   /** Pourquoi incomplet/échec — affiché à l'admin. */
   motif?: string;
+  /**
+   * D'où vient la proposition : `ia` (Gemini ou simulation de dev/E2E) ou
+   * `locale` (extraction déterministe de secours, sans appel réseau — utilisée
+   * quand l'IA est coupée, sans clé, ou en échec 429/503). Absent = `ia`
+   * (propositions stockées avant cette distinction).
+   */
+  methode?: "ia" | "locale";
   /** Date ISO de l'extraction. */
   extraitLe: string;
   /** (Ré)extractions automatiques déjà tentées sur cette proposition. */
@@ -287,6 +294,52 @@ export function extractionMock(pub: PublicationVeille): string {
   });
 }
 
+/**
+ * Extraction **locale de secours** (sans IA, sans réseau) : même discipline
+ * que le mock — articles repérés par regex dans le contenu (le parser applique
+ * ensuite le garde-fou verbatim), conditions et extraits = citations déjà
+ * retenues par le filtre de pertinence (donc littéralement présentes).
+ *
+ * Utilisée dès que l'IA est indisponible (`off`, `absent`) ou en échec
+ * (429 quota / 503) : la proposition reste **immédiatement disponible** pour
+ * l'admin (valider / corriger / écarter) au lieu d'un `echec` muet. La règle
+ * est volontairement la citation de tête, explicitement étiquetée « locale » :
+ * l'admin la corrige dans le drawer avant validation si besoin.
+ */
+export function extractionLocale(pub: PublicationVeille): string {
+  const re = /(?:article|art\.)\s*([LRDC]\.?\s*\d{1,3}(?:-\d{1,3})?)/gi;
+  const articles: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(pub.contenu)) !== null && articles.length < 3) {
+    const article = m[0].trim();
+    if (!articles.some((a) => normaliserPourComparaison(a) === normaliserPourComparaison(article))) {
+      articles.push(article);
+    }
+  }
+  const typeInfraction =
+    /permis|suspension|invalidation|retrait de points|annulation du permis/i.test(
+      `${pub.titre} ${pub.contenu}`,
+    )
+      ? "SUSPENSION"
+      : "AMENDE";
+  const citation = pub.citations[0] ?? pub.contenu.slice(0, 200);
+  const conditions = pub.citations
+    .slice(0, 3)
+    .filter((c) => normaliserPourComparaison(pub.contenu).includes(normaliserPourComparaison(c)));
+  if (conditions.length === 0 && pub.contenu.trim().length >= 15) {
+    conditions.push(pub.contenu.trim().slice(0, 150));
+  }
+  return JSON.stringify({
+    titre: pub.titre.slice(0, 120),
+    typeInfraction,
+    articles,
+    regle: `Extraction locale (sans IA) — citation de tête retenue : « ${citation} »`,
+    conditions,
+    resume: `Extraction locale (sans IA) : ${pub.titre.slice(0, 120)}`,
+    extraits: pub.citations.slice(0, 2),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Orchestration provider
 // ---------------------------------------------------------------------------
@@ -307,21 +360,18 @@ export type ResultatExtraction =
 
 /**
  * Extrait la proposition d'une publication. Jamais d'exception : `ok:false`
- * avec un motif prêt à afficher (IA coupée, appel en échec, réponse illisible).
+ * avec un motif prêt à afficher uniquement si même le secours local échoue
+ * (réponse illisible — quasi impossible sur sa propre sortie).
+ *
+ * **Disponibilité immédiate** : quand l'IA est coupée (`off`), sans clé
+ * (`absent`) ou en échec (429 quota / 503 / réponse illisible), on bascule sur
+ * `extractionLocale` (sans réseau) au lieu de renvoyer un `echec` — la
+ * proposition reste consultable/correctible/validable par l'admin.
  */
 export async function extraireProposition(
   pub: PublicationVeille,
 ): Promise<ResultatExtraction> {
   const dispo = extractionDispo();
-  if (dispo === "off" || dispo === "absent") {
-    return {
-      ok: false,
-      motif:
-        dispo === "off"
-          ? "extraction IA désactivée (VERIF_IA_PROVIDER=off)"
-          : "IA indisponible (GEMINI_API_KEY absente)",
-    };
-  }
 
   if (dispo === "mock") {
     const prop = parserExtraction(extractionMock(pub), pub.contenu);
@@ -329,15 +379,29 @@ export async function extraireProposition(
     return { ok: true, proposition: prop };
   }
 
+  if (dispo === "off" || dispo === "absent") {
+    return secoursLocal(pub);
+  }
+
   const appel = await appelerGeminiJson(
     construirePromptExtraction(pub),
     "veille-extraction",
   );
-  if (!appel.ok) return { ok: false, motif: appel.motif };
-  const prop = parserExtraction(appel.texte, pub.contenu);
-  if (!prop) {
-    return { ok: false, motif: "réponse IA illisible" };
+  if (appel.ok) {
+    const prop = parserExtraction(appel.texte, pub.contenu);
+    if (prop) return { ok: true, proposition: prop };
   }
+  // IA en échec (429 quota, 503, réponse illisible…) : le secours local
+  // garantit une proposition immédiate — l'étiquette UI « locale » et le
+  // libellé de la règle signalent le repli à l'admin.
+  return secoursLocal(pub);
+}
+
+/** Parse la réponse locale et l'étiquette `methode: "locale"`. */
+function secoursLocal(pub: PublicationVeille): ResultatExtraction {
+  const prop = parserExtraction(extractionLocale(pub), pub.contenu);
+  if (!prop) return { ok: false, motif: "extraction locale illisible" };
+  prop.methode = "locale";
   return { ok: true, proposition: prop };
 }
 

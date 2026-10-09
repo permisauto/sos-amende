@@ -197,7 +197,7 @@ export async function extrairePropositionsLot(
   if (total === 0) {
     return {
       message:
-        "Rien à extraire : toutes les publications sont déjà traitées, ou l'IA est indisponible.",
+        "Rien à extraire : toutes les publications sont déjà traitées (ou score trop bas).",
     };
   }
   return {
