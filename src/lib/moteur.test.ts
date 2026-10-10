@@ -8,6 +8,9 @@ import {
   echeanceVerificationRadar,
   etalonnageExpire,
   joursRestants,
+  margeEthylometre,
+  margeNonDeduite,
+  margeTechniqueVitesse,
   meteoDefavorable,
   remplirLettreMulti,
   remplirTemplate,
@@ -623,5 +626,170 @@ describe("règles du pack 3F/48SI (types additifs)", () => {
     expect(
       detecterFailles({ date: "2024-01-01" }, "avis pour excès de vitesse", faillesOrdre),
     ).toEqual([FAILLE_IDS.prescription, PACK_ID, "faille-autre-suspension"]);
+  });
+});
+
+describe("marges arithmétiques (chantier 1)", () => {
+  const uneSeule = (id: string, regle: unknown) => [
+    { id, reglesDetection: [regle as RegleDetection] },
+  ];
+  const VITESSE = "faille-marge-tolerance-vitesse";
+  const ALCOOL = "faille-suspension-marge-erreur-ethylometre";
+
+  describe("helpers purs", () => {
+    it("margeTechniqueVitesse : −5 sous 100, −5 % au-delà (arrondi entier)", () => {
+      expect(margeTechniqueVitesse(50)).toBe(5);
+      expect(margeTechniqueVitesse(99)).toBe(5);
+      expect(margeTechniqueVitesse(100)).toBe(5); // 5 % de 100 = 5
+      expect(margeTechniqueVitesse(110)).toBe(6); // 5,5 → 6
+      expect(margeTechniqueVitesse(120)).toBe(6);
+      expect(margeTechniqueVitesse(137)).toBe(7); // 6,85 → 7
+      expect(margeTechniqueVitesse(200)).toBe(10);
+    });
+
+    it("margeEthylometre : fixe sous le seuil, 8 % au-delà (3 décimales)", () => {
+      expect(margeEthylometre(0.3, "g/L")).toBeCloseTo(0.032, 3);
+      expect(margeEthylometre(0.4, "g/L")).toBeCloseTo(0.032, 3); // seuil inclus → fixe
+      expect(margeEthylometre(0.5, "g/L")).toBeCloseTo(0.04, 3); // 8 % de 0,5
+      expect(margeEthylometre(0.1, "mg/L")).toBeCloseTo(0.016, 3);
+      expect(margeEthylometre(0.2, "mg/L")).toBeCloseTo(0.016, 3);
+      expect(margeEthylometre(0.25, "mg/L")).toBeCloseTo(0.02, 3); // 8 % de 0,25
+    });
+
+    it("margeNonDeduite : retenu absent → false (jamais de contexte fabriqué)", () => {
+      expect(
+        margeNonDeduite({ valeur: 93, unite: "km/h" }, 5),
+      ).toBe(false);
+    });
+
+    it("margeNonDeduite : déduction insuffisante → true ; marge appliquée → false", () => {
+      // 93 mesuré, retenu 93 (rien déduit) → faille.
+      expect(margeNonDeduite({ valeur: 93, retenu: 93, unite: "km/h" }, 5)).toBe(true);
+      // 93 mesuré, retenu 88 (−5 exact) → pas de faille.
+      expect(margeNonDeduite({ valeur: 93, retenu: 88, unite: "km/h" }, 5)).toBe(false);
+      // Déduction partielle (−3 sur −5 requis) → faille.
+      expect(margeNonDeduite({ valeur: 93, retenu: 90, unite: "km/h" }, 5)).toBe(true);
+      // Alcoolémie : 0,50 g/L retenu 0,50 (8 % non déduit) → faille.
+      expect(margeNonDeduite({ valeur: 0.5, retenu: 0.5, unite: "g/L" }, 0.04)).toBe(true);
+      // 0,50 g/L retenu 0,46 (−0,04 = 8 %) → pas de faille.
+      expect(margeNonDeduite({ valeur: 0.5, retenu: 0.46, unite: "g/L" }, 0.04)).toBe(false);
+    });
+  });
+
+  describe("règle margeTechniqueVitesse", () => {
+    const failles = uneSeule(VITESSE, { type: "margeTechniqueVitesse" });
+
+    it("active la faille si la marge n'est pas déduite (< 100 km/h)", () => {
+      // 93 mesuré, retenu 93 → 0 < 5.
+      expect(
+        detecterFailles({ docType: "AMENDE", mesure: { valeur: 93, retenu: 93, unite: "km/h" } }, null, failles),
+      ).toEqual([VITESSE]);
+      // 93 mesuré, retenu 91 → 2 < 5.
+      expect(
+        detecterFailles({ docType: "AMENDE", mesure: { valeur: 93, retenu: 91, unite: "km/h" } }, null, failles),
+      ).toEqual([VITESSE]);
+    });
+
+    it("n'active pas la faille si la marge est appliquée", () => {
+      expect(
+        detecterFailles({ docType: "AMENDE", mesure: { valeur: 93, retenu: 88, unite: "km/h" } }, null, failles),
+      ).toEqual([]);
+      expect(
+        detecterFailles({ docType: "AMENDE", mesure: { valeur: 137, retenu: 130, unite: "km/h" } }, null, failles),
+      ).toEqual([]); // −7 ≥ marge 7
+    });
+
+    it("utilise 5 % au-delà de 100 km/h", () => {
+      // 137 mesuré, retenu 133 → 4 < 7.
+      expect(
+        detecterFailles({ docType: "AMENDE", mesure: { valeur: 137, retenu: 133, unite: "km/h" } }, null, failles),
+      ).toEqual([VITESSE]);
+      // 137 mesuré, retenu 130 → −7 = marge → pas de faille.
+      expect(
+        detecterFailles({ docType: "AMENDE", mesure: { valeur: 137, retenu: 130, unite: "km/h" } }, null, failles),
+      ).toEqual([]);
+    });
+
+    it("n'exige plus la présence du mot « marge » dans le texte", () => {
+      expect(
+        detecterFailles(
+          { docType: "AMENDE", mesure: { valeur: 93, retenu: 93, unite: "km/h" } },
+          "PV sans le mot marge",
+          failles,
+        ),
+      ).toEqual([VITESSE]);
+    });
+
+    it("exige mesure.valeur ET mesure.retenu (aucun contexte fabriqué)", () => {
+      expect(
+        detecterFailles({ docType: "AMENDE", mesure: { valeur: 93, unite: "km/h" } }, null, failles),
+      ).toEqual([]); // retenu absent
+      expect(
+        detecterFailles(
+          { docType: "AMENDE", mesure: { retenu: 88, unite: "km/h" } as unknown as { valeur: number; retenu?: number; unite: "km/h" } },
+          null,
+          failles,
+        ),
+      ).toEqual([]); // valeur absente
+      expect(detecterFailles({ docType: "AMENDE" }, null, failles)).toEqual([]); // mesure absente
+    });
+
+    it("cloisonne : jamais sur un document de suspension", () => {
+      expect(
+        detecterFailles({ docType: "3F", mesure: { valeur: 93, retenu: 93, unite: "km/h" } }, null, failles),
+      ).toEqual([]);
+      expect(
+        detecterFailles({ docType: "48SI", mesure: { valeur: 93, retenu: 93, unite: "km/h" } }, null, failles),
+      ).toEqual([]);
+    });
+
+    it("n'exige pas d'unité fausse (mg/L sur une règle vitesse)", () => {
+      expect(
+        detecterFailles({ docType: "AMENDE", mesure: { valeur: 93, retenu: 93, unite: "mg/L" } }, null, failles),
+      ).toEqual([]);
+    });
+  });
+
+  describe("règle margeEthylometre", () => {
+    const failles = uneSeule(ALCOOL, { type: "margeEthylometre" });
+
+    it("active la faille si les 8 % ne sont pas déduits (g/L)", () => {
+      expect(
+        detecterFailles({ mesure: { valeur: 0.5, retenu: 0.5, unite: "g/L" } }, null, failles),
+      ).toEqual([ALCOOL]);
+      expect(
+        detecterFailles({ mesure: { valeur: 0.5, retenu: 0.48, unite: "g/L" } }, null, failles),
+      ).toEqual([ALCOOL]); // −0,02 < 0,04
+    });
+
+    it("n'active pas la faille si la marge 8 % est appliquée (g/L)", () => {
+      expect(
+        detecterFailles({ mesure: { valeur: 0.5, retenu: 0.46, unite: "g/L" } }, null, failles),
+      ).toEqual([]);
+    });
+
+    it("marge fixe sous le seuil (mg/L)", () => {
+      // 0,18 mg/L mesuré, retenu 0,18 → 0 < 0,016.
+      expect(
+        detecterFailles({ mesure: { valeur: 0.18, retenu: 0.18, unite: "mg/L" } }, null, failles),
+      ).toEqual([ALCOOL]);
+      // 0,18 mg/L retenu 0,16 → −0,02 ≥ 0,016 → pas de faille.
+      expect(
+        detecterFailles({ mesure: { valeur: 0.18, retenu: 0.16, unite: "mg/L" } }, null, failles),
+      ).toEqual([]);
+    });
+
+    it("exige retenu présent (jamais de contexte fabriqué)", () => {
+      expect(
+        detecterFailles({ mesure: { valeur: 0.5, unite: "g/L" } }, null, failles),
+      ).toEqual([]);
+      expect(detecterFailles({}, null, failles)).toEqual([]);
+    });
+
+    it("n'exige pas d'unité fausse (km/h sur une règle alcool)", () => {
+      expect(
+        detecterFailles({ mesure: { valeur: 0.5, retenu: 0.5, unite: "km/h" } }, null, failles),
+      ).toEqual([]);
+    });
   });
 });

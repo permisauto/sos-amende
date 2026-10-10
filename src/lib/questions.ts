@@ -56,7 +56,10 @@ export type ChampReponse =
   | "suspPrecedentsNonRecapitules"
   | "suspPointsCumulesJour"
   | "suspStageAvantNotif"
-  | "suspSoldeInexact";
+  | "suspSoldeInexact"
+  // Chantier 2 (2026-10-10) — urgence professionnelle (référé L. 521-2).
+  | "urgencePro"
+  | "siret";
 
 export type QuestionCiblee = {
   /** Nom du champ dans le formulaire (FormData). */
@@ -76,6 +79,9 @@ export type QuestionCiblee = {
   preuve?: PreuveCible;
   /** La réponse appelle une pièce que le **client** ajoute lui-même. */
   preuveClient?: PreuveClient;
+  /** Type de champ rendu dans le formulaire — défaut : case à cocher.
+   * `"texte"` = saisie libre (ex. SIRET — jamais pré-remplie par l'OCR). */
+  typeChamp?: "case" | "texte";
 };
 
 export const QUESTIONS_CIBLEES: readonly QuestionCiblee[] = [
@@ -292,6 +298,29 @@ export const QUESTIONS_CIBLEES: readonly QuestionCiblee[] = [
     docTypes: ["48SI"],
     preuveClient: "RELEVE_POINTS",
   },
+
+  // ── SUSPENSION — 3F/48SI — urgence professionnelle (chantier 2, 2026-10-10)
+  // Capteurs de fait pour le référé d'urgence (art. L. 521-2 CJA) : ils
+  // contextualisent la demande de suspension de la mesure, jamais un fondement
+  // supplémentaire. Même groupe, sans cascade (le SIRET reste facultatif).
+  {
+    cle: "urgencePro",
+    champ: "urgencePro",
+    libelle:
+      "La mesure de suspension/invalidation met en péril mon activité professionnelle (licenciement, revenus, emploi)",
+    groupe: "Urgence professionnelle",
+    types: ["SUSPENSION"],
+    docTypes: ["3F", "48SI"],
+  },
+  {
+    cle: "siret",
+    champ: "siret",
+    libelle: "SIRET de mon entreprise (facultatif — s'il m'en reste un)",
+    groupe: "Urgence professionnelle",
+    types: ["SUSPENSION"],
+    docTypes: ["3F", "48SI"],
+    typeChamp: "texte",
+  },
 ];
 
 const MOTIFS_NATURE: Record<Nature, RegExp> = {
@@ -348,9 +377,10 @@ export function questionsPour(opts: {
 }
 
 /**
- * Lit les cases cochées du questionnaire dans le FormData — seules les clés du
+ * Lit les réponses du questionnaire dans le FormData — seules les clés du
  * registre sont lues (ajouter une question = toucher le registre, pas l'action).
- * Une case non cochée n'écrit rien (jamais de `false` inutile en base).
+ * Une case non cochée n'écrit rien (jamais de `false` inutile en base) ; un
+ * champ texte vide n'écrit rien non plus.
  */
 export function lireReponses(fd: FormData): Partial<ExtractedData> {
   const out: Partial<ExtractedData> = {};
@@ -358,7 +388,12 @@ export function lireReponses(fd: FormData): Partial<ExtractedData> {
   // type large sur une clé union (`out[q.champ]` exigerait l'intersection).
   const cible = out as Record<string, ExtractedData[ChampReponse]>;
   for (const q of QUESTIONS_CIBLEES) {
-    if (fd.get(q.cle) === "on") {
+    if (q.typeChamp === "texte") {
+      const brut = fd.get(q.cle);
+      if (typeof brut === "string" && brut.trim()) {
+        cible[q.champ] = brut.trim();
+      }
+    } else if (fd.get(q.cle) === "on") {
       cible[q.champ] = q.valeur ?? true;
     }
   }

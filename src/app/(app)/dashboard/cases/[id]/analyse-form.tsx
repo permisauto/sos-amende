@@ -54,6 +54,9 @@ export type AnalysePrefill = {
   suspPointsCumulesJour?: boolean;
   suspStageAvantNotif?: boolean;
   suspSoldeInexact?: boolean;
+  // Chantier 2 (2026-10-10) — urgence professionnelle (référé L. 521-2).
+  urgencePro?: boolean;
+  siret?: string;
   // Pack 3F/48SI : classificateur lu à l'OCR (badge informatif — le champ
   // n'est pas éditable ici, il est porté automatiquement à l'analyse).
   docType?: string;
@@ -311,17 +314,33 @@ export function AnalyseForm({
               {groupe.groupe}
             </p>
             <div className="mt-2 flex flex-col gap-2.5">
-              {groupe.questions.map((q) => (
+              {groupe.questions.map((q) => {
+                const prefillQ = prefill?.[q.champ];
+                return (
                 <div key={q.cle} className="group">
-                  <label className="flex items-start gap-2 text-sm text-zinc-700">
-                    <input
-                      type="checkbox"
-                      name={q.cle}
-                      defaultChecked={Boolean(prefill?.[q.champ])}
-                      className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500"
-                    />
-                    {q.libelle}
-                  </label>
+                  {q.typeChamp === "texte" ? (
+                    <label className="flex flex-col gap-1.5 text-sm text-zinc-700">
+                      {q.libelle}
+                      <input
+                        type="text"
+                        name={q.cle}
+                        defaultValue={
+                          typeof prefillQ === "string" ? prefillQ : undefined
+                        }
+                        className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                      />
+                    </label>
+                  ) : (
+                    <label className="flex items-start gap-2 text-sm text-zinc-700">
+                      <input
+                        type="checkbox"
+                        name={q.cle}
+                        defaultChecked={Boolean(prefillQ)}
+                        className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500"
+                      />
+                      {q.libelle}
+                    </label>
+                  )}
                   {q.preuveClient && (
                     <p className="ml-6 mt-1 text-xs text-amber-700">
                       Cette réponse appelle un document :{" "}
@@ -362,7 +381,8 @@ export function AnalyseForm({
                     </div>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         ))}

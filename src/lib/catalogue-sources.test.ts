@@ -92,6 +92,9 @@ describe("catalogue-sources (garde-fou anti-hallucination)", () => {
       "datePrealable",
       "valeurSuperieure",
       "et",
+      // Chantier 1 (2026-10-10) : marges arithmétiques
+      "margeTechniqueVitesse",
+      "margeEthylometre",
     ]);
     for (const faille of CATALOGUE_SOURCES) {
       for (const regle of faille.reglesDetection as RegleDetection[]) {

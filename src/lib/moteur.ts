@@ -128,6 +128,11 @@ export type ExtractedData = {
   suspPointsCumulesJour?: boolean;
   suspStageAvantNotif?: boolean;
   suspSoldeInexact?: boolean;
+  // Chantier 2 (2026-10-10) — urgence professionnelle (3F/48SI) : capteur de
+  // fait pour le référé d'urgence (L. 521-2 CJA). `siret` est le premier
+  // champ **texte** du questionnaire (jamais pré-rempli par l'OCR).
+  urgencePro?: boolean;
+  siret?: string;
   // Pack 3F/48SI (Télérecours Citoyens) — classificateur de document
   // (AMENDE / 3F / 48SI) et champs temporels du pack. Jamais inventés : extrait
   // par libellé (OCR) ou saisis par l'humain ; le moteur ne conclut que si les
@@ -230,6 +235,45 @@ export function etalonnageExpire(
   const pv = new Date(`${datePv}T00:00:00Z`);
   if (Number.isNaN(exp.getTime()) || Number.isNaN(pv.getTime())) return false;
   return pv.getTime() > exp.getTime();
+}
+
+/**
+ * Marge technique réglementaire d'un cinémomètre (arrêté du 4 juin 2009,
+ * art. 14-15) : −5 km/h si la vitesse mesurée est < 100 km/h, −5 % (arrondi
+ * à l'entier le plus proche) si elle est ≥ 100 km/h. La vitesse retenue par
+ * l'administration doit être mesurée − marge ; à défaut, la contravention est
+ * contestable.
+ */
+export function margeTechniqueVitesse(valeurMesuree: number): number {
+  return valeurMesuree < 100 ? 5 : Math.round(valeurMesuree * 0.05);
+}
+
+/**
+ * Marge d'erreur d'un éthylomètre (art. 15 de l'arrêté du 8 juillet 2003) :
+ * 8 % de la valeur mesurée, ou marge fixe quand le taux est bas — seuils
+ * 0,40 g/L (sang) / 0,20 mg/L (air expiré), marge 0,032 g/L ou 0,016 mg/L.
+ * Le taux retenu par l'administration doit être mesuré − marge ; à défaut,
+ * la suspension est annulable (CE 14 févr. 2018 n° 407914).
+ */
+export function margeEthylometre(
+  valeurMesuree: number,
+  unite: "mg/L" | "g/L",
+): number {
+  if (unite === "g/L") {
+    return valeurMesuree <= 0.4 ? 0.032 : Math.round(valeurMesuree * 0.08 * 1000) / 1000;
+  }
+  return valeurMesuree <= 0.2 ? 0.016 : Math.round(valeurMesuree * 0.08 * 1000) / 1000;
+}
+
+/** Comparaison des marges avec tolérance d'arrondi (float 3 décimales) :
+ * la marge n'est réellement déduite que si (mesurée − retenue) ≥ marge. */
+export function margeNonDeduite(
+  mesure: { valeur: number; retenu?: number; unite: "mg/L" | "g/L" | "km/h" },
+  marge: number,
+): boolean {
+  if (typeof mesure.retenu !== "number") return false;
+  const deduite = Math.round((mesure.valeur - mesure.retenu) * 1000) / 1000;
+  return deduite < marge - 1e-9;
 }
 
 /** Date « yyyy-mm-dd » ou « dd/mm/yyyy » → Date UTC à minuit ; null si
@@ -345,6 +389,19 @@ export type RegleDetection =
   /** Valeur numérique extraite strictement supérieure à un seuil
    * (ex. cumul de retraits de points le même jour > 8 — L. 223-2/R. 223-2 CR). */
   | { type: "valeurSuperieure"; champ: string; seuil: number }
+  // --- Chantier 1 (2026-10-10) : marges arithmétiques — plus de repérage par
+  // mot-clé : le moteur déduit lui-même la marge réglementaire et compare la
+  // valeur retenue par l'administration. N'exige que `mesure.valeur` ET
+  // `mesure.retenu` (jamais de contexte fabriqué).
+  /** Marge technique du cinémomètre non déduite (vitesse) — arrêté 4 juin
+   * 2009 art. 14-15 : −5 km/h sous 100 km/h, −5 % au-delà (arrondi entier).
+   * Faille si (mesurée − retenue) < marge, sur document AMENDE. */
+  | { type: "margeTechniqueVitesse" }
+  /** Marge d'erreur de l'éthylomètre non déduite (alcoolémie par air expiré)
+   * — art. 15 arrêté 8 juillet 2003 : 8 % de la valeur mesurée, ou marge
+   * fixe 0,032 g/L (0,016 mg/L) sous les seuils 0,40 g/L / 0,20 mg/L.
+   * Faille si (mesurée − retenue) < marge. */
+  | { type: "margeEthylometre" }
   /** Composition ET (les règles d'une même faille sont sinon en OU). */
   | { type: "et"; regles: RegleDetection[] };
 
@@ -511,6 +568,20 @@ function evalRegle(
             ? Number.NaN
             : Number(String(brut).replace(",", "."));
       return Number.isFinite(n) && n > regle.seuil;
+    }
+    case "margeTechniqueVitesse": {
+      // Cloisonnement : jamais sur un document de suspension (3F/48SI).
+      if (data.docType === "3F" || data.docType === "48SI") return false;
+      const m = data.mesure;
+      if (!m || m.unite !== "km/h") return false;
+      if (!Number.isFinite(m.valeur) || typeof m.retenu !== "number") return false;
+      return margeNonDeduite(m, margeTechniqueVitesse(m.valeur));
+    }
+    case "margeEthylometre": {
+      const m = data.mesure;
+      if (!m || (m.unite !== "mg/L" && m.unite !== "g/L")) return false;
+      if (!Number.isFinite(m.valeur) || typeof m.retenu !== "number") return false;
+      return margeNonDeduite(m, margeEthylometre(m.valeur, m.unite));
     }
     case "et":
       return regle.regles.every((r) => evalRegle(r, data, texte, contexte));

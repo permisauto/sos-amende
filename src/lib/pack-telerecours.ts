@@ -32,6 +32,28 @@ export function estPackTelecours(opts: {
 }
 
 /**
+ * Référé de secours (chantier 3, 2026-10-10) : utilisé quand le dossier porte
+ * l'urgence professionnelle (`extractedData.urgencePro`) mais que la faille
+ * principale n'a pas de `templateRefere` en base. Ne cite que l'article
+ * L. 521-2 du CJA (déjà présent au catalogue) — jamais d'article inventé.
+ * Les variables d'urgence non saisies ({metier}/{entreprise}/{siret}/
+ * {risque_licenciement}) sont effacées par `nettoyerLettre`.
+ */
+const REFERE_SECOURS_URGENCE = `À Monsieur le Président du tribunal administratif siégeant en formation de référé,
+
+Je soussigné(e) {nom}, ai l'honneur de saisir Monsieur le Président, par la présente requête en référé, d'une demande de suspension d'exécution de la décision n° {num_pv} en date du {date} portant atteinte à la validité de mon permis de conduire.
+
+SUR LE FONDEMENT DE L'ARTICLE L. 521-2 DU CODE DE JUSTICE ADMINISTRATIVE
+
+L'urgence est caractérisée par les conséquences immédiates de la décision contestée sur ma vie professionnelle : l'interdiction de conduire met en péril la poursuite de mon activité. J'exerce l'activité de {metier} au sein de {entreprise} (SIRET {siret}), et {risque_licenciement}.
+
+Le moyen présenté à l'appui de la présente demande est la légalité manifeste de la décision contestée, tel qu'exposé dans la requête au fond déposée simultanément au greffe de la juridiction — illégalité dont il est sérieusement douté qu'elle puisse être écartée au principal.
+
+EN CONSÉQUENCE
+
+Je demande qu'il plaise à Monsieur le Président du tribunal administratif, en application de l'article L. 521-2 du code de justice administrative, d'ordonner la suspension de l'exécution de la décision n° {num_pv} en date du {date}, l'administration disposant du délai légal pour régulariser la situation si elle le juge opportun.`;
+
+/**
  * Texte du bordereau : en-tête du dépôt + liste numérotée des documents
  * réellement produits. Inventaire procédural — aucun contenu juridique.
  */
@@ -67,9 +89,12 @@ export function texteBordereau(opts: {
 /**
  * Génère les PDF du pack et stocke chacun via `storageWrite`. Échec d'un PDF
  * = exception propagée (l'appelant est best-effort : jamais de validation
- * bloquée par le pack). Le référé n'est produit que si la faille principale
- * porte un `templateRefere` validé — sinon le pack se limite à la requête et
- * au bordereau (anti-hallucination).
+ * bloquée par le pack). Le référé est produit si la faille principale porte
+ * un `templateRefere` validé **ou** si le client a coché l'urgence
+ * professionnelle (`data.urgencePro`) — auquel cas le référé de secours L.
+ * 521-2 est utilisé à défaut de template en base (anti-hallucination : seul
+ * l'article déjà présent au catalogue est cité). Sinon le pack se limite à
+ * la requête et au bordereau.
  */
 export async function genererPackTelecours(opts: {
   dossierId: string;
@@ -86,13 +111,18 @@ export async function genererPackTelecours(opts: {
     `Requête au fond (lettre de contestation)${opts.signatureDataUrl ? " — signée" : ""}`,
   ];
   let refereTexte: string | null = null;
-  if (opts.templateRefere) {
+  const urgencePro = opts.data.urgencePro === true;
+  // `||` (pas `??`) : une éventuelle chaîne vide en base doit basculer sur le
+  // secours au lieu de produire un référé vide.
+  const templateRefere =
+    opts.templateRefere || (urgencePro ? REFERE_SECOURS_URGENCE : null);
+  if (templateRefere) {
     documents.push(
       "Requête en référé-suspension (article L. 521-2 du code de justice administrative)",
     );
     // remplirTemplate applique nettoyerLettre : les variables d'urgence non
     // saisies ({metier}/{entreprise}/{risque_licenciement}) disparaissent.
-    refereTexte = remplirTemplate(opts.templateRefere, opts.data);
+    refereTexte = remplirTemplate(templateRefere, opts.data);
   }
   documents.push(...opts.piecesJointes);
 

@@ -504,8 +504,15 @@ export default async function JuristeCasePage(
         ...LIBELLES_REPONSES,
         { cle: "plaqueIncorrecte", lib: "Plaque du PV différente de la mienne" },
       ]
-        .filter((item) => data[item.cle] === true)
-        .map((item) => item.lib)
+        .filter((item) => {
+          const v = data[item.cle];
+          // Cases cochées (true) + champs texte renseignés (ex. SIRET).
+          return v === true || (typeof v === "string" && v !== "");
+        })
+        .map((item) => {
+          const v = data[item.cle];
+          return typeof v === "string" ? `${item.lib} : ${v}` : item.lib;
+        })
     : [];
   const courrier = item.courriers[item.courriers.length - 1];
   const pjData = (item.extractedData ?? {}) as Record<string, unknown>;
@@ -1300,6 +1307,18 @@ export default async function JuristeCasePage(
                   {data["creditConsome"] === false
                     ? "Crédit non consommé : le débit aura lieu à votre validation du dossier (débit différé)."
                     : "Vérifiez ce paiement avant validation — une amende déjà payée peut rendre la contestation sans objet."}
+                </div>
+              )}
+              {data?.urgencePro === true && (
+                <div
+                  data-testid="badge-urgence-pro"
+                  className="mb-3 rounded-xl border border-blue-300 bg-blue-50 px-3 py-2 text-xs text-blue-800"
+                >
+                  <span className="font-semibold">
+                    Urgence professionnelle signalée.
+                  </span>{" "}
+                  Un référé de suspension (art. L. 521-2 CJA) sera joint au
+                  pack Télérecours à la validation.
                 </div>
               )}
               <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">

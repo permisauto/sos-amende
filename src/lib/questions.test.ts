@@ -180,6 +180,45 @@ describe("questionsPour — sous-type 3F vs 48SI (filtre docTypes)", () => {
   });
 });
 
+describe("questionsPour — urgence professionnelle (chantier 2)", () => {
+  const texteSusp = "ARRÊTÉ PRÉFECTORAL — suspension du permis de conduire";
+
+  it("3F et 48SI : groupe visible, deux questions (case + texte SIRET)", () => {
+    for (const docType of ["3F", "48SI"] as const) {
+      const groupes = questionsPour({
+        type: "SUSPENSION",
+        texte: texteSusp,
+        docType,
+      });
+      const urgence = groupes.find(
+        (g) => g.groupe === "Urgence professionnelle",
+      );
+      expect(urgence?.questions.map((q) => q.cle)).toEqual([
+        "urgencePro",
+        "siret",
+      ]);
+      expect(urgence?.questions[1]?.typeChamp).toBe("texte");
+    }
+  });
+
+  it("docType inconnu ou AMENDE : le groupe n'apparaît jamais", () => {
+    for (const docType of [undefined, "BIDON", "AMENDE"]) {
+      const groupes = questionsPour({
+        type: "SUSPENSION",
+        texte: texteSusp,
+        docType: docType as string | undefined,
+      });
+      expect(groupes.map((g) => g.groupe)).not.toContain(
+        "Urgence professionnelle",
+      );
+    }
+    const amende = questionsPour({ type: "AMENDE", texte: "Radar 96 km/h", docType: "3F" });
+    expect(amende.map((g) => g.groupe)).not.toContain(
+      "Urgence professionnelle",
+    );
+  });
+});
+
 describe("lireReponses — lecture du FormData", () => {
   it("n'écrit que les cases cochées, avec la valeur du registre", () => {
     const fd = new FormData();
@@ -200,6 +239,19 @@ describe("lireReponses — lecture du FormData", () => {
 
   it("case non cochée → aucune clé écrite", () => {
     expect(lireReponses(new FormData())).toEqual({});
+  });
+
+  it("champ texte (SIRET) : valeur trimée écrite, vide → rien", () => {
+    const fd = new FormData();
+    fd.set("siret", "  123 456 789 00012  ");
+    fd.set("urgencePro", "on");
+    const reponses = lireReponses(fd);
+    expect(reponses.siret).toBe("123 456 789 00012");
+    expect(reponses.urgencePro).toBe(true);
+
+    const vide = new FormData();
+    vide.set("siret", "   ");
+    expect(lireReponses(vide)).toEqual({});
   });
 });
 

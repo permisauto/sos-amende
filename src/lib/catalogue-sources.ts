@@ -333,7 +333,7 @@ En conséquence, je vous demande de bien vouloir retirer la décision de suspens
     source: "Légifrance (CE 14 févr. 2018 n° 407914) ; ledall-avocat.fr ; capital.fr",
     regle:
       "Le préfet doit s'assurer que les seuils légaux d'alcoolémie ont été effectivement dépassés et, par suite, prendre en compte la marge d'erreur maximale tolérée de 8 % de l'éthylomètre (art. 15 de l'arrêté du 8 juillet 2003), sauf si le résultat communiqué intègre déjà cette marge. À défaut, la suspension est annulable.",
-    reglesDetection: [{ type: "texteContient", motif: "éthylomètre" }],
+    reglesDetection: [{ type: "margeEthylometre" }],
     jurisprudence: [
       {
         reference: "Conseil d'État, 14 février 2018, n° 407914",
@@ -459,7 +459,7 @@ En application de l'article R. 110-10 du Code de la route, du décret n° 2001-3
     articleLoi: "Arrêté 4 juin 2009 Art.14-15",
     source: "Sécurité Routière ; ANTAI",
     regle: "Marge légale : fixe -5 km/h (<100) ou -5% (>100), embarqué -10 km/h / -10%. Vitesse retenue = mesurée - marge.",
-    reglesDetection: [{ type: "texteContient", motif: "marge" }],
+    reglesDetection: [{ type: "margeTechniqueVitesse" }],
     jurisprudence: [{ reference: "Principe constant — Arrêté 4 juin 2009", juridiction: "Conseil d'État", url: null, verifiee: false, resume: "La vitesse retenue doit être la vitesse mesurée minorée de la tolérance réglementaire." }],
     templateLettre: `Je soussigné(e) {nom}, conteste l'avis de contravention n° {num_pv} qui m'a été notifié.
 
