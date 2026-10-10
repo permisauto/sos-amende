@@ -141,6 +141,10 @@ export type ExtractedData = {
     adresse?: string | null;
     etatAdministratif: string;
   } | null;
+  /** Résidence difficile d'accès (peu/pas de transport en commun) — capteur
+   * de fait pour étayer l'urgence du référé L. 521-2 (lot 5). Déclaratif,
+   * aucun fondement automatique (invariant N3). */
+  domicileEnclave?: boolean;
   // Pack 3F/48SI (Télérecours Citoyens) — classificateur de document
   // (AMENDE / 3F / 48SI) et champs temporels du pack. Jamais inventés : extrait
   // par libellé (OCR) ou saisis par l'humain ; le moteur ne conclut que si les

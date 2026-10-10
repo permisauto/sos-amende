@@ -94,6 +94,9 @@ describe("questionsPour — affichage dynamique par nature du document", () => {
     expect(sansAlcool.map((g) => g.groupe)).toEqual([
       "Notification de la décision",
       "Recours engagés",
+      // Lot 5 : l'enclavement du domicile est affiché pour toute suspension
+      // (aucun filtre docType) — pertinence indépendante du motif.
+      "Accès au domicile",
     ]);
 
     const avecAlcool = questionsPour({
@@ -216,6 +219,41 @@ describe("questionsPour — urgence professionnelle (chantier 2)", () => {
     expect(amende.map((g) => g.groupe)).not.toContain(
       "Urgence professionnelle",
     );
+  });
+});
+
+describe("questionsPour — enclavement du domicile (lot 5)", () => {
+  const texteSusp = "ARRÊTÉ PRÉFECTORAL — suspension du permis de conduire";
+
+  it("SUSPENSION : groupe visible pour tout docType (1 question)", () => {
+    for (const docType of [undefined, "3F", "48SI", "BIDON"]) {
+      const groupes = questionsPour({
+        type: "SUSPENSION",
+        texte: texteSusp,
+        docType: docType as string | undefined,
+      });
+      const acces = groupes.find((g) => g.groupe === "Accès au domicile");
+      expect(acces?.questions.map((q) => q.cle)).toEqual(["domicileEnclave"]);
+      expect(acces?.questions[0]?.typeChamp).toBeUndefined(); // case à cocher
+    }
+  });
+
+  it("AMENDE : le groupe n'apparaît jamais", () => {
+    for (const texte of ["Radar 96 km/h", "stationnement en zone bleue", ""]) {
+      const groupes = questionsPour({ type: "AMENDE", texte });
+      expect(groupes.map((g) => g.groupe)).not.toContain("Accès au domicile");
+    }
+  });
+
+  it("lireReponses écrit la case cochée ; non cochée → rien", () => {
+    const fd = new FormData();
+    fd.set("domicileEnclave", "on");
+    expect(lireReponses(fd).domicileEnclave).toBe(true);
+    expect(lireReponses(new FormData())).toEqual({});
+  });
+
+  it("LIBELLES_REPONSES contient la clé (affichage juriste)", () => {
+    expect(LIBELLES_REPONSES.map((q) => q.cle)).toContain("domicileEnclave");
   });
 });
 

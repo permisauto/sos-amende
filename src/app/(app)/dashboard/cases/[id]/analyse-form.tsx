@@ -57,6 +57,8 @@ export type AnalysePrefill = {
   // Chantier 2 (2026-10-10) — urgence professionnelle (référé L. 521-2).
   urgencePro?: boolean;
   siret?: string;
+  // Lot 5 (2026-10-10) — enclavement du domicile (référé L. 521-2).
+  domicileEnclave?: boolean;
   // Pack 3F/48SI : classificateur lu à l'OCR (badge informatif — le champ
   // n'est pas éditable ici, il est porté automatiquement à l'analyse).
   docType?: string;

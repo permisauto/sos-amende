@@ -26,6 +26,8 @@ test("flux SUSPENSION (infra) : dépôt → analyse type-aware → attente juris
     page.getByText("Notification de la décision", { exact: true }),
   ).toBeVisible();
   await expect(page.getByText("Recours engagés", { exact: true })).toBeVisible();
+  // Lot 5 : enclavement du domicile — groupe affiché pour toute suspension.
+  await expect(page.getByText("Accès au domicile", { exact: true })).toBeVisible();
   await expect(page.getByText("J'ai déjà payé cette amende")).toHaveCount(0);
 
   await page.getByLabel("Nom", { exact: true }).fill("DUPONT");

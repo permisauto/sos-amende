@@ -63,7 +63,9 @@ export type ChampReponse =
   // en dur du formulaire (`analyseSchema`), pas par le registre — éviter les
   // doublons de nom de champ.
   | "urgencePro"
-  | "siret";
+  | "siret"
+  // Lot 5 (2026-10-10) — enclavement du domicile (référé L. 521-2).
+  | "domicileEnclave";
 
 export type QuestionCiblee = {
   /** Nom du champ dans le formulaire (FormData). */
@@ -327,6 +329,23 @@ export const QUESTIONS_CIBLEES: readonly QuestionCiblee[] = [
     // Saisir un SIRET appelle la preuve qui corrobore l'existence de
     // l'entreprise : l'extrait Kbis, téléversable par le client (lot 4).
     preuveClient: "KBIS",
+  },
+
+  // ── SUSPENSION — enclavement du domicile (lot 5, 2026-10-10) ─────────────
+  // Capteur de fait pour étayer l'urgence du référé (art. L. 521-2 CJA) : le
+  // client déclare que son domicile est difficile d'accès (peu/pas de
+  // transport en commun) — sans voiture, la suspension le pénalise
+  // fortement. Déclaratif, aucune vérification trajet (arbitrage RGPD) et
+  // aucun fondement automatique (invariant N3). Affiché pour toute suspension
+  // (pas de filtre docType) : la difficulté d'accès est pertinente quel que
+  // soit le motif de la mesure.
+  {
+    cle: "domicileEnclave",
+    champ: "domicileEnclave",
+    libelle:
+      "Mon lieu de résidence est difficile d'accès (peu ou pas de transport en commun)",
+    groupe: "Accès au domicile",
+    types: ["SUSPENSION"],
   },
 ];
 
