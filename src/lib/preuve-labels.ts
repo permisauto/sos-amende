@@ -13,6 +13,7 @@ export const TYPE_LABELS: Record<string, string> = {
   COPIE_DECISION: "Copie de la décision notifiée",
   RELEVE_POINTS: "Relevé de points (permis)",
   ATTESTATION_STAGE: "Attestation de stage de sensibilisation",
+  KBIS: "Extrait Kbis de l'entreprise",
   AUTRE: "Autre pièce",
   METEO: "Météo (source externe)",
   RADAR: "Fiche radar (donnée officielle)",

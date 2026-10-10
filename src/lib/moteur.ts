@@ -133,6 +133,14 @@ export type ExtractedData = {
   // champ **texte** du questionnaire (jamais pré-rempli par l'OCR).
   urgencePro?: boolean;
   siret?: string;
+  /** Résultat de la vérification du SIRET auprès de l'API publique
+   * (lot 4) — dénomination officielle, adresse, état administratif.
+   * `null` = vérification impossible (réseau, introuvable) — jamais inventé. */
+  siretInfo?: {
+    denomination: string;
+    adresse?: string | null;
+    etatAdministratif: string;
+  } | null;
   // Pack 3F/48SI (Télérecours Citoyens) — classificateur de document
   // (AMENDE / 3F / 48SI) et champs temporels du pack. Jamais inventés : extrait
   // par libellé (OCR) ou saisis par l'humain ; le moteur ne conclut que si les

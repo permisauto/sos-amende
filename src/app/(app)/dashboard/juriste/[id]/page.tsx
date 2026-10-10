@@ -1321,6 +1321,23 @@ export default async function JuristeCasePage(
                   pack Télérecours à la validation.
                 </div>
               )}
+              {dataLettres.siretInfo && (
+                <div
+                  data-testid="badge-siret-verifie"
+                  className="mb-3 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-800"
+                >
+                  <span className="font-semibold">
+                    SIRET vérifié auprès de l&apos;API Recherche
+                    d&apos;entreprises.
+                  </span>{" "}
+                  {dataLettres.siretInfo.denomination}
+                  {dataLettres.siretInfo.adresse
+                    ? ` — ${dataLettres.siretInfo.adresse}`
+                    : ""}
+                  {dataLettres.siretInfo.etatAdministratif === "F" &&
+                    " (établissement fermé — à vérifier)"}
+                </div>
+              )}
               <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
                 Contexte (questionnaire)
               </h3>

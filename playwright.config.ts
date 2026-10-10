@@ -31,6 +31,8 @@ export default defineConfig({
       // Vérification des failles : IA simulée (suggestions mock tracées) —
       // le bouton « Analyse approfondie (IA) » reste visible sans clé Gemini.
       VERIF_IA_PROVIDER: "mock",
+      // Vérification du SIRET (lot 4) : réponse déterministe sans appel API.
+      SIRET_PROVIDER: "mock",
       ANTAI_MOCK: "1",
       ANTAI_MOCK_TOKEN: "dev-antai-mock",
       AUTH_DEV_FILE: "1",

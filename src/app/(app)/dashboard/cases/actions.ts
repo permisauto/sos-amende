@@ -28,6 +28,7 @@ import {
   typesPreuvesPourFailles,
 } from "@/lib/preuves-api";
 import { lireReponses, preuvesPourReponses } from "@/lib/questions";
+import { verifierSiret } from "@/lib/siret";
 import { contexteEtalonnage } from "@/lib/etalonnage";
 import {
   estPackTelecours,
@@ -346,6 +347,23 @@ export async function analyserDossier(
   // pour les catégories hors pack : 48N, annulation, INCONNU). Anciens
   // dossiers sans catégorie → no-op (leur docType survit).
   alignerDocType(data as Record<string, unknown>);
+
+  // Vérification du SIRET (lot 4) : best-effort borné — l'API publique est la
+  // seule source de vérité sur l'existence de l'établissement (jamais de clé
+  // de contrôle locale, testée empiriquement). `null` = sans effet.
+  if (data.siret) {
+    const info = await verifierSiret(data.siret);
+    if (info) {
+      data.siretInfo = {
+        denomination: info.denomination,
+        adresse: info.adresse,
+        etatAdministratif: info.etatAdministratif,
+      };
+      // Pré-remplissage de {entreprise} pour le référé (chantier 2) : la
+      // dénomination officielle de l'API vaut mieux qu'une saisie libre.
+      if (!data.entreprise) data.entreprise = info.denomination;
+    }
+  }
 
   // Contexte étalonnage (preuve d'entretien du radar) : registre admin
   // prioritaire, sinon date de vérification lue sur le PV — permet au moteur

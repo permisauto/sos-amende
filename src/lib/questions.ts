@@ -27,7 +27,8 @@ export type PreuveClient =
   | "ATTESTATION_VOL"
   | "COPIE_DECISION"
   | "RELEVE_POINTS"
-  | "ATTESTATION_STAGE";
+  | "ATTESTATION_STAGE"
+  | "KBIS";
 
 /** Nature du document détectée dans le texte scanné. */
 export type Nature = "stationnement" | "travaux" | "radar" | "visibilite" | "alcool";
@@ -58,6 +59,9 @@ export type ChampReponse =
   | "suspStageAvantNotif"
   | "suspSoldeInexact"
   // Chantier 2 (2026-10-10) — urgence professionnelle (référé L. 521-2).
+  // `metier`/`entreprise`/`risque_licenciement` sont capturés par les champs
+  // en dur du formulaire (`analyseSchema`), pas par le registre — éviter les
+  // doublons de nom de champ.
   | "urgencePro"
   | "siret";
 
@@ -320,6 +324,9 @@ export const QUESTIONS_CIBLEES: readonly QuestionCiblee[] = [
     types: ["SUSPENSION"],
     docTypes: ["3F", "48SI"],
     typeChamp: "texte",
+    // Saisir un SIRET appelle la preuve qui corrobore l'existence de
+    // l'entreprise : l'extrait Kbis, téléversable par le client (lot 4).
+    preuveClient: "KBIS",
   },
 ];
 
