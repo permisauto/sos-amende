@@ -37,6 +37,20 @@ export type PropositionVeille = {
   resume: string;
   /** Citations verbatim du texte qui fondent la règle (max 3). */
   extraits: string[];
+  /**
+   * Paragraphe VERBATIM (20 à 600 car.) où la juridiction énonce le motif
+   * décisif de sa décision (l'attendu/considérant de censure). Enrichissement
+   * **optionnel** : jamais exigé pour l'état `extrait` (beaucoup de textes
+   * JORF n'ont pas d'attendu structuré).
+   */
+  motifDecisif?: string;
+  /**
+   * Appréciation d'obsolescence (réforme postérieure au texte) — phrase de
+   * mise en garde de l'IA. Affichée en **badge** uniquement : jamais de
+   * changement de statut, la décision d'écarter revient à l'humain
+   * (arbitrage 2026-10-10).
+   */
+  obsolescence?: string;
   /** Pourquoi incomplet/échec — affiché à l'admin. */
   motif?: string;
   /**
@@ -114,6 +128,8 @@ const schemaReponse = z.object({
   conditions: z.array(z.string()).max(6).default([]),
   resume: z.string().max(1200).default(""),
   extraits: z.array(z.string()).max(5).default([]),
+  motifDecisif: z.string().max(700).default(""),
+  obsolescence: z.string().max(400).default(""),
 });
 
 export function construirePromptExtraction(pub: PublicationVeille): string {
@@ -129,7 +145,7 @@ export function construirePromptExtraction(pub: PublicationVeille): string {
     "Tu analyses une publication officielle de veille juridique française (décision de juridiction ou texte publié).",
     "",
     "Réponds UNIQUEMENT par un objet JSON sans texte autour, de la forme :",
-    '{"titre":"...","typeInfraction":"AMENDE|SUSPENSION","articles":["..."],"regle":"...","conditions":["..."],"resume":"...","extraits":["..."]}',
+    '{"titre":"...","typeInfraction":"AMENDE|SUSPENSION","articles":["..."],"regle":"...","conditions":["..."],"resume":"...","extraits":["..."],"motifDecisif":"...","obsolescence":"..."}',
     "",
     "Règles absolues :",
     '1. articles : UNIQUEMENT les articles EXPLICITEMENT cités dans le document fourni, recopiés tels quels (ex. "C. route, art. L. 224-16"). Max 3. Jamais d\'article inventé, induit ou général.',
@@ -138,7 +154,9 @@ export function construirePromptExtraction(pub: PublicationVeille): string {
     "4. resume : une phrase sur l'objet du litige ou la portée.",
     "5. extraits : 1 à 3 citations VERBATIM (20 à 400 caractères, recopiées mot pour mot) du document qui fondent la règle.",
     "6. typeInfraction : SUSPENSION si la décision porte sur le permis de conduire (suspension, invalidation, annulation, retrait de points, stage…) ; sinon AMENDE.",
-    '7. Si le document ne permet pas d\'identifier au moins un article cité et une règle : renvoie {"titre":"...","typeInfraction":"...","articles":[],"regle":"","conditions":[],"resume":"","extraits":[]} — n\'invente jamais.',
+    '7. Si le document ne permet pas d\'identifier au moins un article cité et une règle : renvoie {"titre":"...","typeInfraction":"...","articles":[],"regle":"","conditions":[],"resume":"","extraits":[],"motifDecisif":"","obsolescence":""} — n\'invente jamais.',
+    '8. motifDecisif : le passage VERBATIM (20 à 600 caractères, recopié mot pour mot) où la juridiction énonce le motif décisif de sa décision (l\'attendu ou le considérant qui fonde la solution). Si aucun passage distinct ne se détache du texte, renvoie "".',
+    '9. obsolescence : si la DATE du document est manifestement antérieure à une réforme connue du régime traité, une phrase courte de mise en garde pour l\'administrateur ; sinon "". N\'affirme aucune réforme qui n\'apparaît pas au document lui-même.',
     "",
     "=== PUBLICATION ===",
     `${pub.titre}${entete ? ` — ${entete}` : ""}`,
@@ -216,6 +234,24 @@ export function parserExtraction(
   }
 
   const regle = d.regle.trim();
+
+  // Motif décisif : même discipline verbatim que les extraits — un passage
+  // non présent dans le document est retiré (jamais d'attendu fabriqué).
+  const motifDecisifBrut = d.motifDecisif.trim();
+  const motifDecisif =
+    motifDecisifBrut.length >= 20 &&
+    motifDecisifBrut.length <= 600 &&
+    contenuVerbatim(contenu, motifDecisifBrut)
+      ? motifDecisifBrut
+      : undefined;
+
+  // Obsolescence : appréciation (pas une citation) — bornée, affichée en
+  // badge sans jamais changer l'état de la proposition.
+  const obsolescence = (() => {
+    const o = d.obsolescence.trim();
+    return o.length >= 10 && o.length <= 400 ? o : undefined;
+  })();
+
   const complet =
     articles.length > 0 &&
     regle.length >= 15 &&
@@ -248,6 +284,8 @@ export function parserExtraction(
     conditions,
     resume: d.resume.trim(),
     extraits,
+    ...(motifDecisif ? { motifDecisif } : {}),
+    ...(obsolescence ? { obsolescence } : {}),
     motif,
     extraitLe: new Date().toISOString(),
   };
@@ -283,6 +321,20 @@ export function extractionMock(pub: PublicationVeille): string {
   if (conditions.length === 0 && pub.contenu.trim().length >= 15) {
     conditions.push(pub.contenu.trim().slice(0, 150));
   }
+  // Motif décisif simulé : première citation suffisamment longue réellement
+  // présente dans le contenu (passe le garde-fou verbatim du parser).
+  const motifDecisif = pub.citations.find(
+    (c) => c.trim().length >= 20 && contenuVerbatim(pub.contenu, c),
+  );
+  // Obsolescence simulée et déterministe : décision datant d'avant 2020 →
+  // drapeau testable en E2E sans appel réseau.
+  const annee = pub.dateSource
+    ? Number.parseInt(pub.dateSource.slice(0, 4), 10)
+    : Number.NaN;
+  const obsolescence =
+    Number.isFinite(annee) && annee < 2020
+      ? `Décision de ${annee} : vérifier qu'aucune réforme postérieure n'a modifié le régime applicable avant de l'invoquer.`
+      : undefined;
   return JSON.stringify({
     titre: pub.titre.slice(0, 120),
     typeInfraction,
@@ -291,6 +343,8 @@ export function extractionMock(pub: PublicationVeille): string {
     conditions,
     resume: `Simulation (mock) : ${pub.titre.slice(0, 120)}`,
     extraits: pub.citations.slice(0, 2),
+    motifDecisif: motifDecisif ? motifDecisif.trim().slice(0, 600) : "",
+    obsolescence: obsolescence ?? "",
   });
 }
 
@@ -434,6 +488,8 @@ export type ValeursProposition = {
   /** Conditions d'application saisies : une par ligne. */
   conditions: string;
   resume: string;
+  /** Motif décisif saisi par l'admin (verbatim de la décision lu). */
+  motifDecisif: string;
 };
 
 export type ResultatFormulation =
@@ -477,7 +533,12 @@ function dedupLignes(lignes: string[]): string[] {
  */
 export function propositionDepuisFormulaire(
   valeurs: ValeursProposition,
-  options: { extraits?: string[]; extraitLe?: string } = {},
+  options: {
+    extraits?: string[];
+    extraitLe?: string;
+    /** Drapeau d'obsolescence IA conservé à la correction (jamais édité). */
+    obsolescence?: string;
+  } = {},
 ): ResultatFormulation {
   const titre = valeurs.titre.trim();
   if (titre.length < 5) {
@@ -518,6 +579,16 @@ export function propositionDepuisFormulaire(
     return { ok: false, erreur: "Règle dégagée trop longue (2 500 caractères maximum)." };
   }
 
+  // Motif décisif : bornes seulement — la saisie est signée par l'humain qui
+  // vient de lire la décision, aucune exigence de verbatim (comme la règle).
+  const motifDecisif = valeurs.motifDecisif.trim();
+  if (motifDecisif.length > 0 && motifDecisif.length < 20) {
+    return { ok: false, erreur: "Motif décisif trop court (20 caractères minimum, ou vide)." };
+  }
+  if (motifDecisif.length > 600) {
+    return { ok: false, erreur: "Motif décisif trop long (600 caractères maximum)." };
+  }
+
   const complet = articles.length > 0 && regle.length >= 15 && conditions.length > 0;
   const motif = complet
     ? undefined
@@ -540,6 +611,8 @@ export function propositionDepuisFormulaire(
       conditions,
       resume: valeurs.resume.trim().slice(0, 1200),
       extraits: (options.extraits ?? []).slice(0, 3),
+      ...(motifDecisif ? { motifDecisif } : {}),
+      ...(options.obsolescence ? { obsolescence: options.obsolescence } : {}),
       motif,
       extraitLe: options.extraitLe ?? new Date().toISOString(),
       corrigeLe: new Date().toISOString(),

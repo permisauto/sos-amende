@@ -99,6 +99,7 @@ function lirePropositionFormulaire(formData: FormData): ValeursProposition | nul
     regle: String(formData.get("regle") ?? ""),
     conditions: String(formData.get("conditions") ?? ""),
     resume: String(formData.get("resume") ?? ""),
+    motifDecisif: String(formData.get("motifDecisif") ?? ""),
   };
 }
 
@@ -148,6 +149,7 @@ export async function validerPropositionSource(
     const res = propositionDepuisFormulaire(formulaire, {
       extraits: stockee && stockee.etat !== "echec" ? stockee.extraits : [],
       extraitLe: stockee?.extraitLe,
+      obsolescence: stockee?.obsolescence,
     });
     if (!res.ok) return { error: res.erreur };
     proposition = res.proposition;

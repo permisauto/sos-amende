@@ -191,6 +191,134 @@ describe("extractionMock", () => {
   });
 });
 
+describe("motif décisif + obsolescence (lot 2 — 2026-10-10)", () => {
+  const motifVerbatim = CONTENU.slice(30, 160); // passage réellement présent
+  const base = {
+    titre: "Étalonnage expiré — excès de vitesse contesté",
+    typeInfraction: "AMENDE",
+    articles: ["article L. 224-16 du code de la route"],
+    regle:
+      "Le constat d'infraction ne peut être reçu si le certificat d'étalonnage de l'appareil était expiré au moment des faits, l'autorité devant justifier du contrôle en vigueur.",
+    conditions: [
+      "certificat de vérification périodique avait expiré le 12 janvier 2026",
+    ],
+    resume: "Contestation d'un avis fondé sur un cinémomètre au certificat expiré.",
+    extraits: [CONTENU.slice(0, 200) + "…"],
+  };
+
+  it("prompt : impose le motif décisif verbatim et la mise en garde d'obsolescence", () => {
+    const p = construirePromptExtraction(PUB);
+    expect(p).toContain("motifDecisif");
+    expect(p).toContain("obsolescence");
+    expect(p).toContain("motif décisif");
+    expect(p).toContain("obsolescence");
+  });
+
+  it("conserve le motif décisif verbatim et l'obsolescence bornée", () => {
+    const p = parserExtraction(
+      JSON.stringify({
+        ...base,
+        motifDecisif: motifVerbatim,
+        obsolescence:
+          "Décision de 2015 : vérifier qu'aucune réforme postérieure n'a modifié le régime applicable.",
+      }),
+      CONTENU,
+    );
+    expect(p).not.toBeNull();
+    expect(p!.etat).toBe("extrait");
+    expect(p!.motifDecisif).toBe(motifVerbatim);
+    expect(p!.obsolescence).toContain("Décision de 2015");
+    expect(p!.motif).toBeUndefined();
+  });
+
+  it("retire le motif absent du texte ou trop court (jamais d'attendu fabriqué)", () => {
+    const invente = parserExtraction(
+      JSON.stringify({
+        ...base,
+        motifDecisif:
+          "Le tribunal estime que la sanction prononcée est disproportionnée au regard des circonstances de l'espèce examinée.",
+      }),
+      CONTENU,
+    );
+    expect(invente!.motifDecisif).toBeUndefined();
+    // L'absence de motif ne dégrade jamais l'état : critère `complet` inchangé.
+    expect(invente!.etat).toBe("extrait");
+
+    const tropCourt = parserExtraction(
+      JSON.stringify({ ...base, motifDecisif: "trop court" }),
+      CONTENU,
+    );
+    expect(tropCourt!.motifDecisif).toBeUndefined();
+    expect(tropCourt!.etat).toBe("extrait");
+  });
+
+  it("borne l'obsolescence (appréciation courte) et l'omet sinon", () => {
+    const tropCourte = parserExtraction(
+      JSON.stringify({ ...base, obsolescence: "vieux" }),
+      CONTENU,
+    );
+    expect(tropCourte!.obsolescence).toBeUndefined();
+
+    const tropLongue = parserExtraction(
+      JSON.stringify({ ...base, obsolescence: "x".repeat(401) }),
+      CONTENU,
+    );
+    // Schéma zod refusé → proposition illisible (bornes au parseur zod).
+    expect(tropLongue).toBeNull();
+  });
+
+  it("mock : motif décisif = citation verbatim ; obsolescence déterministe par date", () => {
+    // PUB datée 2026 : aucun drapeau, motif repris des citations.
+    const recent = parserExtraction(extractionMock(PUB), CONTENU);
+    expect(recent!.motifDecisif).toBe(PUB.citations[0]!.trim().slice(0, 600));
+    expect(recent!.obsolescence).toBeUndefined();
+
+    // Décision d'avant 2020 : drapeau affichable en E2E sans appel réseau.
+    const ancien = parserExtraction(
+      extractionMock({ ...PUB, dateSource: "2015-06-30" }),
+      CONTENU,
+    );
+    expect(ancien!.obsolescence).toContain("2015");
+    expect(ancien!.etat).toBe("extrait");
+  });
+
+  it("formulaire : motif décisif borné et obsolescence IA conservée", () => {
+    const valeurs = {
+      titre: "Défaut de motivation — annulation de l'avis",
+      typeInfraction: "AMENDE" as const,
+      articles: "C. route, art. L. 121-1",
+      regle:
+        "L'avis de contravention doit être motivé à peine de nullité, la juridiction annulant l'avis régulièrement contesté faute de motivation suffisante.",
+      conditions:
+        "L'avis de contravention contesté ne comporte pas de motif mentionnant les raisons du contrôle.",
+      resume: "Annulation pour défaut de motivation de l'arrêté attaqué.",
+      motifDecisif: motifVerbatim,
+    };
+
+    const ok = propositionDepuisFormulaire(valeurs, {
+      obsolescence: "Décision de 2012 : réforme antérieure à vérifier.",
+    });
+    expect(ok.ok).toBe(true);
+    if (ok.ok) {
+      expect(ok.proposition.motifDecisif).toBe(motifVerbatim);
+      expect(ok.proposition.obsolescence).toContain("2012");
+      expect(ok.proposition.etat).toBe("extrait");
+    }
+
+    const tropCourt = propositionDepuisFormulaire({ ...valeurs, motifDecisif: "court" });
+    expect(tropCourt.ok).toBe(false);
+    if (!tropCourt.ok) expect(tropCourt.erreur).toContain("Motif décisif trop court");
+
+    const tropLong = propositionDepuisFormulaire({ ...valeurs, motifDecisif: "x".repeat(601) });
+    expect(tropLong.ok).toBe(false);
+    if (!tropLong.ok) expect(tropLong.erreur).toContain("Motif décisif trop long");
+
+    const vide = propositionDepuisFormulaire({ ...valeurs, motifDecisif: "" });
+    expect(vide.ok).toBe(true);
+    if (vide.ok) expect(vide.proposition.motifDecisif).toBeUndefined();
+  });
+});
+
 describe("extraireProposition — providers", () => {
   afterEach(() => vi.unstubAllEnvs());
 
@@ -297,6 +425,7 @@ describe("propositionDepuisFormulaire — correction admin (lot O)", () => {
     conditions:
       "L'avis de contravention contesté ne comporte pas de motif mentionnant les raisons du contrôle.",
     resume: "Annulation pour défaut de motivation de l'arrêté attaqué.",
+    motifDecisif: "",
   };
 
   it("construit une proposition complète et datée avec les extraits conservés", () => {

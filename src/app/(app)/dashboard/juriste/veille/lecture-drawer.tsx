@@ -251,6 +251,27 @@ export function LectureDrawer({
                     />
                   </label>
                   <label className="block text-xs font-semibold text-zinc-500">
+                    Motif décisif de la décision (verbatim, 20 à 600 caractères)
+                    <textarea
+                      name="motifDecisif"
+                      rows={3}
+                      defaultValue={p.motifDecisif ?? ""}
+                      data-testid="lecture-motif-decisif-edit"
+                      placeholder="Recopiez le passage où la juridiction énonce le motif de sa décision — ou laissez vide."
+                      className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm italic leading-relaxed text-zinc-900"
+                    />
+                  </label>
+                  {p.obsolescence && (
+                    <p
+                      className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800"
+                      data-testid="badge-obsolescence-edit"
+                    >
+                      <span className="font-semibold">Obsolescence signalée : </span>
+                      {p.obsolescence} — appréciation IA en lecture seule, ne
+                      modifiable que depuis une nouvelle extraction.
+                    </p>
+                  )}
+                  <label className="block text-xs font-semibold text-zinc-500">
                     Conditions d&apos;application (une par ligne)
                     <textarea
                       name="conditions"
@@ -375,6 +396,38 @@ export function LectureDrawer({
                           {p.regle || "—"}
                         </p>
                       </div>
+
+                      {p.obsolescence && (
+                        <div
+                          className="rounded-xl border border-amber-300 bg-amber-50 p-3"
+                          data-testid="badge-obsolescence"
+                        >
+                          <p className="text-xs font-semibold text-amber-900">
+                            Obsolescence signalée
+                          </p>
+                          <p className="mt-1 text-xs leading-relaxed text-amber-800">
+                            {p.obsolescence}
+                          </p>
+                          <p className="mt-1.5 text-[11px] text-amber-700">
+                            Appréciation automatique — à vérifier sur la source
+                            avant usage. Ne bloque ni ne retire la publication.
+                          </p>
+                        </div>
+                      )}
+
+                      {p.motifDecisif && (
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                            Motif décisif (verbatim)
+                          </p>
+                          <p
+                            className="mt-1.5 border-l-2 border-sky-300 pl-3 text-xs italic leading-relaxed text-zinc-700"
+                            data-testid="lecture-motif-decisif"
+                          >
+                            « {p.motifDecisif} »
+                          </p>
+                        </div>
+                      )}
 
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
