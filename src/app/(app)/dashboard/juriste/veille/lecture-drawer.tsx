@@ -272,6 +272,33 @@ export function LectureDrawer({
                     </p>
                   )}
                   <label className="block text-xs font-semibold text-zinc-500">
+                    Template de lettre pré-rédigé (variables :{" "}
+                    <code>{"{nom} {plaque} {num_pv} {date} {montant} {radarId} {lieu}"}</code>
+                    ) — vide = « Template à rédiger » après validation
+                    <textarea
+                      name="templateLettre"
+                      rows={8}
+                      defaultValue={p.templateLettre ?? ""}
+                      data-testid="lecture-template-edit"
+                      placeholder="Corps de la lettre proposé par l'extraction — relisez-le et corrigez-le librement."
+                      className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm leading-relaxed text-zinc-900"
+                    />
+                  </label>
+                  {p.typeInfraction === "SUSPENSION" && (
+                    <label className="block text-xs font-semibold text-zinc-500">
+                      Moyen de référé (L. 521-2 CJA) — variables{" "}
+                      <code>{"{nom} {num_pv} {date} {metier} {entreprise} {siret} {risque_licenciement}"}</code>
+                      <textarea
+                        name="templateRefere"
+                        rows={5}
+                        defaultValue={p.templateRefere ?? ""}
+                        data-testid="lecture-template-refere-edit"
+                        placeholder="Paragraphe de référé proposé par l'extraction — facultatif."
+                        className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm leading-relaxed text-zinc-900"
+                      />
+                    </label>
+                  )}
+                  <label className="block text-xs font-semibold text-zinc-500">
                     Conditions d&apos;application (une par ligne)
                     <textarea
                       name="conditions"
@@ -425,6 +452,39 @@ export function LectureDrawer({
                             data-testid="lecture-motif-decisif"
                           >
                             « {p.motifDecisif} »
+                          </p>
+                        </div>
+                      )}
+
+                      {p.templateLettre && (
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                            Template de lettre pré-rédigé
+                          </p>
+                          <p
+                            className="mt-1.5 max-h-64 overflow-y-auto whitespace-pre-line rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-xs leading-relaxed text-zinc-800"
+                            data-testid="lecture-template"
+                          >
+                            {p.templateLettre}
+                          </p>
+                          <p className="mt-1 text-[11px] text-zinc-500">
+                            Proposition de l&apos;extraction — relisez-la avant
+                            validation, modifiable via « Modifier la
+                            proposition ».
+                          </p>
+                        </div>
+                      )}
+
+                      {p.templateRefere && (
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                            Moyen de référé proposé (L. 521-2 CJA)
+                          </p>
+                          <p
+                            className="mt-1.5 max-h-48 overflow-y-auto whitespace-pre-line rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-xs leading-relaxed text-zinc-800"
+                            data-testid="lecture-template-refere"
+                          >
+                            {p.templateRefere}
                           </p>
                         </div>
                       )}

@@ -556,8 +556,9 @@ export function normaliserTitreProposition(t: string): string {
  *
  * Garde-fous (assouplissement documenté de « la veille ne crée jamais de
  * faille » — cf. AGENTS.md) :
- *  - uniquement `PROPOSEE`, jamais `ACTIVE` : le moteur est aveugle à ce
- *    statut et la `templateLettre` reste vide → ni détection ni lettre ;
+ *  - uniquement `PROPOSEE`, jamais `ACTIVE` : le moteur est **aveugle** à ce
+ *    statut, template compris (le template pré-rédigé reste inerte tant que
+ *    l'admin n'a pas cliqué) ;
  *  - seule l'administration tranche (drawer de la veille → flip
  *    `PROPOSEE → ACTIVE`, ou bibliothèque → « Écarter ») ;
  *  - idempotent : liason par `SourceJuridique.failleId` + dédup par titre
@@ -611,7 +612,8 @@ export async function proposerFaillesDepuisExtraction(): Promise<{
             titreFaille: titre,
             articleLoi,
             regle: composerRegleProposition(p),
-            templateLettre: "",
+            templateLettre: p.templateLettre ?? "",
+            templateRefere: p.templateRefere ?? "",
             source: row.url ?? row.archive,
             jurisprudence: [refPropositionDepuisSource(row, p)] as unknown as Prisma.InputJsonValue,
             statut: "PROPOSEE",

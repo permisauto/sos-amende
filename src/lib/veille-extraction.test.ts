@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   BUDGET_EXTRACTION,
   SCORE_SEUIL_EXTRACTION,
+  assainirTemplate,
   composerRegleProposition,
   construirePromptExtraction,
   contenuVerbatim,
@@ -14,6 +15,7 @@ import {
   parserExtraction,
   propositionDepuisFormulaire,
   refPropositionDepuisSource,
+  templatesMechaniques,
   type PublicationVeille,
 } from "./veille-extraction";
 
@@ -553,5 +555,192 @@ describe("refPropositionDepuisSource — référence au format base juridique", 
   it("replie sur l'id DILA sans ecli ni référence", () => {
     const ref = refPropositionDepuisSource({ ...source, ecli: null, reference: null }, p);
     expect(ref.reference).toBe("DILA00001");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Lot 3 — 2026-10-10 : templates pré-rédigés (lettre + référé de suspension)
+// ---------------------------------------------------------------------------
+
+describe("assainirTemplate — lint des templates proposés", () => {
+  const ARTICLES = ["C. route, art. L. 121-1"];
+  const LETTRE_OK =
+    "Je soussigné(e) {nom}, conteste la présente contravention n° {num_pv} " +
+    "en date du {date} au titre de l'article L. 121-1 du code de la route : " +
+    "les conditions d'application de ce texte n'étaient pas réunies au moment " +
+    "des faits constants, la sanction prononcée ne peut dès lors être maintenue.";
+  const REFERE_OK =
+    "Aux termes de l'article L. 521-2 du code de justice administrative, il " +
+    "existe un doute sérieux sur la légalité de la décision contestée, prise " +
+    "au titre de l'article L. 121-1, qui justifie la suspension de son exécution.";
+
+  it("accepte une lettre conforme (variables whitelistées + article présent)", () => {
+    expect(assainirTemplate(LETTRE_OK, ARTICLES)).toBe(LETTRE_OK);
+  });
+
+  it("rejette une variable hors whitelist (elle serait effacée au remplissage)", () => {
+    expect(
+      assainirTemplate(`${LETTRE_OK} Ajout de {temoin}.`, ARTICLES),
+    ).toBeUndefined();
+  });
+
+  it("rejette un article absent de articles[] (jamais d'article inventé)", () => {
+    expect(
+      assainirTemplate(`${LETTRE_OK} Aussi l'article L. 999-9.`, ARTICLES),
+    ).toBeUndefined();
+  });
+
+  it("rejette un texte trop court (moins de 100 caractères)", () => {
+    expect(assainirTemplate("Je conteste au titre de l'article L. 121-1.", ARTICLES)).toBeUndefined();
+    expect(assainirTemplate("", ARTICLES)).toBeUndefined();
+  });
+
+  it("référé : accepte L. 521-2 hors articles[], refuse cette base en lettre simple", () => {
+    expect(assainirTemplate(REFERE_OK, ARTICLES, { refere: true })).toBe(REFERE_OK);
+    expect(assainirTemplate(REFERE_OK, ARTICLES)).toBeUndefined();
+  });
+});
+
+describe("templates mécaniques (mock + secours local)", () => {
+  it("amende : lettre seule, sans référé, sur l'article de tête", () => {
+    const t = templatesMechaniques(["article L. 121-1"], "AMENDE");
+    expect(t.templateLettre).toContain("{nom}");
+    expect(t.templateLettre).toContain("l'article L. 121-1");
+    expect(t.templateRefere).toBe("");
+  });
+
+  it("suspension : lettre + moyen de référé L. 521-2", () => {
+    const t = templatesMechaniques(["article L. 224-16"], "SUSPENSION");
+    expect(t.templateLettre).toContain("décision contestée");
+    expect(t.templateRefere).toContain("L. 521-2");
+    expect(t.templateRefere).toContain("l'article L. 224-16");
+  });
+
+  it("sans article : rien (le chip « Template à rédager » reste en place)", () => {
+    const t = templatesMechaniques([], "AMENDE");
+    expect(t.templateLettre).toBe("");
+    expect(t.templateRefere).toBe("");
+  });
+});
+
+describe("templates pré-rédigés (lot 3 — 2026-10-10)", () => {
+  it("prompt : règles 10/11 — template lettre, référé de suspension, variables bornées", () => {
+    const p = construirePromptExtraction(PUB);
+    expect(p).toContain("templateLettre");
+    expect(p).toContain("templateRefere");
+    expect(p).toContain("{radarId}");
+    expect(p).toContain("risque_licenciement");
+    expect(p).toContain("L. 521-2");
+    expect(p).toContain('renvoie ""');
+  });
+
+  it("mock : template déterministe qui passe le lint du parser", () => {
+    const p = parserExtraction(extractionMock(PUB), CONTENU)!;
+    expect(p.etat).toBe("extrait");
+    expect(p.templateLettre).toBeTruthy();
+    expect(p.templateLettre).toContain("{nom}");
+    expect(p.templateLettre).toContain("L. 224-16");
+    expect(p.templateRefere).toBeUndefined(); // amende : jamais de référé
+  });
+
+  it("secours local : même template mécanique sans appel réseau", () => {
+    const p = parserExtraction(extractionLocale(PUB), CONTENU)!;
+    expect(p.templateLettre).toContain("{num_pv}");
+    expect(p.templateLettre).toContain("L. 224-16");
+  });
+
+  it("suspension : le référé proposé est conservé", () => {
+    const contenuSusp =
+      "Le Tribunal administratif statue sur la suspension du permis de " +
+      "conduire prononcée au titre de l'article L. 224-16 du code de la " +
+      "route, décision notifiée hors délai au conducteur.";
+    const pubSusp: PublicationVeille = {
+      ...PUB,
+      titre: "Suspension du permis — non-notification de la décision",
+      contenu: contenuSusp,
+      citations: [contenuSusp.slice(0, 180) + "…"],
+    };
+    const p = parserExtraction(extractionMock(pubSusp), pubSusp.contenu)!;
+    expect(p.typeInfraction).toBe("SUSPENSION");
+    expect(p.templateRefere).toContain("L. 521-2");
+  });
+
+  it("template invalide : champ vidé, état inchangé (jamais d'incomplet forcé)", () => {
+    const brut = JSON.stringify({
+      titre: "Faille sur certificat d'étalonnage",
+      typeInfraction: "AMENDE",
+      articles: ["article L. 224-16 du code de la route"],
+      regle: "La juridiction retient que le certificat d'étalonnage n'était pas en vigueur au moment des faits.",
+      conditions: [CONTENU.slice(0, 150)],
+      resume: "Absence de certificat d'étalonnage en vigueur.",
+      extraits: [CONTENU.slice(0, 200)],
+      templateLettre:
+        "Je conteste au titre de l'article L. 999-9 pour le motif {temoin} " +
+        "invoqué par le requérant et développé ci-après dans le présent écrit.",
+    });
+    const p = parserExtraction(brut, CONTENU)!;
+    expect(p.etat).toBe("extrait");
+    expect(p.templateLettre).toBeUndefined();
+    expect(p.templateRefere).toBeUndefined();
+  });
+});
+
+describe("propositionDepuisFormulaire — templates (lot 3)", () => {
+  const base = {
+    titre: "Faille test sur mentions obligatoires",
+    typeInfraction: "AMENDE" as const,
+    articles: "art. L. 121-1",
+    regle: "La juridiction exige une motivation expresse de la décision.",
+    conditions: "Condition d'application reprise textuellement du document.",
+    resume: "Résumé de la décision.",
+    motifDecisif: "",
+  };
+  const LETTRE =
+    "Je soussigné(e) {nom}, conteste la présente contravention n° {num_pv} " +
+    "en date du {date} au titre de l'article L. 121-1 du code de la route : " +
+    "les conditions d'application n'étaient pas réunies au moment des faits.";
+
+  it("conserve un template saisi et borne ses longueurs", () => {
+    const tropLong = propositionDepuisFormulaire({
+      ...base,
+      templateLettre: "x".repeat(6001),
+    });
+    expect(tropLong.ok).toBe(false);
+
+    const refTropLong = propositionDepuisFormulaire({
+      ...base,
+      templateRefere: "x".repeat(4001),
+    });
+    expect(refTropLong.ok).toBe(false);
+
+    const res = propositionDepuisFormulaire({ ...base, templateLettre: LETTRE });
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.proposition.templateLettre).toBe(LETTRE);
+      expect(res.proposition.templateRefere).toBeUndefined();
+    }
+  });
+
+  it("template vidé = champ absent (le chip « à rédager » revient)", () => {
+    const res = propositionDepuisFormulaire({ ...base, templateLettre: "   " });
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.proposition.templateLettre).toBeUndefined();
+  });
+
+  it("n'inclut le référé que pour une suspension", () => {
+    const refere =
+      "Aux termes de l'article L. 521-2 du code de justice administrative, " +
+      "le doute sérieux sur la légalité justifie la suspension sollicitée.";
+    const susp = propositionDepuisFormulaire({
+      ...base,
+      typeInfraction: "SUSPENSION",
+      templateRefere: refere,
+    });
+    expect(susp.ok).toBe(true);
+    if (susp.ok) expect(susp.proposition.templateRefere).toBe(refere);
+
+    const amende = propositionDepuisFormulaire({ ...base, templateRefere: refere });
+    expect(amende.ok).toBe(true);
+    if (amende.ok) expect(amende.proposition.templateRefere).toBeUndefined();
   });
 });

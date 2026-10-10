@@ -100,6 +100,8 @@ function lirePropositionFormulaire(formData: FormData): ValeursProposition | nul
     conditions: String(formData.get("conditions") ?? ""),
     resume: String(formData.get("resume") ?? ""),
     motifDecisif: String(formData.get("motifDecisif") ?? ""),
+    templateLettre: String(formData.get("templateLettre") ?? ""),
+    templateRefere: String(formData.get("templateRefere") ?? ""),
   };
 }
 
@@ -120,10 +122,9 @@ function lirePropositionFormulaire(formData: FormData): ValeursProposition | nul
  * `SourceJuridique.proposition` **sans créer de faille** (l'admin finira
  * plus tard). `intention=valider` (défaut) : crée la faille **ACTIVE
  * immédiate** (choix produit explicite), pré-remplie — règle dégagée +
- * conditions + articles + jurisprudence. Le template de lettre reste vide :
- * sans template, la faille ne peut **jamais** nourrir une lettre (garde-fous
- * `analyserDossier`/`confirmerFaille`) — l'admin rédige le template dans la
- * bibliothèque.
+ * conditions + articles + jurisprudence + **template pré-rédigé par
+ * l'extraction** (lot 3 ; s'il est vide, la faille garde le chip « Template
+ * à rédiger » et ne peut encore nourrir aucune lettre).
  */
 export async function validerPropositionSource(
   _prev: VeilleState,
@@ -214,20 +215,25 @@ export async function validerPropositionSource(
 
   // Deuxième entrée (auto-proposition de la veille) : la faille existe déjà
   // en PROPOSEE — on la **met à jour et l'active** (flip) au lieu d'en créer
-  // une seconde. Un template déjà rédigé dans la bibliothèque est conservé.
+  // une seconde. Un template déjà rédigé dans la bibliothèque est conservé ;
+  // sinon on reprend celui de la proposition (lot 3).
   const dejaLiee = source.failleId
     ? await prisma.failleJuridique.findUnique({ where: { id: source.failleId } })
     : null;
+  const templateLettre =
+    dejaLiee?.templateLettre || proposition.templateLettre || "";
+  const templateRefere =
+    dejaLiee?.templateRefere || proposition.templateRefere || "";
   let failleId: string;
   if (dejaLiee) {
     failleId = dejaLiee.id;
     await prisma.failleJuridique.update({
       where: { id: dejaLiee.id },
-      data: { ...donnees, templateLettre: dejaLiee.templateLettre },
+      data: { ...donnees, templateLettre, templateRefere },
     });
   } else {
     const faille = await prisma.failleJuridique.create({
-      data: { ...donnees, templateLettre: "" },
+      data: { ...donnees, templateLettre, templateRefere },
     });
     failleId = faille.id;
   }
@@ -251,6 +257,10 @@ export async function validerPropositionSource(
     ok: true,
     message: `Lecture validée : faille « ${titreFaille} » ${
       dejaLiee ? "mise à jour et ACTIVÉE" : "créée et ACTIVÉE"
-    }. Rédigez son template de lettre dans la bibliothèque juridique — sans template, elle ne peut pas encore alimenter une contestation.`,
+    }. ${
+      templateLettre
+        ? "Template de lettre pré-rédigé inclus : relisez-le dans la bibliothèque juridique avant usage."
+        : "Rédigez son template de lettre dans la bibliothèque juridique — sans template, elle ne peut pas encore alimenter une contestation."
+    }`,
   };
 }

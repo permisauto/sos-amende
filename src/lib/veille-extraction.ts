@@ -51,6 +51,18 @@ export type PropositionVeille = {
    * (arbitrage 2026-10-10).
    */
   obsolescence?: string;
+  /**
+   * Template de lettre pré-rédigé par l'extraction (lot 3) : soumis au lint
+   * `assainirTemplate` (whitelist de variables + articles ⊆ `articles[]`).
+   * La faille créée en `PROPOSEE` le reçoit — **le moteur reste aveugle**,
+   * seul le clic admin `PROPOSEE → ACTIVE` le rend utilisable.
+   */
+  templateLettre?: string;
+  /**
+   * Moyen de référé (paragraphe L. 521-2 CJA) — seulement pour les
+   * suspensions, même lint. `undefined` sur les amendes.
+   */
+  templateRefere?: string;
   /** Pourquoi incomplet/échec — affiché à l'admin. */
   motif?: string;
   /**
@@ -117,6 +129,79 @@ export function contenuVerbatim(texte: string, passage: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Lint des templates (lot 3) — whitelist de variables + articles bornés
+// ---------------------------------------------------------------------------
+
+/** Variables que `remplirTemplate` sait remplir dans une lettre. */
+export const VARIABLES_LETTRE = [
+  "nom",
+  "plaque",
+  "num_pv",
+  "date",
+  "montant",
+  "radarId",
+  "lieu",
+] as const;
+
+/** Variables supplémentaires du moyen de référé (pack Télérecours). */
+export const VARIABLES_REFERE = [
+  ...VARIABLES_LETTRE,
+  "metier",
+  "entreprise",
+  "siret",
+  "risque_licenciement",
+] as const;
+
+/** Toute référence d'article « L. 121-1 », « R. 47-1 », « D. 231-2 »… */
+const RE_MENTION_ARTICLE = /\b([LRDC]\.?\s*\d{1,3}(?:-\d{1,3})+)\b/gi;
+
+/** Forme comparable d'une référence : « Art. L. 121-1 » → « artl1211 ». */
+function normaliserMentionArticle(t: string): string {
+  return t.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * Contrôle un template proposé par l'extraction : **soit il passe, soit il
+ * est rejeté** (`undefined`) — jamais retouché (aucune réécriture cachée).
+ *
+ *  1. longueur 100 à 6 000 caractères ;
+ *  2. chaque variable `{…}` appartient à la whitelist (le reste serait de
+ *     toute façon effacé par `nettoyerLettre` à la génération) ;
+ *  3. chaque référence d'article du texte appartient à `articles[]` (déjà
+ *     verbatim sur la publication) — le référé cite en plus L. 521-2 CJA
+ *     (seule référence légalement requise hors décision).
+ *
+ * Échec → le champ est laissé vide : le noyau de la proposition (articles,
+ * règle, conditions) reste validable et la faille gardera son chip « Template
+ * à rédager ». L'état `extrait`/`incomplet` **n'est jamais modifié** ici.
+ */
+export function assainirTemplate(
+  brut: string,
+  articles: string[],
+  options: { refere?: boolean } = {},
+): string | undefined {
+  const t = brut.trim();
+  if (t.length < 100 || t.length > 6000) return undefined;
+
+  const variables = (
+    options.refere ? VARIABLES_REFERE : VARIABLES_LETTRE
+  ) as readonly string[];
+  for (const m of t.matchAll(/\{(\w+)\}/g)) {
+    if (!variables.includes(m[1])) return undefined;
+  }
+
+  const refs = articles.map((a) => normaliserMentionArticle(a));
+  for (const m of t.matchAll(RE_MENTION_ARTICLE)) {
+    const ref = normaliserMentionArticle(m[1]);
+    const connu =
+      refs.some((a) => a.includes(ref)) ||
+      (options.refere === true && ref === "l5212");
+    if (!connu) return undefined;
+  }
+  return t;
+}
+
+// ---------------------------------------------------------------------------
 // Prompt + parsing
 // ---------------------------------------------------------------------------
 
@@ -130,6 +215,8 @@ const schemaReponse = z.object({
   extraits: z.array(z.string()).max(5).default([]),
   motifDecisif: z.string().max(700).default(""),
   obsolescence: z.string().max(400).default(""),
+  templateLettre: z.string().max(6000).default(""),
+  templateRefere: z.string().max(4000).default(""),
 });
 
 export function construirePromptExtraction(pub: PublicationVeille): string {
@@ -145,7 +232,7 @@ export function construirePromptExtraction(pub: PublicationVeille): string {
     "Tu analyses une publication officielle de veille juridique française (décision de juridiction ou texte publié).",
     "",
     "Réponds UNIQUEMENT par un objet JSON sans texte autour, de la forme :",
-    '{"titre":"...","typeInfraction":"AMENDE|SUSPENSION","articles":["..."],"regle":"...","conditions":["..."],"resume":"...","extraits":["..."],"motifDecisif":"...","obsolescence":"..."}',
+    '{"titre":"...","typeInfraction":"AMENDE|SUSPENSION","articles":["..."],"regle":"...","conditions":["..."],"resume":"...","extraits":["..."],"motifDecisif":"...","obsolescence":"...","templateLettre":"...","templateRefere":"..."}',
     "",
     "Règles absolues :",
     '1. articles : UNIQUEMENT les articles EXPLICITEMENT cités dans le document fourni, recopiés tels quels (ex. "C. route, art. L. 224-16"). Max 3. Jamais d\'article inventé, induit ou général.',
@@ -154,9 +241,11 @@ export function construirePromptExtraction(pub: PublicationVeille): string {
     "4. resume : une phrase sur l'objet du litige ou la portée.",
     "5. extraits : 1 à 3 citations VERBATIM (20 à 400 caractères, recopiées mot pour mot) du document qui fondent la règle.",
     "6. typeInfraction : SUSPENSION si la décision porte sur le permis de conduire (suspension, invalidation, annulation, retrait de points, stage…) ; sinon AMENDE.",
-    '7. Si le document ne permet pas d\'identifier au moins un article cité et une règle : renvoie {"titre":"...","typeInfraction":"...","articles":[],"regle":"","conditions":[],"resume":"","extraits":[],"motifDecisif":"","obsolescence":""} — n\'invente jamais.',
+    '7. Si le document ne permet pas d\'identifier au moins un article cité et une règle : renvoie {"titre":"...","typeInfraction":"...","articles":[],"regle":"","conditions":[],"resume":"","extraits":[],"motifDecisif":"","obsolescence":"","templateLettre":"","templateRefere":""} — n\'invente jamais.',
     '8. motifDecisif : le passage VERBATIM (20 à 600 caractères, recopié mot pour mot) où la juridiction énonce le motif décisif de sa décision (l\'attendu ou le considérant qui fonde la solution). Si aucun passage distinct ne se détache du texte, renvoie "".',
     '9. obsolescence : si la DATE du document est manifestement antérieure à une réforme connue du régime traité, une phrase courte de mise en garde pour l\'administrateur ; sinon "". N\'affirme aucune réforme qui n\'apparaît pas au document lui-même.',
+    '10. templateLettre : rédige le CORPS d\'une lettre de contestation au 1ère personne (style soutenu, 400 à 2 500 caractères) qui reprend la regle et le motifDecisif : declaration de contestation, invocation UNIQUEMENT des articles de la liste "articles", moyens decoulant du document. Variables autorisees — exactement celles-ci entre accolades, aucune autre : {nom} {plaque} {num_pv} {date} {montant} {radarId} {lieu}. Ne reprend AUCUN fait d\'espèce qui n\'est pas dans le document (pas de temoin, pas de lieu invente, pas de date inventee). Si tu ne peux pas le faire proprement, renvoie "".',
+    '11. templateRefere : UNIQUEMENT si typeInfraction vaut SUSPENSION — le paragraphe du moyen de refere (doute serieux sur la legalite, article L. 521-2 du code de justice administrative, 400 a 1 500 caracteres), retenant la meme regle. Variables autorisees : {nom} {num_pv} {date} {metier} {entreprise} {siret} {risque_licenciement}. Sinon renvoie "".',
     "",
     "=== PUBLICATION ===",
     `${pub.titre}${entete ? ` — ${entete}` : ""}`,
@@ -252,6 +341,14 @@ export function parserExtraction(
     return o.length >= 10 && o.length <= 400 ? o : undefined;
   })();
 
+  // Templates (lot 3) : lint pur — soit le texte passe, soit il est rejeté
+  // (champ vidé). Ne touche jamais à l'état de la proposition.
+  const templateLettre = assainirTemplate(d.templateLettre, articles);
+  const templateRefere =
+    d.typeInfraction === "SUSPENSION"
+      ? assainirTemplate(d.templateRefere, articles, { refere: true })
+      : undefined;
+
   const complet =
     articles.length > 0 &&
     regle.length >= 15 &&
@@ -286,6 +383,8 @@ export function parserExtraction(
     extraits,
     ...(motifDecisif ? { motifDecisif } : {}),
     ...(obsolescence ? { obsolescence } : {}),
+    ...(templateLettre ? { templateLettre } : {}),
+    ...(templateRefere ? { templateRefere } : {}),
     motif,
     extraitLe: new Date().toISOString(),
   };
@@ -294,6 +393,41 @@ export function parserExtraction(
 // ---------------------------------------------------------------------------
 // Mock déterministe (dev/E2E — même esprit que reponseIaMock)
 // ---------------------------------------------------------------------------
+
+/**
+ * Squelette de lettre / de moyen de référé déterministe, partagé par le mock
+ * (dev/E2E) et le secours local (prod sans IA) : construit **à partir des
+ * articles déjà trouvés dans le contenu**, donc soumis au même
+ * `assainirTemplate` que la sortie IA. Aucun fait d'espèce — seuls des
+ * libellés procéduraux et la référence d'article déjà verbatim.
+ */
+export function templatesMechaniques(
+  articles: string[],
+  typeInfraction: "AMENDE" | "SUSPENSION",
+): { templateLettre: string; templateRefere: string } {
+  const brut = articles[0] ?? "";
+  const article = brut.replace(/^(?:article|art\.)\s*/i, "");
+  const objet =
+    typeInfraction === "SUSPENSION"
+      ? "la décision contestée n° {num_pv} en date du {date}"
+      : "l'avis de contravention n° {num_pv} en date du {date}";
+  const templateLettre = article
+    ? [
+        `Je soussigné(e) {nom}, conteste par la présente ${objet}. La contestation est prise au titre de l'article ${article}.`,
+        `La contestation est fondée : les conditions d'application de ce texte n'étaient pas réunies au moment des faits tels qu'ils sont constants, et la sanction prononcée ne peut dès lors être maintenue.`,
+        `Je demande en conséquence l'annulation intégrale de la sanction prononcée et le remboursement des sommes éventuellement versées.`,
+      ].join("\n\n")
+    : "";
+  const templateRefere =
+    typeInfraction === "SUSPENSION" && article
+      ? [
+          `Monsieur le Président du tribunal administratif siégeant en formation de référé,`,
+          `Aux termes de l'article L. 521-2 du code de justice administrative, il existe, dans un litige sérieux, un motif d'ordonner la mesure sollicitée lorsque l'exécution de la décision contestée porte une atteinte grave et manifestement illégale.`,
+          `En l'espèce, l'application de l'article ${article} est contestable au regard des éléments constants du dossier : le doute sérieux sur la légalité de la décision contestée justifie la suspension de son exécution.`,
+        ].join("\n\n")
+      : "";
+  return { templateLettre, templateRefere };
+}
 
 /** Réponse simulée : articles repérés par regex, règle = citation de tête. */
 export function extractionMock(pub: PublicationVeille): string {
@@ -335,6 +469,7 @@ export function extractionMock(pub: PublicationVeille): string {
     Number.isFinite(annee) && annee < 2020
       ? `Décision de ${annee} : vérifier qu'aucune réforme postérieure n'a modifié le régime applicable avant de l'invoquer.`
       : undefined;
+  const templates = templatesMechaniques(articles, typeInfraction);
   return JSON.stringify({
     titre: pub.titre.slice(0, 120),
     typeInfraction,
@@ -345,6 +480,7 @@ export function extractionMock(pub: PublicationVeille): string {
     extraits: pub.citations.slice(0, 2),
     motifDecisif: motifDecisif ? motifDecisif.trim().slice(0, 600) : "",
     obsolescence: obsolescence ?? "",
+    ...templates,
   });
 }
 
@@ -383,6 +519,7 @@ export function extractionLocale(pub: PublicationVeille): string {
   if (conditions.length === 0 && pub.contenu.trim().length >= 15) {
     conditions.push(pub.contenu.trim().slice(0, 150));
   }
+  const templates = templatesMechaniques(articles, typeInfraction);
   return JSON.stringify({
     titre: pub.titre.slice(0, 120),
     typeInfraction,
@@ -391,6 +528,7 @@ export function extractionLocale(pub: PublicationVeille): string {
     conditions,
     resume: `Extraction locale (sans IA) : ${pub.titre.slice(0, 120)}`,
     extraits: pub.citations.slice(0, 2),
+    ...templates,
   });
 }
 
@@ -490,6 +628,10 @@ export type ValeursProposition = {
   resume: string;
   /** Motif décisif saisi par l'admin (verbatim de la décision lu). */
   motifDecisif: string;
+  /** Template de lettre relu/écrit par l'admin (vide = chip « à rédiger »). */
+  templateLettre?: string;
+  /** Moyen de référé relu/écrit par l'admin (suspension seulement). */
+  templateRefere?: string;
 };
 
 export type ResultatFormulation =
@@ -589,6 +731,18 @@ export function propositionDepuisFormulaire(
     return { ok: false, erreur: "Motif décisif trop long (600 caractères maximum)." };
   }
 
+  // Templates (lot 3) : bornes seulement sur la saisie humaine (le lint
+  // verbatim/articles ne s'applique qu'à la sortie IA de `parserExtraction`).
+  // Un template vidé volontairement remet le chip « Template à rédiger ».
+  const templateLettre = (valeurs.templateLettre ?? "").trim();
+  if (templateLettre.length > 6000) {
+    return { ok: false, erreur: "Template de lettre trop long (6 000 caractères maximum)." };
+  }
+  const templateRefere = (valeurs.templateRefere ?? "").trim();
+  if (templateRefere.length > 4000) {
+    return { ok: false, erreur: "Moyen de référé trop long (4 000 caractères maximum)." };
+  }
+
   const complet = articles.length > 0 && regle.length >= 15 && conditions.length > 0;
   const motif = complet
     ? undefined
@@ -613,6 +767,10 @@ export function propositionDepuisFormulaire(
       extraits: (options.extraits ?? []).slice(0, 3),
       ...(motifDecisif ? { motifDecisif } : {}),
       ...(options.obsolescence ? { obsolescence: options.obsolescence } : {}),
+      ...(templateLettre ? { templateLettre } : {}),
+      ...(templateRefere && valeurs.typeInfraction === "SUSPENSION"
+        ? { templateRefere }
+        : {}),
       motif,
       extraitLe: options.extraitLe ?? new Date().toISOString(),
       corrigeLe: new Date().toISOString(),

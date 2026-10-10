@@ -17,9 +17,17 @@ import { loginAs } from "./helpers";
  * (`/login` redirige sinon vers le dashboard déjà ouvert) → l'admin ouvre le
  * drawer, **corrige la règle via le formulaire d'édition** (brouillon en base,
  * retour à la consultation) puis **valide depuis le drawer** → la publication
- * quitte « À lire » pour « Promues », la faille apparaît **ACTIVE** (template
- * encore à rédiger — chip rouge) dans la bibliothèque, avec la règle corrigée.
+ * quitte « À lire » pour « Promues », la faille apparaît **ACTIVE avec le
+ * template pré-rédigé porté par la proposition** (lot 3 — aucun chip « Template
+ * à rédiger ») dans la bibliothèque, avec la règle corrigée.
  */
+
+// Les deux scénarios cliquent « Extraire les propositions » — un bouton de lot
+// qui traite **toutes** les sources pendantes. En `fullyParallel` (config
+// globale), leurs grains respectifs s'extraient mutuellement et l'assertion
+// « non extraite » devenait un flaky documenté ; le mode séquentiel supprime
+// la course sans toucher aux autres specs.
+test.describe.configure({ mode: "serial" });
 
 const TITRE = "Annulation avis contravention — défaut de motivation E2E veille";
 const TITRE_REFUS = "Refus synchronisé veille — écartement bibliothèque E2E";
@@ -79,17 +87,26 @@ async function grainerSource(id: string, titre: string): Promise<void> {
   }
 }
 
-/** Règle de la faille liée à la publication de ce test (assertion SQL déterministe). */
-async function regleFailleLiee(): Promise<string | null> {
+/** État de la faille liée à la publication de ce test (assertion SQL déterministe). */
+async function etatFailleLiee(): Promise<{
+  regle: string | null;
+  template: string | null;
+  statut: string | null;
+}> {
   const c = new Client({ connectionString: databaseUrl() });
   await c.connect();
   try {
-    const r = await c.query<{ regle: string | null }>(
-      `SELECT f.regle FROM "SourceJuridique" s
+    const r = await c.query<{ regle: string | null; template: string | null; statut: string | null }>(
+      `SELECT f.regle, f."templateLettre" AS template, f.statut
+         FROM "SourceJuridique" s
          JOIN "FailleJuridique" f ON f.id = s."failleId"
         WHERE s.id = 'e2e-veille-proposition'`,
     );
-    return r.rows[0]?.regle ?? null;
+    return {
+      regle: r.rows[0]?.regle ?? null,
+      template: r.rows[0]?.template ?? null,
+      statut: r.rows[0]?.statut ?? null,
+    };
   } finally {
     await c.end();
   }
@@ -149,6 +166,9 @@ test("veille : extraction proposée puis validation admin", async ({ page }) => 
   await expect(page.getByTestId("lecture-conditions").locator("li")).toHaveCount(
     1,
   );
+  // Template de lettre pré-rédigé par l'extraction (lot 3) : visible en
+  // lecture, juriste compris — jamais éditable avant la validation admin.
+  await expect(page.getByTestId("lecture-template")).toContainText("{nom}");
   // Le juriste lit mais ne valide jamais depuis le drawer (ni ne corrige).
   await expect(page.getByTestId("lecture-valider")).toHaveCount(0);
   await expect(page.getByTestId("lecture-modifier")).toHaveCount(0);
@@ -186,6 +206,9 @@ test("veille : extraction proposée puis validation admin", async ({ page }) => 
   // relue depuis la base avant la validation finale.
   await page.getByTestId("lecture-modifier").click();
   await expect(page.getByTestId("lecture-form-correction")).toBeVisible();
+  // Le template pré-rédigé est proposé en édition (saisie humaine libre).
+  await expect(page.getByTestId("lecture-template-edit")).toBeVisible();
+  await expect(page.getByTestId("lecture-template-edit")).toContainText("{nom}");
   await page.getByTestId("lecture-regle-edit").fill(
     "La juridiction annule l'avis pour défaut de motivation — règle corrigée par l'admin E2E.",
   );
@@ -208,22 +231,23 @@ test("veille : extraction proposée puis validation admin", async ({ page }) => 
   ).toBeVisible();
 
   // La faille créée porte la règle **corrigée** (la validation utilise les
-  // valeurs enregistrées, plus la proposition IA brute).
-  expect(await regleFailleLiee()).toContain("règle corrigée par l'admin E2E");
+  // valeurs enregistrées, plus la proposition IA brute) et le **template
+  // pré-rédigé** porté par la proposition (lot 3) — elle est ACTIVE et peut
+  // déjà nourrir une lettre après relecture du juriste. (Vérifié en SQL sur
+  // la faille liée : la recherche `?q=` remonte aussi les failles de runs
+  // précédents, inaptes à porter une assertion par compte de chips.)
+  const liee = await etatFailleLiee();
+  expect(liee.regle).toContain("règle corrigée par l'admin E2E");
+  expect(liee.statut).toBe("ACTIVE");
+  expect(liee.template).toContain("{nom}");
 
-  // La faille créée est **ACTIVE** (validation = faille active immédiate) mais
-  // sans template : la bibliothèque affiche le chip « Template à rédiger » —
-  // elle ne peut pas encore alimenter une lettre.
+  // Faille née de la veille : chip « Proposition (veille) » (flip depuis le
+  // drawer — la source liée est promue en même temps).
   await page.goto(
     "/dashboard/juriste/failles?q=" +
       encodeURIComponent("défaut de motivation E2E"),
   );
   await expect(page.getByText(TITRE).first()).toBeVisible();
-  await expect(
-    page.getByTestId("chip-template-manquant").first(),
-  ).toBeVisible();
-  // Faille née de la veille : chip « Proposition (veille) » (flip depuis le
-  // drawer — la source liée est promue en même temps).
   await expect(page.getByTestId("chip-veille").first()).toBeVisible();
 });
 
