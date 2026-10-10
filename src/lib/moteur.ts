@@ -245,7 +245,7 @@ export function etalonnageExpire(
  * contestable.
  */
 export function margeTechniqueVitesse(valeurMesuree: number): number {
-  return valeurMesuree < 100 ? 5 : Math.round(valeurMesuree * 0.05);
+  return valeurMesuree < 100 ? 5 : Math.ceil(valeurMesuree * 0.05);
 }
 
 /**

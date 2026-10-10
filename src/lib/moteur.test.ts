@@ -637,10 +637,11 @@ describe("marges arithmétiques (chantier 1)", () => {
   const ALCOOL = "faille-suspension-marge-erreur-ethylometre";
 
   describe("helpers purs", () => {
-    it("margeTechniqueVitesse : −5 sous 100, −5 % au-delà (arrondi entier)", () => {
+    it("margeTechniqueVitesse : −5 sous 100, −5 % au-delà (arrondi supérieur)", () => {
       expect(margeTechniqueVitesse(50)).toBe(5);
       expect(margeTechniqueVitesse(99)).toBe(5);
       expect(margeTechniqueVitesse(100)).toBe(5); // 5 % de 100 = 5
+      expect(margeTechniqueVitesse(101)).toBe(6); // 5,05 → 6 (supérieur favorable au client)
       expect(margeTechniqueVitesse(110)).toBe(6); // 5,5 → 6
       expect(margeTechniqueVitesse(120)).toBe(6);
       expect(margeTechniqueVitesse(137)).toBe(7); // 6,85 → 7
@@ -699,7 +700,7 @@ describe("marges arithmétiques (chantier 1)", () => {
       ).toEqual([]); // −7 ≥ marge 7
     });
 
-    it("utilise 5 % au-delà de 100 km/h", () => {
+    it("utilise 5 % au-delà de 100 km/h (arrondi supérieur)", () => {
       // 137 mesuré, retenu 133 → 4 < 7.
       expect(
         detecterFailles({ docType: "AMENDE", mesure: { valeur: 137, retenu: 133, unite: "km/h" } }, null, failles),
@@ -707,6 +708,14 @@ describe("marges arithmétiques (chantier 1)", () => {
       // 137 mesuré, retenu 130 → −7 = marge → pas de faille.
       expect(
         detecterFailles({ docType: "AMENDE", mesure: { valeur: 137, retenu: 130, unite: "km/h" } }, null, failles),
+      ).toEqual([]);
+      // 101 mesuré, retenu 96 → −5 < marge 6 (5,05 arrondi supérieur) → faille.
+      expect(
+        detecterFailles({ docType: "AMENDE", mesure: { valeur: 101, retenu: 96, unite: "km/h" } }, null, failles),
+      ).toEqual([VITESSE]);
+      // 101 mesuré, retenu 95 → −6 = marge → pas de faille.
+      expect(
+        detecterFailles({ docType: "AMENDE", mesure: { valeur: 101, retenu: 95, unite: "km/h" } }, null, failles),
       ).toEqual([]);
     });
 
