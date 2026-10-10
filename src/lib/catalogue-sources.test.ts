@@ -95,6 +95,9 @@ describe("catalogue-sources (garde-fou anti-hallucination)", () => {
       // Chantier 1 (2026-10-10) : marges arithmétiques
       "margeTechniqueVitesse",
       "margeEthylometre",
+      // P3 (2026-10-10) : seuil 0,2 g/L nouveau conducteur
+      "margeEthylometreSeuil",
+      "valeurPlageMesure",
     ]);
     for (const faille of CATALOGUE_SOURCES) {
       for (const regle of faille.reglesDetection as RegleDetection[]) {
@@ -114,6 +117,13 @@ describe("catalogue-sources (garde-fou anti-hallucination)", () => {
         }
         if (regle.type === "valeurSuperieure") {
           expect(regle.seuil).toBeGreaterThan(0);
+        }
+        if (regle.type === "margeEthylometreSeuil") {
+          expect(regle.seuil).toBeGreaterThan(0);
+        }
+        if (regle.type === "valeurPlageMesure") {
+          expect(regle.min).toBeGreaterThanOrEqual(0);
+          expect(regle.max).toBeGreaterThan(regle.min);
         }
         if (regle.type === "et") {
           expect(regle.regles.length).toBeGreaterThan(0);

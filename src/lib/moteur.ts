@@ -277,6 +277,22 @@ export function margeEthylometre(
   return valeurMesuree <= 0.2 ? 0.016 : Math.round(valeurMesuree * 0.08 * 1000) / 1000;
 }
 
+/**
+ * Marge d'erreur d'un éthylomètre à un **seuil explicite** (art. 15 de
+ * l'arrêté du 8 juillet 2003) : 8 % de la valeur mesurée, ou marge fixe
+ * `seuil × 0,08` sous le seuil. Généralise `margeEthylometre` (pivots 0,40 g/L
+ * / 0,20 mg/L = seuils par défaut) à tout seuil — ex. 0,20 g/L du nouveau
+ * conducteur (R. 234-1 CR). Ne dépend jamais de `retenu`.
+ */
+export function margeEthylometreSeuil(
+  valeurMesuree: number,
+  _unite: "mg/L" | "g/L",
+  seuil: number,
+): number {
+  if (valeurMesuree <= seuil) return Math.round(seuil * 0.08 * 1000) / 1000;
+  return Math.round(valeurMesuree * 0.08 * 1000) / 1000;
+}
+
 /** Comparaison des marges avec tolérance d'arrondi (float 3 décimales) :
  * la marge n'est réellement déduite que si (mesurée − retenue) ≥ marge. */
 export function margeNonDeduite(
@@ -414,6 +430,22 @@ export type RegleDetection =
    * fixe 0,032 g/L (0,016 mg/L) sous les seuils 0,40 g/L / 0,20 mg/L.
    * Faille si (mesurée − retenue) < marge. */
   | { type: "margeEthylometre" }
+  // --- P3 (2026-10-10) : seuil alcool 0,2 g/L du nouveau conducteur
+  // (R. 234-1 CR). Pour un conducteur ayant > 3 ans de permis le seuil est
+  // 0,5 g/L : une alcoolémie de 0,2-0,5 g/L n'est alors AUCUNE infraction.
+  // Tout PV s'appuyant sur 0,2-0,5 g/L a donc nécessairement visé un nouveau
+  // conducteur (seuil 0,2) — le moteur raisonne sur la plage de valeur, sans
+  // questionnaire (invariant N3).
+  /** Marge d'erreur non déduite à un **seuil explicite** : la valeur mesurée,
+   * déduction faite de la marge art. 15 (8 %), retombe sous le seuil → le
+   * dépassement allégué n'est pas caractérisé (ex. 0,21 g/L → 0,193 < 0,20).
+   * N'exige que `mesure.valeur` (jamais `retenu`). */
+  | { type: "margeEthylometreSeuil"; seuil: number }
+  /** Alcoolémie mesurée dans une plage donnée (ex. ]0,20 ; 0,50] g/L = bande
+   * du nouveau conducteur : seuil 0,20 applicable, sous le seuil général
+   * 0,50). `unite` optionnel cloisonne l'unité (jamais de faux positif mg/L).
+   * N'exige que `mesure.valeur`. */
+  | { type: "valeurPlageMesure"; min: number; max: number; unite?: "g/L" | "mg/L" }
   /** Composition ET (les règles d'une même faille sont sinon en OU). */
   | { type: "et"; regles: RegleDetection[] };
 
@@ -594,6 +626,20 @@ function evalRegle(
       if (!m || (m.unite !== "mg/L" && m.unite !== "g/L")) return false;
       if (!Number.isFinite(m.valeur) || typeof m.retenu !== "number") return false;
       return margeNonDeduite(m, margeEthylometre(m.valeur, m.unite));
+    }
+    case "margeEthylometreSeuil": {
+      const m = data.mesure;
+      if (!m || (m.unite !== "mg/L" && m.unite !== "g/L")) return false;
+      if (!Number.isFinite(m.valeur)) return false;
+      // Dépassement allégué au seuil ET marge le ramenant sous le seuil.
+      const marge = margeEthylometreSeuil(m.valeur, m.unite, regle.seuil);
+      return m.valeur > regle.seuil && m.valeur - marge < regle.seuil;
+    }
+    case "valeurPlageMesure": {
+      const m = data.mesure;
+      if (!m || !Number.isFinite(m.valeur)) return false;
+      if (regle.unite && m.unite !== regle.unite) return false;
+      return m.valeur > regle.min && m.valeur <= regle.max;
     }
     case "et":
       return regle.regles.every((r) => evalRegle(r, data, texte, contexte));

@@ -363,6 +363,67 @@ En application des articles L. 224-2 et L. 234-1 du Code de la route et de l'art
 En conséquence, je vous demande de bien vouloir retirer la décision de suspension prise à mon encontre.`,
   },
   {
+    id: "faille-alcool-marge-seuil-02",
+    typeInfraction: "SUSPENSION",
+    titreFaille:
+      "Nouveau conducteur — alcoolémie sous le seuil de 0,20 g/L après déduction de la marge d'erreur",
+    articleLoi:
+      "art. R. 234-1 du Code de la route (seuil 0,20 g/L pour les nouveaux conducteurs — permis de moins de 3 ans) ; art. 15 de l'arrêté du 8 juillet 2003 (marge d'erreur 8 %)",
+    source: "Légifrance (CE 14 févr. 2018 n° 407914) ; code de la route R. 234-1",
+    regle:
+      "Le seuil d'alcoolémie des nouveaux conducteurs (permis délivré depuis moins de 3 ans) est de 0,20 g/L (art. R. 234-1 CR). Ce seuil est soumis à la même marge d'erreur de l'éthylomètre (8 %, art. 15 de l'arrêté du 8 juillet 2003) que les autres seuils : une valeur mesurée de 0,21 à 0,25 g/L retombe sous 0,20 g/L après déduction de la marge, et le dépassement n'est pas caractérisé.",
+    reglesDetection: [{ type: "margeEthylometreSeuil", seuil: 0.2 }],
+    jurisprudence: [
+      {
+        reference: "Conseil d'État, 14 février 2018, n° 407914",
+        juridiction: "Conseil d'État",
+        date: "2018-02-14",
+        url: "https://www.legifrance.gouv.fr/ceta/id/CETATEXT000036601993",
+        verifiee: false,
+        resume:
+          "La marge d'erreur maximale tolérée de l'éthylomètre (8 %) doit être prise en compte pour retenir le dépassement d'un seuil légal d'alcoolémie ; le principe s'applique à tout seuil, y compris celui de 0,20 g/L des nouveaux conducteurs.",
+      },
+    ],
+    templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} en date du {date} par laquelle le préfet a suspendu mon permis de conduire pour conduite sous l'empire d'un état alcoolique en qualité de nouveau conducteur.
+
+Cette suspension se fonde sur une mesure d'alcoolémie mesurée à proximité du seuil de 0,20 g/L applicable aux nouveaux conducteurs, sans prise en compte de la marge d'erreur maximale tolérée de l'éthylomètre.
+
+En application de l'article R. 234-1 du Code de la route et de l'article 15 de l'arrêté du 8 juillet 2003, le seuil de 0,20 g/L est soumis à la marge d'erreur de 8 % de l'appareil. Après déduction de cette marge, le taux mesuré retombe sous le seuil de 0,20 g/L, de sorte que le dépassement allégué n'est pas caractérisé (Conseil d'État, 14 février 2018, n° 407914).
+
+En conséquence, je vous demande de bien vouloir retirer la décision de suspension prise à mon encontre.`,
+  },
+  {
+    id: "faille-alcool-seuil-02-non-prouve",
+    typeInfraction: "SUSPENSION",
+    titreFaille:
+      "Nouveau conducteur — statut de nouveau conducteur non prouvé pour appliquer le seuil de 0,20 g/L",
+    articleLoi:
+      "art. R. 234-1 du Code de la route (seuil 0,20 g/L réservé aux conducteurs dont le permis a été délivré depuis moins de 3 ans ; seuil général 0,50 g/L)",
+    source: "Code de la route R. 234-1",
+    regle:
+      "Le seuil de 0,20 g/L ne s'applique qu'aux conducteurs dont le permis a été délivré depuis moins de 3 ans. Cette condition est une composante de l'infraction que l'administration doit établir. À défaut de preuve du statut de nouveau conducteur, le seuil applicable est celui de 0,50 g/L : une alcoolémie comprise entre 0,20 et 0,50 g/L n'est alors pas constitutive d'infraction.",
+    reglesDetection: [
+      { type: "valeurPlageMesure", min: 0.2, max: 0.5, unite: "g/L" },
+    ],
+    jurisprudence: [
+      {
+        reference: "Code de la route, art. R. 234-1",
+        juridiction: "Légifrance",
+        url: null,
+        verifiee: false,
+        resume:
+          "Le seuil de 0,20 g/L est réservé aux nouveaux conducteurs (permis de moins de 3 ans) ; le seuil général est de 0,50 g/L. Le statut de nouveau conducteur est une condition de l'infraction que l'administration doit prouver.",
+      },
+    ],
+    templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} en date du {date} par laquelle le préfet a suspendu mon permis de conduire pour conduite sous l'empire d'un état alcoolique.
+
+La décision retient un taux d'alcoolémie compris entre 0,20 et 0,50 g/L et applique le seuil de 0,20 g/L réservé aux nouveaux conducteurs, sans que mon statut de nouveau conducteur — c'est-à-dire un permis de conduire délivré depuis moins de trois ans — soit établi.
+
+Or, en application de l'article R. 234-1 du Code de la route, le seuil de 0,20 g/L ne s'applique qu'aux conducteurs dont le permis a été délivré depuis moins de trois ans ; le seuil général est de 0,50 g/L. Cette condition est une composante de l'infraction que l'administration doit prouver. À défaut de cette preuve, le seuil applicable est de 0,50 g/L et le taux qui m'est reproché, inférieur à ce seuil, n'est pas constitutif d'infraction.
+
+En conséquence, je vous demande de bien vouloir retirer la décision de suspension prise à mon encontre.`,
+  },
+  {
     id: "faille-suspension-notification-irreguliere",
     typeInfraction: "SUSPENSION",
     titreFaille:

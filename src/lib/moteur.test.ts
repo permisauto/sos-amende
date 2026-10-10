@@ -9,6 +9,7 @@ import {
   etalonnageExpire,
   joursRestants,
   margeEthylometre,
+  margeEthylometreSeuil,
   margeNonDeduite,
   margeTechniqueVitesse,
   meteoDefavorable,
@@ -799,6 +800,81 @@ describe("marges arithmétiques (chantier 1)", () => {
       expect(
         detecterFailles({ mesure: { valeur: 0.5, retenu: 0.5, unite: "km/h" } }, null, failles),
       ).toEqual([]);
+    });
+  });
+
+  describe("règle margeEthylometreSeuil (P3 — seuil 0,2 g/L nouveau conducteur)", () => {
+    const SEUIL02 = "faille-alcool-marge-seuil-02";
+    const failles = uneSeule(SEUIL02, { type: "margeEthylometreSeuil", seuil: 0.2 });
+
+    it("margeEthylometreSeuil : fixe seuil×0,08 sous le seuil, 8 % au-delà", () => {
+      expect(margeEthylometreSeuil(0.19, "g/L", 0.2)).toBeCloseTo(0.016, 3);
+      expect(margeEthylometreSeuil(0.21, "g/L", 0.2)).toBeCloseTo(0.017, 3); // 8 % de 0,21
+      expect(margeEthylometreSeuil(0.25, "g/L", 0.2)).toBeCloseTo(0.02, 3); // 8 % de 0,25
+    });
+
+    it("active la faille si la marge ramène sous le seuil (0,21 → 0,193 < 0,2)", () => {
+      expect(
+        detecterFailles({ mesure: { valeur: 0.21, unite: "g/L" } }, null, failles),
+      ).toEqual([SEUIL02]);
+    });
+
+    it("n'active pas la faille si après marge on reste au-dessus (0,25 → 0,23 > 0,2)", () => {
+      expect(
+        detecterFailles({ mesure: { valeur: 0.25, unite: "g/L" } }, null, failles),
+      ).toEqual([]);
+    });
+
+    it("n'active pas la faille si pas de dépassement allégué (valeur ≤ seuil)", () => {
+      expect(
+        detecterFailles({ mesure: { valeur: 0.19, unite: "g/L" } }, null, failles),
+      ).toEqual([]);
+      expect(
+        detecterFailles({ mesure: { valeur: 0.2, unite: "g/L" } }, null, failles),
+      ).toEqual([]);
+    });
+
+    it("cloisonne l'unité (km/h ignoré) et sans mesure → rien", () => {
+      expect(
+        detecterFailles({ mesure: { valeur: 0.21, unite: "km/h" } }, null, failles),
+      ).toEqual([]);
+      expect(detecterFailles({}, null, failles)).toEqual([]);
+    });
+  });
+
+  describe("règle valeurPlageMesure (P3 — bande nouveau conducteur ]0,2 ; 0,5] g/L)", () => {
+    const NON_PROUVE = "faille-alcool-seuil-02-non-prouve";
+    const failles = uneSeule(NON_PROUVE, {
+      type: "valeurPlageMesure",
+      min: 0.2,
+      max: 0.5,
+      unite: "g/L",
+    });
+
+    it("active la faille dans la bande (0,21 à 0,5 g/L)", () => {
+      for (const valeur of [0.21, 0.25, 0.4, 0.5]) {
+        expect(
+          detecterFailles({ mesure: { valeur, unite: "g/L" } }, null, failles),
+        ).toEqual([NON_PROUVE]);
+      }
+    });
+
+    it("n'active pas la faille hors bande (≤ 0,2 ou > 0,5 g/L)", () => {
+      for (const valeur of [0.15, 0.2, 0.51, 0.8]) {
+        expect(
+          detecterFailles({ mesure: { valeur, unite: "g/L" } }, null, failles),
+        ).toEqual([]);
+      }
+    });
+
+    it("cloisonne l'unité (mg/L ignoré même dans la plage numérique)", () => {
+      expect(
+        detecterFailles({ mesure: { valeur: 0.3, unite: "mg/L" } }, null, failles),
+      ).toEqual([]);
+    });
+
+    it("sans mesure → rien", () => {
+      expect(detecterFailles({}, null, failles)).toEqual([]);
     });
   });
 });
