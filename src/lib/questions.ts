@@ -61,8 +61,9 @@ export type ChampReponse =
   // Chantier 2 (2026-10-10) — urgence professionnelle (référé L. 521-2).
   // `metier`/`entreprise`/`risque_licenciement` sont capturés par les champs
   // en dur du formulaire (`analyseSchema`), pas par le registre — éviter les
-  // doublons de nom de champ.
-  | "urgencePro"
+  // doublons de nom de champ. Lot R1 : la case `urgencePro` a été remplacée
+  // par le radio `urgenceSituation` (pose `urgencePro` implicitement).
+  | "urgenceSituation"
   | "siret"
   // Lot 5 (2026-10-10) — enclavement du domicile (référé L. 521-2).
   | "domicileEnclave";
@@ -86,8 +87,13 @@ export type QuestionCiblee = {
   /** La réponse appelle une pièce que le **client** ajoute lui-même. */
   preuveClient?: PreuveClient;
   /** Type de champ rendu dans le formulaire — défaut : case à cocher.
-   * `"texte"` = saisie libre (ex. SIRET — jamais pré-remplie par l'OCR). */
-  typeChamp?: "case" | "texte";
+   * `"texte"` = saisie libre (ex. SIRET — jamais pré-remplie par l'OCR) ;
+   * `"radio"` = choix unique parmi `options` (lot R1). */
+  typeChamp?: "case" | "texte" | "radio";
+  /** Options d'un champ radio (valeur = clé écrite dans `extractedData`). */
+  options?: readonly { valeur: string; libelle: string }[];
+  /** Libellé court pour l'affichage juriste (défaut : `libelle`, la question). */
+  libAffichage?: string;
 };
 
 export const QUESTIONS_CIBLEES: readonly QuestionCiblee[] = [
@@ -305,24 +311,50 @@ export const QUESTIONS_CIBLEES: readonly QuestionCiblee[] = [
     preuveClient: "RELEVE_POINTS",
   },
 
-  // ── SUSPENSION — 3F/48SI — urgence professionnelle (chantier 2, 2026-10-10)
+  // ── SUSPENSION — urgence (chantier 2, 2026-10-10 — structuré R1, 2026-10-11)
   // Capteurs de fait pour le référé d'urgence (art. L. 521-2 CJA) : ils
   // contextualisent la demande de suspension de la mesure, jamais un fondement
-  // supplémentaire. Même groupe, sans cascade (le SIRET reste facultatif).
+  // supplémentaire. Lot R1 : choix unique de la situation principale (radio) —
+  // toute option pose `urgencePro = true` (déclencheur pack référé inchangé) ;
+  // l'option `enclavement` pose aussi `domicileEnclave` (capteur lot 5 réutilisé,
+  // pas de double question). Affiché pour toute SUSPENSION (pas de filtre
+  // docType : le référé est pertinent y compris pour une suspension de droit
+  // commun — garde-fou R0).
   {
-    cle: "urgencePro",
-    champ: "urgencePro",
+    cle: "urgenceSituation",
+    champ: "urgenceSituation",
     libelle:
-      "La mesure de suspension/invalidation met en péril mon activité professionnelle (licenciement, revenus, emploi)",
-    groupe: "Urgence professionnelle",
+      "Quelle est la situation principale qui rend votre permis indispensable au quotidien ?",
+    libAffichage: "Situation d'urgence",
+    groupe: "Votre urgence",
     types: ["SUSPENSION"],
-    docTypes: ["3F", "48SI"],
+    typeChamp: "radio",
+    options: [
+      {
+        valeur: "salarie",
+        libelle: "Salarié / Cadre — je risque de perdre mon emploi",
+      },
+      {
+        valeur: "artisan",
+        libelle:
+          "Artisan / Indépendant / Dirigeant — je risque de perdre mon chiffre d'affaires",
+      },
+      {
+        valeur: "enclavement",
+        libelle: "Lieu isolé — sans voiture, aucun transport en commun",
+      },
+      {
+        valeur: "medical",
+        libelle:
+          "Je transporte un proche malade — sans voiture, impossible de l'emmener chez le médecin",
+      },
+    ],
   },
   {
     cle: "siret",
     champ: "siret",
     libelle: "SIRET de mon entreprise (facultatif — s'il m'en reste un)",
-    groupe: "Urgence professionnelle",
+    groupe: "Votre urgence",
     types: ["SUSPENSION"],
     docTypes: ["3F", "48SI"],
     typeChamp: "texte",
@@ -419,6 +451,20 @@ export function lireReponses(fd: FormData): Partial<ExtractedData> {
       if (typeof brut === "string" && brut.trim()) {
         cible[q.champ] = brut.trim();
       }
+    } else if (q.typeChamp === "radio") {
+      const brut = fd.get(q.cle);
+      const val = typeof brut === "string" ? brut.trim() : "";
+      // Jamais une valeur hors options (anti-fraude formulaire).
+      if (val && q.options?.some((o) => o.valeur === val)) {
+        cible[q.champ] = val;
+        // Couplages R1 : toute situation pose le déclencheur pack référé
+        // (`urgencePro` — badge juriste et génération inchangés) ; l'option
+        // enclavement réutilise le capteur de fait du lot 5.
+        if (q.champ === "urgenceSituation") {
+          cible.urgencePro = true;
+          if (val === "enclavement") cible.domicileEnclave = true;
+        }
+      }
     } else if (fd.get(q.cle) === "on") {
       cible[q.champ] = q.valeur ?? true;
     }
@@ -426,11 +472,21 @@ export function lireReponses(fd: FormData): Partial<ExtractedData> {
   return out;
 }
 
-/** Libellés des réponses pour l'affichage juriste (clé → phrase). */
-export const LIBELLES_REPONSES: readonly {
+/** Entrée d'affichage d'une réponse côté juriste (clé → phrase). */
+export type LibelleReponse = {
   cle: ChampReponse;
   lib: string;
-}[] = QUESTIONS_CIBLEES.map((q) => ({ cle: q.champ, lib: q.libelle }));
+  options?: readonly { valeur: string; libelle: string }[];
+};
+
+/** Libellés des réponses pour l'affichage juriste (clé → phrase).
+ * `lib` = libellé court (`libAffichage`) pour les radios (R1). */
+export const LIBELLES_REPONSES: readonly LibelleReponse[] =
+  QUESTIONS_CIBLEES.map((q) => ({
+    cle: q.champ,
+    lib: q.libAffichage ?? q.libelle,
+    options: q.options,
+  }));
 
 /** Types de preuves externes rendus pertinents par des réponses cochées (N2). */
 export function preuvesPourReponses(

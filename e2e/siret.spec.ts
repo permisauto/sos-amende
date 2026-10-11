@@ -8,8 +8,8 @@ test("SIRET (lot 4) : questionnaire urgence pro → vérification API mock → b
   test.slow();
 
   // 1) Client : dépôt d'un arrêté 3F (nom de fichier « arrete-… » → texte
-  //    3F côté OCR mock — le groupe « Urgence professionnelle » s'affiche
-  //    uniquement pour docType 3F/48SI).
+  //    3F côté OCR mock — le groupe « Votre urgence » (radio R1 + SIRET)
+  //    s'affiche pour toute suspension ; le SIRET reste filtré 3F/48SI).
   await loginAs(page, "e2e-client@test.local");
   await page.goto("/dashboard/cases/new");
   await page.getByLabel("Type d'infraction").selectOption("SUSPENSION");
@@ -24,11 +24,9 @@ test("SIRET (lot 4) : questionnaire urgence pro → vérification API mock → b
   await page.waitForURL(/\/dashboard\/cases\/(?!new$)[^/]+$/);
   const dossierId = page.url().split("/").pop() as string;
 
-  // 2) Formulaire : groupe « Urgence professionnelle » visible (3F), champ
-  //    SIRET présent + encart Kbis (preuveClient portée sur la question).
-  await expect(
-    page.getByText("Urgence professionnelle", { exact: true }),
-  ).toBeVisible();
+  // 2) Formulaire : groupe « Votre urgence » visible (3F), radio situation
+  //    + champ SIRET + encart Kbis (preuveClient portée sur la question).
+  await expect(page.getByText("Votre urgence", { exact: true })).toBeVisible();
   await expect(
     page.getByLabel(/SIRET de mon entreprise/),
   ).toBeVisible();
@@ -43,9 +41,7 @@ test("SIRET (lot 4) : questionnaire urgence pro → vérification API mock → b
     .fill("DEC-2026-0500");
   await page.getByLabel("Date de la décision", { exact: true }).fill("2026-07-01");
   await page
-    .getByRole("checkbox", {
-      name: /met en péril mon activité professionnelle/,
-    })
+    .getByRole("radio", { name: /Salarié \/ Cadre/ })
     .check();
   await page
     .getByLabel(/SIRET de mon entreprise/)

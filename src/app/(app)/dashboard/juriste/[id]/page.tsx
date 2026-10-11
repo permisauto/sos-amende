@@ -502,16 +502,25 @@ export default async function JuristeCasePage(
         // Registre unique `lib/questions.ts` (mêmes libellés que le client) +
         // la case plaque, posée hors groupes dans le formulaire.
         ...LIBELLES_REPONSES,
-        { cle: "plaqueIncorrecte", lib: "Plaque du PV différente de la mienne" },
+        {
+          cle: "plaqueIncorrecte" as const,
+          lib: "Plaque du PV différente de la mienne",
+          options: undefined,
+        },
       ]
         .filter((item) => {
           const v = data[item.cle];
-          // Cases cochées (true) + champs texte renseignés (ex. SIRET).
+          // Cases cochées (true) + champs texte renseignés (ex. SIRET) +
+          // radios (valeur = option choisie, ex. urgenceSituation).
           return v === true || (typeof v === "string" && v !== "");
         })
         .map((item) => {
           const v = data[item.cle];
-          return typeof v === "string" ? `${item.lib} : ${v}` : item.lib;
+          if (typeof v !== "string") return item.lib;
+          const opt = item.options?.find(
+            (o: { valeur: string; libelle: string }) => o.valeur === v,
+          );
+          return `${item.lib} : ${opt ? opt.libelle : v}`;
         })
     : [];
   const courrier = item.courriers[item.courriers.length - 1];

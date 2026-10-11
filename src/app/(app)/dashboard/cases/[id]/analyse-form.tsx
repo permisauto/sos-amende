@@ -55,7 +55,8 @@ export type AnalysePrefill = {
   suspStageAvantNotif?: boolean;
   suspSoldeInexact?: boolean;
   // Chantier 2 (2026-10-10) — urgence professionnelle (référé L. 521-2).
-  urgencePro?: boolean;
+  // Lot R1 : radio « Votre urgence » (situation principale).
+  urgenceSituation?: string;
   siret?: string;
   // Lot 5 (2026-10-10) — enclavement du domicile (référé L. 521-2).
   domicileEnclave?: boolean;
@@ -332,6 +333,27 @@ export function AnalyseForm({
                         className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
                       />
                     </label>
+                  ) : q.typeChamp === "radio" ? (
+                    <fieldset className="flex flex-col gap-1.5">
+                      <legend className="text-sm text-zinc-700">
+                        {q.libelle}
+                      </legend>
+                      {(q.options ?? []).map((opt) => (
+                        <label
+                          key={opt.valeur}
+                          className="flex items-start gap-2 text-sm text-zinc-700"
+                        >
+                          <input
+                            type="radio"
+                            name={q.cle}
+                            value={opt.valeur}
+                            defaultChecked={prefillQ === opt.valeur}
+                            className="mt-0.5 h-4 w-4 border-zinc-300 text-emerald-600 focus:ring-emerald-500"
+                          />
+                          {opt.libelle}
+                        </label>
+                      ))}
+                    </fieldset>
                   ) : (
                     <label className="flex items-start gap-2 text-sm text-zinc-700">
                       <input

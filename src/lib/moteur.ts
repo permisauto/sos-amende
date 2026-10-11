@@ -132,6 +132,10 @@ export type ExtractedData = {
   // fait pour le référé d'urgence (L. 521-2 CJA). `siret` est le premier
   // champ **texte** du questionnaire (jamais pré-rempli par l'OCR).
   urgencePro?: boolean;
+  /** Situation d'urgence principale (radio « Votre urgence », lot R1) —
+   * contexte juriste + déclencheur implicite d'`urgencePro` (pack référé),
+   * jamais un fondement à lui seul. */
+  urgenceSituation?: string;
   siret?: string;
   /** Résultat de la vérification du SIRET auprès de l'API publique
    * (lot 4) — dénomination officielle, adresse, état administratif.

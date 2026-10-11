@@ -94,6 +94,9 @@ describe("questionsPour — affichage dynamique par nature du document", () => {
     expect(sansAlcool.map((g) => g.groupe)).toEqual([
       "Notification de la décision",
       "Recours engagés",
+      // Lot R1 : le radio d'urgence s'affiche pour toute suspension (pas de
+      // filtre docType) ; le SIRET, filtré 3F/48SI, est absent ici.
+      "Votre urgence",
       // Lot 5 : l'enclavement du domicile est affiché pour toute suspension
       // (aucun filtre docType) — pertinence indépendante du motif.
       "Accès au domicile",
@@ -183,42 +186,53 @@ describe("questionsPour — sous-type 3F vs 48SI (filtre docTypes)", () => {
   });
 });
 
-describe("questionsPour — urgence professionnelle (chantier 2)", () => {
+describe("questionsPour — urgence structurée (lot R1)", () => {
   const texteSusp = "ARRÊTÉ PRÉFECTORAL — suspension du permis de conduire";
 
-  it("3F et 48SI : groupe visible, deux questions (case + texte SIRET)", () => {
+  it("3F et 48SI : groupe « Votre urgence » — radio + SIRET", () => {
     for (const docType of ["3F", "48SI"] as const) {
       const groupes = questionsPour({
         type: "SUSPENSION",
         texte: texteSusp,
         docType,
       });
-      const urgence = groupes.find(
-        (g) => g.groupe === "Urgence professionnelle",
-      );
+      const urgence = groupes.find((g) => g.groupe === "Votre urgence");
       expect(urgence?.questions.map((q) => q.cle)).toEqual([
-        "urgencePro",
+        "urgenceSituation",
         "siret",
+      ]);
+      expect(urgence?.questions[0]?.typeChamp).toBe("radio");
+      expect(urgence?.questions[0]?.options?.map((o) => o.valeur)).toEqual([
+        "salarie",
+        "artisan",
+        "enclavement",
+        "medical",
       ]);
       expect(urgence?.questions[1]?.typeChamp).toBe("texte");
     }
   });
 
-  it("docType inconnu ou AMENDE : le groupe n'apparaît jamais", () => {
-    for (const docType of [undefined, "BIDON", "AMENDE"]) {
+  it("docType inconnu (droit commun R0) : radio seule, sans SIRET", () => {
+    for (const docType of [undefined, "BIDON"]) {
       const groupes = questionsPour({
         type: "SUSPENSION",
         texte: texteSusp,
         docType: docType as string | undefined,
       });
-      expect(groupes.map((g) => g.groupe)).not.toContain(
-        "Urgence professionnelle",
-      );
+      const urgence = groupes.find((g) => g.groupe === "Votre urgence");
+      expect(urgence?.questions.map((q) => q.cle)).toEqual([
+        "urgenceSituation",
+      ]);
     }
-    const amende = questionsPour({ type: "AMENDE", texte: "Radar 96 km/h", docType: "3F" });
-    expect(amende.map((g) => g.groupe)).not.toContain(
-      "Urgence professionnelle",
-    );
+  });
+
+  it("AMENDE : le groupe n'apparaît jamais", () => {
+    const amende = questionsPour({
+      type: "AMENDE",
+      texte: "Radar 96 km/h",
+      docType: "3F",
+    });
+    expect(amende.map((g) => g.groupe)).not.toContain("Votre urgence");
   });
 });
 
@@ -282,14 +296,44 @@ describe("lireReponses — lecture du FormData", () => {
   it("champ texte (SIRET) : valeur trimée écrite, vide → rien", () => {
     const fd = new FormData();
     fd.set("siret", "  123 456 789 00012  ");
-    fd.set("urgencePro", "on");
     const reponses = lireReponses(fd);
     expect(reponses.siret).toBe("123 456 789 00012");
-    expect(reponses.urgencePro).toBe(true);
 
     const vide = new FormData();
     vide.set("siret", "   ");
     expect(lireReponses(vide)).toEqual({});
+  });
+
+  it("radio urgenceSituation : option valide → urgencePro posé (pack référé)", () => {
+    const fd = new FormData();
+    fd.set("urgenceSituation", "salarie");
+    const reponses = lireReponses(fd);
+    expect(reponses.urgenceSituation).toBe("salarie");
+    expect(reponses.urgencePro).toBe(true); // déclencheur pack inchangé
+    expect(reponses.domicileEnclave).toBeUndefined();
+  });
+
+  it("radio urgenceSituation = enclavement → domicileEnclave couplé (lot 5)", () => {
+    const fd = new FormData();
+    fd.set("urgenceSituation", "enclavement");
+    const reponses = lireReponses(fd);
+    expect(reponses.urgenceSituation).toBe("enclavement");
+    expect(reponses.urgencePro).toBe(true);
+    expect(reponses.domicileEnclave).toBe(true);
+  });
+
+  it("radio hors options → rien écrit (anti-fraude formulaire)", () => {
+    const fd = new FormData();
+    fd.set("urgenceSituation", "hors-registre");
+    expect(lireReponses(fd)).toEqual({});
+  });
+
+  it("LIBELLES_REPONSES : libellé court + options pour l'affichage juriste", () => {
+    const item = LIBELLES_REPONSES.find((q) => q.cle === "urgenceSituation");
+    expect(item?.lib).toBe("Situation d'urgence");
+    expect(item?.options?.find((o) => o.valeur === "medical")?.libelle).toContain(
+      "proche malade",
+    );
   });
 });
 
