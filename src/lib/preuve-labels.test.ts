@@ -13,6 +13,21 @@ describe("libellés des pièces", () => {
     }
   });
 
+  it("lot R2 : chaque pièce d'une option radio a un libellé affichable", () => {
+    let total = 0;
+    for (const q of QUESTIONS_CIBLEES) {
+      for (const types of Object.values(q.preuvesOption ?? {})) {
+        for (const type of types ?? []) {
+          total += 1;
+          const lib = TYPE_LABELS[type];
+          expect(lib, `libellé manquant pour ${type}`).toBeTruthy();
+          expect(lib).not.toBe(type);
+        }
+      }
+    }
+    expect(total).toBeGreaterThanOrEqual(7);
+  });
+
   it("aucun libellé vide dans la table", () => {
     for (const [type, lib] of Object.entries(TYPE_LABELS)) {
       expect(lib.trim().length, `libellé vide pour ${type}`).toBeGreaterThan(0);

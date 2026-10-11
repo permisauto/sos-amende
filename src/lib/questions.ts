@@ -28,7 +28,15 @@ export type PreuveClient =
   | "COPIE_DECISION"
   | "RELEVE_POINTS"
   | "ATTESTATION_STAGE"
-  | "KBIS";
+  | "KBIS"
+  // Lot R2 — pièces d'urgence par situation (radio « Votre urgence »).
+  | "CONTRAT_TRAVAIL"
+  | "ATTESTATION_EMPLOYEUR"
+  | "BILAN_COMMANDES"
+  | "JUSTIFICATIF_DOMICILE"
+  | "HORAIRES_TRANSPORTS"
+  | "CERTIFICAT_MEDICAL_PROCHE"
+  | "ATTESTATION_HONNEUR";
 
 /** Nature du document détectée dans le texte scanné. */
 export type Nature = "stationnement" | "travaux" | "radar" | "visibilite" | "alcool";
@@ -92,6 +100,9 @@ export type QuestionCiblee = {
   typeChamp?: "case" | "texte" | "radio";
   /** Options d'un champ radio (valeur = clé écrite dans `extractedData`). */
   options?: readonly { valeur: string; libelle: string }[];
+  /** Pièces appelées par option d'un radio (lot R2 : chaque situation a ses
+   * preuves — suggestions non bloquantes, même mécanisme que `preuveClient`). */
+  preuvesOption?: Partial<Record<string, readonly PreuveClient[]>>;
   /** Libellé court pour l'affichage juriste (défaut : `libelle`, la question). */
   libAffichage?: string;
 };
@@ -349,6 +360,14 @@ export const QUESTIONS_CIBLEES: readonly QuestionCiblee[] = [
           "Je transporte un proche malade — sans voiture, impossible de l'emmener chez le médecin",
       },
     ],
+    // Pièces d'urgence par situation (lot R2) : l'extrait Kbis reste porté par
+    // la question `siret` (déclenché par la saisie, pas par le choix).
+    preuvesOption: {
+      salarie: ["CONTRAT_TRAVAIL", "ATTESTATION_EMPLOYEUR"],
+      artisan: ["BILAN_COMMANDES"],
+      enclavement: ["JUSTIFICATIF_DOMICILE", "HORAIRES_TRANSPORTS"],
+      medical: ["CERTIFICAT_MEDICAL_PROCHE", "ATTESTATION_HONNEUR"],
+    },
   },
   {
     cle: "siret",
@@ -520,14 +539,30 @@ export function suggestionsPreuvesClient(
   const vus = new Set<PreuveClient>();
   const suggestions: PreuveSuggestionClient[] = [];
   for (const q of QUESTIONS_CIBLEES) {
-    if (!q.preuveClient) continue;
     const valeur = reponses[q.champ];
     if (!(valeur === true || (typeof valeur === "string" && valeur !== ""))) {
       continue;
     }
-    if (presents.has(q.preuveClient) || vus.has(q.preuveClient)) continue;
-    vus.add(q.preuveClient);
-    suggestions.push({ type: q.preuveClient, raison: q.libelle });
+    // Pièces appelées : `preuveClient` (case/texte) + `preuvesOption` (radio —
+    // chaque situation a les siennes, lot R2). La raison du radio est le
+    // libellé de l'option choisie, pas la question générique.
+    const option =
+      typeof valeur === "string"
+        ? q.options?.find((o) => o.valeur === valeur)
+        : undefined;
+    const types: readonly PreuveClient[] = [
+      ...(q.preuveClient ? [q.preuveClient] : []),
+      ...(typeof valeur === "string" && q.preuvesOption?.[valeur]
+        ? q.preuvesOption[valeur]
+        : []),
+    ];
+    if (types.length === 0) continue;
+    const raison = option ? option.libelle : q.libelle;
+    for (const type of types) {
+      if (presents.has(type) || vus.has(type)) continue;
+      vus.add(type);
+      suggestions.push({ type, raison });
+    }
   }
   return suggestions;
 }

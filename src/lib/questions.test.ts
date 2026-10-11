@@ -381,6 +381,41 @@ describe("suggestionsPreuvesClient — pièces attendues du client", () => {
     expect(suggestionsPreuvesClient({ stationnementGene: true })).toEqual([]);
   });
 
+  it("lot R2 : chaque situation d'urgence appelle ses propres pièces", () => {
+    expect(
+      suggestionsPreuvesClient({ urgenceSituation: "salarie" }).map(
+        (s) => s.type,
+      ),
+    ).toEqual(["CONTRAT_TRAVAIL", "ATTESTATION_EMPLOYEUR"]);
+    expect(
+      suggestionsPreuvesClient({ urgenceSituation: "enclavement" }).map(
+        (s) => s.type,
+      ),
+    ).toEqual(["JUSTIFICATIF_DOMICILE", "HORAIRES_TRANSPORTS"]);
+    expect(
+      suggestionsPreuvesClient({ urgenceSituation: "medical" }).map(
+        (s) => s.type,
+      ),
+    ).toEqual(["CERTIFICAT_MEDICAL_PROCHE", "ATTESTATION_HONNEUR"]);
+    // Artisan : le Kbis vient de la question SIRET, le bilan de l'option radio
+    // — pas de doublon, raison = libellé de l'option choisie.
+    expect(
+      suggestionsPreuvesClient({
+        urgenceSituation: "artisan",
+        siret: "35600000066432",
+      }),
+    ).toEqual([
+      {
+        type: "BILAN_COMMANDES",
+        raison:
+          "Artisan / Indépendant / Dirigeant — je risque de perdre mon chiffre d'affaires",
+      },
+      { type: "KBIS", raison: "SIRET de mon entreprise (facultatif — s'il m'en reste un)" },
+    ]);
+    // Situation hors options (anti-fraude) → aucune pièce.
+    expect(suggestionsPreuvesClient({ urgenceSituation: "bidon" })).toEqual([]);
+  });
+
   it("une pièce déjà versée au dossier n'est plus suggérée", () => {
     expect(
       suggestionsPreuvesClient({ paiementDejaFait: true }, ["RELEVE_PAIEMENT"]),

@@ -338,21 +338,34 @@ export function AnalyseForm({
                       <legend className="text-sm text-zinc-700">
                         {q.libelle}
                       </legend>
-                      {(q.options ?? []).map((opt) => (
-                        <label
-                          key={opt.valeur}
-                          className="flex items-start gap-2 text-sm text-zinc-700"
-                        >
-                          <input
-                            type="radio"
-                            name={q.cle}
-                            value={opt.valeur}
-                            defaultChecked={prefillQ === opt.valeur}
-                            className="mt-0.5 h-4 w-4 border-zinc-300 text-emerald-600 focus:ring-emerald-500"
-                          />
-                          {opt.libelle}
-                        </label>
-                      ))}
+                      {(q.options ?? []).map((opt) => {
+                        const pieces = q.preuvesOption?.[opt.valeur] ?? [];
+                        return (
+                          <div key={opt.valeur}>
+                            <label className="flex items-start gap-2 text-sm text-zinc-700">
+                              <input
+                                type="radio"
+                                name={q.cle}
+                                value={opt.valeur}
+                                defaultChecked={prefillQ === opt.valeur}
+                                className="mt-0.5 h-4 w-4 border-zinc-300 text-emerald-600 focus:ring-emerald-500"
+                              />
+                              {opt.libelle}
+                            </label>
+                            {pieces.length > 0 && (
+                              <p className="ml-6 mt-1 text-xs text-amber-700">
+                                Pour étayer cette situation :{" "}
+                                <strong>
+                                  {pieces.map((p) => libellePreuve(p)).join(", ")}
+                                </strong>{" "}
+                                — à joindre après l&apos;analyse sur la fiche de
+                                votre dossier (facultatif : le dossier n&apos;est
+                                pas bloqué sans lui).
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
                     </fieldset>
                   ) : (
                     <label className="flex items-start gap-2 text-sm text-zinc-700">
