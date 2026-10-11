@@ -69,6 +69,24 @@ export function libelleCategorie(cat: CategorieDocument): string {
   return LIBELLES_CATEGORIE[cat];
 }
 
+/**
+ * Lot R4 — la nature du document n'a pas pu être déterminée après analyse :
+ * ni catégorie utile (absente ou `INCONNU`) ni `docType` pack (3F/48SI).
+ * Sert à afficher l'alerte juriste « Nature du document non déterminée »
+ * (information seule — jamais un blocage). Le droit commun de suspension
+ * (catégorie présente, `docType` volontairement absent — garde-fou R0)
+ * n'est PAS indéterminé. Un dossier sans aucune donnée extraite (pas encore
+ * analysé) n'alerte pas non plus.
+ */
+export function documentNonDetermine(
+  data: Record<string, unknown> | null | undefined,
+): boolean {
+  if (!data) return false;
+  if (typeof data.docType === "string" && data.docType.trim()) return false;
+  const cat = lireCategorie(data.categorie);
+  return !cat || cat === "INCONNU";
+}
+
 // ---------------------------------------------------------------------------
 // Champs tolérants (zod) : jamais d'exception, isolation champ par champ.
 // ---------------------------------------------------------------------------

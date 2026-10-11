@@ -37,7 +37,7 @@ import {
   libelleDocType,
 } from "@/lib/envoi";
 import { faillesPourTypePreuve, listePiecesJointes } from "@/lib/preuves-api";
-import { libelleCategorie, lireCategorie } from "@/lib/doc-v2";
+import { documentNonDetermine, libelleCategorie, lireCategorie } from "@/lib/doc-v2";
 import { FilMessages, type MessageDto } from "@/components/messages";
 import {
   FilEquipe,
@@ -735,6 +735,25 @@ export default async function JuristeCasePage(
       {isDemo && (
         <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
           Dossier de démonstration — les actions (enregistrer, approuver, rejeter) sont simulées et ne modifient pas la base.
+        </div>
+      )}
+
+      {/* Lot R4 — classification indéterminée : information seule (jamais un
+          blocage). Le droit commun de suspension (catégorie présente, docType
+          volontairement absent — garde-fou R0) n'affiche pas cet encart. */}
+      {documentNonDetermine(data) && (
+        <div
+          data-testid="alerte-classification"
+          className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-6"
+        >
+          <h2 className="font-semibold text-amber-900">
+            Nature du document non déterminée
+          </h2>
+          <p className="mt-1 text-sm text-amber-800">
+            Les questions spécifiques au sous-type (arrêté préfectoral, solde
+            de points) et les règles conditionnées n&apos;ont pas été
+            appliquées. Vérifiez le document avant de valider.
+          </p>
         </div>
       )}
 

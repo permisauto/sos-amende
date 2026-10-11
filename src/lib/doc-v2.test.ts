@@ -4,6 +4,7 @@ import {
   alignerDocType,
   aplatirDocV2,
   docTypePourCategorie,
+  documentNonDetermine,
   estSuspensionDroitCommun,
   libelleCategorie,
   lireCategorie,
@@ -352,5 +353,36 @@ Fait à Lyon, le 10/03/2026`;
     };
     alignerDocType(data, ARRETE_CONVOCATION);
     expect(data.docType).toBe("48SI");
+  });
+});
+
+describe("doc-v2 — documentNonDetermine (lot R4, alerte juriste)", () => {
+  it("catégorie INCONNU et pas de docType → indéterminé (alerte)", () => {
+    expect(documentNonDetermine({ categorie: "INCONNU" })).toBe(true);
+  });
+
+  it("ni catégorie ni docType → indéterminé (alerte)", () => {
+    expect(documentNonDetermine({ nom: "X" })).toBe(true);
+  });
+
+  it("droit commun de suspension (catégorie présente, docType absent — R0) → déterminé", () => {
+    expect(
+      documentNonDetermine({ categorie: "SUSPENSION_PREFECTORALE" }),
+    ).toBe(false);
+  });
+
+  it("ancien dossier avec docType connu (sans catégorie) → déterminé", () => {
+    expect(documentNonDetermine({ docType: "3F" })).toBe(false);
+    expect(documentNonDetermine({ docType: "48SI" })).toBe(false);
+  });
+
+  it("catégorie utile (même sans docType pack, ex. 48N) → déterminé", () => {
+    expect(documentNonDetermine({ categorie: "PERTE_POINTS_48" })).toBe(false);
+    expect(documentNonDetermine({ categorie: "AMENDE_ANTAI" })).toBe(false);
+  });
+
+  it("dossier pas encore analysé (aucune donnée) → pas d'alerte prématurée", () => {
+    expect(documentNonDetermine(null)).toBe(false);
+    expect(documentNonDetermine(undefined)).toBe(false);
   });
 });
