@@ -4,6 +4,7 @@ import {
   alignerDocType,
   aplatirDocV2,
   docTypePourCategorie,
+  estSuspensionDroitCommun,
   libelleCategorie,
   lireCategorie,
   normaliserCategorie,
@@ -295,6 +296,61 @@ describe("doc-v2 — alignerDocType", () => {
     const data: Record<string, unknown> = { categorie: " invalidation 48si " };
     alignerDocType(data);
     expect(data.categorie).toBe("INVALIDATION_48SI");
+    expect(data.docType).toBe("48SI");
+  });
+});
+
+describe("doc-v2 — garde-fou R0 (suspension de droit commun)", () => {
+  const ARRETE_CONVOCATION = `ARRÊTÉ DE SUSPENSION DU PERMIS DE CONDUIRE
+Vous êtes invité à présenter vos observations avant la décision.
+Fait à Lyon, le 10/03/2026`;
+
+  const ARRETE_URGENCE = `ARRÊTÉ DE SUSPENSION DU PERMIS DE CONDUIRE
+Rétention immédiate du permis sur les lieux du contrôle.
+Fait à Lyon, le 10/03/2026`;
+
+  it("convocation seule → catégorie conservée, docType 3F non posé", () => {
+    expect(estSuspensionDroitCommun(ARRETE_CONVOCATION)).toBe(true);
+    const data: Record<string, unknown> = {
+      categorie: "SUSPENSION_PREFECTORALE",
+    };
+    alignerDocType(data, ARRETE_CONVOCATION);
+    expect(data.categorie).toBe("SUSPENSION_PREFECTORALE");
+    expect(data.docType).toBeUndefined();
+  });
+
+  it("rétention seule → 3F (comportement inchangé)", () => {
+    expect(estSuspensionDroitCommun(ARRETE_URGENCE)).toBe(false);
+    const data: Record<string, unknown> = {
+      categorie: "SUSPENSION_PREFECTORALE",
+    };
+    alignerDocType(data, ARRETE_URGENCE);
+    expect(data.docType).toBe("3F");
+  });
+
+  it("convocation + urgence (cas limite) → 3F préservé", () => {
+    const texte = `${ARRETE_CONVOCATION}\n${ARRETE_URGENCE}`;
+    expect(estSuspensionDroitCommun(texte)).toBe(false);
+    const data: Record<string, unknown> = {
+      categorie: "SUSPENSION_PREFECTORALE",
+    };
+    alignerDocType(data, texte);
+    expect(data.docType).toBe("3F");
+  });
+
+  it("texte non fourni → comportement actuel inchangé (3F)", () => {
+    const data: Record<string, unknown> = {
+      categorie: "SUSPENSION_PREFECTORALE",
+    };
+    alignerDocType(data);
+    expect(data.docType).toBe("3F");
+  });
+
+  it("48SI prioritaire : convocation citée n'efface pas le docType", () => {
+    const data: Record<string, unknown> = {
+      categorie: "INVALIDATION_48SI",
+    };
+    alignerDocType(data, ARRETE_CONVOCATION);
     expect(data.docType).toBe("48SI");
   });
 });

@@ -332,14 +332,44 @@ export function aplatirDocV2(doc: DocV2): Partial<ExtractedData> {
 }
 
 /**
+ * Suspension de droit commun (garde-fou R0) : arrêté pris **après convocation
+ * préalable**, sans rétention immédiate du permis — le pack 3F (rétention
+ * immédiate) ne s'applique alors pas. Détection conservative : un marqueur de
+ * convocation **et** l'absence de tout marqueur d'urgence ; un doute (les deux
+ * familles présentes, texte pauvre) laisse le comportement actuel (3F) —
+ * jamais de reclassification hasardeuse.
+ */
+export function estSuspensionDroitCommun(texte: string): boolean {
+  const convocation =
+    /\bconvocation\b/i.test(texte) ||
+    /présenter\s+(?:vos\s+|des\s+)?observations/i.test(texte) ||
+    /invit\w+\s+à\s+(?:vous\s+)?présenter/i.test(texte) ||
+    /procédure\s+(?:préalable|contradictoire)/i.test(texte);
+  if (!convocation) return false;
+  const urgence =
+    /\br[ée]tention\b/i.test(texte) ||
+    /imm[ée]diat/i.test(texte) ||
+    /sur\s+les\s+lieux/i.test(texte);
+  return !urgence;
+}
+
+/**
  * Aligne `docType` (et valide `categorie`) sur la catégorie OCR v2 :
  *  - catégorie **absente** → no-op (anciens dossiers : leur docType survit) ;
  *  - catégorie **invalide** → les deux clés sont supprimées (jamais de
  *    classification fabriquée) ;
  *  - catégorie **valide** → `docType` = mapping de la catégorie, ou supprimé
- *    si la catégorie n'a pas d'équivalent pack (48N, annulation, INCONNU).
+ *    si la catégorie n'a pas d'équivalent pack (48N, annulation, INCONNU) ;
+ *  - exception `SUSPENSION_PREFECTORALE` (garde-fou R0) : si `texte` est
+ *    fourni et caractérise une suspension de droit commun (`estSuspension-
+ *    DroitCommun`), la catégorie est conservée pour l'affichage juriste mais
+ *    le `docType` 3F n'est **pas** posé — les règles pack filtrées 3F restent
+ *    inertes.
  */
-export function alignerDocType(data: Record<string, unknown>): void {
+export function alignerDocType(
+  data: Record<string, unknown>,
+  texte?: string,
+): void {
   const brut = data.categorie;
   if (brut === undefined || brut === null) return;
   const cat = normaliserCategorie(brut);
@@ -350,6 +380,15 @@ export function alignerDocType(data: Record<string, unknown>): void {
   }
   data.categorie = cat;
   const docType = docTypePourCategorie(cat);
+  if (
+    docType &&
+    cat === "SUSPENSION_PREFECTORALE" &&
+    texte &&
+    estSuspensionDroitCommun(texte)
+  ) {
+    delete data.docType;
+    return;
+  }
   if (docType) data.docType = docType;
   else delete data.docType;
 }

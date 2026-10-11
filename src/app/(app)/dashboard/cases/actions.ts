@@ -160,7 +160,7 @@ export async function createDossier(
       if (dv && typeof dv === "object") prefill.doc_v2 = dv;
       const mesure = ocr.extrait?.mesure;
       if (mesure && typeof mesure === "object") prefill.mesure = mesure;
-      alignerDocType(prefill);
+      alignerDocType(prefill, ocr.texte);
       await prisma.dossier.update({
         where: { id: dossier.id },
         data: { pvTexte: ocr.texte, extractedData: prefill as object },
@@ -345,8 +345,9 @@ export async function analyserDossier(
 
   // OCR v2 : la catégorie est la source de vérité du `docType` (et le supprime
   // pour les catégories hors pack : 48N, annulation, INCONNU). Anciens
-  // dossiers sans catégorie → no-op (leur docType survit).
-  alignerDocType(data as Record<string, unknown>);
+  // dossiers sans catégorie → no-op (leur docType survit). Le texte brut
+  // permet aussi le garde-fou R0 : suspension de droit commun → pas de 3F.
+  alignerDocType(data as Record<string, unknown>, dossier.pvTexte ?? undefined);
 
   // Vérification du SIRET (lot 4) : best-effort borné — l'API publique est la
   // seule source de vérité sur l'existence de l'établissement (jamais de clé
