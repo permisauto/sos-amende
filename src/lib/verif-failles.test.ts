@@ -7,17 +7,21 @@ import {
 } from "./verif-failles";
 
 describe("faitsDepuisPreuves — pièces versées → faits avérés", () => {
-  it("dérive vol / cession / paiement / travaux depuis les pièces", () => {
+  it("dérive vol / cession / paiement / travaux / cliché / marquage depuis les pièces", () => {
     const faits = faitsDepuisPreuves({}, [
       { type: "ATTESTATION_VOL", url: "/uploads/vol.png" },
       { type: "ATTESTATION_CESSION", url: "/uploads/cession.png" },
       { type: "RELEVE_PAIEMENT", url: "/uploads/paiement.pdf" },
       { type: "TRAVAUX", url: "" },
+      { type: "CLICHE_ANTAI", url: "/uploads/cliche.jpg" },
+      { type: "PHOTO_MARQUAGE", url: "/uploads/sol.jpg" },
     ]);
     expect(faits.vehiculeVole).toBe(true);
     expect(faits.vehiculeCede).toBe(true);
     expect(faits.paiementDejaFait).toBe(true);
     expect(faits.travaux_présents).toBe(true);
+    expect(faits.clicheDeuxVehicules).toBe(true);
+    expect(faits.marquageEfface).toBe(true);
   });
 
   it("ne complète que : ne désactive jamais un fait déjà saisi", () => {

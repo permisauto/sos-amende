@@ -4,20 +4,22 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser, requireJuriste } from "@/lib/dal";
 import { storageWrite } from "@/lib/storage";
+import { PREUVE_CLIENT_TYPES } from "@/lib/questions";
 
 const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
 const MAX_SIZE = 8 * 1024 * 1024; // 8 Mo
 // Types téléversables par le client / le juriste. Les types METEO / RADAR /
 // TRAVAUX sont réservés aux preuves externes récupérées automatiquement.
+// Les pièces guidées (relevé de paiement, cliché, Kbis…) viennent de la liste
+// unique `PREUVE_CLIENT_TYPES` : un type suggéré par le questionnaire mais
+// absent d'ici serait silencieusement stocké « AUTRE » (type perdu).
 const TYPES = [
   "CARTE_GRISE",
   "PLAINTE",
   "PHOTO",
   "CERTIFICAT",
-  "RELEVE_PAIEMENT",
-  "ATTESTATION_CESSION",
-  "ATTESTATION_VOL",
   "AUTRE",
+  ...PREUVE_CLIENT_TYPES,
 ] as const;
 
 export type PreuveState = { error?: string; ok?: boolean } | undefined;

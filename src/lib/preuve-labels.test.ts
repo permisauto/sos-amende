@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { QUESTIONS_CIBLEES } from "./questions";
+import { PREUVE_CLIENT_TYPES, QUESTIONS_CIBLEES } from "./questions";
 import { TYPE_LABELS, libellePreuve } from "./preuve-labels";
 
 describe("libellés des pièces", () => {
@@ -10,6 +10,15 @@ describe("libellés des pièces", () => {
       const lib = TYPE_LABELS[q.preuveClient as string];
       expect(lib, `libellé manquant pour ${q.preuveClient}`).toBeTruthy();
       expect(lib).not.toBe(q.preuveClient);
+    }
+  });
+
+  it("chaque type téléversable (PREUVE_CLIENT_TYPES) a un libellé affichable", () => {
+    expect(PREUVE_CLIENT_TYPES.length).toBeGreaterThanOrEqual(16);
+    for (const type of PREUVE_CLIENT_TYPES) {
+      const lib = TYPE_LABELS[type];
+      expect(lib, `libellé manquant pour ${type}`).toBeTruthy();
+      expect(lib).not.toBe(type);
     }
   });
 

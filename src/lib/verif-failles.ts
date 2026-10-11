@@ -29,12 +29,21 @@ export function faitsDepuisPreuves(
   const drapeaux: Array<
     [
       typePreuve: string,
-      champ: "vehiculeVole" | "vehiculeCede" | "paiementDejaFait",
+      champ:
+        | "vehiculeVole"
+        | "vehiculeCede"
+        | "paiementDejaFait"
+        | "clicheDeuxVehicules"
+        | "marquageEfface",
     ]
   > = [
     ["ATTESTATION_VOL", "vehiculeVole"],
     ["ATTESTATION_CESSION", "vehiculeCede"],
     ["RELEVE_PAIEMENT", "paiementDejaFait"],
+    // Lot R3 : le cliché ambigu / le marquage effacé versés après coup
+    // rendent le fait déclaré avéré (contexte juriste — jamais un fondement).
+    ["CLICHE_ANTAI", "clicheDeuxVehicules"],
+    ["PHOTO_MARQUAGE", "marquageEfface"],
   ];
   for (const p of preuves) {
     for (const [type, champ] of drapeaux) {

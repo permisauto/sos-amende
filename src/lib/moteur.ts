@@ -115,6 +115,11 @@ export type ExtractedData = {
   stationnementGene?: boolean;
   stationnementTicket?: boolean;
   stationnementLieu?: boolean;
+  // Lot R3 (2026-10-11) — questions amende : cliché ambigu / marquage effacé
+  // (contexte juriste pour `faille-photo-illisible` /
+  // `faille-stationnement-panneau`, jamais un fondement à lui seul).
+  clicheDeuxVehicules?: boolean;
+  marquageEfface?: boolean;
   suspNotifIrreguliere?: boolean;
   suspDelaiNotification?: boolean;
   suspMotifsAbsents?: boolean;

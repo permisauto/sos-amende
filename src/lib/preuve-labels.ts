@@ -22,6 +22,9 @@ export const TYPE_LABELS: Record<string, string> = {
   HORAIRES_TRANSPORTS: "Horaires des transports de la commune",
   CERTIFICAT_MEDICAL_PROCHE: "Certificat médical du proche",
   ATTESTATION_HONNEUR: "Attestation sur l'honneur (aucun autre conducteur)",
+  // Lot R3 — pièces des questions amende (cliché radar, marquage stationnement).
+  CLICHE_ANTAI: "Cliché de contrôle (photo du flash)",
+  PHOTO_MARQUAGE: "Photo du marquage au sol",
   AUTRE: "Autre pièce",
   METEO: "Météo (source externe)",
   RADAR: "Fiche radar (donnée officielle)",

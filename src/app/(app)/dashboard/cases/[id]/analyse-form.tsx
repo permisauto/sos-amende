@@ -40,6 +40,10 @@ export type AnalysePrefill = {
   stationnementGene?: boolean;
   stationnementTicket?: boolean;
   stationnementLieu?: boolean;
+  // Lot R3 (2026-10-11) — questions amende : cliché ambigu / marquage effacé
+  // (faits déclarés, jamais pré-remplis par l'OCR).
+  clicheDeuxVehicules?: boolean;
+  marquageEfface?: boolean;
   suspNotifIrreguliere?: boolean;
   suspDelaiNotification?: boolean;
   suspMotifsAbsents?: boolean;

@@ -20,23 +20,32 @@ import type { TypePreuveExterne } from "./preuves-api";
 /** Preuves externes que la réponse peut rendre pertinentes (N2). */
 export type PreuveCible = TypePreuveExterne;
 
-/** Pièces que le **client** peut apporter lui-même quand la réponse est cochée. */
-export type PreuveClient =
-  | "RELEVE_PAIEMENT"
-  | "ATTESTATION_CESSION"
-  | "ATTESTATION_VOL"
-  | "COPIE_DECISION"
-  | "RELEVE_POINTS"
-  | "ATTESTATION_STAGE"
-  | "KBIS"
+/** Pièces que le **client** peut apporter lui-même quand la réponse est cochée.
+ * Liste runtime exportée (`PREUVE_CLIENT_TYPES`) : la whitelist serveur de
+ * téléversement (`ajouterPreuve`) s'y réfère — un type suggéré mais absent de
+ * cette liste serait silencieusement stocké « AUTRE » (type perdu). */
+export const PREUVE_CLIENT_TYPES = [
+  "RELEVE_PAIEMENT",
+  "ATTESTATION_CESSION",
+  "ATTESTATION_VOL",
+  "COPIE_DECISION",
+  "RELEVE_POINTS",
+  "ATTESTATION_STAGE",
+  "KBIS",
   // Lot R2 — pièces d'urgence par situation (radio « Votre urgence »).
-  | "CONTRAT_TRAVAIL"
-  | "ATTESTATION_EMPLOYEUR"
-  | "BILAN_COMMANDES"
-  | "JUSTIFICATIF_DOMICILE"
-  | "HORAIRES_TRANSPORTS"
-  | "CERTIFICAT_MEDICAL_PROCHE"
-  | "ATTESTATION_HONNEUR";
+  "CONTRAT_TRAVAIL",
+  "ATTESTATION_EMPLOYEUR",
+  "BILAN_COMMANDES",
+  "JUSTIFICATIF_DOMICILE",
+  "HORAIRES_TRANSPORTS",
+  "CERTIFICAT_MEDICAL_PROCHE",
+  "ATTESTATION_HONNEUR",
+  // Lot R3 — pièces des questions amende (cliché radar, marquage stationnement).
+  "CLICHE_ANTAI",
+  "PHOTO_MARQUAGE",
+] as const;
+
+export type PreuveClient = (typeof PREUVE_CLIENT_TYPES)[number];
 
 /** Nature du document détectée dans le texte scanné. */
 export type Nature = "stationnement" | "travaux" | "radar" | "visibilite" | "alcool";
@@ -54,6 +63,11 @@ export type ChampReponse =
   | "stationnementGene"
   | "stationnementTicket"
   | "stationnementLieu"
+  // Lot R3 (2026-10-11) — questions amende : cliché ambigu, marquage effacé
+  // (capteurs de fait pour les failles catalogue existantes
+  // `faille-photo-illisible` et `faille-stationnement-panneau`).
+  | "clicheDeuxVehicules"
+  | "marquageEfface"
   | "suspNotifIrreguliere"
   | "suspDelaiNotification"
   | "suspMotifsAbsents"
@@ -182,6 +196,28 @@ export const QUESTIONS_CIBLEES: readonly QuestionCiblee[] = [
     groupe: "Stationnement",
     types: ["AMENDE"],
     natures: ["stationnement"],
+  },
+  {
+    cle: "marquageEfface",
+    champ: "marquageEfface",
+    libelle:
+      "La peinture de délimitation de la place était effacée ou invisible",
+    groupe: "Stationnement",
+    types: ["AMENDE"],
+    natures: ["stationnement"],
+    preuveClient: "PHOTO_MARQUAGE",
+  },
+  {
+    cle: "clicheDeuxVehicules",
+    champ: "clicheDeuxVehicules",
+    libelle:
+      "Sur le cliché du contrôle, deux véhicules figurent sur la même ligne de mesure",
+    groupe: "Contrôle radar (cliché)",
+    types: ["AMENDE"],
+    natures: ["radar"],
+    // Le cliché reçu (photo du flash) est la pièce qui corrobore le fait —
+    // le juriste confirme alors `faille-photo-illisible` (catalogue).
+    preuveClient: "CLICHE_ANTAI",
   },
   {
     cle: "travaux_présents",

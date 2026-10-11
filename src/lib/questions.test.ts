@@ -56,7 +56,7 @@ describe("questionsPour — affichage dynamique par nature du document", () => {
     expect(groupes[0].questions).toHaveLength(5);
   });
 
-  it("AMENDE stationnement : le groupe Stationnement apparaît (4 questions)", () => {
+  it("AMENDE stationnement : le groupe Stationnement apparaît (5 questions)", () => {
     const groupes = questionsPour({
       type: "AMENDE",
       texte: textes.stationnement,
@@ -72,6 +72,8 @@ describe("questionsPour — affichage dynamique par nature du document", () => {
       "stationnementGene",
       "stationnementTicket",
       "stationnementLieu",
+      // Lot R3 : marquage effacé (pièce PHOTO_MARQUAGE).
+      "marquageEfface",
     ]);
   });
 
@@ -84,6 +86,30 @@ describe("questionsPour — affichage dynamique par nature du document", () => {
       texte: "Radar fixe 96 km/h limite 70",
     });
     expect(radar.map((g) => g.groupe)).toContain("Visibilité");
+  });
+
+  it("lot R3 : cliché ambigu sur PV radar ; jamais sur suspension ou hors radar", () => {
+    const radar = questionsPour({
+      type: "AMENDE",
+      texte: "Radar laser 96 km/h — infraction photographiée",
+    });
+    const cliche = radar.find((g) => g.groupe === "Contrôle radar (cliché)");
+    expect(cliche?.questions.map((q) => q.cle)).toEqual(["clicheDeuxVehicules"]);
+    expect(cliche?.questions[0]?.preuveClient).toBe("CLICHE_ANTAI");
+
+    // Jamais hors AMENDE/radar (cloisonnement par nature et par type).
+    const susp = questionsPour({
+      type: "SUSPENSION",
+      texte: "Radar 96 km/h",
+    });
+    expect(susp.map((g) => g.groupe)).not.toContain("Contrôle radar (cliché)");
+    const stationnement = questionsPour({
+      type: "AMENDE",
+      texte: textes.stationnement,
+    });
+    expect(stationnement.map((g) => g.groupe)).not.toContain(
+      "Contrôle radar (cliché)",
+    );
   });
 
   it("SUSPENSION : notification + recours toujours, alcool seulement si motif", () => {
@@ -414,6 +440,25 @@ describe("suggestionsPreuvesClient — pièces attendues du client", () => {
     ]);
     // Situation hors options (anti-fraude) → aucune pièce.
     expect(suggestionsPreuvesClient({ urgenceSituation: "bidon" })).toEqual([]);
+  });
+
+  it("lot R3 : cliché ambigu et marquage effacé appellent leur pièce", () => {
+    expect(
+      suggestionsPreuvesClient({ clicheDeuxVehicules: true }),
+    ).toEqual([
+      {
+        type: "CLICHE_ANTAI",
+        raison:
+          "Sur le cliché du contrôle, deux véhicules figurent sur la même ligne de mesure",
+      },
+    ]);
+    expect(
+      suggestionsPreuvesClient({ marquageEfface: true }).map((s) => s.type),
+    ).toEqual(["PHOTO_MARQUAGE"]);
+    // Pièce déjà versée → plus suggérée (même mécanisme que le reste).
+    expect(
+      suggestionsPreuvesClient({ clicheDeuxVehicules: true }, ["CLICHE_ANTAI"]),
+    ).toEqual([]);
   });
 
   it("une pièce déjà versée au dossier n'est plus suggérée", () => {
