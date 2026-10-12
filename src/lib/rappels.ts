@@ -2,6 +2,7 @@ import { Resend } from "resend";
 import { prisma } from "@/lib/prisma";
 import { joursRestants } from "@/lib/moteur";
 import { suggestionsPreuvesClient } from "@/lib/questions";
+import { chargerQuestionsDynamiques } from "@/lib/questions-dyn";
 import { libellePreuve } from "@/lib/preuve-labels";
 
 const cleanKey = process.env.AUTH_RESEND_KEY?.replace(/^\uFEFF/, "").trim();
@@ -220,11 +221,16 @@ export async function chercherRappelsPreuves(): Promise<RappelPreuvesResultat[]>
   });
 
   const resultats: RappelPreuvesResultat[] = [];
+  // Veille 2.0 : les pièces suggérées par les questions dynamiques sont
+  // relancées au même titre que les pièces du registre (best-effort).
+  const dynamiques =
+    (await chargerQuestionsDynamiques().catch(() => null)) ?? null;
   for (const dossier of dossiers) {
     if (dossier.rappels.length > 0) continue;
     const manquantes = suggestionsPreuvesClient(
       dossier.extractedData as Record<string, unknown> | null,
       dossier.preuves.map((p) => p.type),
+      dynamiques?.[dossier.type as "AMENDE" | "SUSPENSION"] ?? [],
     );
     if (!relancePreuvesDue(manquantes.length, dossier.statut)) continue;
 

@@ -15,6 +15,7 @@ import {
   type ValeursProposition,
 } from "@/lib/veille-extraction";
 import type { PropositionVeille } from "@/lib/veille-extraction";
+import { reglesDetectionPourQuestions } from "@/lib/questions";
 
 /** Budget du bouton « Extraire les propositions » (plus large que le lot auto). */
 const BUDGET_EXTRACTION_LOT = 30;
@@ -102,6 +103,7 @@ function lirePropositionFormulaire(formData: FormData): ValeursProposition | nul
     motifDecisif: String(formData.get("motifDecisif") ?? ""),
     templateLettre: String(formData.get("templateLettre") ?? ""),
     templateRefere: String(formData.get("templateRefere") ?? ""),
+    templateGracieux: String(formData.get("templateGracieux") ?? ""),
   };
 }
 
@@ -151,6 +153,12 @@ export async function validerPropositionSource(
       extraits: stockee && stockee.etat !== "echec" ? stockee.extraits : [],
       extraitLe: stockee?.extraitLe,
       obsolescence: stockee?.obsolescence,
+      // Veille 2.0 : l'admin n'édite ni l'analyse prédiction ni les questions
+      // — les champs v2 sont préservés à la correction.
+      statutAnalyse: stockee?.statutAnalyse,
+      analyse: stockee?.analyse,
+      motifsCles: stockee?.motifsCles,
+      questionsDynamiques: stockee?.questionsDynamiques,
     });
     if (!res.ok) return { error: res.erreur };
     proposition = res.proposition;
@@ -202,6 +210,9 @@ export async function validerPropositionSource(
 
   const regle = composerRegleProposition(proposition);
   const ref = refPropositionDepuisSource(source, proposition);
+  // Veille 2.0 : règles de détection mappées des questions dynamiques (types
+  // additifs du moteur) + 3ᵉ template (gracieux) — champs distincts (D5).
+  const regles = reglesDetectionPourQuestions(proposition.questionsDynamiques ?? []);
 
   const donnees = {
     typeInfraction: proposition.typeInfraction,
@@ -211,6 +222,15 @@ export async function validerPropositionSource(
     source: source.url ?? source.archive,
     jurisprudence: [ref] as unknown as Prisma.InputJsonValue,
     statut: "ACTIVE" as const,
+    ...(regles.length
+      ? { reglesDetection: regles as unknown as Prisma.InputJsonValue }
+      : {}),
+    ...(proposition.questionsDynamiques?.length
+      ? {
+          questionsDynamiques:
+            proposition.questionsDynamiques as unknown as Prisma.InputJsonValue,
+        }
+      : {}),
   };
 
   // Deuxième entrée (auto-proposition de la veille) : la faille existe déjà
@@ -224,16 +244,18 @@ export async function validerPropositionSource(
     dejaLiee?.templateLettre || proposition.templateLettre || "";
   const templateRefere =
     dejaLiee?.templateRefere || proposition.templateRefere || "";
+  const templateGracieux =
+    dejaLiee?.templateGracieux || proposition.templateGracieux || "";
   let failleId: string;
   if (dejaLiee) {
     failleId = dejaLiee.id;
     await prisma.failleJuridique.update({
       where: { id: dejaLiee.id },
-      data: { ...donnees, templateLettre, templateRefere },
+      data: { ...donnees, templateLettre, templateRefere, templateGracieux },
     });
   } else {
     const faille = await prisma.failleJuridique.create({
-      data: { ...donnees, templateLettre, templateRefere },
+      data: { ...donnees, templateLettre, templateRefere, templateGracieux },
     });
     failleId = faille.id;
   }
@@ -261,6 +283,10 @@ export async function validerPropositionSource(
       templateLettre
         ? "Template de lettre pré-rédigé inclus : relisez-le dans la bibliothèque juridique avant usage."
         : "Rédigez son template de lettre dans la bibliothèque juridique — sans template, elle ne peut pas encore alimenter une contestation."
+    }${
+      templateGracieux
+        ? " Demande gracieuse (3ᵉ parcours) également pré-rédigée."
+        : ""
     }`,
   };
 }

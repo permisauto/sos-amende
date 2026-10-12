@@ -15,6 +15,7 @@ import { AvocatRequest } from "./avocat-request";
 import { Preuves, type PreuveDto } from "@/components/preuves";
 import { faillesPourTypePreuve } from "@/lib/preuves-api";
 import { suggestionsPreuvesClient } from "@/lib/questions";
+import { chargerQuestionsDynamiques } from "@/lib/questions-dyn";
 import { libellePreuve } from "@/lib/preuve-labels";
 import { DossierTimeline, type TimelineEvent } from "@/components/dossier-timeline";
 import { FilMessages, type MessageDto } from "@/components/messages";
@@ -265,10 +266,14 @@ export default async function CaseDetailPage(
     contexte: contexteParType[p.type] ?? null,
   }));
   // Pièces suggérées d'après les réponses cochées (capteur de fait) : une
-  // pièce déjà versée au dossier n'est plus proposée.
+  // pièce déjà versée au dossier n'est plus proposée. Les questions
+  // dynamiques (veille 2.0) complètent le registre pour les suggestions.
+  const questionsDynamiques =
+    (await chargerQuestionsDynamiques().catch(() => null))?.[item.type] ?? [];
   const suggestionsPreuves = suggestionsPreuvesClient(
     item.extractedData,
     preuves.map((p) => p.type),
+    questionsDynamiques,
   );
 
   const messagesDto: MessageDto[] = (item.messages ?? []).map((m) => ({
@@ -477,6 +482,7 @@ export default async function CaseDetailPage(
               type={item.type}
               pvTexte={item.pvTexte}
               prefill={item.extractedData as AnalysePrefill | null}
+              questionsDynamiques={questionsDynamiques}
             />
           </div>
         </section>

@@ -55,6 +55,7 @@ import {
   redigerBrouillonRegle,
   scorerPertinence,
 } from "@/lib/veille-perteinence";
+import { reglesDetectionPourQuestions } from "@/lib/questions";
 import { enregistrerTraceAutoAlimentation } from "@/lib/auto-alimentation";
 
 const TIMEOUT_LISTING_MS = 15_000;
@@ -559,6 +560,10 @@ export function normaliserTitreProposition(t: string): string {
  *  - uniquement `PROPOSEE`, jamais `ACTIVE` : le moteur est **aveugle** à ce
  *    statut, template compris (le template pré-rédigé reste inerte tant que
  *    l'admin n'a pas cliqué) ;
+ *  - **PERDANT jamais auto-proposé** (veille 2.0, invariant D1) : une
+ *    décision que l'IA juge rejetée pour l'usager ne produit aucune faille —
+ *    la source reste `NOUVEAU` avec son badge rouge, l'admin l'écarte (ou
+ *    promeut en connaissance) depuis le drawer ;
  *  - seule l'administration tranche (drawer de la veille → flip
  *    `PROPOSEE → ACTIVE`, ou bibliothèque → « Écarter ») ;
  *  - idempotent : liason par `SourceJuridique.failleId` + dédup par titre
@@ -569,6 +574,7 @@ export function normaliserTitreProposition(t: string): string {
 export async function proposerFaillesDepuisExtraction(): Promise<{
   creees: number;
   liees: number;
+  ecartees: number;
 }> {
   try {
     const propositionComplete = { path: ["etat"], equals: "extrait" } as const;
@@ -581,7 +587,7 @@ export async function proposerFaillesDepuisExtraction(): Promise<{
       orderBy: [{ score: "desc" }, { createdAt: "desc" }],
       take: 50,
     });
-    if (rows.length === 0) return { creees: 0, liees: 0 };
+    if (rows.length === 0) return { creees: 0, liees: 0, ecartees: 0 };
 
     // Dédup par titre : une proposition en attente déjà posée pour le même
     // objet → on relie la source au lieu de créer un doublon.
@@ -595,9 +601,16 @@ export async function proposerFaillesDepuisExtraction(): Promise<{
 
     let creees = 0;
     let liees = 0;
+    let ecartees = 0;
     for (const row of rows) {
       const p = row.proposition as PropositionVeille | null;
       if (!p || p.etat !== "extrait" || !Array.isArray(p.articles)) continue;
+      // Veille 2.0 : PERDANT = aucune faille auto-créée (l'IA n'écartera
+      // jamais seule — le badge + le drawer admin portent la décision).
+      if (p.statutAnalyse === "REJETE_AUTOMOBILISTE_PERDANT") {
+        ecartees++;
+        continue;
+      }
       const titre =
         p.titre && p.titre.length >= 5 ? p.titre : row.titre.slice(0, 120);
       const articleLoi = p.articles.join(" ; ");
@@ -606,6 +619,10 @@ export async function proposerFaillesDepuisExtraction(): Promise<{
 
       let failleId = parTitre.get(cleTitre);
       if (!failleId) {
+        // Règles de détection mappées depuis les questions dynamiques (types
+        // additifs du moteur) — distinctes des `questionsDynamiques` JSON
+        // (arbitrage D5 : jamais imbriquées).
+        const regles = reglesDetectionPourQuestions(p.questionsDynamiques ?? []);
         const faille = await prisma.failleJuridique.create({
           data: {
             typeInfraction: p.typeInfraction,
@@ -614,6 +631,16 @@ export async function proposerFaillesDepuisExtraction(): Promise<{
             regle: composerRegleProposition(p),
             templateLettre: p.templateLettre ?? "",
             templateRefere: p.templateRefere ?? "",
+            templateGracieux: p.templateGracieux ?? "",
+            ...(regles.length
+              ? { reglesDetection: regles as unknown as Prisma.InputJsonValue }
+              : {}),
+            ...(p.questionsDynamiques?.length
+              ? {
+                  questionsDynamiques:
+                    p.questionsDynamiques as unknown as Prisma.InputJsonValue,
+                }
+              : {}),
             source: row.url ?? row.archive,
             jurisprudence: [refPropositionDepuisSource(row, p)] as unknown as Prisma.InputJsonValue,
             statut: "PROPOSEE",
@@ -639,13 +666,13 @@ export async function proposerFaillesDepuisExtraction(): Promise<{
         statut: "OK",
         traitees: creees + liees,
         nouvelles: creees,
-        detail: `creees=${creees} liees=${liees}`,
+        detail: `creees=${creees} liees=${liees} perdants_sautes=${ecartees}`,
       });
     }
-    return { creees, liees };
+    return { creees, liees, ecartees };
   } catch (e) {
     console.error("veille-extraction: auto-proposition de failles impossible", e);
-    return { creees: 0, liees: 0 };
+    return { creees: 0, liees: 0, ecartees: 0 };
   }
 }
 

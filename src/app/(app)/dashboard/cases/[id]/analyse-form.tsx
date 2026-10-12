@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { analyserDossier } from "../actions";
-import { questionsPour } from "@/lib/questions";
+import { questionsPour, type QuestionDynamique } from "@/lib/questions";
 import { libellePreuve } from "@/lib/preuve-labels";
 import {
   dateRefLibelle,
@@ -80,11 +80,14 @@ export function AnalyseForm({
   prefill,
   type,
   pvTexte,
+  questionsDynamiques,
 }: {
   dossierId: string;
   prefill?: AnalysePrefill | null;
   type: InfractionType;
   pvTexte?: string | null;
+  /** Veille 2.0 : questions auto-générées par les failles ACTIVE liées. */
+  questionsDynamiques?: QuestionDynamique[];
 }) {
   const [state, formAction, pending] = useActionState(
     analyserDossier,
@@ -93,7 +96,7 @@ export function AnalyseForm({
   const hasPrefill = !!prefill && Object.keys(prefill).length > 0;
   // Questions conditionnées à la nature du document scanné (et aux champs
   // saisis : motif, lieu) — jamais aux règles des failles (groupe vide
-  // impossible).
+  // impossible). Les questions dynamiques (veille 2.0) complètent le registre.
   const groupes = questionsPour({
     type,
     texte: [pvTexte, prefill?.motif, prefill?.lieu]
@@ -102,6 +105,7 @@ export function AnalyseForm({
     // Sous-type lu à l'OCR (3F / 48SI) : conditionne les questions spécifiques
     // du pack (Arrêté préfectoral / Calcul du solde de points).
     docType: prefill?.docType,
+    dynamiques: questionsDynamiques,
   });
 
   return (
@@ -384,7 +388,15 @@ export function AnalyseForm({
                   )}
                   {q.preuveClient && (
                     <p className="ml-6 mt-1 text-xs text-amber-700">
-                      Cette réponse appelle un document :{" "}
+                      {q.notePreuve ? (
+                        <>
+                          {q.notePreuve}{" "}
+                        </>
+                      ) : (
+                        <>
+                          Cette réponse appelle un document :{" "}
+                        </>
+                      )}
                       <strong>{libellePreuve(q.preuveClient)}</strong> — vous
                       pourrez le joindre juste après l&apos;analyse, sur la fiche
                       de votre dossier (facultatif : le dossier n&apos;est pas

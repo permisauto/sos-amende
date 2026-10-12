@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/dal";
 import { BandeauPaiement } from "@/components/bandeau-paiement";
 import { joursRestants } from "@/lib/moteur";
 import { suggestionsPreuvesClient } from "@/lib/questions";
+import { chargerQuestionsDynamiques } from "@/lib/questions-dyn";
 import { libellePreuve } from "@/lib/preuve-labels";
 import { PRIX_AMENDE, PRIX_SUSPENSION, PRIX_OPTION_LRAR } from "@/lib/tarifs";
 
@@ -44,6 +45,9 @@ export default async function DashboardPage() {
       take: 10,
       select: { id: true, type: true, extractedData: true, preuves: { select: { type: true } } },
     });
+    // Veille 2.0 : questions dynamiques par type (une seule lecture, best-effort).
+    const dynamiques =
+      (await chargerQuestionsDynamiques().catch(() => null)) ?? null;
     piecesManquantes = dossiersOuverts
       .map((d) => ({
         id: d.id,
@@ -51,6 +55,7 @@ export default async function DashboardPage() {
         libelles: suggestionsPreuvesClient(
           d.extractedData as Record<string, unknown> | null,
           d.preuves.map((p) => p.type),
+          dynamiques?.[d.type as "AMENDE" | "SUSPENSION"] ?? [],
         ).map((s) => libellePreuve(s.type)),
       }))
       .filter((d) => d.libelles.length > 0);
