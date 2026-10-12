@@ -607,31 +607,69 @@ En application des articles L. 211-2 et L. 211-5 du Code des relations entre le 
     id: "faille-suspension-duree-disproportionnee",
     typeInfraction: "SUSPENSION",
     titreFaille: "Durée disproportionnée",
-    articleLoi: "art. L.224-2 II + L.224-8 CR",
-    source: "TA",
-    regle: "Le préfet doit proportionner la durée au danger (max 6 mois, 1 an si alcool/stup/délit fuite). Durée excessive = erreur manifeste d'appréciation.",
+    articleLoi: "art. L. 224-2 II et L. 224-8 CR",
+    source: "Légifrance + doctrine",
+    regle:
+      "Durée maximale de six mois, portée à un an seulement en cas d'accident ayant entraîné la mort ou un dommage corporel, de refus d'obtempérer (L. 233-1-1), de conduite sous l'empire de l'alcool, de conduite après usage de stupéfiants ou de refus de se soumettre aux épreuves (L. 224-2 II ; mêmes cas et délit de fuite pour L. 224-8). Dépassement de ces plafonds = illégalité. Indépendamment des plafonds, l'erreur manifeste d'appréciation est un moyen général du recours pour excès de pouvoir : erreur évidente de l'administration dans l'appréciation de la situation, sanctionnant une décision manifestement disproportionnée aux faits.",
     reglesDetection: [{ type: "texteContient", motif: "mois" }],
-    jurisprudence: [{ reference: "Principe proportionnalité TA", juridiction: "Tribunal administratif", url: null, verifiee: false, resume: "10 mois annulés car hors plafond L.224-8." }],
+    jurisprudence: [
+      {
+        reference: "CE, 15 février 1961, Lagrange",
+        juridiction: "Conseil d'État",
+        url: null,
+        verifiee: false,
+        resume:
+          "Arrêt d'origine du contrôle d'erreur manifeste d'appréciation (première annulation sur ce fondement) — notion confirmée par la doctrine, texte intégral non relu au catalogage.",
+      },
+      {
+        reference: "CE, 3 février 1975, Sieur Pardov",
+        juridiction: "Conseil d'État",
+        url: null,
+        verifiee: false,
+        resume:
+          "Exemple type : décision manifestement disproportionnée aux faits = erreur manifeste d'appréciation (source : encyclopédie juridique ; texte intégral non relu). Aucune décision annulant une durée de suspension sur ce fondement n'a été retrouvée.",
+      },
+    ],
     templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} en date du {date} par laquelle le préfet a prononcé la suspension de mon permis de conduire.
 
-La durée de la suspension prononcée est manifestement disproportionnée au regard du danger que ma conduite présente pour la sécurité routière et excède en tout état de cause les plafonds légaux.
+La durée de la suspension prononcée est manifestement disproportionnée au regard des circonstances de mon cas personnel et du danger réel que présente ma conduite pour la sécurité routière.
 
-En application de l'article L. 224-2 (II) et de l'article L. 224-8 du Code de la route, le préfet doit proportionner la durée de la suspension au danger pour la sécurité routière, dans la limite des maxima qu'il prévoit. En conséquence, je vous demande de bien vouloir réduire la durée de la suspension à un niveau proportionné et, à titre subsidiaire, annuler la décision prise à mon encontre.`,
+Aux termes des articles L. 224-2 (II) et L. 224-8 du Code de la route, la durée de la suspension ne peut excéder six mois et n'est portée à un an que dans les cas limitativement énumérés par ces textes. Par ailleurs, une décision administrative est annulée lorsqu'elle repose sur une erreur manifeste d'appréciation, c'est-à-dire une erreur évidente qui ne fait aucun doute pour un esprit éclairé, notamment lorsque sa sévérité est manifestement disproportionnée aux faits.
+
+En conséquence, je vous demande de bien vouloir réduire la durée de la suspension à un niveau proportionné à ma situation et, si cette durée excède les plafonds légaux ou si l'appréciation portée sur mon cas est manifestement erronée, d'annuler la décision prise à mon encontre.`,
   },
   {
     id: "faille-suspension-delai-notification-72h",
     typeInfraction: "SUSPENSION",
     titreFaille: "Notification hors délai 72h/120h",
-    articleLoi: "art. L.224-2 + R.224-3 CR",
+    articleLoi: "art. L. 224-2 (I A, I et III) CR",
     source: "Code de la route",
-    regle: "Suspension L224-2 dans 72h (vitesse/alcool sans labo) ou 120h (stup/alcool avec analyse), au-delà restitution et bascule en L224-7 avec contradictoire.",
+    regle:
+      "La suspension doit être prononcée dans les 72 heures à compter de la rétention du permis (120 heures lorsque les vérifications prévues aux articles L. 234-4 à L. 234-6 et L. 235-2 ont été effectuées) — obligation pour l'alcool et les stupéfiants (I A), faculté encadrée pour la vitesse et l'accident (I). À défaut de décision dans ce délai, le permis est remis à la disposition de l'intéressé, sans préjudice de l'application ultérieure des articles L. 224-7 à L. 224-9 (III).",
     reglesDetection: [{ type: "texteContient", motif: "72h" }],
-    jurisprudence: [{ reference: "Art. L.224-2 CR", juridiction: "Légifrance", url: null, verifiee: false, resume: "Délai de 72h/120h pour prononcer la suspension L224-2." }],
+    jurisprudence: [
+      {
+        reference: "CE, 19 juin 2025, n° 488037, inédit",
+        juridiction: "Conseil d'État",
+        url: "https://www.conseil-etat.fr/fr/arianeweb/CE/decision/2025-06-19/488037",
+        verifiee: true,
+        resume:
+          "Rappelle le cadre de l'article L. 224-2 dans un litige de suspension : prononciation dans les 72 heures (120 heures selon les vérifications), durée maximale de six mois et remise du permis à disposition à défaut de décision dans le délai (III).",
+      },
+      {
+        reference: "CE, 2 février 2011, n° 327760, au Lebon",
+        juridiction: "Conseil d'État",
+        url: "https://www.conseil-etat.fr/fr/arianeweb/CE/decision/2011-02-02/327760",
+        verifiee: true,
+        resume:
+          "La suspension prononcée alors que les conditions des articles L. 224-2 et L. 224-7 ne sont pas réunies est illégale et constitue une faute engageant la responsabilité de l'État, sans qu'une faute lourde soit exigée.",
+      },
+    ],
     templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} en date du {date} par laquelle le préfet a prononcé la suspension de mon permis de conduire.
 
-Cette suspension a été notifiée au-delà des délais impératifs de soixante-douze heures, ou de cent vingt heures lorsque sont requises des analyses sanguines, prévus pour la suspension d'urgence de l'article L. 224-2 du Code de la route.
+Cette suspension a été prononcée au-delà des délais impératifs de soixante-douze heures — ou de cent vingt heures lorsque les vérifications prévues par l'article L. 224-2 ont été effectuées — à compter de la rétention de mon permis de conduire.
 
-En application de l'article R. 224-3 du Code de la route, la suspension d'urgence doit être notifiée dans ces délais ; à défaut, elle ne peut être maintenue et doit être prolongée dans le cadre de la procédure contradictoire. En conséquence, je vous demande de bien vouloir annuler la décision de suspension prise à mon encontre.`,
+En application de l'article L. 224-2 du Code de la route, la suspension devait être prononcée dans ces délais ; à défaut, aux termes de son III, mon permis de conduire devait m'être remis à disposition, sans préjudice de l'application ultérieure des articles L. 224-7 à L. 224-9. En conséquence, je vous demande de bien vouloir annuler la décision de suspension prise à mon encontre.`,
   },
   {
     id: "faille-suspension-ethylometre-carnet",
@@ -768,11 +806,11 @@ En application des articles 429, 537 et 43 du Code de procédure pénale, l'acte
     typeInfraction: "SUSPENSION",
     titreFaille:
       "Suspension d'urgence (3F) prononcée hors délai de 72 heures suivant le contrôle alors que le permis a été retenu",
-    articleLoi: "art. L. 224-2 et R. 224-3 du Code de la route",
+    articleLoi: "art. L. 224-2 (I A, I et III) du Code de la route",
     source:
-      "Légifrance (L. 224-2, R. 224-3) — mêmes textes que faille-suspension-delai-notification-72h",
+      "Légifrance (L. 224-2) — mêmes textes que faille-suspension-delai-notification-72h",
     regle:
-      "La suspension d'urgence de l'article L. 224-2 du Code de la route doit être prononcée et notifiée dans les 72 heures suivant le contrôle (120 heures lorsque des analyses sanguines ou d'autres examens complémentaires sont requis). Au-delà, la suspension ne peut être maintenue et doit être réexaminée selon la procédure contradictoire de l'article L. 224-7 ; la rétention du permis au-delà de ce délai est alors irrégulière.",
+      "La suspension d'urgence de l'article L. 224-2 du Code de la route doit être prononcée dans les 72 heures suivant la rétention du permis — 120 heures lorsque les vérifications prévues aux articles L. 234-4 à L. 234-6 et L. 235-2 ont été effectuées. À défaut de décision dans ce délai, le permis est remis à la disposition de l'intéressé (III), sans préjudice de l'application ultérieure des articles L. 224-7 à L. 224-9 ; la rétention du permis au-delà de ce délai est alors irrégulière.",
     reglesDetection: [
       {
         type: "delaiDepasse",
@@ -795,19 +833,27 @@ En application des articles 429, 537 et 43 du Code de procédure pénale, l'acte
     ],
     jurisprudence: [
       {
-        reference: "Art. L. 224-2 et R. 224-3 du Code de la route (Légifrance)",
-        juridiction: "Légifrance",
-        url: null,
-        verifiee: false,
+        reference: "CE, 19 juin 2025, n° 488037, inédit",
+        juridiction: "Conseil d'État",
+        url: "https://www.conseil-etat.fr/fr/arianeweb/CE/decision/2025-06-19/488037",
+        verifiee: true,
         resume:
-          "La suspension d'urgence doit être prononcée dans les 72 heures (120 heures en cas d'analyses sanguines ou d'examens complémentaires) suivant le contrôle ; passé ces délais, elle ne peut être maintenue que selon la procédure contradictoire.",
+          "Rappelle le cadre de l'article L. 224-2 dans un litige de suspension : prononciation dans les 72 heures (120 heures selon les vérifications), durée maximale de six mois et remise du permis à disposition à défaut de décision dans le délai (III).",
+      },
+      {
+        reference: "CE, 2 février 2011, n° 327760, au Lebon",
+        juridiction: "Conseil d'État",
+        url: "https://www.conseil-etat.fr/fr/arianeweb/CE/decision/2011-02-02/327760",
+        verifiee: true,
+        resume:
+          "La suspension prononcée alors que les conditions des articles L. 224-2 et L. 224-7 ne sont pas réunies est illégale et constitue une faute engageant la responsabilité de l'État, sans qu'une faute lourde soit exigée.",
       },
     ],
     templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} en date du {date} par laquelle le préfet a prononcé la suspension de mon permis de conduire.
 
-Cette décision a été prononcée au-delà du délai impératif de soixante-douze heures — ou de cent vingt heures lorsque des analyses sanguines ont été requises — suivant le contrôle, alors que mon permis de conduire avait été retenu. Au terme de ce délai, la suspension d'urgence ne pouvait plus être maintenue sans être réexaminée selon la procédure contradictoire.
+Cette décision a été prononcée au-delà du délai impératif de soixante-douze heures — ou de cent vingt heures lorsque les vérifications prévues par l'article L. 224-2 ont été effectuées — à compter de la rétention de mon permis, alors que celui-ci m'avait été retiré.
 
-En application des articles L. 224-2 et R. 224-3 du Code de la route, la suspension d'urgence doit être prononcée dans ces délais ; à défaut, elle ne peut être maintenue et doit être réexaminée dans le cadre de la procédure contradictoire prévue à l'article L. 224-7.
+En application de l'article L. 224-2 du Code de la route, la suspension d'urgence devait être prononcée dans ces délais ; à défaut, aux termes de son III, mon permis de conduire devait m'être remis à disposition, sans préjudice de l'application ultérieure des articles L. 224-7 à L. 224-9.
 
 En conséquence, je vous demande de bien vouloir retirer la décision de suspension prise à mon encontre.`,
     templateRefere: REFERE_SUSPENSION_PACK,

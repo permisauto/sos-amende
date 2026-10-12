@@ -320,7 +320,7 @@ défaut du type SUSPENSION).
 
 | id | Fondement | Template |
 |---|---|---|
-| `faille-3f-delai-retention` | **L. 224-2 et R. 224-3 CR** — suspension d'urgence prononcée hors délai 72 h (120 h si analyses sanguines) alors que le permis est retenu | lettre + **référé** |
+| `faille-3f-delai-retention` | **L. 224-2 (I A, I et III) CR** — suspension d'urgence prononcée hors délai 72 h (120 h si vérifications L. 234-4 à L. 234-6 et L. 235-2) alors que le permis est retenu — à défaut, remise du permis à disposition (III) | lettre + **référé** |
 | `faille-3f-incompetence` | **L. 211-3 CRPA** — signé par une autorité incompétente | lettre + **référé** |
 | `faille-3f-defaut-motivation` | **L. 211-2 / L. 211-5 CRPA** — ni taux d'alcoolémie ni vitesse retenue dans l'arrêté | lettre + **référé** |
 | `faille-48si-defaut-info` | **L. 223-3 CR** — décision d'invalidation ne récapitulant pas les précédents retraits ayant concouru au solde nul (défaut d'information) | lettre |
