@@ -42,14 +42,14 @@ type ValidationLettre = "floutee" | "verification" | "validee";
 
 const SCAN_STEPS_AMENDE = [
   "Téléversement simulé de l'avis de contravention…",
-  "Numérisation sécurisée en cours…",
+  "Numérisation simulée en cours…",
   "Extraction des données (plaque, date, montant)…",
   "Identification des failles juridiques…",
 ];
 
 const SCAN_STEPS_SUSPENSION = [
   "Téléversement simulé de la décision de suspension…",
-  "Numérisation sécurisée en cours…",
+  "Numérisation simulée en cours…",
   "Extraction des données (plaque, date, décision)…",
   "Identification des failles juridiques…",
 ];
@@ -206,7 +206,7 @@ export function DemoScan() {
               {type === "SUSPENSION"
                 ? "Décision de suspension"
                 : "Avis de contravention"}{" "}
-              — téléversé et scanné
+              — échantillon, lecture simulée
             </p>
             <div className="mt-2 font-mono text-xs leading-relaxed text-zinc-700">
               {reponse?.texte ? (
