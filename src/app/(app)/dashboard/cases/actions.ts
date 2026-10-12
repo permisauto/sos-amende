@@ -21,7 +21,7 @@ import { extrairePv, getOcrProvider, fusionnerPrefill } from "@/lib/ocr";
 import { alignerDocType, lireCategorie } from "@/lib/doc-v2";
 import { notifierStatut } from "@/lib/notifications";
 import { prixBase } from "@/lib/tarifs";
-import { formaterLettreOfficielle } from "@/lib/envoi";
+import { formaterLettreOfficielle, identiteExtrait } from "@/lib/envoi";
 import {
   listePiecesJointes,
   recupererPreuvesPourDossierId,
@@ -33,6 +33,7 @@ import { contexteEtalonnage } from "@/lib/etalonnage";
 import {
   estPackTelecours,
   genererPackTelecours,
+  texteReferePour,
   type PackTelecours,
 } from "@/lib/pack-telerecours";
 import {
@@ -450,6 +451,15 @@ export async function analyserDossier(
   if (differe) data.creditConsome = false;
 
   let statut: "EN_ATTENTE_VALIDATION" | "EN_ATTENTE_PAIEMENT";
+  // Référé-suspension (pack Télérecours) : généré en même temps que la lettre
+  // pour que le juriste le relise — et l'éventuellement le modifie — avant de
+  // valider. `null` hors suspension, ou sans template validé ni urgence
+  // professionnelle (jamais de texte hors base).
+  const refereGenere = texteReferePour({
+    type: dossier.type,
+    templateRefere: faille?.templateRefere ?? null,
+    data,
+  });
   try {
     statut = await prisma.$transaction(async (tx) => {
       let next: "EN_ATTENTE_VALIDATION" | "EN_ATTENTE_PAIEMENT";
@@ -473,6 +483,7 @@ export async function analyserDossier(
           extractedData: data as object,
           failleJuridiqueId: faille?.id ?? null,
           lettreGeneree: lettre,
+          refereGenere,
           dateLimite: dateLimitePv(data.date, dossier.type),
           statut: next,
         },
@@ -529,13 +540,17 @@ export async function analyserDossier(
   // voir formaterLettreOfficielle ; idempotent, laisse l'argumentation intacte.
   // La liste des pièces jointes figure une seule fois, sous la signature, dans
   // le PDF signé (voir generateLettrePdf) — jamais doublée dans le corps.
+  // En-tête : identité extraite du document par l'OCR (nom + prénom + adresse),
+  // profil `User.name` en repli seulement (voir identiteExtrait).
+  const identite = identiteExtrait(data, user.name);
   const lettreFinale = formaterLettreOfficielle({
     type: dossier.type,
     corps: lettre ?? "",
     docType: data.docType,
     numRef: data.num_pv,
     dateRef: data.date,
-    nom: user.name ?? null,
+    nom: identite.nom,
+    adresse: identite.adresse,
     date: new Date().toISOString().slice(0, 10),
   });
   if (lettreFinale !== lettre) {
@@ -663,6 +678,7 @@ export async function signerDossier(
         lettreFinale: dossier.lettreGeneree,
         data: dataExt as unknown as ExtractedData,
         templateRefere: dossier.failleJuridique?.templateRefere ?? null,
+        refereGenere: dossier.refereGenere ?? null,
         piecesJointes,
         signatureDataUrl,
         numRef: typeof dataExt["num_pv"] === "string" ? dataExt["num_pv"] : null,

@@ -151,6 +151,17 @@ test("pack Télérecours 3F : activation catalogue → dépôt arrêté → vali
   ).toBeVisible();
   await pj.getByRole("button", { name: /Fermer les suggestions/ }).click();
 
+  // 4b) Référé-suspension (art. L. 521-2 CJA) : généré à l'analyse, lisible
+  //     sur la fiche juriste AVANT validation — le juriste le relit et le
+  //     modifie ; le pack PDF sera mot pour mot ce texte (refereGenere).
+  await expect(pj.getByTestId("refere-bloc")).toBeVisible();
+  await expect(pj.getByTestId("refere-apercu")).not.toBeEmpty();
+  const texteEdite = "TEXTE REFERE MODIFIE PAR LE JURISTE E2E";
+  await pj.getByTestId("refere-modifier").click();
+  await pj.getByLabel("Texte du référé-suspension").fill(texteEdite);
+  await pj.getByTestId("refere-enregistrer").click();
+  await expect(pj.getByTestId("refere-apercu")).toContainText(texteEdite);
+
   await pj
     .getByLabel("Canal d'envoi de la contestation")
     .selectOption("TELERECOURS");
@@ -182,11 +193,15 @@ test("pack Télérecours 3F : activation catalogue → dépôt arrêté → vali
   ).toBeVisible();
   await verifierPack(page);
 
-  // 6) Juriste : mêmes 3 PDF téléchargeables depuis la fiche dossier.
+  // 6) Juriste : mêmes 3 PDF téléchargeables depuis la fiche dossier, et le
+  //    référé relu/édité est toujours celui affiché (lettre validée).
   const ctxJuriste2 = await browser.newContext();
   const pj2 = await ctxJuriste2.newPage();
   await loginAs(pj2, "e2e-juriste@test.local");
   await pj2.goto(`/dashboard/juriste/${dossierId}`);
   await verifierPack(pj2);
+  await expect(pj2.getByTestId("refere-apercu")).toContainText(
+    "TEXTE REFERE MODIFIE PAR LE JURISTE E2E",
+  );
   await ctxJuriste2.close();
 });

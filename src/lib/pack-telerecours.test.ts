@@ -17,6 +17,7 @@ import {
   estPackTelecours,
   genererPackTelecours,
   texteBordereau,
+  texteReferePour,
 } from "./pack-telerecours";
 
 describe("estPackTelecours", () => {
@@ -244,5 +245,124 @@ describe("genererPackTelecours", () => {
       .find((t) => t.includes("BORDEREAU DES PIÈCES"));
     expect(texteBord).toContain("1. Requête au fond (lettre de contestation)");
     expect(texteBord).not.toContain("— signée");
+  });
+
+  // ── Référé relu/modifié par le juriste (Dossier.refereGenere) ──────────────
+  it("refereGenere fourni : le PDF référé est mot pour mot ce texte (prime sur le template)", async () => {
+    const templateRefere = "Madame la Présidente,\n\nUrgence : {metier}.";
+    const urls = await genererPackTelecours({
+      ...base,
+      templateRefere,
+      refereGenere: "Madame la Présidente,\n\nTEXTE RELU PAR LE JURISTE.",
+    });
+    expect(urls.refere).toContain("pdfs/pack/dos_1/Requete_Refere_Suspension.pdf");
+    const texteRefere = vi
+      .mocked(generateLettrePdf)
+      .mock.calls.map((c) => String(c[0]))
+      .find((t) => t.includes("TEXTE RELU PAR LE JURISTE"));
+    expect(texteRefere).toBe("Madame la Présidente,\n\nTEXTE RELU PAR LE JURISTE.");
+    // Le template de la faille n'est plus utilisé (variables non remplies).
+    expect(texteRefere).not.toContain("ambulancier");
+    // Le bordereau liste toujours le référé (documents produits).
+    const texteBord = vi
+      .mocked(generateLettrePdf)
+      .mock.calls.map((c) => String(c[0]))
+      .find((t) => t.includes("BORDEREAU DES PIÈCES"));
+    expect(texteBord).toContain("2. Requête en référé-suspension");
+  });
+
+  it("refereGenere vide ou blanc : repli sur le template de la faille", async () => {
+    const templateRefere = "Madame la Présidente,\n\nUrgence : {metier}.";
+    const urls = await genererPackTelecours({
+      ...base,
+      templateRefere,
+      refereGenere: "   ",
+    });
+    expect(urls.refere).toBeDefined();
+    const texteRefere = vi
+      .mocked(generateLettrePdf)
+      .mock.calls.map((c) => String(c[0]))
+      .find((t) => t.startsWith("Madame la Présidente"));
+    expect(texteRefere).toBe("Madame la Présidente,\n\nUrgence : ambulancier.");
+  });
+
+  it("refereGenere présent mais plus aucun template/urgence : pas de référé fantôme (secours si urgence)", async () => {
+    // Sans template, avec urgencePro, le secours s'applique (texteReferePour) —
+    // le override ne doit pas créer de référé hors conditions.
+    const urls = await genererPackTelecours({
+      ...base,
+      templateRefere: null,
+      data: { ...data, urgencePro: false },
+      refereGenere: "Texte relu.",
+    });
+    // urgencePro false + pas de template → aucun référé, override ignoré
+    // (le dossier a été re-classifié entre-temps : cohérence texteReferePour).
+    expect(urls.refere).toBeUndefined();
+    expect(storageWrite).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("texteReferePour", () => {
+  const data = {
+    nom: "Alex Martin",
+    num_pv: "12345678901234",
+    date: "2026-07-01",
+    metier: "ambulancier",
+    entreprise: "Ambulances du Perche",
+    risque_licenciement: "a été suspendu avant la fin de son contrat",
+  } as ExtractedData;
+
+  it("SUSPENSION + template de la faille : texte rempli, variables effacées, trim", () => {
+    const texte = texteReferePour({
+      type: "SUSPENSION",
+      templateRefere:
+        "Madame la Présidente,\n\nUrgence : l'activité de {metier} pour {entreprise}, et {risque_licenciement}.  \n",
+      data,
+    });
+    expect(texte).toBe(
+      "Madame la Présidente,\n\nUrgence : l'activité de ambulancier pour Ambulances du Perche, et a été suspendu avant la fin de son contrat.",
+    );
+  });
+
+  it("hors SUSPENSION : toujours null (jamais de référé sur une amende)", () => {
+    expect(
+      texteReferePour({
+        type: "AMENDE",
+        templateRefere: "Madame la Présidente,\n\nTexte.",
+        data,
+      }),
+    ).toBeNull();
+  });
+
+  it("sans template, sans urgence professionnelle : null (aucun texte hors base)", () => {
+    expect(
+      texteReferePour({ type: "SUSPENSION", templateRefere: null, data }),
+    ).toBeNull();
+  });
+
+  it("sans template, urgence pro cochée : référé de secours L. 521-2", () => {
+    const texte = texteReferePour({
+      type: "SUSPENSION",
+      templateRefere: null,
+      data: { ...data, urgencePro: true },
+    });
+    expect(texte).toContain("L'ARTICLE L. 521-2");
+    expect(texte).toContain("ambulancier");
+    expect(texte).not.toContain("{metier}");
+  });
+
+  it("template vide en base + urgence pro : bascule sur le secours (||, pas ??)", () => {
+    const texte = texteReferePour({
+      type: "SUSPENSION",
+      templateRefere: "",
+      data: { ...data, urgencePro: true },
+    });
+    expect(texte).toContain("L'ARTICLE L. 521-2");
+  });
+
+  it("template qui ne produit que des vides : null (jamais un référé vide)", () => {
+    expect(
+      texteReferePour({ type: "SUSPENSION", templateRefere: "  \n ", data }),
+    ).toBeNull();
   });
 });

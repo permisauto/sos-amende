@@ -17,7 +17,7 @@ import { storageRead, storageWrite } from "@/lib/storage";
 import { generateLettrePdf } from "@/lib/lettre-pdf";
 import { soumettreDossier } from "@/lib/antai";
 import { generatePreuvePdf } from "@/lib/preuve-pdf";
-import { destinataireLrar, canauxEnvoi, formaterLettreOfficielle, organismeEnvoi, lireDocType, type CanalEnvoi } from "@/lib/envoi";
+import { destinataireLrar, canauxEnvoi, formaterLettreOfficielle, identiteExtrait, organismeEnvoi, lireDocType, type CanalEnvoi } from "@/lib/envoi";
 import { setDemoLettre } from "@/lib/demo-lettres";
 import { listePiecesJointes, recupererPreuvesPourDossierId } from "@/lib/preuves-api";
 import {
@@ -32,6 +32,7 @@ import { controlerForclusion48si } from "@/lib/delais";
 import {
   estPackTelecours,
   genererPackTelecours,
+  texteReferePour,
   type PackTelecours,
 } from "@/lib/pack-telerecours";
 
@@ -291,13 +292,16 @@ export async function validerDossier(
   // Habillage professionnel (en-tête, Objet, Madame, Monsieur, politesse)
   // appliqué aussi aux anciennes lettres. La liste des pièces jointes figure
   // une seule fois, sous la signature, dans le PDF signé.
+  // En-tête : identité extraite du document par l'OCR, profil en repli.
+  const identite = identiteExtrait(dataExt, dossier.user?.name);
   const lettreFinale = formaterLettreOfficielle({
     type: dossier.type,
     corps: dossier.lettreGeneree,
     docType: lireDocType(dataExt["docType"]),
     numRef: typeof dataExt["num_pv"] === "string" ? (dataExt["num_pv"] as string) : null,
     dateRef: typeof dataExt["date"] === "string" ? (dataExt["date"] as string) : null,
-    nom: dossier.user?.name ?? null,
+    nom: identite.nom,
+    adresse: identite.adresse,
     date: new Date().toISOString().slice(0, 10),
   });
 
@@ -356,6 +360,7 @@ export async function validerDossier(
         lettreFinale,
         data: dataExt as unknown as ExtractedData,
         templateRefere: dossier.failleJuridique?.templateRefere ?? null,
+        refereGenere: dossier.refereGenere ?? null,
         piecesJointes,
         signatureDataUrl,
         numRef: typeof dataExt["num_pv"] === "string" ? dataExt["num_pv"] : null,
@@ -831,6 +836,7 @@ export async function verifierFailles(
   }
 
   let lettreGeneree: string | null | undefined;
+  let refereGenere: string | null | undefined;
   if (changement) {
     const candidatsFailles = fusion.idsLettre
       .map((id) => failles.find((f) => f.id === id))
@@ -844,6 +850,8 @@ export async function verifierFailles(
       })),
       faits,
     );
+    // En-tête : identité extraite du document par l'OCR, profil en repli.
+    const identite = identiteExtrait(data, dossier.user?.name);
     lettreGeneree = lettre
       ? formaterLettreOfficielle({
           type: dossier.type,
@@ -851,10 +859,19 @@ export async function verifierFailles(
           docType: data.docType,
           numRef: faits.num_pv ?? null,
           dateRef: faits.date ?? null,
-          nom: dossier.user?.name ?? null,
+          nom: identite.nom,
+          adresse: identite.adresse,
           date: new Date().toISOString().slice(0, 10),
         })
       : null;
+    // Référé recalculé avec la nouvelle faille principale (le juriste a pu
+    // l'éditer : seule une vraie régénération l'écrase, comme la lettre).
+    const principale = failles.find((f) => f.id === principalId) ?? null;
+    refereGenere = texteReferePour({
+      type: dossier.type,
+      templateRefere: principale?.templateRefere ?? null,
+      data,
+    });
   }
 
   const detailVerif = [
@@ -875,6 +892,7 @@ export async function verifierFailles(
           ? {
               failleJuridiqueId: principalId,
               lettreGeneree: lettreGeneree ?? null,
+              refereGenere: refereGenere ?? null,
             }
           : {}),
       },
@@ -1045,6 +1063,65 @@ export async function modifierLettre(
 export type GenererVarianteState = { error?: string; ok?: boolean } | undefined;
 
 /**
+ * Modification du référé-suspension (art. L. 521-2 CJA) par le juriste avant
+ * validation : le texte relu/modifié est stocké dans `Dossier.refereGenere`
+ * et c'est **exactement** ce texte qui partira dans le pack Télérecours
+ * (`genererPackTelecours` le priorise sur le template). Aucun PDF à cet
+ * instant : le pack n'est généré qu'à la validation/signature.
+ */
+export async function modifierRefere(
+  _prev: ValidationState,
+  formData: FormData,
+): Promise<ValidationState> {
+  await requireJuristeRedacteur();
+
+  const dossierId = String(formData.get("dossierId") ?? "");
+  const refere = String(formData.get("refere") ?? "").trim();
+  if (refere.length < 10) {
+    return { error: "Le référé doit contenir au moins 10 caractères." };
+  }
+
+  const dossier = await prisma.dossier.findUnique({
+    where: { id: dossierId },
+  });
+  if (!dossier) {
+    if (isDemoId(dossierId)) {
+      return { error: "Référé indisponible sur un dossier de démonstration." };
+    }
+    return { error: "Dossier introuvable." };
+  }
+  if (
+    dossier.statut !== "A_VERIFIER" &&
+    dossier.statut !== "PRET" &&
+    dossier.statut !== "EN_ATTENTE_VALIDATION"
+  ) {
+    return { error: "Le référé ne peut être modifié qu'avant validation." };
+  }
+  if (dossier.type !== "SUSPENSION") {
+    return { error: "Le référé-suspension ne concerne que les suspensions." };
+  }
+
+  await prisma.$transaction([
+    prisma.dossier.update({
+      where: { id: dossier.id },
+      data: { refereGenere: refere },
+    }),
+    prisma.dossierEvent.create({
+      data: {
+        dossierId: dossier.id,
+        type: "LETTRE_GENEREE",
+        detail: "Référé-Suspension modifié par le juriste.",
+      },
+    }),
+  ]);
+
+  revalidatePath("/dashboard/juriste");
+  revalidatePath(`/dashboard/juriste/${dossier.id}`);
+  revalidatePath(`/dashboard/cases/${dossier.id}`);
+  return { ok: true };
+}
+
+/**
  * Générateur de lettre (variantes) : le juriste ne se retrouve pas avec une
  * seule lettre pré-rédigée — il choisit une combinaison de failles connues
  * (candidates du dossier, statut ACTIVE) et le moteur régénère une lettre
@@ -1129,14 +1206,24 @@ export async function genererVarianteLettre(
   );
 
   const docVariante = (dossier.extractedData ?? {}) as Record<string, unknown>;
+  // En-tête : identité extraite du document par l'OCR, profil en repli.
+  const identiteVariante = identiteExtrait(docVariante, dossier.user?.name);
   const lettreOfficielle = formaterLettreOfficielle({
     type: dossier.type,
     corps: lettre ?? "",
     docType: lireDocType(docVariante["docType"]),
     numRef: typeof docVariante["num_pv"] === "string" ? (docVariante["num_pv"] as string) : null,
     dateRef: typeof docVariante["date"] === "string" ? (docVariante["date"] as string) : null,
-    nom: dossier.user?.name ?? null,
+    nom: identiteVariante.nom,
+    adresse: identiteVariante.adresse,
     date: new Date().toISOString().slice(0, 10),
+  });
+  // Référé recalculé depuis la nouvelle faille principale (dossier SUSPENSION
+  // uniquement — texteReferePour rend null ailleurs).
+  const refereGenere = texteReferePour({
+    type: dossier.type,
+    templateRefere: retenues[0].templateRefere ?? null,
+    data,
   });
 
   // 2) PDF signé : si la lettre a déjà été signée (PRET), on régénère le PDF
@@ -1180,6 +1267,7 @@ export async function genererVarianteLettre(
       where: { id: dossier.id },
       data: {
         lettreGeneree: lettreOfficielle,
+        refereGenere,
         failleJuridiqueId: retenues[0].id,
       },
     }),
@@ -1440,10 +1528,22 @@ export async function confirmerFaille(
     data,
   );
 
+  // Référé recalculé depuis la faille confirmée (SUSPENSION seulement —
+  // null ailleurs ; une édition du juriste n'est écrasée qu'ici, comme la
+  // lettre, au moment où le juriste change lui-même la faille principale).
+  const refereGenere = texteReferePour({
+    type: dossier.type,
+    templateRefere: faille.templateRefere ?? null,
+    data,
+  });
   await prisma.$transaction([
     prisma.dossier.update({
       where: { id: dossier.id },
-      data: { failleJuridiqueId: faille.id, lettreGeneree: lettre },
+      data: {
+        failleJuridiqueId: faille.id,
+        lettreGeneree: lettre,
+        refereGenere,
+      },
     }),
     prisma.dossierEvent.create({
       data: {
@@ -1455,13 +1555,16 @@ export async function confirmerFaille(
   ]);
 
   const docConfirme = (dossier.extractedData ?? {}) as Record<string, unknown>;
+  // En-tête : identité extraite du document par l'OCR, profil en repli.
+  const identiteConfirme = identiteExtrait(docConfirme, dossier.user?.name);
   const lettreOfficielle = formaterLettreOfficielle({
     type: dossier.type,
     corps: lettre ?? "",
     docType: lireDocType(docConfirme["docType"]),
     numRef: typeof docConfirme["num_pv"] === "string" ? (docConfirme["num_pv"] as string) : null,
     dateRef: typeof docConfirme["date"] === "string" ? (docConfirme["date"] as string) : null,
-    nom: dossier.user?.name ?? null,
+    nom: identiteConfirme.nom,
+    adresse: identiteConfirme.adresse,
     date: new Date().toISOString().slice(0, 10),
   });
   if (lettreOfficielle !== lettre) {

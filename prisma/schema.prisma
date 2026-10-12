@@ -108,6 +108,7 @@ model Dossier {
   extractedData    Json? // OCR : {nom, plaque, num_pv, date, heure, typeRadar, numTelePaiement, cle}
   conditions_meteo String? // résumé météo au jour de l'infraction (pluie, brouillard etc.)
   lettreGeneree    String? @db.Text // lettre remplie à partir du templateLettre (sect. 5)
+  refereGenere     String? @db.Text // référé-suspension (L. 521-2 CJA) relu/modifié par le juriste avant validation — texte exact du pack Télérecours
   motifRejet       String? @db.Text // raison du rejet juriste (statut REJETE)
   decisionOmp      String? // décision OMP après envoi : ACCEPTE | REJETE
   decisionDetail   String? @db.Text // note du juriste sur la décision OMP

@@ -91,6 +91,27 @@ describe("normaliserPv", () => {
   });
 });
 
+describe("mock — identité extraite (Titulaire + Adresse)", () => {
+  it("le PV mock porte le titulaire et l'adresse (pré-remplissage + en-tête)", async () => {
+    process.env.OCR_PROVIDER = "mock";
+    const res = await extrairePv(Buffer.from("png"));
+    expect(res?.texte).toContain("Titulaire : MARTIN Jean");
+    expect(res?.texte).toContain("Adresse : 12 RUE DE LA PAIX 75001 PARIS");
+    const s = normaliserPv(res!.texte);
+    expect(s.nom).toBe("MARTIN Jean");
+    expect(s.adresse).toContain("12 RUE DE LA PAIX");
+  });
+
+  it("l'arrêté 3F mock aussi (fichier arrete-*.png)", async () => {
+    process.env.OCR_PROVIDER = "mock";
+    const res = await extrairePv(Buffer.from("png"), "arrete-3f.png");
+    expect(res?.texte).toContain("ARRÊTÉ PRÉFECTORAL");
+    const s = normaliserPv(res!.texte);
+    expect(s.nom).toBe("MARTIN Jean");
+    expect(s.adresse).toContain("12 RUE DE LA PAIX");
+  });
+});
+
 describe("getOcrProvider", () => {
   it("par défaut : aucun provider", () => {
     expect(getOcrProvider()).toBe("aucun");

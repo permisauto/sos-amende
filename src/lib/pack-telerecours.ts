@@ -54,6 +54,30 @@ EN CONSÉQUENCE
 Je demande qu'il plaise à Monsieur le Président du tribunal administratif, en application de l'article L. 521-2 du code de justice administrative, d'ordonner la suspension de l'exécution de la décision n° {num_pv} en date du {date}, l'administration disposant du délai légal pour régulariser la situation si elle le juge opportun.`;
 
 /**
+ * Texte du référé-suspension pour un dossier SUSPENSION : le template validé
+ * de la faille principale, sinon le référé de secours L. 521-2 si le client
+ * a signalé son urgence professionnelle — `null` sinon (aucun référé produit,
+ * jamais de texte hors base). Généré à l'analyse puis relu / modifié par le
+ * juriste (`Dossier.refereGenere`) : le pack PDF reprend exactement ce texte.
+ */
+export function texteReferePour(opts: {
+  type: string;
+  templateRefere: string | null;
+  data: ExtractedData;
+}): string | null {
+  if (opts.type !== "SUSPENSION") return null;
+  // `||` (pas `??`) : une éventuelle chaîne vide en base doit basculer sur le
+  // secours au lieu de produire un référé vide.
+  const template =
+    opts.templateRefere ||
+    (opts.data.urgencePro === true ? REFERE_SECOURS_URGENCE : null);
+  if (!template) return null;
+  // remplirTemplate applique nettoyerLettre : les variables d'urgence non
+  // saisies ({metier}/{entreprise}/{risque_licenciement}) disparaissent.
+  return remplirTemplate(template, opts.data).trim() || null;
+}
+
+/**
  * Texte du bordereau : en-tête du dépôt + liste numérotée des documents
  * réellement produits. Inventaire procédural — aucun contenu juridique.
  */
@@ -93,8 +117,10 @@ export function texteBordereau(opts: {
  * un `templateRefere` validé **ou** si le client a coché l'urgence
  * professionnelle (`data.urgencePro`) — auquel cas le référé de secours L.
  * 521-2 est utilisé à défaut de template en base (anti-hallucination : seul
- * l'article déjà présent au catalogue est cité). Sinon le pack se limite à
- * la requête et au bordereau.
+ * l'article déjà présent au catalogue est cité). Un référé relu/modifié par
+ * le juriste (`refereGenere`) prime sur le template : le PDF déposé est mot
+ * pour mot le texte validé. Sinon le pack se limite à la requête et au
+ * bordereau.
  */
 export async function genererPackTelecours(opts: {
   dossierId: string;
@@ -102,6 +128,10 @@ export async function genererPackTelecours(opts: {
   lettreFinale: string;
   data: ExtractedData; // variables {nom}/{num_pv}/{date} + urgence du référé
   templateRefere: string | null;
+  /** Référé relu puis éventuellement modifié par le juriste
+   * (`Dossier.refereGenere`) — le PDF est mot pour mot ce texte validé.
+   * Absent/vides → repli sur le template (anciens dossiers). */
+  refereGenere?: string | null;
   piecesJointes: string[];
   signatureDataUrl: string | null;
   numRef: string | null;
@@ -110,19 +140,23 @@ export async function genererPackTelecours(opts: {
   const documents: string[] = [
     `Requête au fond (lettre de contestation)${opts.signatureDataUrl ? " — signée" : ""}`,
   ];
-  let refereTexte: string | null = null;
-  const urgencePro = opts.data.urgencePro === true;
-  // `||` (pas `??`) : une éventuelle chaîne vide en base doit basculer sur le
-  // secours au lieu de produire un référé vide.
-  const templateRefere =
-    opts.templateRefere || (urgencePro ? REFERE_SECOURS_URGENCE : null);
-  if (templateRefere) {
+  // Un référé n'existe que si la faille porte un template validé ou si
+  // l'urgence professionnelle est cochée (secours L. 521-2) — l'édition du
+  // juriste (`refereGenere`) ne peut pas créer un référé hors conditions
+  // (dossier re-classifié entre-temps) : elle prime seulement quand un référé
+  // serait produit de toute façon.
+  const refereBase = texteReferePour({
+    type: "SUSPENSION",
+    templateRefere: opts.templateRefere,
+    data: opts.data,
+  });
+  const refereTexte = refereBase
+    ? opts.refereGenere?.trim() || refereBase
+    : null;
+  if (refereTexte) {
     documents.push(
       "Requête en référé-suspension (article L. 521-2 du code de justice administrative)",
     );
-    // remplirTemplate applique nettoyerLettre : les variables d'urgence non
-    // saisies ({metier}/{entreprise}/{risque_licenciement}) disparaissent.
-    refereTexte = remplirTemplate(templateRefere, opts.data);
   }
   documents.push(...opts.piecesJointes);
 

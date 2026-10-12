@@ -687,6 +687,8 @@ async function tesseractOcr(buffer: Buffer): Promise<OcrResult | null> {
  * jamais toucher aux autres specs (fichier « pv.png » par défaut). */
 const MOCK_PV_AMENDE = `CONTRAVENTION
 N° 123456789
+Titulaire : MARTIN Jean
+Adresse : 12 RUE DE LA PAIX 75001 PARIS
 Vous êtes avisé d'une infraction commise le 01/07/2026 à 14h32.
 Véhicule : AB-123-CD
 Montant : 135 €
@@ -695,6 +697,8 @@ N° de télé-paiement 123456789, clé 02`;
 
 const MOCK_ARRETE_3F = `ARRÊTÉ PRÉFECTORAL N° 2026-0451
 Préfecture du Rhône
+Titulaire : MARTIN Jean
+Adresse : 12 RUE DE LA PAIX 75001 PARIS
 ARRÊTÉ DE SUSPENSION DU PERMIS DE CONDUIRE
 Véhicule : AB-123-CD
 Infraction commise le 01/07/2026 à 14h32
@@ -703,6 +707,8 @@ Fait à Lyon, le 05/07/2026 à 09h00`;
 
 const MOCK_LETTRE_48SI = `LETTRE 48 SI
 INVALIDATION DE MON PERMIS DE CONDUIRE POUR SOLDE DE POINTS NUL
+Titulaire : MARTIN Jean
+Adresse : 12 RUE DE LA PAIX 75001 PARIS
 Récapitulatif des retraits :
 05/03/2026 : retrait de 6 points
 05/03/2026 : retrait de 4 points
@@ -710,18 +716,24 @@ Notifiée le 20/03/2026`;
 
 const MOCK_RETENTION = `NOTIFICATION DE RÉTENTION DU PERMIS DE CONDUIRE
 Préfecture du Rhône
+Titulaire : MARTIN Jean
+Adresse : 12 RUE DE LA PAIX 75001 PARIS
 Rétention immédiate du permis
 Durée : 3 mois
 Notifiée le 01/08/2026`;
 
 const MOCK_48N = `LETTRE 48 N
 NOTIFICATION DE RETRAIT DE POINTS
+Titulaire : MARTIN Jean
+Adresse : 12 RUE DE LA PAIX 75001 PARIS
 Solde restant : 4 points
 Il est retiré 2 points
 Date de la décision : 15/06/2026`;
 
 const MOCK_ANNULATION = `TRIBUNAL ADMINISTRATIF DE LYON
 ORDONNANCE N° 2026-114
+Titulaire : MARTIN Jean
+Adresse : 12 RUE DE LA PAIX 75001 PARIS
 Le juge des référés annule la décision de suspension du permis de conduire`;
 
 async function mockOcr(nomFichier?: string): Promise<OcrResult | null> {

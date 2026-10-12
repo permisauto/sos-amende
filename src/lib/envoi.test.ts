@@ -8,6 +8,7 @@ import {
   formuleEnTeteDestinataire,
   formulePolitesse,
   formaterLettreOfficielle,
+  identiteExtrait,
   libelleCanal,
   libelleCanalDepuisStockage,
   lireDocType,
@@ -237,5 +238,65 @@ describe("envoi — destinataire par docType (lot H1)", () => {
     expect(lettre).toContain("Madame, Monsieur,");
     expect(lettre).toContain("Monsieur l'Officier du ministère public");
     expect(lettre.endsWith(formulePolitesse("AMENDE"))).toBe(true);
+  });
+});
+
+describe("identiteExtrait — en-tête = identité OCR, profil en repli", () => {
+  it("nom et adresse extraits du document sont retenus tels quels (trim)", () => {
+    const id = identiteExtrait(
+      { nom: " MARTIN Jean ", adresse: "12 RUE DE LA PAIX 75001 PARIS" },
+      "Profil Autre",
+    );
+    expect(id.nom).toBe("MARTIN Jean");
+    expect(id.adresse).toBe("12 RUE DE LA PAIX 75001 PARIS");
+  });
+
+  it("nom OCR prioritaire sur le nom du profil (User.name = repli)", () => {
+    expect(identiteExtrait({ nom: "MARTIN Jean" }, "Profil Autre").nom).toBe(
+      "MARTIN Jean",
+    );
+  });
+
+  it("sans nom extrait, repli sur le profil — jamais de valeur fabriquée", () => {
+    expect(identiteExtrait({}, "Jean Dupont").nom).toBe("Jean Dupont");
+    expect(identiteExtrait({ adresse: "1 rue A 75001 PARIS" }, "Jean Dupont").nom).toBe(
+      "Jean Dupont",
+    );
+  });
+
+  it("chaînes vides ou blanches traitées comme absentes", () => {
+    const id = identiteExtrait({ nom: "   ", adresse: "\t" }, "Jean Dupont");
+    expect(id.nom).toBe("Jean Dupont");
+    expect(id.adresse).toBeNull();
+  });
+
+  it("tout absent : null des deux côtés (l'en-tête omet simplement les lignes)", () => {
+    expect(identiteExtrait(null, null)).toEqual({ nom: null, adresse: null });
+    expect(identiteExtrait(undefined, undefined)).toEqual({
+      nom: null,
+      adresse: null,
+    });
+    expect(identiteExtrait({}, "").nom).toBeNull();
+  });
+
+  it("type non objet (défensif) : repli profil, aucun crash", () => {
+    expect(identiteExtrait("oops", "Jean Dupont").nom).toBe("Jean Dupont");
+    expect(identiteExtrait(42, null)).toEqual({ nom: null, adresse: null });
+  });
+
+  it("l'habillage place bien l'identité extraite en tête de lettre", () => {
+    const lettre = formaterLettreOfficielle({
+      type: "AMENDE",
+      corps: "Je conteste le PV 42.",
+      ...identiteExtrait(
+        { nom: "MARTIN Jean", adresse: "12 RUE DE LA PAIX 75001 PARIS" },
+        "Jean Dupont",
+      ),
+      date: "2026-10-12",
+    });
+    expect(lettre.startsWith("MARTIN Jean\n12 RUE DE LA PAIX 75001 PARIS")).toBe(
+      true,
+    );
+    expect(lettre).not.toContain("Jean Dupont");
   });
 });

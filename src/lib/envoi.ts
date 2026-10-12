@@ -245,6 +245,27 @@ export function formuleEnTeteDestinataire(
 }
 
 /**
+ * Identité du requérant pour l'en-tête de la lettre : le nom (nom + prénom
+ * concaténés) et l'adresse **extraits du document par l'OCR** et relus par
+ * l'humain au formulaire d'analyse d'abord ; `User.name` (profil, saisi au
+ * paiement) ne sert que de repli pour le nom si l'OCR n'a rien lu. Jamais de
+ * valeur inventée : sans donnée, `null` — l'en-tête omet simplement la ligne.
+ */
+export function identiteExtrait(
+  data: unknown,
+  profilName: string | null | undefined,
+): { nom: string | null; adresse: string | null } {
+  const lire = (cle: string): string | null => {
+    const v = (data as Record<string, unknown> | null | undefined)?.[cle];
+    return typeof v === "string" && v.trim() ? v.trim() : null;
+  };
+  return {
+    nom: lire("nom") ?? (profilName?.trim() || null),
+    adresse: lire("adresse"),
+  };
+}
+
+/**
  * En-tête administrative de la lettre : bloc expéditeur (nom + adresse si
  * renseignés), destinataire type-aware, date de rédaction en toutes lettres.
  * Pure : rien n'est inventé, chaque bloc n'apparaît que si la donnée existe.

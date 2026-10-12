@@ -6,6 +6,7 @@ import { storageUrl } from "@/lib/storage";
 import { JuristeActions, DecisionOmpForm } from "./juriste-actions";
 import { VerificationFailles } from "./verification-failles";
 import { LettreEdition } from "./lettre-edition";
+import { RefereEdition } from "./refere-edition";
 import { GenerateurLettre } from "./generateur-lettre";
 import { AvocatTraitement } from "./avocat-traitement";
 import { SuggestionsDrawer } from "./suggestions-drawer";
@@ -31,6 +32,7 @@ import {
 import { LIBELLES_REPONSES, suggestionsPreuvesClient } from "@/lib/questions";
 import {
   formaterLettreOfficielle,
+  identiteExtrait,
   organismeEnvoi,
   destinataireLrar,
   libelleCanalDepuisStockage,
@@ -107,6 +109,7 @@ type JuristeCaseDetail = {
   pvTexte: string | null;
   extractedData: Record<string, unknown> | null;
   lettreGeneree: string | null;
+  refereGenere: string | null;
   canalEnvoi: string | null;
   conditions_meteo: string | null;
   remarquesJuriste: string | null;
@@ -117,6 +120,7 @@ type JuristeCaseDetail = {
     statut: string;
     regle: string | null;
     jurisprudence: unknown;
+    templateRefere?: string | null;
   } | null;
   failleJuridiqueId: string | null;
   faillesRetenues: Array<{
@@ -242,6 +246,7 @@ function demoJuristeDossier(id: string): JuristeCaseDetail | null {
     pvTexte: mock.pvTexte,
     extractedData: mock.extractedData,
     lettreGeneree: mock.lettreGeneree,
+    refereGenere: null,
     canalEnvoi: null,
     conditions_meteo: null,
     remarquesJuriste: null,
@@ -438,14 +443,16 @@ export default async function JuristeCasePage(
   const dataLettres = (item.extractedData ?? {}) as ExtractedData;
   // Habillage professionnel des propositions (en-tête, Objet, Madame/Monsieur,
   // formule de politesse) identique à la lettre stockée — cohérence de style.
+  // En-tête : identité extraite du document par l'OCR, profil en repli.
+  const identiteLettres = identiteExtrait(dataLettres, item.user?.name);
   const habiller = (corps: string) =>
     formaterLettreOfficielle({
       type: item.type,
       corps,
       numRef: dataLettres.num_pv ?? null,
       dateRef: dataLettres.date ?? null,
-      nom: item.user?.name ?? null,
-      adresse: dataLettres.adresse ?? null,
+      nom: identiteLettres.nom,
+      adresse: identiteLettres.adresse,
       date: new Date().toISOString().slice(0, 10),
     });
   const faillesActivesAvecTemplate = item.faillesRetenues
@@ -886,6 +893,20 @@ export default async function JuristeCasePage(
                     </div>
                   ) : null}
                 </>
+              )}
+              {/* Référé-suspension (pack Télérecours) : rendu dans les DEUX
+                  modes (lecture et édition) — le juriste le relit, et le
+                  modifie si besoin, avant validation ; le pack PDF déposé
+                  reprendra exactement ce texte (Dossier.refereGenere). */}
+              {item.type === "SUSPENSION" && item.refereGenere && (
+                <div className="mt-4">
+                  <RefereEdition
+                    dossierId={item.id}
+                    refere={item.refereGenere}
+                    modifiable={editable}
+                    lectureSeule={lectureSeule}
+                  />
+                </div>
               )}
               {/* Pack Télérecours : rendu dans les DEUX modes (lecture et
                   édition) — un dossier PRET prêt au dépôt doit montrer ses
