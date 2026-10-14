@@ -9,7 +9,12 @@ export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
     adapter: new PrismaPg({
-      connectionString: process.env.DATABASE_URL,
+      // Repli sur DIRECT_URL : si DATABASE_URL est absente/invalide (ex. config
+      // d'un environnement de prévisualisation incomplet), on se connecte quand
+      // même via l'URL directe qui, elle, fonctionne pour les requêtes comme
+      // pour les migrations. Jamais d'erreur « DATABASE_URL manquante » au boot.
+      connectionString:
+        process.env.DATABASE_URL ?? process.env.DIRECT_URL,
     }),
   });
 
