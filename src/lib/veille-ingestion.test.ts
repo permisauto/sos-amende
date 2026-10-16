@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   archivesATraiter,
   estCandidatExtraction,
+  estSchemaVeille2,
   listerArchives,
   normaliserTitreProposition,
 } from "@/lib/veille-ingestion";
@@ -84,5 +85,23 @@ describe("normaliserTitreProposition — dédup des auto-propositions", () => {
     expect(normaliserTitreProposition("Prescription de l'action")).not.toBe(
       normaliserTitreProposition("Étiquetage des appareils"),
     );
+  });
+});
+
+describe("estSchemaVeille2 — ciblage du retraitement des analyses héritées", () => {
+  it("une analyse au format Veille 2.0 (marqueur 2) n'est pas régénérée", () => {
+    expect(estSchemaVeille2({ schemaVeille: 2 })).toBe(true);
+  });
+
+  it("une analyse héritée sans marqueur est ciblée", () => {
+    expect(estSchemaVeille2({})).toBe(false);
+  });
+
+  it("une proposition absente n'est pas une analyse hérite à régénérer", () => {
+    expect(estSchemaVeille2(null)).toBe(false);
+  });
+
+  it("un marqueur d'une autre version n'est pas confondu avec le v2", () => {
+    expect(estSchemaVeille2({ schemaVeille: 1 })).toBe(false);
   });
 });

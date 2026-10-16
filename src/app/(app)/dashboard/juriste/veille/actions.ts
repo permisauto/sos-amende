@@ -7,6 +7,7 @@ import { Prisma } from "@/generated/prisma/client";
 import {
   executerVeilleDila,
   extrairePropositionsEnAttente,
+  regenererAnalysesAnciennes,
 } from "@/lib/veille-ingestion";
 import {
   composerRegleProposition,
@@ -86,6 +87,32 @@ export async function extrairePropositionsLot(
   return {
     ok: true,
     message: `${bilan.extraites} proposition(s) extraite(s), ${bilan.incompletes} incomplète(s), ${bilan.echecs} en échec.`,
+  };
+}
+
+/**
+ * Régénère les analyses hérites (avant Veille 2.0) au format courant —
+ * **admin seul**. Le bouton n'apparaît que pour l'admin ; les juristes ne
+ * déclenchent jamais un retraitement de masse. Progressif : chaque clic
+ * traite un lot borné, on rappuie pour avancer (la page ne fige pas).
+ */
+export async function regenererAnalysesVeille(
+  _prev: VeilleState,
+): Promise<VeilleState> {
+  await requireAdmin();
+  const bilan = await regenererAnalysesAnciennes(BUDGET_EXTRACTION_LOT);
+  revalidatePath("/dashboard/juriste/veille");
+  const total = bilan.extraites + bilan.incompletes + bilan.echecs;
+  if (total === 0) {
+    return {
+      ok: true,
+      message:
+        "Toutes les analyses sont déjà au format Veille 2.0 — rien à régénérer.",
+    };
+  }
+  return {
+    ok: true,
+    message: `${total} analyse(s) régénérée(s) au format Veille 2.0 (${bilan.extraites} complète(s)). Rappuyez pour traiter le lot suivant.`,
   };
 }
 

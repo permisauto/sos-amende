@@ -537,6 +537,95 @@ export async function extrairePropositionsEnAttente(
   return bilan;
 }
 
+/**
+ * Marqueur `schemaVeille: 2` sur une proposition : distingue une analyse au
+ * format Veille 2.0 (statutAnalyse, analyse, motifsCles, questionsDynamiques,
+ * templateGracieux) d'une analyse héritée avant cette version. C'est ce
+ * marqueur — stocké dans le JSON, **sans migration de schéma** — qui cible le
+ * retraitement `regenererAnalysesAnciennes` : une analyse sans ce champ est
+ * candidate, une qui le porte est déjà régénérée.
+ */
+const SCHEMA_VEILLE_ACTUEL = 2;
+
+/** Une proposition est au format Veille 2.0 si elle porte le marqueur. */
+export function estSchemaVeille2(
+  p: { schemaVeille?: number } | null | undefined,
+): boolean {
+  return p?.schemaVeille === SCHEMA_VEILLE_ACTUEL;
+}
+
+/**
+ * Régénère les analyses **hérites** (avant Veille 2.0) au format courant —
+ * lot progressif borné, **admin seul** (bouton « Régénérer les analyses »).
+ *
+ * Contrairement à `extrairePropositionsEnAttente` (qui ne traite que les
+ * publications jamais analysées, `estCandidatExtraction` exclut les `extrait`),
+ * ce lot cible précisément les analyses **déjà présentes mais sans le marqueur
+ * `schemaVeille: 2`** : celles écrites avant la Veille 2.0 et qui n'ont donc
+ * ni statut gagnant/perdant, ni courrier gracieux, ni questions dynamiques.
+ *
+ * Garde-fous :
+ *  - **réutilise le même chemin d'extraction** (`extraireProposition`) : même
+ *    provider (mock / secours local / IA), mêmes garde-fous anti-hallucination ;
+ *  - **préserve les corrections manuelles** : si l'admin avait corrigé
+ *    (`corrigeLe` renseigné), on garde sa proposition — on ne régénère que
+ *    les analyses jamais retouchées à la main ;
+ *  - **bornée** (`limite` + `BUDGET_TEMPS_EXTRACTION_MS`) : la page ne fige
+ *    pas sur 108 analyses ; on rappuie pour avancer ;
+ *  - **tracée** en `AutoAlimentationTrace` (campagne `regeneration-veille-2`)
+ *    pour la transparence ;
+ *  - n'écrit jamais sur une faille ni ne change le statut d'une source.
+ */
+export async function regenererAnalysesAnciennes(
+  limite = BUDGET_EXTRACTION,
+): Promise<BilanExtraction> {
+  let rows: SourceJuridique[];
+  try {
+    rows = await prisma.sourceJuridique.findMany({
+      where: { proposition: { not: Prisma.DbNull } },
+      orderBy: [{ score: "desc" }, { createdAt: "desc" }],
+      take: 200,
+    });
+  } catch (e) {
+    console.error("veille-regeneration: lecture des analyses impossible", e);
+    return { ...BILAN_VIDE };
+  }
+
+  // Hérites = une proposition stockée SANS le marqueur v2. `take` large côté
+  // requête puis filtrage mémoire (JSON path trop variable pour un where SQL
+  // robuste), puis bornage `limite`.
+  const heritees = rows
+    .filter((r) => {
+      const p = r.proposition as { schemaVeille?: number; corrigeLe?: string } | null;
+      if (!p || estSchemaVeille2(p)) return false;
+      // Correction manuelle prioritaire : jamais écrasée par la régénération.
+      return !p.corrigeLe;
+    })
+    .slice(0, limite);
+
+  const bilan = { ...BILAN_VIDE };
+  const fin = Date.now() + BUDGET_TEMPS_EXTRACTION_MS;
+  for (const row of heritees) {
+    if (Date.now() > fin) break;
+    const prop = await extraireEtStocker(row);
+    if (prop?.etat === "extrait") bilan.extraites++;
+    else if (prop?.etat === "incomplet") bilan.incompletes++;
+    else bilan.echecs++;
+  }
+
+  const traitees = bilan.extraites + bilan.incompletes + bilan.echecs;
+  if (traitees > 0) {
+    await enregistrerTraceAutoAlimentation({
+      campagne: "regeneration-veille-2",
+      statut: bilan.echecs === 0 ? "OK" : "ECHEC",
+      traitees,
+      nouvelles: bilan.extraites,
+      detail: `extraites=${bilan.extraites} incompletes=${bilan.incompletes} echecs=${bilan.echecs}`,
+    });
+  }
+  return bilan;
+}
+
 // ---------------------------------------------------------------------------
 // Auto-proposition de failles (PROPOSEE) — « la veille propose, l'admin tranche »
 // ---------------------------------------------------------------------------

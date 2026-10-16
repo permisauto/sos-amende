@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import {
   ecarterSource,
   extrairePropositionsLot,
+  regenererAnalysesVeille,
   relancerVeille,
   validerPropositionSource,
   type VeilleState,
@@ -409,6 +410,10 @@ export function VeilleList({
     extrairePropositionsLot,
     undefined,
   );
+  const [stateRegen, actionRegen, pendingRegen] = useActionState<VeilleState, FormData>(
+    regenererAnalysesVeille,
+    undefined,
+  );
   const candidatsExtraction = sources.filter(
     (s) =>
       s.statut === "NOUVEAU" &&
@@ -446,12 +451,28 @@ export function VeilleList({
               {pending ? "Interrogation en cours…" : "Relancer la veille maintenant"}
             </button>
           </form>
+          {role === "ADMIN" && (
+            <form action={actionRegen}>
+              <button
+                type="submit"
+                disabled={pendingRegen}
+                data-testid="regenerer-analyses"
+                className="rounded-full border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 disabled:opacity-50"
+              >
+                {pendingRegen
+                  ? "Régénération en cours…"
+                  : "Régénérer les analyses (Veille 2.0)"}
+              </button>
+            </form>
+          )}
         </div>
       </div>
 
       {state?.message && <Bandeau state={state} />}
       {stateLot?.message && <Bandeau state={stateLot} />}
       {stateLot?.error && <Bandeau state={stateLot} />}
+      {stateRegen?.message && <Bandeau state={stateRegen} />}
+      {stateRegen?.error && <Bandeau state={stateRegen} />}
 
       {sources.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-zinc-300 p-6 text-sm text-zinc-500">

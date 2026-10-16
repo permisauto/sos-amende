@@ -117,6 +117,13 @@ export type PropositionVeille = {
    * mappées depuis `reglesDetectionPourQuestions`.
    */
   questionsDynamiques?: QuestionDynamique[];
+  /**
+   * Version du schéma de l'analyse. `2` = format Veille 2.0 (statutAnalyse,
+   * analyse, motifsCles, questionsDynamiques, templateGracieux). Absent =
+   * analyse héritée (avant la Veille 2.0) — c'est ce qui distingue, sans
+   * migration de schéma, une analyse à régénérer d'une déjà régénérée.
+   */
+  schemaVeille?: 2;
   /** Date ISO de l'extraction. */
   extraitLe: string;
   /** (Ré)extractions automatiques déjà tentées sur cette proposition. */
@@ -600,6 +607,7 @@ function proposerDepuisV2(
     ...(motifsCles.length ? { motifsCles } : {}),
     ...(questionsDynamiques.length ? { questionsDynamiques } : {}),
     motif,
+    schemaVeille: 2,
     extraitLe: new Date().toISOString(),
   };
 }
