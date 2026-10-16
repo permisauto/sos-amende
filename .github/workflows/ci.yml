@@ -23,6 +23,12 @@ jobs:
       - name: Lint (eslint)
         run: npm run lint
 
+      # Génère les types de routes Next.js (PageProps, LayoutProps) sans build
+      # complet : sans ce step, tsc --noEmit échoue à chaque run sur un
+      # checkout vierge (dossier .next absent du dépôt).
+      - name: Generate Next.js route types
+        run: npx next typegen
+
       - name: Typecheck (tsc --noEmit)
         run: npx tsc --noEmit
 
