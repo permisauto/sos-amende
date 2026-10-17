@@ -27,7 +27,11 @@ import {
   recupererPreuvesPourDossierId,
   typesPreuvesPourFailles,
 } from "@/lib/preuves-api";
-import { lireReponses, preuvesPourReponses } from "@/lib/questions";
+import {
+  lireReponses,
+  preuvesPourReponses,
+  fusionnerQuestionsDynamiques,
+} from "@/lib/questions";
 import { verifierSiret } from "@/lib/siret";
 import { contexteEtalonnage } from "@/lib/etalonnage";
 import {
@@ -283,7 +287,14 @@ export async function analyserDossier(
     ...parsed.data,
     // Questionnaire ciblé dynamique (registre `questions.ts`) : seules les
     // cases cochées écrivent une clé — contexte juriste + preuves externes.
-    ...lireReponses(formData),
+    // Les questions du catalogue veille 2.0 (failles ACTIVE déjà chargées
+    // plus haut) suivent les mêmes règles : clé = id, jamais de fondement.
+    ...lireReponses(
+      formData,
+      fusionnerQuestionsDynamiques(
+        failles.map((f) => f.questionsDynamiques),
+      ),
+    ),
     plaqueIncorrecte: formData.get("plaqueIncorrecte") === "on",
     ...(categorieAnt ? { categorie: categorieAnt } : {}),
     ...(chaine(anterieur.neph) ? { neph: chaine(anterieur.neph) } : {}),

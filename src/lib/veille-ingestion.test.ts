@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   archivesATraiter,
   estCandidatExtraction,
+  estRepriseRegeneration,
+  estSchemaVeille2,
   listerArchives,
   normaliserTitreProposition,
 } from "@/lib/veille-ingestion";
@@ -84,5 +86,67 @@ describe("normaliserTitreProposition — dédup des auto-propositions", () => {
     expect(normaliserTitreProposition("Prescription de l'action")).not.toBe(
       normaliserTitreProposition("Étiquetage des appareils"),
     );
+  });
+});
+
+describe("estSchemaVeille2 — ciblage du retraitement des analyses héritées", () => {
+  it("une analyse au format Veille 2.0 (marqueur 2) n'est pas régénérée", () => {
+    expect(estSchemaVeille2({ schemaVeille: 2 })).toBe(true);
+  });
+
+  it("une analyse héritée sans marqueur est ciblée", () => {
+    expect(estSchemaVeille2({})).toBe(false);
+  });
+
+  it("une proposition absente n'est pas une analyse hérite à régénérer", () => {
+    expect(estSchemaVeille2(null)).toBe(false);
+  });
+
+  it("un marqueur d'une autre version n'est pas confondu avec le v2", () => {
+    expect(estSchemaVeille2({ schemaVeille: 1 })).toBe(false);
+  });
+});
+
+describe("estRepriseRegeneration — analyses v2 non abouties", () => {
+  it("reprend l'incomplet v2 jamais retenté (cas du pilote : 7/9)", () => {
+    expect(estRepriseRegeneration({ etat: "incomplet" })).toBe(true);
+    expect(
+      estRepriseRegeneration({ etat: "incomplet", tentatives: 4 }),
+    ).toBe(true);
+  });
+
+  it("n'accorde qu'une seule reprise (anti ping-pong)", () => {
+    expect(estRepriseRegeneration({ etat: "incomplet", regenTentatives: 0 })).toBe(true);
+    expect(estRepriseRegeneration({ etat: "incomplet", regenTentatives: 1 })).toBe(false);
+    expect(estRepriseRegeneration({ etat: "incomplet", regenTentatives: 4 })).toBe(false);
+  });
+
+  it("reprend un échec à chaque passage, comme estCandidatExtraction", () => {
+    expect(estRepriseRegeneration({ etat: "echec" })).toBe(true);
+    expect(estRepriseRegeneration({ etat: "echec", regenTentatives: 5 })).toBe(true);
+  });
+
+  it("ne reprend JAMAIS une analyse v2 aboutie", () => {
+    expect(estRepriseRegeneration({ etat: "extrait" })).toBe(false);
+    expect(estRepriseRegeneration({ etat: "extrait", regenTentatives: 0 })).toBe(false);
+  });
+
+  it("la correction manuelle prime sur toute reprise", () => {
+    expect(
+      estRepriseRegeneration({
+        etat: "incomplet",
+        corrigeLe: "2026-10-17T12:00:00.000Z",
+      }),
+    ).toBe(false);
+    expect(
+      estRepriseRegeneration({
+        etat: "echec",
+        corrigeLe: "2026-10-17T12:00:00.000Z",
+      }),
+    ).toBe(false);
+  });
+
+  it("une proposition absente n'est pas une reprise", () => {
+    expect(estRepriseRegeneration(null)).toBe(false);
   });
 });

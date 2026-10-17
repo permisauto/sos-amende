@@ -285,18 +285,32 @@ export function LectureDrawer({
                     />
                   </label>
                   {p.typeInfraction === "SUSPENSION" && (
-                    <label className="block text-xs font-semibold text-zinc-500">
-                      Moyen de référé (L. 521-2 CJA) — variables{" "}
-                      <code>{"{nom} {num_pv} {date} {metier} {entreprise} {siret} {risque_licenciement}"}</code>
-                      <textarea
-                        name="templateRefere"
-                        rows={5}
-                        defaultValue={p.templateRefere ?? ""}
-                        data-testid="lecture-template-refere-edit"
-                        placeholder="Paragraphe de référé proposé par l'extraction — facultatif."
-                        className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm leading-relaxed text-zinc-900"
-                      />
-                    </label>
+                    <>
+                      <label className="block text-xs font-semibold text-zinc-500">
+                        Moyen de référé (L. 521-2 CJA) — variables{" "}
+                        <code>{"{nom} {num_pv} {date} {metier} {entreprise} {siret} {risque_licenciement}"}</code>
+                        <textarea
+                          name="templateRefere"
+                          rows={5}
+                          defaultValue={p.templateRefere ?? ""}
+                          data-testid="lecture-template-refere-edit"
+                          placeholder="Paragraphe de référé proposé par l'extraction — facultatif."
+                          className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm leading-relaxed text-zinc-900"
+                        />
+                      </label>
+                      <label className="block text-xs font-semibold text-zinc-500">
+                        Demande gracieuse (3ᵉ parcours, LRAR) — variables{" "}
+                        <code>{"{nom} {num_pv} {date} {montant}"}</code>
+                        <textarea
+                          name="templateGracieux"
+                          rows={5}
+                          defaultValue={p.templateGracieux ?? ""}
+                          data-testid="lecture-template-gracieux-edit"
+                          placeholder="Paragraphe de demande gracieuse proposé par l'extraction — facultatif."
+                          className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm leading-relaxed text-zinc-900"
+                        />
+                      </label>
+                    </>
                   )}
                   <label className="block text-xs font-semibold text-zinc-500">
                     Conditions d&apos;application (une par ligne)
@@ -404,6 +418,139 @@ export function LectureDrawer({
 
                   {p && p.etat !== "echec" && (
                     <>
+                      {/* Veille 2.0 : issue de l'analyse prédiction — l'IA
+                          n'écartera jamais seule (D1), le clic admin reste la
+                          seule voie d'écarter une décision perdante. */}
+                      {p.statutAnalyse && (
+                        <div
+                          className={`rounded-xl border p-3 ${
+                            p.statutAnalyse === "REJETE_AUTOMOBILISTE_PERDANT"
+                              ? "border-red-300 bg-red-50"
+                              : "border-emerald-300 bg-emerald-50"
+                          }`}
+                          data-testid="badge-statut-analyse"
+                        >
+                          <p
+                            className={`text-xs font-semibold ${
+                              p.statutAnalyse === "REJETE_AUTOMOBILISTE_PERDANT"
+                                ? "text-red-900"
+                                : "text-emerald-900"
+                            }`}
+                          >
+                            {p.statutAnalyse === "REJETE_AUTOMOBILISTE_PERDANT"
+                              ? "Décision perdante pour les automobilistes"
+                              : "Décision gagnante pour les automobilistes"}
+                          </p>
+                          <p
+                            className={`mt-1 text-[11px] ${
+                              p.statutAnalyse === "REJETE_AUTOMOBILISTE_PERDANT"
+                                ? "text-red-700"
+                                : "text-emerald-700"
+                            }`}
+                          >
+                            {p.statutAnalyse === "REJETE_AUTOMOBILISTE_PERDANT"
+                              ? "L'extraction n'a pas proposé de lettre (parcours vides) — la décision rejette la contestation. Cliquez « Écarter » si vous partagez cette lecture : l'IA n'écartera jamais seule."
+                              : "L'extraction a pré-rédigé les parcours de courrier à partir des motifs de la décision."}
+                          </p>
+                        </div>
+                      )}
+
+                      {p.analyse && (
+                        <div
+                          className="rounded-xl border border-zinc-200 bg-zinc-50 p-3"
+                          data-testid="lecture-analyse"
+                        >
+                          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                            Analyse prédiction
+                          </p>
+                          <dl className="mt-1.5 space-y-1 text-xs text-zinc-700">
+                            {p.analyse.juridiction && (
+                              <div className="flex gap-2">
+                                <dt className="font-semibold text-zinc-500">
+                                  Juridiction :
+                                </dt>
+                                <dd>{p.analyse.juridiction}</dd>
+                              </div>
+                            )}
+                            {p.analyse.ecli && (
+                              <div className="flex gap-2">
+                                <dt className="font-semibold text-zinc-500">
+                                  ECLI :
+                                </dt>
+                                <dd>{p.analyse.ecli}</dd>
+                              </div>
+                            )}
+                            {p.analyse.dateDecision && (
+                              <div className="flex gap-2">
+                                <dt className="font-semibold text-zinc-500">
+                                  Date de la décision :
+                                </dt>
+                                <dd>{p.analyse.dateDecision}</dd>
+                              </div>
+                            )}
+                            {p.analyse.fondement && (
+                              <div className="flex gap-2">
+                                <dt className="font-semibold text-zinc-500">
+                                  Fondement :
+                                </dt>
+                                <dd>{p.analyse.fondement}</dd>
+                              </div>
+                            )}
+                            <div className="flex gap-2">
+                              <dt className="font-semibold text-zinc-500">
+                                Toujours d&apos;application en 2026 :
+                              </dt>
+                              <dd
+                                className={
+                                  p.analyse.valide2026
+                                    ? "font-semibold text-emerald-700"
+                                    : "font-semibold text-amber-700"
+                                }
+                              >
+                                {p.analyse.valide2026 ? "oui" : "signalée obsolète"}
+                              </dd>
+                            </div>
+                          </dl>
+                          <p className="mt-1.5 text-[11px] text-zinc-500">
+                            Lecture automatique — vérifiez sur la source avant
+                            usage.
+                          </p>
+                        </div>
+                      )}
+
+                      {p.motifsCles && p.motifsCles.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                            Motifs décisifs (verbatim)
+                          </p>
+                          <ul
+                            className="mt-1.5 space-y-2"
+                            data-testid="lecture-motifs"
+                          >
+                            {p.motifsCles.map((m, i) => (
+                              <li
+                                key={i}
+                                className="border-l-2 border-sky-300 pl-3"
+                              >
+                                <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-800">
+                                  {m.type === "CONSIDERANT"
+                                    ? "Considérant"
+                                    : "Attendu"}
+                                </span>
+                                <p className="mt-1 text-xs italic leading-relaxed text-zinc-700">
+                                  « {m.verbatim} »
+                                </p>
+                                {m.vice && (
+                                  <p className="mt-0.5 text-[11px] text-zinc-500">
+                                    Vice visé : {m.vice}
+                                  </p>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
                       <div>
                         <p
                           className="text-xs font-semibold uppercase tracking-wide text-zinc-500"
@@ -485,6 +632,56 @@ export function LectureDrawer({
                             data-testid="lecture-template-refere"
                           >
                             {p.templateRefere}
+                          </p>
+                        </div>
+                      )}
+
+                      {p.templateGracieux && (
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                            Demande gracieuse pré-rédigée (3ᵉ parcours, LRAR)
+                          </p>
+                          <p
+                            className="mt-1.5 max-h-48 overflow-y-auto whitespace-pre-line rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-xs leading-relaxed text-zinc-800"
+                            data-testid="lecture-template-gracieux"
+                          >
+                            {p.templateGracieux}
+                          </p>
+                          <p className="mt-1 text-[11px] text-zinc-500">
+                            Recours gracieux devant le préfet (ou le ministre
+                            pour une 48SI) — canal LRAR.
+                          </p>
+                        </div>
+                      )}
+
+                      {p.questionsDynamiques && p.questionsDynamiques.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                            Questions dynamiques pré-rédigées ({p.questionsDynamiques.length})
+                          </p>
+                          <ul
+                            className="mt-1.5 space-y-1.5"
+                            data-testid="lecture-questions"
+                          >
+                            {p.questionsDynamiques.map((q) => (
+                              <li
+                                key={q.id}
+                                className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700"
+                              >
+                                <span className="font-semibold">{q.id}</span>
+                                {" — "}
+                                {q.libelle}
+                                {q.preuves[0] && (
+                                  <span className="mt-0.5 block text-[11px] text-zinc-500">
+                                    Pièce suggérée : {q.preuves[0].intitule}
+                                  </span>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                          <p className="mt-1 text-[11px] text-zinc-500">
+                            Apparaîtront dans le questionnaire client (groupe
+                            « À vérifier ») après validation de la faille.
                           </p>
                         </div>
                       )}

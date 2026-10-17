@@ -17,11 +17,12 @@ import {
   RAPPEL_TYPE_PREUVES,
 } from "./rappels";
 
-/** Date limite placée dans `jours` jours (positif = recours encore ouvert). */
+/** Date limite placée dans `jours` jours (positif = recours encore ouvert).
+ * Arithmétique en UTC : évite le décalage d'1 h introduit par `setDate`
+ * (heure locale) lors d'un changement d'heure (DST), qui faussait le
+ * `Math.ceil` de `joursRestants` (10 j → 11 j, test rouge le 2026-10-17). */
 function limiteDans(jours: number): Date {
-  const d = new Date();
-  d.setDate(d.getDate() + jours);
-  return d;
+  return new Date(Date.now() + jours * 24 * 3600 * 1000);
 }
 
 describe("rappelDue", () => {

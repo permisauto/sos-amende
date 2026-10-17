@@ -307,3 +307,55 @@ test("veille : le refus depuis la bibliothèque écarte la faille et sa source",
     .poll(async () => etatRefus(), { timeout: 15_000 })
     .toEqual({ faille: "INACTIVE", source: "ECARTE" });
 });
+
+/**
+ * Veille 2.0 — décision PERDANTE : le marqueur `PERDANT` dans le titre pilote
+ * l'extraction mock (statut d'analyse déterministe). Invariants vérifiés :
+ * badge rouge dans le drawer, aucun template ni question, **aucune faille
+ * auto-créée** (l'IA n'écartera jamais seule — D1 : le clic admin « Écarter »
+ * reste la seule voie), le juriste ne valide jamais.
+ */
+test("veille 2.0 : décision perdante → badge rouge, zéro template, aucune faille auto-créée", async ({ page }) => {
+  test.slow();
+  const TITRE_PERDANT =
+    "Rejet du recours PERDANT — contestation non fondée E2E veille 2.0";
+  await grainerSource("e2e-veille-perdant", TITRE_PERDANT);
+
+  await loginAs(page, "e2e-juriste@test.local");
+  await page.goto("/dashboard/juriste/veille");
+  const carte = page.locator("article", { hasText: TITRE_PERDANT }).first();
+  await expect(carte).toBeVisible();
+
+  await page.getByTestId("extraire-lot").click();
+  await expect(carte.getByTestId("proposition-encart")).toContainText(
+    "Proposition extraite",
+    { timeout: 15_000 },
+  );
+  // Invariant D1 : jamais de faille auto-créée sur une décision perdante.
+  await expect(carte.getByTestId("faille-proposee")).toHaveCount(0);
+
+  // Drawer : badge PERDANT rouge, zéro template, zéro question.
+  await carte.getByTestId("lire-decision").click();
+  const drawer = page.getByTestId("lecture-drawer");
+  await expect(drawer).toBeVisible();
+  await expect(page.getByTestId("badge-statut-analyse")).toContainText(
+    "perdante",
+  );
+  await expect(page.getByTestId("badge-statut-analyse")).toContainText(
+    "l'IA n'écartera jamais seule",
+  );
+  await expect(page.getByTestId("lecture-template")).toHaveCount(0);
+  await expect(page.getByTestId("lecture-template-refere")).toHaveCount(0);
+  await expect(page.getByTestId("lecture-template-gracieux")).toHaveCount(0);
+  await expect(page.getByTestId("lecture-questions")).toHaveCount(0);
+  // La lecture et l'analyse restent affichées (règle + conditions + analyse).
+  await expect(page.getByTestId("lecture-regle")).toContainText(
+    "Simulation (mock)",
+  );
+  await expect(page.getByTestId("lecture-analyse")).toBeVisible();
+  // Le juriste ne valide jamais (le rôle admin n'est pas testé ici : la
+  // décision d'écarter est un clic humain, déjà couvert par le scénario 2).
+  await expect(page.getByTestId("lecture-valider")).toHaveCount(0);
+  await page.getByTestId("lecture-fermer").click();
+  await expect(drawer).toHaveCount(0);
+});

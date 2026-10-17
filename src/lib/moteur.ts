@@ -455,6 +455,17 @@ export type RegleDetection =
    * 0,50). `unite` optionnel cloisonne l'unité (jamais de faux positif mg/L).
    * N'exige que `mesure.valeur`. */
   | { type: "valeurPlageMesure"; min: number; max: number; unite?: "g/L" | "mg/L" }
+  // --- Veille 2.0 (types additifs — les types ci-dessus sont intacts) ---
+  // Déclencheurs mappés depuis les questions dynamiques du catalogue
+  // (`questionsDynamiques` → `reglesDetectionPourQuestions`) : la règle lit
+  // une **réponse** du questionnaire (fait déclaré), jamais un fondement.
+  /** Case cochée = vraie (déclencheur `TRUE` d'une question BOOLEAN). */
+  | { type: "reponseVrai"; champ: string }
+  /** Case non cochée / fausse (déclencheur `FALSE`) — s'applique à tous les
+   * dossiers n'ayant pas répondu : l'admin valide ce périmètre en connaissance. */
+  | { type: "reponseFausse"; champ: string }
+  /** Champ texte renseigné non vide (déclencheur `TEXT_PRESENT`). */
+  | { type: "reponseTexte"; champ: string }
   /** Composition ET (les règles d'une même faille sont sinon en OU). */
   | { type: "et"; regles: RegleDetection[] };
 
@@ -649,6 +660,20 @@ function evalRegle(
       if (!m || !Number.isFinite(m.valeur)) return false;
       if (regle.unite && m.unite !== regle.unite) return false;
       return m.valeur > regle.min && m.valeur <= regle.max;
+    }
+    // --- Veille 2.0 : déclencheurs de questions dynamiques du catalogue ---
+    case "reponseVrai": {
+      return (data as Record<string, unknown>)[regle.champ] === true;
+    }
+    case "reponseFausse": {
+      // Case non cochée = absente en base (jamais `false` écrit) : l'absence
+      // vaut « réponse non » — périmètre large assumé, validé par l'admin.
+      const v = (data as Record<string, unknown>)[regle.champ];
+      return v == null || v === "" || v === false;
+    }
+    case "reponseTexte": {
+      const v = (data as Record<string, unknown>)[regle.champ];
+      return typeof v === "string" && v.trim().length > 0;
     }
     case "et":
       return regle.regles.every((r) => evalRegle(r, data, texte, contexte));

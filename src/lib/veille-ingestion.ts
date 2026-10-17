@@ -45,6 +45,7 @@ import {
   SCORE_SEUIL_EXTRACTION,
   composerRegleProposition,
   extraireProposition,
+  extractionDispo,
   propositionEchec,
   refPropositionDepuisSource,
   type PropositionVeille,
@@ -55,6 +56,7 @@ import {
   redigerBrouillonRegle,
   scorerPertinence,
 } from "@/lib/veille-perteinence";
+import { reglesDetectionPourQuestions } from "@/lib/questions";
 import { enregistrerTraceAutoAlimentation } from "@/lib/auto-alimentation";
 
 const TIMEOUT_LISTING_MS = 15_000;
@@ -62,6 +64,14 @@ const TIMEOUT_ARCHIVE_MS = 60_000;
 /** Le zip mensuel TA fait ~64 Mo : on laisse largement la marge. */
 const TIMEOUT_ARCHIVE_TA_MS = 180_000;
 export const TAILLE_MAX_ZIP_TA = 200 * 1024 * 1024;
+
+/**
+ * Nombre de replis locaux consécutifs tolérés avant d'arrêter un lot de
+ * régénération (`regenererAnalysesAnciennes`) : au-delà, l'IA est réellement
+ * indisponible (quota 429, panne) et continuer ne ferait que retraiter des
+ * lignes sans le marqueur v2 — donc re-sélectionnées au clic suivant.
+ */
+const MAX_REPLIS_AVANT_ARRET = 3;
 
 export const SOURCES_VEILLE: CodeSource[] = ["JADE", "CASS", "JORF"];
 
@@ -425,9 +435,19 @@ export type BilanExtraction = {
   extraites: number;
   incompletes: number;
   echecs: number;
+  /** Passages retombés sur le **secours local** (`methode: "locale"`). */
+  locales: number;
+  /** IA globalement indisponible (coupée ou sans clé) : lot non entamé. */
+  iaIndisponible: boolean;
 };
 
-const BILAN_VIDE: BilanExtraction = { extraites: 0, incompletes: 0, echecs: 0 };
+const BILAN_VIDE: BilanExtraction = {
+  extraites: 0,
+  incompletes: 0,
+  echecs: 0,
+  locales: 0,
+  iaIndisponible: false,
+};
 
 function publicationDepuisRow(row: SourceJuridique): PublicationVeille {
   return {
@@ -444,8 +464,18 @@ function publicationDepuisRow(row: SourceJuridique): PublicationVeille {
 
 function propositionEnregistree(
   row: SourceJuridique,
-): { etat?: string; tentatives?: number } | null {
-  return row.proposition as { etat?: string; tentatives?: number } | null;
+): {
+  etat?: string;
+  tentatives?: number;
+  regenTentatives?: number;
+  schemaVeille?: number;
+} | null {
+  return row.proposition as {
+    etat?: string;
+    tentatives?: number;
+    regenTentatives?: number;
+    schemaVeille?: number;
+  } | null;
 }
 
 /**
@@ -466,27 +496,77 @@ export function estCandidatExtraction(
 }
 
 /**
+ * Une analyse **déjà au format v2** est-elle repris par la régénération ?
+ *
+ * Le marqueur `schemaVeille: 2` signale en principe « analysé à jour » — mais
+ * une analyse v2 `incomplet`/`echec` reste rattrapable : c'est le cas du pilote
+ * (7/9 bloqués par le verbatim des articles, cf. `articleVerbatim`). Une seule
+ * reprise, comme `estCandidatExtraction` : au-delà, l'humain corrige à la main.
+ *
+ * `extrait` n'est **jamais** repris (inutile, coûteux) ; `corrigeLe` prime
+ * toujours (correction admin intouchable).
+ */
+export function estRepriseRegeneration(p: {
+  etat?: string;
+  regenTentatives?: number;
+  corrigeLe?: string;
+  /**
+   * Volontairement **ignoré** : hérité des passages automatiques antérieurs
+   * (déjà 4 sur le pilote) et dit donc rien de la régénération. Déclaré ici
+   * pour que le rappel soit explicite chez l'appelant plutôt que silencieux.
+   */
+  tentatives?: number;
+} | null): boolean {
+  if (!p) return false;
+  if (p.corrigeLe) return false;
+  if (p.etat === "extrait") return false;
+  if (p.etat === "echec") return true;
+  if (p.etat === "incomplet") return (p.regenTentatives ?? 0) < 1;
+  return false;
+}
+
+/**
  * Extrait la proposition d'une publication et la stocke (`SourceJuridique
  * .proposition`) : état `extrait`/`incomplet`, ou `echec` avec motif pour
  * relance ultérieure. Chaque passage sur une proposition déjà connue
  * incrémente `tentatives` (bornage des reprises automatiques des `incomplet`).
+ *
+ * `regen: true` (chemin `regenererAnalysesAnciennes`) incrémente **en plus**
+ * `regenTentatives`, compteur propre à la régénération : `tentatives` est
+ * hérité des passages automatiques antérieurs (déjà 4 sur le pilote) et ne
+ * permet donc pas de borner la reprise d'une analyse v2. Sans `regen`, le
+ * compteur existant est conservé tel quel (jamais remis à zéro).
+ *
  * Ne lève jamais (null = écriture impossible).
  */
 async function extraireEtStocker(
   row: SourceJuridique,
-): Promise<PropositionVeille | null> {
+  options: { regen?: boolean } = {},
+): Promise<{ proposition: PropositionVeille; repliLocal: boolean } | null> {
   try {
     const avant = propositionEnregistree(row);
     const res = await extraireProposition(publicationDepuisRow(row));
     const proposition: PropositionVeille = res.ok
       ? res.proposition
       : propositionEchec(res.motif);
+    // `methode: "locale"` n'est posé que par le secours sans IA (quota/panne/clé).
+    const repliLocal = proposition.methode === "locale";
+    // Régénération : **jamais** remplacer une analyse v2 (issue de l'IA) par un
+    // repli local — l'IA est momentanément indisponible, l'existant vaut mieux.
+    if (options.regen && repliLocal && estSchemaVeille2(avant)) {
+      return { proposition: avant as unknown as PropositionVeille, repliLocal: true };
+    }
     if (avant) proposition.tentatives = (avant.tentatives ?? 0) + 1;
+    if (options.regen) {
+      proposition.regenTentatives = (avant?.regenTentatives ?? 0) + 1;
+    } else if (avant?.regenTentatives !== undefined) {
+      proposition.regenTentatives = avant.regenTentatives;
+    }
     await prisma.sourceJuridique.update({
       where: { id: row.id },
       data: { proposition: proposition as unknown as Prisma.InputJsonValue },
     });
-    return proposition;
+    return { proposition, repliLocal };
   } catch (e) {
     console.error(`veille-extraction: ${row.id} impossible`, e);
     return null;
@@ -525,14 +605,152 @@ export async function extrairePropositionsEnAttente(
   const fin = Date.now() + BUDGET_TEMPS_EXTRACTION_MS;
   for (const row of candidats) {
     if (Date.now() > fin) break;
-    const prop = await extraireEtStocker(row);
-    if (prop?.etat === "extrait") bilan.extraites++;
-    else if (prop?.etat === "incomplet") bilan.incompletes++;
+    const res = await extraireEtStocker(row);
+    if (!res) {
+      bilan.echecs++;
+      continue;
+    }
+    if (res.repliLocal) bilan.locales++;
+    if (res.proposition.etat === "extrait") bilan.extraites++;
+    else if (res.proposition.etat === "incomplet") bilan.incompletes++;
     else bilan.echecs++;
   }
   // Après chaque lot d'extraction : les propositions complètes non encore
   // liées deviennent des failles PROPOSEE (auto-proposition, cf. plus bas).
   await proposerFaillesDepuisExtraction();
+  return bilan;
+}
+
+/**
+ * Marqueur `schemaVeille: 2` sur une proposition : distingue une analyse au
+ * format Veille 2.0 (statutAnalyse, analyse, motifsCles, questionsDynamiques,
+ * templateGracieux) d'une analyse héritée avant cette version. C'est ce
+ * marqueur — stocké dans le JSON, **sans migration de schéma** — qui cible le
+ * retraitement `regenererAnalysesAnciennes` : une analyse sans ce champ est
+ * candidate, une qui le porte est déjà régénérée.
+ */
+const SCHEMA_VEILLE_ACTUEL = 2;
+
+/** Une proposition est au format Veille 2.0 si elle porte le marqueur. */
+export function estSchemaVeille2(
+  p: { schemaVeille?: number } | null | undefined,
+): boolean {
+  return p?.schemaVeille === SCHEMA_VEILLE_ACTUEL;
+}
+
+/**
+ * Régénère les analyses **hérites** (avant Veille 2.0) au format courant —
+ * lot progressif borné, **admin seul** (bouton « Régénérer les analyses »).
+ *
+ * Contrairement à `extrairePropositionsEnAttente` (qui ne traite que les
+ * publications jamais analysées, `estCandidatExtraction` exclut les `extrait`),
+ * ce lot cible précisément les analyses **déjà présentes mais sans le marqueur
+ * `schemaVeille: 2`** : celles écrites avant la Veille 2.0 et qui n'ont donc
+ * ni statut gagnant/perdant, ni courrier gracieux, ni questions dynamiques.
+ *
+ * Il reprend aussi, **en tête de file**, les analyses **déjà v2 mais non
+ * abouties** (`incomplet`/`echec`, jamais corrigées) — une seule fois chacune
+ * (`estRepriseRegeneration`) : c'est le cas du pilote, dont 7/9 ont échoué au
+ * verbatim des articles avant la correction `articleVerbatim`. Sans cette
+ * reprise, le marqueur v2 les aurait écartées définitivement.
+ *
+ * Garde-fous :
+ *  - **réutilise le même chemin d'extraction** (`extraireProposition`) : même
+ *    provider (mock / secours local / IA), mêmes garde-fous anti-hallucination ;
+ *  - **préserve les corrections manuelles** : si l'admin avait corrigé
+ *    (`corrigeLe` renseigné), on garde sa proposition — on ne régénère que
+ *    les analyses jamais retouchées à la main ;
+ *  - **bornée** (`limite` + `BUDGET_TEMPS_EXTRACTION_MS`) : la page ne fige
+ *    pas sur 108 analyses ; on rappuie pour avancer ;
+ *  - **tracée** en `AutoAlimentationTrace` (campagne `regeneration-veille-2`)
+ *    pour la transparence ;
+ *  - n'écrit jamais sur une faille ni ne change le statut d'une source.
+ */
+export async function regenererAnalysesAnciennes(
+  limite = BUDGET_EXTRACTION,
+): Promise<BilanExtraction> {
+  // IA coupée ou sans clé : inutile d'entamer le lot — chaque ligne retomberait
+  // sur le secours local (sans marqueur v2), se ferait re-sélectionner au clic
+  // suivant et bouclerait sans jamais progresser. On sort avant toute écriture.
+  const dispo = extractionDispo();
+  if (dispo === "off" || dispo === "absent") {
+    return { ...BILAN_VIDE, iaIndisponible: true };
+  }
+
+  let rows: SourceJuridique[];
+  try {
+    rows = await prisma.sourceJuridique.findMany({
+      where: { proposition: { not: Prisma.DbNull } },
+      orderBy: [{ score: "desc" }, { createdAt: "desc" }],
+      take: 200,
+    });
+  } catch (e) {
+    console.error("veille-regeneration: lecture des analyses impossible", e);
+    return { ...BILAN_VIDE };
+  }
+
+  // Deux populations, bornées ensemble par `limite` :
+  //  1. analyses **hérites** (sans marqueur v2) — le cas historique ;
+  //  2. analyses **v2 non abouties** (`estRepriseRegeneration`) — le cas du
+  //     pilote, bloqué par le verbatim des articles avant `articleVerbatim`.
+  // `take` large côté requête puis filtrage mémoire (JSON path trop variable
+  // pour un where SQL robuste), puis bornage `limite`. Les reprises v2 passent
+  // en tête : elles sont rares et doivent profiter d'abord du correctif.
+  type Ligne = { row: SourceJuridique; reprise: boolean };
+  const reprises: Ligne[] = [];
+  const heritees: Ligne[] = [];
+  for (const row of rows) {
+    const p = row.proposition as {
+      schemaVeille?: number;
+      corrigeLe?: string;
+      etat?: string;
+      tentatives?: number;
+      regenTentatives?: number;
+    } | null;
+    if (!p || p.corrigeLe) continue;
+    if (estSchemaVeille2(p)) {
+      // Reprise d'une analyse v2 non aboutie : rares, profitent d'abord du
+      // correctif, donc traitées avant la file héritée.
+      if (estRepriseRegeneration(p)) reprises.push({ row, reprise: true });
+    } else {
+      heritees.push({ row, reprise: false });
+    }
+  }
+  const aTraiter = [...reprises, ...heritees].slice(0, limite);
+
+  const bilan = { ...BILAN_VIDE };
+  const fin = Date.now() + BUDGET_TEMPS_EXTRACTION_MS;
+  for (const { row, reprise } of aTraiter) {
+    if (Date.now() > fin) break;
+    const res = await extraireEtStocker(row, { regen: reprise });
+    if (!res) {
+      bilan.echecs++;
+      continue;
+    }
+    // Repli local pendant la régénération = l'IA est en train d'échouer (quota
+    // 429, panne). Ces passages ne produisent pas d'analyse v2 : on les compte
+    // à part et, au-delà de quelques-uns, on **stoppe le lot** plutôt que de
+    // brûler le budget sur des lignes qui resteraient en file de toute façon.
+    if (res.repliLocal) {
+      bilan.locales++;
+      if (bilan.locales >= MAX_REPLIS_AVANT_ARRET) break;
+      continue;
+    }
+    if (res.proposition.etat === "extrait") bilan.extraites++;
+    else if (res.proposition.etat === "incomplet") bilan.incompletes++;
+    else bilan.echecs++;
+  }
+
+  const traitees = bilan.extraites + bilan.incompletes + bilan.echecs;
+  if (traitees > 0 || bilan.locales > 0) {
+    await enregistrerTraceAutoAlimentation({
+      campagne: "regeneration-veille-2",
+      statut: bilan.echecs === 0 ? "OK" : "ECHEC",
+      traitees,
+      nouvelles: bilan.extraites,
+      detail: `extraites=${bilan.extraites} incompletes=${bilan.incompletes} echecs=${bilan.echecs} replis=${bilan.locales}`,
+    });
+  }
   return bilan;
 }
 
@@ -559,6 +777,10 @@ export function normaliserTitreProposition(t: string): string {
  *  - uniquement `PROPOSEE`, jamais `ACTIVE` : le moteur est **aveugle** à ce
  *    statut, template compris (le template pré-rédigé reste inerte tant que
  *    l'admin n'a pas cliqué) ;
+ *  - **PERDANT jamais auto-proposé** (veille 2.0, invariant D1) : une
+ *    décision que l'IA juge rejetée pour l'usager ne produit aucune faille —
+ *    la source reste `NOUVEAU` avec son badge rouge, l'admin l'écarte (ou
+ *    promeut en connaissance) depuis le drawer ;
  *  - seule l'administration tranche (drawer de la veille → flip
  *    `PROPOSEE → ACTIVE`, ou bibliothèque → « Écarter ») ;
  *  - idempotent : liason par `SourceJuridique.failleId` + dédup par titre
@@ -569,6 +791,7 @@ export function normaliserTitreProposition(t: string): string {
 export async function proposerFaillesDepuisExtraction(): Promise<{
   creees: number;
   liees: number;
+  ecartees: number;
 }> {
   try {
     const propositionComplete = { path: ["etat"], equals: "extrait" } as const;
@@ -581,7 +804,7 @@ export async function proposerFaillesDepuisExtraction(): Promise<{
       orderBy: [{ score: "desc" }, { createdAt: "desc" }],
       take: 50,
     });
-    if (rows.length === 0) return { creees: 0, liees: 0 };
+    if (rows.length === 0) return { creees: 0, liees: 0, ecartees: 0 };
 
     // Dédup par titre : une proposition en attente déjà posée pour le même
     // objet → on relie la source au lieu de créer un doublon.
@@ -595,9 +818,16 @@ export async function proposerFaillesDepuisExtraction(): Promise<{
 
     let creees = 0;
     let liees = 0;
+    let ecartees = 0;
     for (const row of rows) {
       const p = row.proposition as PropositionVeille | null;
       if (!p || p.etat !== "extrait" || !Array.isArray(p.articles)) continue;
+      // Veille 2.0 : PERDANT = aucune faille auto-créée (l'IA n'écartera
+      // jamais seule — le badge + le drawer admin portent la décision).
+      if (p.statutAnalyse === "REJETE_AUTOMOBILISTE_PERDANT") {
+        ecartees++;
+        continue;
+      }
       const titre =
         p.titre && p.titre.length >= 5 ? p.titre : row.titre.slice(0, 120);
       const articleLoi = p.articles.join(" ; ");
@@ -606,6 +836,10 @@ export async function proposerFaillesDepuisExtraction(): Promise<{
 
       let failleId = parTitre.get(cleTitre);
       if (!failleId) {
+        // Règles de détection mappées depuis les questions dynamiques (types
+        // additifs du moteur) — distinctes des `questionsDynamiques` JSON
+        // (arbitrage D5 : jamais imbriquées).
+        const regles = reglesDetectionPourQuestions(p.questionsDynamiques ?? []);
         const faille = await prisma.failleJuridique.create({
           data: {
             typeInfraction: p.typeInfraction,
@@ -614,6 +848,16 @@ export async function proposerFaillesDepuisExtraction(): Promise<{
             regle: composerRegleProposition(p),
             templateLettre: p.templateLettre ?? "",
             templateRefere: p.templateRefere ?? "",
+            templateGracieux: p.templateGracieux ?? "",
+            ...(regles.length
+              ? { reglesDetection: regles as unknown as Prisma.InputJsonValue }
+              : {}),
+            ...(p.questionsDynamiques?.length
+              ? {
+                  questionsDynamiques:
+                    p.questionsDynamiques as unknown as Prisma.InputJsonValue,
+                }
+              : {}),
             source: row.url ?? row.archive,
             jurisprudence: [refPropositionDepuisSource(row, p)] as unknown as Prisma.InputJsonValue,
             statut: "PROPOSEE",
@@ -639,13 +883,13 @@ export async function proposerFaillesDepuisExtraction(): Promise<{
         statut: "OK",
         traitees: creees + liees,
         nouvelles: creees,
-        detail: `creees=${creees} liees=${liees}`,
+        detail: `creees=${creees} liees=${liees} perdants_sautes=${ecartees}`,
       });
     }
-    return { creees, liees };
+    return { creees, liees, ecartees };
   } catch (e) {
     console.error("veille-extraction: auto-proposition de failles impossible", e);
-    return { creees: 0, liees: 0 };
+    return { creees: 0, liees: 0, ecartees: 0 };
   }
 }
 
@@ -734,4 +978,98 @@ export async function sourcesNouvelles(jours = 7, limite = 50): Promise<LigneDig
     console.error("veille-dila: lecture des sources nouvelles impossible", e);
     return [];
   }
+}
+
+// ---------------------------------------------------------------------------
+// Rétro-remplissage Veille 2.0 des failles PROPOSEE déjà liées
+// ---------------------------------------------------------------------------
+
+export type BilanRetroRemplissage = {
+  /** Failles PROPOSEE liées dont les champs v2 ont été complétés. */
+  misesAJour: number;
+  /** Failles PROPOSEE liées sans proposition v2 exploitable (inchangées). */
+  sansDonnees: number;
+};
+
+/**
+ * Rétro-remplit `templateGracieux` et `questionsDynamiques` sur les failles
+ * `PROPOSEE` déjà liées à une source, depuis la proposition v2 de cette source.
+ *
+ * Pourquoi : quand une source est régénérée en Veille 2.0
+ * (`regenererAnalysesAnciennes`), la faille qui lui est déjà liée garde ses
+ * anciens champs NULL — la proposition a été écrite après la création de la
+ * faille. Sans ce passage, l'admin ouvre une faille PROPOSEE incomplète
+ * (pas de 3ᵉ parcours gracieux, pas de questions dynamiques) au moment de
+ * devoir juger sa valeur.
+ *
+ * Garde-fous identiques à `proposerFaillesDepuisExtraction` :
+ *  - **uniquement `PROPOSEE`** : une faille `ACTIVE` est déjà dans le
+ *    catalogue et peut alimenter des dossiers en cours — la modifier au vol
+ *    introduirait des incohérences sur des lettres déjà générées. Les
+ *    prochaines créations/validations les mettront à jour naturellement ;
+ *  - **jamais d'effacement** : un champ déjà renseigné sur la faille est
+ *    conservé (l'admin a pu le corriger à la main) — on ne comble que le vide ;
+ *  - idempotent : re-exécution = même résultat ;
+ *  - best-effort, ne lève jamais.
+ */
+export async function retroRemplirFaillesVeille2(): Promise<BilanRetroRemplissage> {
+  const bilan: BilanRetroRemplissage = { misesAJour: 0, sansDonnees: 0 };
+  try {
+    const failles = await prisma.failleJuridique.findMany({
+      where: { statut: "PROPOSEE", sources: { some: {} } },
+      select: {
+        id: true,
+        templateGracieux: true,
+        questionsDynamiques: true,
+        sources: {
+          select: { proposition: true },
+          take: 1,
+        },
+      },
+      take: 100,
+    });
+
+    for (const f of failles) {
+      const prop = f.sources[0]?.proposition as PropositionVeille | null;
+      const gracieux = prop?.templateGracieux ?? "";
+      const questions = prop?.questionsDynamiques ?? [];
+      const aGracieux = gracieux.length > 0 && !f.templateGracieux;
+      const aQuestions =
+        questions.length > 0 &&
+        (!Array.isArray(f.questionsDynamiques) || f.questionsDynamiques.length === 0);
+
+      if (!aGracieux && !aQuestions) {
+        bilan.sansDonnees++;
+        continue;
+      }
+
+      await prisma.failleJuridique.update({
+        where: { id: f.id },
+        data: {
+          ...(aGracieux ? { templateGracieux: gracieux } : {}),
+          ...(aQuestions
+            ? {
+                questionsDynamiques:
+                  questions as unknown as Prisma.InputJsonValue,
+              }
+            : {}),
+        },
+      });
+      bilan.misesAJour++;
+    }
+  } catch (e) {
+    console.error("veille-retroremplissage: rétro-remplissage impossible", e);
+    return { misesAJour: 0, sansDonnees: 0 };
+  }
+
+  if (bilan.misesAJour > 0) {
+    await enregistrerTraceAutoAlimentation({
+      campagne: "retroremplissage-veille-2",
+      statut: "OK",
+      traitees: bilan.misesAJour + bilan.sansDonnees,
+      nouvelles: bilan.misesAJour,
+      detail: `misesAJour=${bilan.misesAJour} sansDonnees=${bilan.sansDonnees}`,
+    });
+  }
+  return bilan;
 }

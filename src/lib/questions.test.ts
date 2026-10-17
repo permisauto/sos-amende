@@ -1,12 +1,20 @@
 import { describe, expect, it } from "vitest";
 import {
+  GROUPE_DYNAMIQUE,
   LIBELLES_REPONSES,
   QUESTIONS_CIBLEES,
+  fusionnerQuestionsDynamiques,
+  libellesPourDynamiques,
   lireReponses,
   naturesPv,
+  normaliserQuestionsDynamiques,
   preuvesPourReponses,
   questionsPour,
+  reglesDetectionPourQuestions,
   suggestionsPreuvesClient,
+  typePreuvePourIntitule,
+  versQuestionsCiblees,
+  type QuestionDynamique,
 } from "./questions";
 
 describe("naturesPv — nature du document détectée dans le texte scanné", () => {
@@ -532,5 +540,270 @@ describe("garde-fous du registre", () => {
       expect(q.libelle).not.toMatch(/code (de la route|de procédure)/i);
       expect(q.groupe.length).toBeGreaterThan(2);
     }
+  });
+});
+
+describe("questions dynamiques (veille 2.0 — fondations)", () => {
+  const qBase: QuestionDynamique = {
+    id: "signataire_non_prefet",
+    libelle: "La décision de suspension n'a pas été signée par le préfet",
+    type: "BOOLEAN",
+    declencheur: true,
+    preuves: [],
+  };
+
+  describe("normaliserQuestionsDynamiques", () => {
+    it("normalise l'id (minuscules, tirets → _, borné 60) et borne les listes", () => {
+      const out = normaliserQuestionsDynamiques([
+        { ...qBase, id: "  Signataire-Non-Prefet  ", libelle: "  Question  " },
+      ]);
+      expect(out).toHaveLength(1);
+      expect(out[0].id).toBe("signataire_non_prefet");
+      expect(out[0].libelle).toBe("Question");
+    });
+
+    it("rejette les formes invalides sans jamais lever", () => {
+      expect(normaliserQuestionsDynamiques(null)).toEqual([]);
+      expect(normaliserQuestionsDynamiques({})).toEqual([]);
+      expect(normaliserQuestionsDynamiques("[]")).toEqual([]);
+      expect(
+        normaliserQuestionsDynamiques([{ id: "ab", libelle: "trop court" }]),
+      ).toEqual([]); // id < 3 car.
+      expect(
+        normaliserQuestionsDynamiques([
+          { id: "question_valide", libelle: "ab" },
+        ]),
+      ).toEqual([]); // libellé < 5 car.
+    });
+
+    it("garde la 1ʳᵉ pièce seulement et déduplique les ids", () => {
+      const out = normaliserQuestionsDynamiques([
+        qBase,
+        { ...qBase, libelle: "Doublon" },
+        {
+          ...qBase,
+          id: "avec_preuve",
+          libelle: "Question avec preuve",
+          preuves: [
+            { intitule: "Relevé de points", argument: "" },
+            { intitule: "Autre pièce", argument: "" },
+          ],
+        },
+      ]);
+      expect(out.map((q) => q.id)).toEqual([
+        "signataire_non_prefet",
+        "avec_preuve",
+      ]);
+      expect(out[1].preuves).toHaveLength(1);
+      expect(out[1].preuves[0].intitule).toBe("Relevé de points");
+    });
+
+    it("plafonne à 6 questions par liste", () => {
+      const brut = Array.from({ length: 10 }, (_, i) => ({
+        ...qBase,
+        id: `question_${i}`,
+      }));
+      expect(normaliserQuestionsDynamiques(brut)).toHaveLength(6);
+    });
+
+    it("declencheur non booléen → true (jamais TEXT_PRESENT fabriqué)", () => {
+      expect(
+        normaliserQuestionsDynamiques([{ ...qBase, declencheur: "OUI" }])[0]
+          .declencheur,
+      ).toBe(true);
+      expect(
+        normaliserQuestionsDynamiques([{ ...qBase, declencheur: false }])[0]
+          .declencheur,
+      ).toBe(false);
+      expect(
+        normaliserQuestionsDynamiques([
+          { ...qBase, type: "TEXT", declencheur: "TEXT_PRESENT" },
+        ])[0].declencheur,
+      ).toBe("TEXT_PRESENT");
+    });
+  });
+
+  describe("fusionnerQuestionsDynamiques", () => {
+    it("fusionne et déduplique par id (première définition gagne)", () => {
+      const fusion = fusionnerQuestionsDynamiques([
+        [qBase],
+        [{ ...qBase, libelle: "Autre libellé" }, {
+          ...qBase,
+          id: "nouvelle_question",
+          libelle: "Nouvelle question",
+        }],
+        null,
+        "invalide",
+      ]);
+      expect(fusion.map((q) => q.id)).toEqual([
+        "signataire_non_prefet",
+        "nouvelle_question",
+      ]);
+      expect(fusion[0].libelle).toBe(qBase.libelle);
+    });
+
+    it("plafonne à 12 questions fusionnées", () => {
+      const listes = Array.from({ length: 5 }, (_, l) =>
+        Array.from({ length: 4 }, (_, i) => ({
+          ...qBase,
+          id: `q_${l}_${i}`,
+          libelle: `Question ${l}-${i}`,
+        })),
+      );
+      expect(fusionnerQuestionsDynamiques(listes)).toHaveLength(12);
+    });
+  });
+
+  describe("typePreuvePourIntitule", () => {
+    it("mappe les intitulés connus vers la whitelist", () => {
+      expect(typePreuvePourIntitule("Relevé de points")).toBe("RELEVE_POINTS");
+      expect(typePreuvePourIntitule("Attestation de l'employeur")).toBe(
+        "CONTRAT_TRAVAIL",
+      );
+      expect(typePreuvePourIntitule("Certificat médical")).toBe(
+        "CERTIFICAT_MEDICAL_PROCHE",
+      );
+      expect(typePreuvePourIntitule("Extrait Kbis")).toBe("KBIS");
+    });
+
+    it("fallback PIECE_LIBRE — jamais de type hors whitelist", () => {
+      expect(typePreuvePourIntitule("Document inconnu")).toBe("PIECE_LIBRE");
+      expect(typePreuvePourIntitule("")).toBe("PIECE_LIBRE");
+    });
+  });
+
+  describe("versQuestionsCiblees", () => {
+    it("convertit en format registre avec groupe dédié", () => {
+      const ciblees = versQuestionsCiblees([qBase]);
+      expect(ciblees).toHaveLength(1);
+      expect(ciblees[0].groupe).toBe(GROUPE_DYNAMIQUE);
+      expect(ciblees[0].typeChamp).toBe("case");
+      expect(ciblees[0].types).toEqual(["AMENDE", "SUSPENSION"]);
+    });
+
+    it("TEXT → typeChamp texte, preuve → preuveClient + notePreuve", () => {
+      const avecPreuve: QuestionDynamique = {
+        ...qBase,
+        type: "TEXT",
+        declencheur: "TEXT_PRESENT",
+        preuves: [{ intitule: "Relevé de points", argument: "sur les 12 derniers mois" }],
+      };
+      const ciblees = versQuestionsCiblees([avecPreuve]);
+      expect(ciblees[0].typeChamp).toBe("texte");
+      expect(ciblees[0].preuveClient).toBe("RELEVE_POINTS");
+      expect(ciblees[0].notePreuve).toContain("Relevé de points");
+      expect(ciblees[0].notePreuve).toContain("sur les 12 derniers mois");
+    });
+  });
+
+  describe("questionsPour avec dynamiques", () => {
+    it("ajoute le groupe dynamique en dernier", () => {
+      const groupes = questionsPour({
+        type: "AMENDE",
+        texte: "CONTRAVENTION N° 123 montant 135 €",
+        dynamiques: [qBase],
+      });
+      const noms = groupes.map((g) => g.groupe);
+      expect(noms).toContain(GROUPE_DYNAMIQUE);
+      expect(noms[noms.length - 1]).toBe(GROUPE_DYNAMIQUE);
+      // Le registre reste premier.
+      expect(noms[0]).toBe("Contexte (questionnaire ciblé)");
+    });
+
+    it("sans dynamiques → aucun groupe vide ajouté", () => {
+      const groupes = questionsPour({
+        type: "AMENDE",
+        texte: "CONTRAVENTION N° 123 montant 135 €",
+      });
+      expect(groupes.map((g) => g.groupe)).not.toContain(GROUPE_DYNAMIQUE);
+    });
+  });
+
+  describe("lireReponses avec dynamiques", () => {
+    it("écrit une case booléenne (on → true, absente → rien)", () => {
+      const fd = new FormData();
+      fd.set("signataire_non_prefet", "on");
+      const out = lireReponses(fd, [qBase]) as Record<string, unknown>;
+      expect(out.signataire_non_prefet).toBe(true);
+      expect(lireReponses(new FormData(), [qBase])).toEqual({});
+    });
+
+    it("écrit un champ texte non vide, jamais vide", () => {
+      const qTexte: QuestionDynamique = {
+        ...qBase,
+        id: "motif_inexact",
+        type: "TEXT",
+        declencheur: "TEXT_PRESENT",
+      };
+      const fd = new FormData();
+      fd.set("motif_inexact", "  ");
+      expect(lireReponses(fd, [qTexte])).toEqual({});
+      fd.set("motif_inexact", "le solde est inexact");
+      const out = lireReponses(fd, [qTexte]) as Record<string, unknown>;
+      expect(out.motif_inexact).toBe("le solde est inexact");
+    });
+  });
+
+  describe("suggestionsPreuvesClient avec dynamiques", () => {
+    it("propose la pièce de la question cochée (raison = intitulé)", () => {
+      const avecPreuve: QuestionDynamique = {
+        ...qBase,
+        preuves: [{ intitule: "Relevé de points", argument: "" }],
+      };
+      const suggestions = suggestionsPreuvesClient(
+        { signataire_non_prefet: true },
+        [],
+        [avecPreuve],
+      );
+      expect(suggestions).toHaveLength(1);
+      expect(suggestions[0].type).toBe("RELEVE_POINTS");
+      expect(suggestions[0].raison).toContain("Relevé de points");
+    });
+
+    it("une pièce déjà versée n'est plus suggérée (dédup type)", () => {
+      const avecPreuve: QuestionDynamique = {
+        ...qBase,
+        preuves: [{ intitule: "Relevé de points", argument: "" }],
+      };
+      expect(
+        suggestionsPreuvesClient({ signataire_non_prefet: true }, ["RELEVE_POINTS"], [avecPreuve]),
+      ).toEqual([]);
+    });
+
+    it("question non cochée → aucune suggestion", () => {
+      const avecPreuve: QuestionDynamique = {
+        ...qBase,
+        preuves: [{ intitule: "Relevé de points", argument: "" }],
+      };
+      expect(suggestionsPreuvesClient({}, [], [avecPreuve])).toEqual([]);
+    });
+  });
+
+  describe("libellesPourDynamiques", () => {
+    it("retourne les libellés courts pour l'affichage juriste", () => {
+      const libelles = libellesPourDynamiques([qBase]);
+      expect(libelles).toHaveLength(1);
+      expect(libelles[0].lib).toBe(qBase.libelle);
+    });
+  });
+
+  describe("reglesDetectionPourQuestions", () => {
+    it("BOOLEAN true → reponseVrai, false → reponseFausse, TEXT → reponseTexte", () => {
+      const regles = reglesDetectionPourQuestions([
+        qBase,
+        { ...qBase, id: "question_fausse", declencheur: false },
+        {
+          ...qBase,
+          id: "question_texte",
+          type: "TEXT",
+          declencheur: "TEXT_PRESENT",
+        },
+      ]);
+      expect(regles).toEqual([
+        { type: "reponseVrai", champ: "signataire_non_prefet" },
+        { type: "reponseFausse", champ: "question_fausse" },
+        { type: "reponseTexte", champ: "question_texte" },
+      ]);
+    });
   });
 });

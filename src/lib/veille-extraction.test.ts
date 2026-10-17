@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   BUDGET_EXTRACTION,
   SCORE_SEUIL_EXTRACTION,
+  articleVerbatim,
   assainirTemplate,
   composerRegleProposition,
   construirePromptExtraction,
@@ -55,12 +56,153 @@ describe("normaliserPourComparaison / contenuVerbatim", () => {
   });
 });
 
+describe("articleVerbatim", () => {
+  it("accepte l'article nu de 8 caractères que contenuVerbatim rejette", () => {
+    // Régression : le plancher de 15 car. de contenuVerbatim vidait articles[]
+    // → aucun template (assainirTemplate) → état incomplet sur 7/9 pilotes.
+    expect(contenuVerbatim(CONTENU, "L. 224-16")).toBe(false);
+    expect(articleVerbatim(CONTENU, "L. 224-16")).toBe(true);
+    expect(articleVerbatim(CONTENU, "R. 47-1")).toBe(false);
+  });
+
+  it("compare par référence légale : la forme libre du modèle passe", () => {
+    expect(articleVerbatim(CONTENU, "C. route, art. L. 224-16")).toBe(true);
+    expect(articleVerbatim(CONTENU, "art. L. 224-16 du code de la route")).toBe(
+      true,
+    );
+    expect(articleVerbatim(CONTENU, "L. 224-16 du code de la route")).toBe(true);
+  });
+
+  it("refuse l'article absent et la citation qui n'est pas un article", () => {
+    expect(articleVerbatim(CONTENU, "L. 415-2 du code des impôts")).toBe(false);
+    expect(articleVerbatim(CONTENU, "L. 521-2 du code de justice")).toBe(false);
+    // Aucun groupe « -n » : aucune référence extraite → rejet (pas de faille
+    // silencieuse qui passerait pour un article vérifié).
+    expect(articleVerbatim(CONTENU, "L. 121")).toBe(false);
+    expect(articleVerbatim(CONTENU, "")).toBe(false);
+  });
+
+  it("exige TOUS les articles de la citation", () => {
+    // Un seul article du duo est cité dans CONTENU → rejet.
+    expect(articleVerbatim(CONTENU, "L. 224-16 et R. 47-1")).toBe(false);
+    expect(articleVerbatim(CONTENU, "L. 224-16 et L. 415-2")).toBe(false);
+    expect(articleVerbatim(CONTENU, "L. 224-16 et L. 224-16")).toBe(true);
+  });
+
+  it("est insensible aux accents et à la casse comme contenuVerbatim", () => {
+    expect(articleVerbatim(CONTENU, "l. 224-16")).toBe(true);
+    expect(articleVerbatim(CONTENU, "L.224-16")).toBe(true);
+  });
+});
+
+describe("parserExtraction — articles (régression pilote v2)", () => {
+  const v2 = (articles: string[]) =>
+    JSON.stringify({
+      statut_analyse: "SUCCES_AUTOMOBILISTE_GAGNANT",
+      analyse: {
+        juridiction: "Conseil d'État",
+        jurisprudence_valide_en_2026: true,
+        fondement_regle_de_droit_degagee:
+          "La suspension du permis de conduire doit être notifiée dans le délai imparti ; à défaut, la décision est entachée d'irrégularité.",
+      },
+      motifs_cles: [
+        {
+          type: "CONSIDERANT",
+          verbatim:
+            "que l'administration n'a pas justifié de la notification de la décision dans le délai imparti",
+          vice: "défaut de notification",
+        },
+      ],
+      generation_templates_recours: {
+        titre_faille_catalogue: "Défaut de notification de la suspension",
+        conditions_application: [
+          "l'administration n'a pas justifié de la notification de la décision dans le délai imparti",
+        ],
+        articles_loi_vises: articles,
+        parcours_amende_contestation_omp: {
+          applicable: false,
+          paragraphe_lettre_contestation_amende: "",
+        },
+        parcours_suspension_recours_au_fond_avec_refere: {
+          applicable: true,
+          paragraphe_recours_exces_de_pouvoir_fond:
+            "Je conteste la suspension de mon permis de conduire, prononcée au titre de l'article L. 223-3 du code de la route, et demande son annulation pour défaut de notification dans le délai imparti.",
+          paragraphe_memoire_refere_suspension_urgence:
+            "Je demande au juge des référés de suspendre l'exécution de l'arrêté attaqué, sur le fondement de l'article L. 521-2 du code de justice administrative, la décision présentant un doute sérieux.",
+        },
+        parcours_suspension_amiable: {
+          applicable: false,
+          paragraphe_recours_gracieux_prefet_ou_ministre: "",
+        },
+      },
+      auto_alimentation_questions_ux_et_preuves: { questions: [] },
+    });
+
+  // Le texte réel des documents échoués du pilote : l'article y figure, mais
+  // sous sa forme nu (8 car.) — rejetée par l'ancien plancher de 15.
+  const CONTENU_SUSP = [
+    "Considérant qu'aux termes de l'article L. 223-3 du code de la route nul ne peut conduire",
+    "un véhicule à moteur s'il ne possède pas un permis de conduire en cours de validité ;",
+    "qu'il résulte des pièces du dossier que l'arrêté attaqué a prononcé la suspension du",
+    "permis de conduire du requérant ; que l'administration n'a pas justifié de la notification",
+    "de la décision dans le délai imparti ; qu'une telle omission a privé le requérant de la",
+    "possibilité d'exercer utilement les voies de recours ouvertes par le code de la route.",
+  ].join(" ");
+
+  it("article nu de 8 car. : extrait avec ses templates (pilote 7/9 → 0)", () => {
+    const p = parserExtraction(v2(["L. 223-3"]), CONTENU_SUSP, "CE");
+    expect(p?.etat).toBe("extrait");
+    expect(p?.motif).toBeUndefined();
+    expect(p?.articles).toEqual(["L. 223-3"]);
+    expect(p?.templateLettre).toBeTruthy();
+    expect(p?.templateRefere).toBeTruthy();
+  });
+
+  it("forme libre du modèle : extrait aussi", () => {
+    const p = parserExtraction(
+      v2(["C. route, art. L. 223-3"]),
+      CONTENU_SUSP,
+      "CE",
+    );
+    expect(p?.etat).toBe("extrait");
+    expect(p?.articles).toEqual(["C. route, art. L. 223-3"]);
+  });
+
+  it("déduplique par référence légale — les 3 emplacements ne sont pas gâchés", () => {
+    const p = parserExtraction(
+      v2([
+        "L. 223-3",
+        "C. route, art. L. 223-3",
+        "art. L. 223-3 du code de la route",
+        "l. 223-3",
+      ]),
+      CONTENU_SUSP,
+      "CE",
+    );
+    expect(p?.articles).toHaveLength(1);
+  });
+
+  it("garde l'anti-invention : l'article absent reste rejeté", () => {
+    const p = parserExtraction(v2(["L. 415-2"]), CONTENU_SUSP, "CE");
+    expect(p?.etat).toBe("incomplet");
+    expect(p?.motif).toContain("aucun article cité textuellement");
+    expect(p?.templateLettre).toBeUndefined();
+  });
+
+  it("le document qui ne cite aucun article ne fabrique rien (règle 14)", () => {
+    const p = parserExtraction(v2(["L. 223-3"]), "Aucun article ici.", "CE");
+    expect(p?.etat).toBe("incomplet");
+    expect(p?.articles).toEqual([]);
+  });
+});
+
 describe("construirePromptExtraction", () => {
   it("impose le JSON, l'anti-invention d'articles et borne le texte", () => {
     const p = construirePromptExtraction(PUB);
     expect(p).toContain("Réponds UNIQUEMENT par un objet JSON");
     expect(p).toContain("Jamais d'article inventé");
-    expect(p).toContain("citations VERBATIM");
+    // Veille 2.0 : les verbatims sont demandés via `motifs_cles` (typés).
+    expect(p).toContain("passages VERBATIM");
     expect(p).toContain("conditions d'application");
     expect(p).toContain("Excès de vitesse");
     expect(p).toContain("=== TEXTE INTÉGRAL ===");
@@ -210,10 +352,13 @@ describe("motif décisif + obsolescence (lot 2 — 2026-10-10)", () => {
 
   it("prompt : impose le motif décisif verbatim et la mise en garde d'obsolescence", () => {
     const p = construirePromptExtraction(PUB);
-    expect(p).toContain("motifDecisif");
-    expect(p).toContain("obsolescence");
+    // Veille 2.0 : motifs typés (considérant/attendu) + booléen de validité
+    // 2026 — la phrase de mise en garde est fabriquée par le parser, pas par
+    // l'IA (jamais d'affirmation hors document).
+    expect(p).toContain("motifs_cles");
+    expect(p).toContain("CONSIDERANT");
     expect(p).toContain("motif décisif");
-    expect(p).toContain("obsolescence");
+    expect(p).toContain("jurisprudence_valide_en_2026");
   });
 
   it("conserve le motif décisif verbatim et l'obsolescence bornée", () => {
@@ -624,14 +769,16 @@ describe("templates mécaniques (mock + secours local)", () => {
 });
 
 describe("templates pré-rédigés (lot 3 — 2026-10-10)", () => {
-  it("prompt : règles 10/11 — template lettre, référé de suspension, variables bornées", () => {
+  it("prompt : parcours OMP/référé/gracieux — variables bornées, L. 521-2 forcée", () => {
     const p = construirePromptExtraction(PUB);
-    expect(p).toContain("templateLettre");
-    expect(p).toContain("templateRefere");
+    // Veille 2.0 : les templates vivent dans les blocs de parcours.
+    expect(p).toContain("paragraphe_lettre_contestation_amende");
+    expect(p).toContain("paragraphe_memoire_refere_suspension_urgence");
+    expect(p).toContain("paragraphe_recours_gracieux_prefet_ou_ministre");
     expect(p).toContain("{radarId}");
     expect(p).toContain("risque_licenciement");
     expect(p).toContain("L. 521-2");
-    expect(p).toContain('renvoie ""');
+    expect(p).toContain('Sinon ""');
   });
 
   it("mock : template déterministe qui passe le lint du parser", () => {
@@ -742,5 +889,163 @@ describe("propositionDepuisFormulaire — templates (lot 3)", () => {
     const amende = propositionDepuisFormulaire({ ...base, templateRefere: refere });
     expect(amende.ok).toBe(true);
     if (amende.ok) expect(amende.proposition.templateRefere).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Veille 2.0 — parser v2 (enveloppe structurée), statut d'analyse, 3ᵉ
+// parcours (gracieux) et questions dynamiques.
+// ---------------------------------------------------------------------------
+
+describe("parserExtraction — format v2 (veille 2.0)", () => {
+  const lettreAmende =
+    "Je soussigné(e) {nom}, conteste par la présente l'avis de contravention n° {num_pv} en date du {date}, " +
+    "au titre de l'article L. 224-16 du code de la route : les conditions d'application de ce texte n'étaient " +
+    "pas réunies au moment des faits constants, la sanction ne pouvant être maintenue.";
+  const gracieuxSusp =
+    "Je soussigné(e) {nom}, forme par la présente une demande de grâce gracieuse à l'encontre de la décision " +
+    "n° {num_pv} en date du {date}. La mesure repose sur l'article L. 224-16 du code de la route ; je demande " +
+    "respectueusement qu'il soit renoncé à son exécution au vu des circonstances du dossier et de ma situation " +
+    "personnelle, et vous prie d'agréer l'expression de ma haute considération.";
+  const v2Base = {
+    statut_analyse: "SUCCES_AUTOMOBILISTE_GAGNANT",
+    analyse: {
+      juridiction: "TA de Nice",
+      ecli: "ECLI:TA:NI:2026:1234",
+      date_decision: "2026-09-15",
+      jurisprudence_valide_en_2026: true,
+      fondement_regle_de_droit_degagee:
+        "Le constat d'infraction ne peut être reçu si le certificat d'étalonnage de l'appareil était expiré au moment des faits.",
+    },
+    motifs_cles: [
+      { type: "ATTENDU", verbatim: CONTENU.slice(0, 120) + "…", vice: "défaut d'étalonnage" },
+    ],
+    generation_templates_recours: {
+      titre_faille_catalogue: "Étalonnage expiré — excès de vitesse contesté",
+      conditions_application: [
+        "certificat de vérification périodique avait expiré le 12 janvier 2026",
+      ],
+      articles_loi_vises: ["article L. 224-16 du code de la route"],
+      parcours_amende_contestation_omp: {
+        applicable: true,
+        paragraphe_lettre_contestation_amende: lettreAmende,
+      },
+      parcours_suspension_recours_au_fond_avec_refere: {
+        applicable: false,
+        paragraphe_recours_exces_de_pouvoir_fond: "",
+        paragraphe_memoire_refere_suspension_urgence: "",
+      },
+      parcours_suspension_amiable: {
+        applicable: false,
+        paragraphe_recours_gracieux_prefet_ou_ministre: "",
+      },
+    },
+    auto_alimentation_questions_ux_et_preuves: {
+      questions: [
+        {
+          id: "certificat_renouvele",
+          libelle: "Le certificat de vérification a-t-il été renouvelé depuis ?",
+          type: "BOOLEAN",
+          declencheur: true,
+          preuves: [
+            {
+              intitule: "Certificat d'étalonnage",
+              argument: "Copie du certificat en vigueur le jour des faits",
+            },
+          ],
+        },
+      ],
+    },
+  };
+
+  it("mappe l'enveloppe v2 : analyse, motifs typés, template OMP, questions", () => {
+    const p = parserExtraction(JSON.stringify(v2Base), CONTENU)!;
+    expect(p.etat).toBe("extrait");
+    expect(p.statutAnalyse).toBe("SUCCES_AUTOMOBILISTE_GAGNANT");
+    expect(p.titre).toBe("Étalonnage expiré — excès de vitesse contesté");
+    expect(p.analyse?.ecli).toBe("ECLI:TA:NI:2026:1234");
+    expect(p.analyse?.valide2026).toBe(true);
+    expect(p.motifsCles?.[0]?.type).toBe("ATTENDU");
+    expect(p.motifsCles?.[0]?.vice).toBe("défaut d'étalonnage");
+    expect(p.templateLettre).toContain("{nom}");
+    expect(p.templateRefere).toBeUndefined(); // amende : jamais de référé
+    expect(p.templateGracieux).toBeUndefined(); // amende : jamais de gracieux
+    expect(p.questionsDynamiques).toHaveLength(1);
+    expect(p.questionsDynamiques?.[0]?.id).toBe("certificat_renouvele");
+    expect(p.questionsDynamiques?.[0]?.preuves[0]?.intitule).toBe(
+      "Certificat d'étalonnage",
+    );
+  });
+
+  it("PERDANT : statut conservé, templates et questions jamais proposés", () => {
+    const p = parserExtraction(
+      JSON.stringify({
+        ...v2Base,
+        statut_analyse: "REJETE_AUTOMOBILISTE_PERDANT",
+      }),
+      CONTENU,
+    )!;
+    // Invariant D1 : l'IA n'écartera jamais seule — l'état reste `extrait`
+    // (le badge rouge + le clic admin gèrent l'écarterement).
+    expect(p.etat).toBe("extrait");
+    expect(p.statutAnalyse).toBe("REJETE_AUTOMOBILISTE_PERDANT");
+    expect(p.templateLettre).toBeUndefined();
+    expect(p.templateGracieux).toBeUndefined();
+    expect(p.questionsDynamiques).toBeUndefined();
+    // Le fondement reste lisible pour transparence.
+    expect(p.regle).toContain("certificat d'étalonnage");
+  });
+
+  it("suspension : 3ᵉ parcours gracieux conservé quand applicable", () => {
+    const susp = {
+      ...v2Base,
+      generation_templates_recours: {
+        ...v2Base.generation_templates_recours,
+        parcours_amende_contestation_omp: {
+          applicable: false,
+          paragraphe_lettre_contestation_amende: "",
+        },
+        parcours_suspension_recours_au_fond_avec_refere: {
+          applicable: true,
+          paragraphe_recours_exces_de_pouvoir_fond: lettreAmende,
+          paragraphe_memoire_refere_suspension_urgence: "",
+        },
+        parcours_suspension_amiable: {
+          applicable: true,
+          paragraphe_recours_gracieux_prefet_ou_ministre: gracieuxSusp,
+        },
+      },
+    };
+    const p = parserExtraction(JSON.stringify(susp), CONTENU)!;
+    expect(p.typeInfraction).toBe("SUSPENSION");
+    expect(p.templateLettre).toContain("{num_pv}"); // requête au fond
+    expect(p.templateGracieux).toContain("demande de grâce");
+  });
+
+  it("mock : marqueur PERDANT dans le titre → templates vidés, statut présent", () => {
+    const p = parserExtraction(
+      extractionMock({ ...PUB, titre: `${PUB.titre} — PERDANT` }),
+      CONTENU,
+    )!;
+    expect(p.statutAnalyse).toBe("REJETE_AUTOMOBILISTE_PERDANT");
+    expect(p.templateLettre).toBeUndefined();
+    expect(p.etat).toBe("extrait"); // le fondement reste affichable
+  });
+
+  it("obsolescence v2 : booléen faux → phrase de mise en garde datée", () => {
+    const p = parserExtraction(
+      JSON.stringify({
+        ...v2Base,
+        analyse: {
+          ...v2Base.analyse,
+          jurisprudence_valide_en_2026: false,
+          date_decision: "2015-06-30",
+        },
+      }),
+      CONTENU,
+    )!;
+    expect(p.obsolescence).toContain("2015");
+    expect(p.obsolescence).toContain("2026");
+    expect(p.etat).toBe("extrait"); // jamais de dégradation d'état
   });
 });
