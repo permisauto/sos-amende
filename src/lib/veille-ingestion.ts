@@ -445,8 +445,12 @@ function publicationDepuisRow(row: SourceJuridique): PublicationVeille {
 
 function propositionEnregistree(
   row: SourceJuridique,
-): { etat?: string; tentatives?: number } | null {
-  return row.proposition as { etat?: string; tentatives?: number } | null;
+): { etat?: string; tentatives?: number; regenTentatives?: number } | null {
+  return row.proposition as {
+    etat?: string;
+    tentatives?: number;
+    regenTentatives?: number;
+  } | null;
 }
 
 /**
@@ -467,14 +471,52 @@ export function estCandidatExtraction(
 }
 
 /**
+ * Une analyse **déjà au format v2** est-elle repris par la régénération ?
+ *
+ * Le marqueur `schemaVeille: 2` signale en principe « analysé à jour » — mais
+ * une analyse v2 `incomplet`/`echec` reste rattrapable : c'est le cas du pilote
+ * (7/9 bloqués par le verbatim des articles, cf. `articleVerbatim`). Une seule
+ * reprise, comme `estCandidatExtraction` : au-delà, l'humain corrige à la main.
+ *
+ * `extrait` n'est **jamais** repris (inutile, coûteux) ; `corrigeLe` prime
+ * toujours (correction admin intouchable).
+ */
+export function estRepriseRegeneration(p: {
+  etat?: string;
+  regenTentatives?: number;
+  corrigeLe?: string;
+  /**
+   * Volontairement **ignoré** : hérité des passages automatiques antérieurs
+   * (déjà 4 sur le pilote) et dit donc rien de la régénération. Déclaré ici
+   * pour que le rappel soit explicite chez l'appelant plutôt que silencieux.
+   */
+  tentatives?: number;
+} | null): boolean {
+  if (!p) return false;
+  if (p.corrigeLe) return false;
+  if (p.etat === "extrait") return false;
+  if (p.etat === "echec") return true;
+  if (p.etat === "incomplet") return (p.regenTentatives ?? 0) < 1;
+  return false;
+}
+
+/**
  * Extrait la proposition d'une publication et la stocke (`SourceJuridique
  * .proposition`) : état `extrait`/`incomplet`, ou `echec` avec motif pour
  * relance ultérieure. Chaque passage sur une proposition déjà connue
  * incrémente `tentatives` (bornage des reprises automatiques des `incomplet`).
+ *
+ * `regen: true` (chemin `regenererAnalysesAnciennes`) incrémente **en plus**
+ * `regenTentatives`, compteur propre à la régénération : `tentatives` est
+ * hérité des passages automatiques antérieurs (déjà 4 sur le pilote) et ne
+ * permet donc pas de borner la reprise d'une analyse v2. Sans `regen`, le
+ * compteur existant est conservé tel quel (jamais remis à zéro).
+ *
  * Ne lève jamais (null = écriture impossible).
  */
 async function extraireEtStocker(
   row: SourceJuridique,
+  options: { regen?: boolean } = {},
 ): Promise<PropositionVeille | null> {
   try {
     const avant = propositionEnregistree(row);
@@ -483,6 +525,11 @@ async function extraireEtStocker(
       ? res.proposition
       : propositionEchec(res.motif);
     if (avant) proposition.tentatives = (avant.tentatives ?? 0) + 1;
+    if (options.regen) {
+      proposition.regenTentatives = (avant?.regenTentatives ?? 0) + 1;
+    } else if (avant?.regenTentatives !== undefined) {
+      proposition.regenTentatives = avant.regenTentatives;
+    }
     await prisma.sourceJuridique.update({
       where: { id: row.id },
       data: { proposition: proposition as unknown as Prisma.InputJsonValue },
@@ -564,6 +611,12 @@ export function estSchemaVeille2(
  * `schemaVeille: 2`** : celles écrites avant la Veille 2.0 et qui n'ont donc
  * ni statut gagnant/perdant, ni courrier gracieux, ni questions dynamiques.
  *
+ * Il reprend aussi, **en tête de file**, les analyses **déjà v2 mais non
+ * abouties** (`incomplet`/`echec`, jamais corrigées) — une seule fois chacune
+ * (`estRepriseRegeneration`) : c'est le cas du pilote, dont 7/9 ont échoué au
+ * verbatim des articles avant la correction `articleVerbatim`. Sans cette
+ * reprise, le marqueur v2 les aurait écartées définitivement.
+ *
  * Garde-fous :
  *  - **réutilise le même chemin d'extraction** (`extraireProposition`) : même
  *    provider (mock / secours local / IA), mêmes garde-fous anti-hallucination ;
@@ -591,23 +644,40 @@ export async function regenererAnalysesAnciennes(
     return { ...BILAN_VIDE };
   }
 
-  // Hérites = une proposition stockée SANS le marqueur v2. `take` large côté
-  // requête puis filtrage mémoire (JSON path trop variable pour un where SQL
-  // robuste), puis bornage `limite`.
-  const heritees = rows
-    .filter((r) => {
-      const p = r.proposition as { schemaVeille?: number; corrigeLe?: string } | null;
-      if (!p || estSchemaVeille2(p)) return false;
-      // Correction manuelle prioritaire : jamais écrasée par la régénération.
-      return !p.corrigeLe;
-    })
-    .slice(0, limite);
+  // Deux populations, bornées ensemble par `limite` :
+  //  1. analyses **hérites** (sans marqueur v2) — le cas historique ;
+  //  2. analyses **v2 non abouties** (`estRepriseRegeneration`) — le cas du
+  //     pilote, bloqué par le verbatim des articles avant `articleVerbatim`.
+  // `take` large côté requête puis filtrage mémoire (JSON path trop variable
+  // pour un where SQL robuste), puis bornage `limite`. Les reprises v2 passent
+  // en tête : elles sont rares et doivent profiter d'abord du correctif.
+  type Ligne = { row: SourceJuridique; reprise: boolean };
+  const reprises: Ligne[] = [];
+  const heritees: Ligne[] = [];
+  for (const row of rows) {
+    const p = row.proposition as {
+      schemaVeille?: number;
+      corrigeLe?: string;
+      etat?: string;
+      tentatives?: number;
+      regenTentatives?: number;
+    } | null;
+    if (!p || p.corrigeLe) continue;
+    if (estSchemaVeille2(p)) {
+      // Reprise d'une analyse v2 non aboutie : rares, profitent d'abord du
+      // correctif, donc traitées avant la file héritée.
+      if (estRepriseRegeneration(p)) reprises.push({ row, reprise: true });
+    } else {
+      heritees.push({ row, reprise: false });
+    }
+  }
+  const aTraiter = [...reprises, ...heritees].slice(0, limite);
 
   const bilan = { ...BILAN_VIDE };
   const fin = Date.now() + BUDGET_TEMPS_EXTRACTION_MS;
-  for (const row of heritees) {
+  for (const { row, reprise } of aTraiter) {
     if (Date.now() > fin) break;
-    const prop = await extraireEtStocker(row);
+    const prop = await extraireEtStocker(row, { regen: reprise });
     if (prop?.etat === "extrait") bilan.extraites++;
     else if (prop?.etat === "incomplet") bilan.incompletes++;
     else bilan.echecs++;
@@ -850,4 +920,98 @@ export async function sourcesNouvelles(jours = 7, limite = 50): Promise<LigneDig
     console.error("veille-dila: lecture des sources nouvelles impossible", e);
     return [];
   }
+}
+
+// ---------------------------------------------------------------------------
+// Rétro-remplissage Veille 2.0 des failles PROPOSEE déjà liées
+// ---------------------------------------------------------------------------
+
+export type BilanRetroRemplissage = {
+  /** Failles PROPOSEE liées dont les champs v2 ont été complétés. */
+  misesAJour: number;
+  /** Failles PROPOSEE liées sans proposition v2 exploitable (inchangées). */
+  sansDonnees: number;
+};
+
+/**
+ * Rétro-remplit `templateGracieux` et `questionsDynamiques` sur les failles
+ * `PROPOSEE` déjà liées à une source, depuis la proposition v2 de cette source.
+ *
+ * Pourquoi : quand une source est régénérée en Veille 2.0
+ * (`regenererAnalysesAnciennes`), la faille qui lui est déjà liée garde ses
+ * anciens champs NULL — la proposition a été écrite après la création de la
+ * faille. Sans ce passage, l'admin ouvre une faille PROPOSEE incomplète
+ * (pas de 3ᵉ parcours gracieux, pas de questions dynamiques) au moment de
+ * devoir juger sa valeur.
+ *
+ * Garde-fous identiques à `proposerFaillesDepuisExtraction` :
+ *  - **uniquement `PROPOSEE`** : une faille `ACTIVE` est déjà dans le
+ *    catalogue et peut alimenter des dossiers en cours — la modifier au vol
+ *    introduirait des incohérences sur des lettres déjà générées. Les
+ *    prochaines créations/validations les mettront à jour naturellement ;
+ *  - **jamais d'effacement** : un champ déjà renseigné sur la faille est
+ *    conservé (l'admin a pu le corriger à la main) — on ne comble que le vide ;
+ *  - idempotent : re-exécution = même résultat ;
+ *  - best-effort, ne lève jamais.
+ */
+export async function retroRemplirFaillesVeille2(): Promise<BilanRetroRemplissage> {
+  const bilan: BilanRetroRemplissage = { misesAJour: 0, sansDonnees: 0 };
+  try {
+    const failles = await prisma.failleJuridique.findMany({
+      where: { statut: "PROPOSEE", sources: { some: {} } },
+      select: {
+        id: true,
+        templateGracieux: true,
+        questionsDynamiques: true,
+        sources: {
+          select: { proposition: true },
+          take: 1,
+        },
+      },
+      take: 100,
+    });
+
+    for (const f of failles) {
+      const prop = f.sources[0]?.proposition as PropositionVeille | null;
+      const gracieux = prop?.templateGracieux ?? "";
+      const questions = prop?.questionsDynamiques ?? [];
+      const aGracieux = gracieux.length > 0 && !f.templateGracieux;
+      const aQuestions =
+        questions.length > 0 &&
+        (!Array.isArray(f.questionsDynamiques) || f.questionsDynamiques.length === 0);
+
+      if (!aGracieux && !aQuestions) {
+        bilan.sansDonnees++;
+        continue;
+      }
+
+      await prisma.failleJuridique.update({
+        where: { id: f.id },
+        data: {
+          ...(aGracieux ? { templateGracieux: gracieux } : {}),
+          ...(aQuestions
+            ? {
+                questionsDynamiques:
+                  questions as unknown as Prisma.InputJsonValue,
+              }
+            : {}),
+        },
+      });
+      bilan.misesAJour++;
+    }
+  } catch (e) {
+    console.error("veille-retroremplissage: rétro-remplissage impossible", e);
+    return { misesAJour: 0, sansDonnees: 0 };
+  }
+
+  if (bilan.misesAJour > 0) {
+    await enregistrerTraceAutoAlimentation({
+      campagne: "retroremplissage-veille-2",
+      statut: "OK",
+      traitees: bilan.misesAJour + bilan.sansDonnees,
+      nouvelles: bilan.misesAJour,
+      detail: `misesAJour=${bilan.misesAJour} sansDonnees=${bilan.sansDonnees}`,
+    });
+  }
+  return bilan;
 }

@@ -128,6 +128,14 @@ export type PropositionVeille = {
   extraitLe: string;
   /** (Ré)extractions automatiques déjà tentées sur cette proposition. */
   tentatives?: number;
+  /**
+   * Reprises de la **régénération** (`regenererAnalysesAnciennes`) sur une
+   * proposition déjà au format v2. Compteur distinct de `tentatives` : celui-ci
+   * est hérité des passages automatiques antérieurs et ne dit rien de la
+   * régénération. `incomplet` n'est repris qu'une seule fois (même arbitrage
+   * que `estCandidatExtraction`) — au-delà, l'admin corrige à la main.
+   */
+  regenTentatives?: number;
   /** Date ISO de la dernière correction manuelle (admin). */
   corrigeLe?: string;
 };
@@ -251,6 +259,39 @@ export function assainirTemplate(
     if (!connu) return undefined;
   }
   return t;
+}
+
+// ---------------------------------------------------------------------------
+// Verbatim des articles
+// ---------------------------------------------------------------------------
+
+/**
+ * L'article est-il **cité dans la publication** ? Contrairement à
+ * `contenuVerbatim`, la comparaison porte sur la **référence légale**
+ * (`RE_MENTION_ARTICLE` → « artl1211 ») et non sur la chaîne complète :
+ *
+ *  * un article nu (« L. 223-3 » = 8 car.) était rejeté par le plancher de
+ *    15 caractères de `contenuVerbatim` — plancher qui, ailleurs, est déjà
+ *    assuré par le minimum du champ appelant (conditions ≥ 15, motifs ≥ 20) ;
+ *  * la forme libre du modèle (« C. route, art. L. 223-3 ») n'est presque
+ *    jamais contiguë au texte publié.
+ *
+ * L'anti-invention est préservée : la référence doit être littéralement
+ * citée dans le document, sinon `false`. Une citation qui n'est aucune
+ * référence d'article (`L. 121` sans groupe `-n`) est rejetée.
+ */
+export function articleVerbatim(texte: string, citation: string): boolean {
+  const cibles = referencesLegales(citation);
+  if (cibles.length === 0) return false;
+  const cites = new Set(referencesLegales(texte));
+  return cibles.every((c) => cites.has(c));
+}
+
+/** Références légales normalisées d'une citation : « artl1211 », « r471 »… */
+function referencesLegales(citation: string): string[] {
+  return [...citation.matchAll(RE_MENTION_ARTICLE)].map((m) =>
+    normaliserMentionArticle(m[1]),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -461,15 +502,19 @@ function proposerDepuisV2(
   const typeInfraction = typeInfractionDepuisParcours(d, contenu, titreSource);
   const perdant = d.statut_analyse === "REJETE_AUTOMOBILISTE_PERDANT";
 
-  // Articles : verbatim exigé, max 3, dédup.
+  // Articles : verbatim exigé (référence légale), max 3, dédup **par
+  // référence** — « L. 223-3 » et « C. route, art. L. 223-3 » désignent le
+  // même article et ne doivent pas consommer deux des trois emplacements.
   const articlesVus = new Set<string>();
   const articles: string[] = [];
   for (const a of s.articles_loi_vises.slice(0, 5)) {
     const article = a.trim();
     if (article.length < 3 || article.length > 120) continue;
-    const cle = normaliserPourComparaison(article);
+    const refs = referencesLegales(article);
+    if (refs.length === 0) continue;
+    const cle = refs.join("+");
     if (articlesVus.has(cle)) continue;
-    if (!contenuVerbatim(contenu, article)) continue;
+    if (!articleVerbatim(contenu, article)) continue;
     articlesVus.add(cle);
     articles.push(article);
     if (articles.length >= 3) break;
@@ -623,9 +668,11 @@ function proposerDepuisLegacy(
   for (const a of d.articles.slice(0, 5)) {
     const article = a.trim();
     if (article.length < 3 || article.length > 120) continue;
-    const cle = normaliserPourComparaison(article);
+    const refs = referencesLegales(article);
+    if (refs.length === 0) continue;
+    const cle = refs.join("+");
     if (articlesVus.has(cle)) continue;
-    if (!contenuVerbatim(contenu, article)) continue;
+    if (!articleVerbatim(contenu, article)) continue;
     articlesVus.add(cle);
     articles.push(article);
     if (articles.length >= 3) break;

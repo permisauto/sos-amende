@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   BUDGET_EXTRACTION,
   SCORE_SEUIL_EXTRACTION,
+  articleVerbatim,
   assainirTemplate,
   composerRegleProposition,
   construirePromptExtraction,
@@ -52,6 +53,146 @@ describe("normaliserPourComparaison / contenuVerbatim", () => {
       false,
     );
     expect(contenuVerbatim(CONTENU, "trop court")).toBe(false);
+  });
+});
+
+describe("articleVerbatim", () => {
+  it("accepte l'article nu de 8 caractères que contenuVerbatim rejette", () => {
+    // Régression : le plancher de 15 car. de contenuVerbatim vidait articles[]
+    // → aucun template (assainirTemplate) → état incomplet sur 7/9 pilotes.
+    expect(contenuVerbatim(CONTENU, "L. 224-16")).toBe(false);
+    expect(articleVerbatim(CONTENU, "L. 224-16")).toBe(true);
+    expect(articleVerbatim(CONTENU, "R. 47-1")).toBe(false);
+  });
+
+  it("compare par référence légale : la forme libre du modèle passe", () => {
+    expect(articleVerbatim(CONTENU, "C. route, art. L. 224-16")).toBe(true);
+    expect(articleVerbatim(CONTENU, "art. L. 224-16 du code de la route")).toBe(
+      true,
+    );
+    expect(articleVerbatim(CONTENU, "L. 224-16 du code de la route")).toBe(true);
+  });
+
+  it("refuse l'article absent et la citation qui n'est pas un article", () => {
+    expect(articleVerbatim(CONTENU, "L. 415-2 du code des impôts")).toBe(false);
+    expect(articleVerbatim(CONTENU, "L. 521-2 du code de justice")).toBe(false);
+    // Aucun groupe « -n » : aucune référence extraite → rejet (pas de faille
+    // silencieuse qui passerait pour un article vérifié).
+    expect(articleVerbatim(CONTENU, "L. 121")).toBe(false);
+    expect(articleVerbatim(CONTENU, "")).toBe(false);
+  });
+
+  it("exige TOUS les articles de la citation", () => {
+    // Un seul article du duo est cité dans CONTENU → rejet.
+    expect(articleVerbatim(CONTENU, "L. 224-16 et R. 47-1")).toBe(false);
+    expect(articleVerbatim(CONTENU, "L. 224-16 et L. 415-2")).toBe(false);
+    expect(articleVerbatim(CONTENU, "L. 224-16 et L. 224-16")).toBe(true);
+  });
+
+  it("est insensible aux accents et à la casse comme contenuVerbatim", () => {
+    expect(articleVerbatim(CONTENU, "l. 224-16")).toBe(true);
+    expect(articleVerbatim(CONTENU, "L.224-16")).toBe(true);
+  });
+});
+
+describe("parserExtraction — articles (régression pilote v2)", () => {
+  const v2 = (articles: string[]) =>
+    JSON.stringify({
+      statut_analyse: "SUCCES_AUTOMOBILISTE_GAGNANT",
+      analyse: {
+        juridiction: "Conseil d'État",
+        jurisprudence_valide_en_2026: true,
+        fondement_regle_de_droit_degagee:
+          "La suspension du permis de conduire doit être notifiée dans le délai imparti ; à défaut, la décision est entachée d'irrégularité.",
+      },
+      motifs_cles: [
+        {
+          type: "CONSIDERANT",
+          verbatim:
+            "que l'administration n'a pas justifié de la notification de la décision dans le délai imparti",
+          vice: "défaut de notification",
+        },
+      ],
+      generation_templates_recours: {
+        titre_faille_catalogue: "Défaut de notification de la suspension",
+        conditions_application: [
+          "l'administration n'a pas justifié de la notification de la décision dans le délai imparti",
+        ],
+        articles_loi_vises: articles,
+        parcours_amende_contestation_omp: {
+          applicable: false,
+          paragraphe_lettre_contestation_amende: "",
+        },
+        parcours_suspension_recours_au_fond_avec_refere: {
+          applicable: true,
+          paragraphe_recours_exces_de_pouvoir_fond:
+            "Je conteste la suspension de mon permis de conduire, prononcée au titre de l'article L. 223-3 du code de la route, et demande son annulation pour défaut de notification dans le délai imparti.",
+          paragraphe_memoire_refere_suspension_urgence:
+            "Je demande au juge des référés de suspendre l'exécution de l'arrêté attaqué, sur le fondement de l'article L. 521-2 du code de justice administrative, la décision présentant un doute sérieux.",
+        },
+        parcours_suspension_amiable: {
+          applicable: false,
+          paragraphe_recours_gracieux_prefet_ou_ministre: "",
+        },
+      },
+      auto_alimentation_questions_ux_et_preuves: { questions: [] },
+    });
+
+  // Le texte réel des documents échoués du pilote : l'article y figure, mais
+  // sous sa forme nu (8 car.) — rejetée par l'ancien plancher de 15.
+  const CONTENU_SUSP = [
+    "Considérant qu'aux termes de l'article L. 223-3 du code de la route nul ne peut conduire",
+    "un véhicule à moteur s'il ne possède pas un permis de conduire en cours de validité ;",
+    "qu'il résulte des pièces du dossier que l'arrêté attaqué a prononcé la suspension du",
+    "permis de conduire du requérant ; que l'administration n'a pas justifié de la notification",
+    "de la décision dans le délai imparti ; qu'une telle omission a privé le requérant de la",
+    "possibilité d'exercer utilement les voies de recours ouvertes par le code de la route.",
+  ].join(" ");
+
+  it("article nu de 8 car. : extrait avec ses templates (pilote 7/9 → 0)", () => {
+    const p = parserExtraction(v2(["L. 223-3"]), CONTENU_SUSP, "CE");
+    expect(p?.etat).toBe("extrait");
+    expect(p?.motif).toBeUndefined();
+    expect(p?.articles).toEqual(["L. 223-3"]);
+    expect(p?.templateLettre).toBeTruthy();
+    expect(p?.templateRefere).toBeTruthy();
+  });
+
+  it("forme libre du modèle : extrait aussi", () => {
+    const p = parserExtraction(
+      v2(["C. route, art. L. 223-3"]),
+      CONTENU_SUSP,
+      "CE",
+    );
+    expect(p?.etat).toBe("extrait");
+    expect(p?.articles).toEqual(["C. route, art. L. 223-3"]);
+  });
+
+  it("déduplique par référence légale — les 3 emplacements ne sont pas gâchés", () => {
+    const p = parserExtraction(
+      v2([
+        "L. 223-3",
+        "C. route, art. L. 223-3",
+        "art. L. 223-3 du code de la route",
+        "l. 223-3",
+      ]),
+      CONTENU_SUSP,
+      "CE",
+    );
+    expect(p?.articles).toHaveLength(1);
+  });
+
+  it("garde l'anti-invention : l'article absent reste rejeté", () => {
+    const p = parserExtraction(v2(["L. 415-2"]), CONTENU_SUSP, "CE");
+    expect(p?.etat).toBe("incomplet");
+    expect(p?.motif).toContain("aucun article cité textuellement");
+    expect(p?.templateLettre).toBeUndefined();
+  });
+
+  it("le document qui ne cite aucun article ne fabrique rien (règle 14)", () => {
+    const p = parserExtraction(v2(["L. 223-3"]), "Aucun article ici.", "CE");
+    expect(p?.etat).toBe("incomplet");
+    expect(p?.articles).toEqual([]);
   });
 });
 

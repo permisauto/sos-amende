@@ -8,6 +8,7 @@ import {
   executerVeilleDila,
   extrairePropositionsEnAttente,
   regenererAnalysesAnciennes,
+  retroRemplirFaillesVeille2,
 } from "@/lib/veille-ingestion";
 import {
   composerRegleProposition,
@@ -113,6 +114,32 @@ export async function regenererAnalysesVeille(
   return {
     ok: true,
     message: `${total} analyse(s) régénérée(s) au format Veille 2.0 (${bilan.extraites} complète(s)). Rappuyez pour traiter le lot suivant.`,
+  };
+}
+
+/**
+ * Complète les failles `PROPOSEE` déjà liées à une source régénérée : recopie
+ * `templateGracieux` et `questionsDynamiques` depuis la proposition v2 de la
+ * source. Admin seul. Sans ce passage, l'admin juge une faille incomplète
+ * (pas de 3ᵉ parcours gracieux ni de questions) au moment de devoir valider.
+ */
+export async function retroRemplirFaillesVeille(
+  _prev: VeilleState,
+): Promise<VeilleState> {
+  await requireAdmin();
+  const bilan = await retroRemplirFaillesVeille2();
+  revalidatePath("/dashboard/juriste/veille");
+  revalidatePath("/dashboard/juriste/failles");
+  if (bilan.misesAJour === 0) {
+    return {
+      ok: true,
+      message:
+        "Aucune faille PROPOSEE liée à compléter — les propositions v2 sont déjà à jour (ou aucune source liée n'est encore régénérée).",
+    };
+  }
+  return {
+    ok: true,
+    message: `${bilan.misesAJour} faille(s) PROPOSEE complétée(s) (gracieux + questions dynamiques). Consultez-les dans la bibliothèque juridique.`,
   };
 }
 
