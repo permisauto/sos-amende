@@ -7,6 +7,8 @@ import { Prisma } from "@/generated/prisma/client";
 import {
   executerVeilleDila,
   extrairePropositionsEnAttente,
+  regenererAnalysesAnciennes,
+  retroRemplirFaillesVeille2,
 } from "@/lib/veille-ingestion";
 import {
   composerRegleProposition,
@@ -15,6 +17,7 @@ import {
   type ValeursProposition,
 } from "@/lib/veille-extraction";
 import type { PropositionVeille } from "@/lib/veille-extraction";
+import { reglesDetectionPourQuestions } from "@/lib/questions";
 
 /** Budget du bouton « Extraire les propositions » (plus large que le lot auto). */
 const BUDGET_EXTRACTION_LOT = 30;
@@ -88,6 +91,76 @@ export async function extrairePropositionsLot(
   };
 }
 
+/**
+ * Régénère les analyses hérites (avant Veille 2.0) au format courant —
+ * **admin seul**. Le bouton n'apparaît que pour l'admin ; les juristes ne
+ * déclenchent jamais un retraitement de masse. Progressif : chaque clic
+ * traite un lot borné, on rappuie pour avancer (la page ne fige pas).
+ */
+export async function regenererAnalysesVeille(
+  _prev: VeilleState,
+): Promise<VeilleState> {
+  await requireAdmin();
+  const bilan = await regenererAnalysesAnciennes(BUDGET_EXTRACTION_LOT);
+  revalidatePath("/dashboard/juriste/veille");
+  if (bilan.iaIndisponible) {
+    return {
+      error:
+        "IA indisponible (coupée ou sans clé) — aucune analyse régénérée. Les analyses existantes sont conservées.",
+    };
+  }
+  // Repli local = l'IA a échoué (quota 429, panne) : le lot a été interrompu.
+  // Ne surtout pas annoncer « régénéré » — ces passages ne sont pas des
+  // analyses Veille 2.0 et resteraient en file.
+  if (bilan.locales > 0) {
+    const total = bilan.extraites + bilan.incompletes + bilan.echecs;
+    return {
+      error:
+        total > 0
+          ? `IA momentanément indisponible (quota atteint ou panne) : ${total} analyse(s) régénérée(s) avant l'arrêt du lot. Réessayez plus tard — les analyses non traitées restent en file.`
+          : "IA momentanément indisponible (quota atteint ou panne) : aucune analyse régénérée. Réessayez plus tard.",
+    };
+  }
+  const total = bilan.extraites + bilan.incompletes + bilan.echecs;
+  if (total === 0) {
+    return {
+      ok: true,
+      message:
+        "Toutes les analyses sont déjà au format Veille 2.0 — rien à régénérer.",
+    };
+  }
+  return {
+    ok: true,
+    message: `${total} analyse(s) régénérée(s) au format Veille 2.0 (${bilan.extraites} complète(s)). Rappuyez pour traiter le lot suivant.`,
+  };
+}
+
+/**
+ * Complète les failles `PROPOSEE` déjà liées à une source régénérée : recopie
+ * `templateGracieux` et `questionsDynamiques` depuis la proposition v2 de la
+ * source. Admin seul. Sans ce passage, l'admin juge une faille incomplète
+ * (pas de 3ᵉ parcours gracieux ni de questions) au moment de devoir valider.
+ */
+export async function retroRemplirFaillesVeille(
+  _prev: VeilleState,
+): Promise<VeilleState> {
+  await requireAdmin();
+  const bilan = await retroRemplirFaillesVeille2();
+  revalidatePath("/dashboard/juriste/veille");
+  revalidatePath("/dashboard/juriste/failles");
+  if (bilan.misesAJour === 0) {
+    return {
+      ok: true,
+      message:
+        "Aucune faille PROPOSEE liée à compléter — les propositions v2 sont déjà à jour (ou aucune source liée n'est encore régénérée).",
+    };
+  }
+  return {
+    ok: true,
+    message: `${bilan.misesAJour} faille(s) PROPOSEE complétée(s) (gracieux + questions dynamiques). Consultez-les dans la bibliothèque juridique.`,
+  };
+}
+
 /** Lit les champs édités du drawer, ou `null` si le bouton n'a envoyé que l'id. */
 function lirePropositionFormulaire(formData: FormData): ValeursProposition | null {
   if (!formData.has("titre")) return null;
@@ -102,6 +175,7 @@ function lirePropositionFormulaire(formData: FormData): ValeursProposition | nul
     motifDecisif: String(formData.get("motifDecisif") ?? ""),
     templateLettre: String(formData.get("templateLettre") ?? ""),
     templateRefere: String(formData.get("templateRefere") ?? ""),
+    templateGracieux: String(formData.get("templateGracieux") ?? ""),
   };
 }
 
@@ -151,6 +225,12 @@ export async function validerPropositionSource(
       extraits: stockee && stockee.etat !== "echec" ? stockee.extraits : [],
       extraitLe: stockee?.extraitLe,
       obsolescence: stockee?.obsolescence,
+      // Veille 2.0 : l'admin n'édite ni l'analyse prédiction ni les questions
+      // — les champs v2 sont préservés à la correction.
+      statutAnalyse: stockee?.statutAnalyse,
+      analyse: stockee?.analyse,
+      motifsCles: stockee?.motifsCles,
+      questionsDynamiques: stockee?.questionsDynamiques,
     });
     if (!res.ok) return { error: res.erreur };
     proposition = res.proposition;
@@ -202,6 +282,9 @@ export async function validerPropositionSource(
 
   const regle = composerRegleProposition(proposition);
   const ref = refPropositionDepuisSource(source, proposition);
+  // Veille 2.0 : règles de détection mappées des questions dynamiques (types
+  // additifs du moteur) + 3ᵉ template (gracieux) — champs distincts (D5).
+  const regles = reglesDetectionPourQuestions(proposition.questionsDynamiques ?? []);
 
   const donnees = {
     typeInfraction: proposition.typeInfraction,
@@ -211,6 +294,15 @@ export async function validerPropositionSource(
     source: source.url ?? source.archive,
     jurisprudence: [ref] as unknown as Prisma.InputJsonValue,
     statut: "ACTIVE" as const,
+    ...(regles.length
+      ? { reglesDetection: regles as unknown as Prisma.InputJsonValue }
+      : {}),
+    ...(proposition.questionsDynamiques?.length
+      ? {
+          questionsDynamiques:
+            proposition.questionsDynamiques as unknown as Prisma.InputJsonValue,
+        }
+      : {}),
   };
 
   // Deuxième entrée (auto-proposition de la veille) : la faille existe déjà
@@ -224,16 +316,18 @@ export async function validerPropositionSource(
     dejaLiee?.templateLettre || proposition.templateLettre || "";
   const templateRefere =
     dejaLiee?.templateRefere || proposition.templateRefere || "";
+  const templateGracieux =
+    dejaLiee?.templateGracieux || proposition.templateGracieux || "";
   let failleId: string;
   if (dejaLiee) {
     failleId = dejaLiee.id;
     await prisma.failleJuridique.update({
       where: { id: dejaLiee.id },
-      data: { ...donnees, templateLettre, templateRefere },
+      data: { ...donnees, templateLettre, templateRefere, templateGracieux },
     });
   } else {
     const faille = await prisma.failleJuridique.create({
-      data: { ...donnees, templateLettre, templateRefere },
+      data: { ...donnees, templateLettre, templateRefere, templateGracieux },
     });
     failleId = faille.id;
   }
@@ -261,6 +355,10 @@ export async function validerPropositionSource(
       templateLettre
         ? "Template de lettre pré-rédigé inclus : relisez-le dans la bibliothèque juridique avant usage."
         : "Rédigez son template de lettre dans la bibliothèque juridique — sans template, elle ne peut pas encore alimenter une contestation."
+    }${
+      templateGracieux
+        ? " Demande gracieuse (3ᵉ parcours) également pré-rédigée."
+        : ""
     }`,
   };
 }

@@ -14,7 +14,7 @@
 
 import { lireDocType, type DocTypeAnalyse } from "./envoi";
 import type { InfractionType } from "./envoi";
-import type { ExtractedData } from "./moteur";
+import type { ExtractedData, RegleDetection } from "./moteur";
 import type { TypePreuveExterne } from "./preuves-api";
 
 /** Preuves externes que la réponse peut rendre pertinentes (N2). */
@@ -43,6 +43,10 @@ export const PREUVE_CLIENT_TYPES = [
   // Lot R3 — pièces des questions amende (cliché radar, marquage stationnement).
   "CLICHE_ANTAI",
   "PHOTO_MARQUAGE",
+  // Veille 2.0 — pièce dont l'intitulé vient du catalogue (IA) quand aucun
+  // type existant ne correspond : libellé générique, la raison portée par la
+  // suggestion nomme la pièce réellement demandée.
+  "PIECE_LIBRE",
 ] as const;
 
 export type PreuveClient = (typeof PREUVE_CLIENT_TYPES)[number];
@@ -119,6 +123,10 @@ export type QuestionCiblee = {
   preuvesOption?: Partial<Record<string, readonly PreuveClient[]>>;
   /** Libellé court pour l'affichage juriste (défaut : `libelle`, la question). */
   libAffichage?: string;
+  /** Note affichée sous la question (question dynamique du catalogue :
+   * intitulé + argument de la pièce, texte libre issu de l'extraction —
+   * remplace le libellé statique de `preuveClient` quand présent). */
+  notePreuve?: string;
 };
 
 export const QUESTIONS_CIBLEES: readonly QuestionCiblee[] = [
@@ -474,6 +482,9 @@ export function questionsPour(opts: {
   type: InfractionType;
   texte?: string | null;
   docType?: string | null;
+  /** Questions dynamiques du catalogue (failles ACTIVE veille 2.0) — déjà
+   * filtrées par type par le chargeur serveur, ajoutées en dernier groupe. */
+  dynamiques?: readonly QuestionDynamique[];
 }): GroupeQuestions[] {
   const natures = naturesPv(opts.texte);
   const docType = lireDocType(opts.docType);
@@ -486,6 +497,8 @@ export function questionsPour(opts: {
     if (liste) liste.push(q);
     else groupes.set(q.groupe, [q]);
   }
+  const dyn = versQuestionsCiblees(opts.dynamiques ?? []);
+  if (dyn.length) groupes.set(GROUPE_DYNAMIQUE, dyn);
   return Array.from(groupes, ([groupe, questions]) => ({ groupe, questions }));
 }
 
@@ -495,7 +508,10 @@ export function questionsPour(opts: {
  * Une case non cochée n'écrit rien (jamais de `false` inutile en base) ; un
  * champ texte vide n'écrit rien non plus.
  */
-export function lireReponses(fd: FormData): Partial<ExtractedData> {
+export function lireReponses(
+  fd: FormData,
+  dynamiques: readonly QuestionDynamique[] = [],
+): Partial<ExtractedData> {
   const out: Partial<ExtractedData> = {};
   // Écriture via index string : TypeScript n'accepte pas l'affectation d'un
   // type large sur une clé union (`out[q.champ]` exigerait l'intersection).
@@ -522,6 +538,17 @@ export function lireReponses(fd: FormData): Partial<ExtractedData> {
       }
     } else if (fd.get(q.cle) === "on") {
       cible[q.champ] = q.valeur ?? true;
+    }
+  }
+  // Questions dynamiques du catalogue (veille 2.0) : mêmes règles que le
+  // registre (case non cochée = rien, texte vide = rien) — clés = `q.id`.
+  const dynCible = out as unknown as Record<string, unknown>;
+  for (const q of dynamiques) {
+    if (q.type === "TEXT") {
+      const brut = fd.get(q.id);
+      if (typeof brut === "string" && brut.trim()) dynCible[q.id] = brut.trim();
+    } else if (fd.get(q.id) === "on") {
+      dynCible[q.id] = true;
     }
   }
   return out;
@@ -569,10 +596,11 @@ export type PreuveSuggestionClient = { type: PreuveClient; raison: string };
 export function suggestionsPreuvesClient(
   reponses: Partial<ExtractedData> | Record<string, unknown> | null | undefined,
   typesPresents?: Iterable<string>,
+  dynamiques: readonly QuestionDynamique[] = [],
 ): PreuveSuggestionClient[] {
   if (!reponses) return [];
   const presents = new Set(typesPresents ?? []);
-  const vus = new Set<PreuveClient>();
+  const vus = new Set<string>();
   const suggestions: PreuveSuggestionClient[] = [];
   for (const q of QUESTIONS_CIBLEES) {
     const valeur = reponses[q.champ];
@@ -595,10 +623,223 @@ export function suggestionsPreuvesClient(
     if (types.length === 0) continue;
     const raison = option ? option.libelle : q.libelle;
     for (const type of types) {
-      if (presents.has(type) || vus.has(type)) continue;
-      vus.add(type);
+      const cle = type;
+      if (presents.has(type) || vus.has(cle)) continue;
+      vus.add(cle);
+      suggestions.push({ type, raison });
+    }
+  }
+  // Pièces des questions dynamiques (catalogue veille 2.0) : la raison nomme
+  // l'intitulé demandé par l'IA + son argument ; dédup par type+raison (deux
+  // questions peuvent appeler deux pièces de même type générique).
+  for (const q of dynamiques) {
+    const valeur = (reponses as Record<string, unknown> | null | undefined)?.[
+      q.id
+    ];
+    if (!(valeur === true || (typeof valeur === "string" && valeur !== ""))) {
+      continue;
+    }
+    for (const p of q.preuves) {
+      const type = typePreuvePourIntitule(p.intitule);
+      const raison = p.argument ? `${p.intitule} — ${p.argument}` : p.intitule;
+      const cle = `${type}|${raison}`;
+      if (presents.has(type) || vus.has(cle)) continue;
+      vus.add(cle);
       suggestions.push({ type, raison });
     }
   }
   return suggestions;
+}
+
+// ---------------------------------------------------------------------------
+// Veille 2.0 — questions dynamiques pré-rédigées par l'extraction (IA) et
+// stockées sur la faille ACTIVE (`FailleJuridique.questionsDynamiques`).
+//
+// Invariants préservés : une question dynamique reste un **capteur de fait**
+// (elle écrit dans `extractedData` et appelle une pièce — jamais un
+// fondement) ; le moteur ne lit que `reglesDetection` (types additifs
+// `reponseVrai`/`reponseFausse`/`reponseTexte` mappés depuis le déclencheur).
+// Module pur — le chargement en base vit dans `questions-dyn.ts` (serveur).
+// ---------------------------------------------------------------------------
+
+export const GROUPE_DYNAMIQUE = "À vérifier (base juridique)";
+
+export type QuestionDynamique = {
+  /** Clé normalisée `^[a-z0-9_]{3,60}$` — champ FormData + clé
+   * `extractedData` + `champ` de la règle moteur. */
+  id: string;
+  libelle: string;
+  type: "BOOLEAN" | "TEXT";
+  /** Déclencheur de la règle liée : `true` → `reponseVrai`, `false` →
+   * `reponseFausse`, `"TEXT_PRESENT"` → `reponseTexte`. */
+  declencheur: boolean | "TEXT_PRESENT";
+  /** Pièce que le client peut joindre (1ʳᵉ pièce bornée par le parser IA). */
+  preuves: { intitule: string; argument: string }[];
+};
+
+/**
+ * Valide et borne une liste de questions brute (JSON `questionsDynamiques` ou
+ * sortie IA) — défensif : jamais d'exception, tableau vide sur forme
+ * inattendue, ids normalisés + dédup, longueurs bornées.
+ */
+export function normaliserQuestionsDynamiques(
+  brut: unknown,
+): QuestionDynamique[] {
+  if (!Array.isArray(brut)) return [];
+  const out: QuestionDynamique[] = [];
+  const vus = new Set<string>();
+  for (const item of brut) {
+    if (out.length >= 6) break;
+    if (!item || typeof item !== "object") continue;
+    const o = item as Record<string, unknown>;
+    const id =
+      typeof o.id === "string"
+        ? o.id
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9_]+/g, "_")
+            .replace(/^_+|_+$/g, "")
+            .slice(0, 60)
+        : "";
+    if (id.length < 3 || vus.has(id)) continue;
+    const libelle = typeof o.libelle === "string" ? o.libelle.trim() : "";
+    if (libelle.length < 5 || libelle.length > 300) continue;
+    const type: QuestionDynamique["type"] = o.type === "TEXT" ? "TEXT" : "BOOLEAN";
+    const declencheur: QuestionDynamique["declencheur"] =
+      o.declencheur === "TEXT_PRESENT"
+        ? "TEXT_PRESENT"
+        : o.declencheur === false
+          ? false
+          : true;
+    const preuves: QuestionDynamique["preuves"] = [];
+    if (Array.isArray(o.preuves)) {
+      for (const p of o.preuves) {
+        if (preuves.length >= 1) break; // 1ʳᵉ pièce seulement (borne IA)
+        if (!p || typeof p !== "object") continue;
+        const pp = p as Record<string, unknown>;
+        const intitule =
+          typeof pp.intitule === "string" ? pp.intitule.trim().slice(0, 200) : "";
+        if (intitule.length < 3) continue;
+        const argument =
+          typeof pp.argument === "string" ? pp.argument.trim().slice(0, 500) : "";
+        preuves.push({ intitule, argument });
+      }
+    }
+    vus.add(id);
+    out.push({ id, libelle, type, declencheur, preuves });
+  }
+  return out;
+}
+
+/** Pièce de catalogue → type de whitelist existant (mots-clés de l'intitulé),
+ * sinon `PIECE_LIBRE` (jamais de type hors `PREUVE_CLIENT_TYPES` : la
+ * whitelist serveur `ajouterPreuve` le stockerait « AUTRE » et perdrait le
+ * type). */
+export function typePreuvePourIntitule(intitule: string): PreuveClient {
+  const t = intitule.toLowerCase();
+  const regles: [RegExp, PreuveClient][] = [
+    [/arrêt[ée]|d[ée]cision|pr[ée]fectorale|ordonnance/, "COPIE_DECISION"],
+    [/relev[ée].{0,20}points|solde de points/, "RELEVE_POINTS"],
+    [/employeur|contrat de travail/, "CONTRAT_TRAVAIL"],
+    [/m[ée]dical|sant[ée]/, "CERTIFICAT_MEDICAL_PROCHE"],
+    [/stage/, "ATTESTATION_STAGE"],
+    [/kbis|siret/, "KBIS"],
+    [/paiement/, "RELEVE_PAIEMENT"],
+    [/cession/, "ATTESTATION_CESSION"],
+    [/vol/, "ATTESTATION_VOL"],
+    [/domicile/, "JUSTIFICATIF_DOMICILE"],
+    [/transport/, "HORAIRES_TRANSPORTS"],
+    [/honneur/, "ATTESTATION_HONNEUR"],
+    [/commande|bilan/, "BILAN_COMMANDES"],
+    [/clich[ée]|flash/, "CLICHE_ANTAI"],
+    [/marquage/, "PHOTO_MARQUAGE"],
+  ];
+  for (const [motif, type] of regles) {
+    if (motif.test(t)) return type;
+  }
+  return "PIECE_LIBRE";
+}
+
+/**
+ * Fusionne plusieurs listes brutes de questions (JSON de failles ACTIVE)
+ * en une seule liste bornée, déduplée par id — un id répété entre failles
+ * garde la première définition (ordre de lecture stable).
+ */
+export function fusionnerQuestionsDynamiques(
+  bruts: readonly unknown[],
+): QuestionDynamique[] {
+  const fusion: QuestionDynamique[] = [];
+  const vus = new Set<string>();
+  for (const brut of bruts) {
+    if (fusion.length >= 12) break;
+    for (const q of normaliserQuestionsDynamiques(brut)) {
+      if (fusion.length >= 12) break;
+      if (vus.has(q.id)) continue;
+      vus.add(q.id);
+      fusion.push(q);
+    }
+  }
+  return fusion;
+}
+
+/** Conversion vers le format du registre (rendu formulaire + libellés). */
+export function versQuestionsCiblees(
+  dynamiques: readonly QuestionDynamique[],
+): QuestionCiblee[] {
+  return dynamiques.map((q) => {
+    const base: QuestionCiblee = {
+      cle: q.id,
+      champ: q.id as unknown as ChampReponse,
+      libelle: q.libelle,
+      groupe: GROUPE_DYNAMIQUE,
+      // Déjà filtrées par type côté chargeur : visibles des deux types pour
+      // ne jamais vider le groupe.
+      types: ["AMENDE", "SUSPENSION"],
+      typeChamp: q.type === "TEXT" ? "texte" : "case",
+    };
+    const p = q.preuves[0];
+    if (p) {
+      return {
+        ...base,
+        preuveClient: typePreuvePourIntitule(p.intitule),
+        notePreuve: p.argument
+          ? `${p.intitule} — ${p.argument}`
+          : p.intitule,
+      };
+    }
+    return base;
+  });
+}
+
+/** Libellés juriste des réponses dynamiques (fusionnés avec le registre). */
+export function libellesPourDynamiques(
+  dynamiques: readonly QuestionDynamique[],
+): LibelleReponse[] {
+  return dynamiques.map((q) => ({
+    cle: q.id as unknown as ChampReponse,
+    lib: q.libelle,
+  }));
+}
+
+/**
+ * Règles de détection moteur mappées depuis les déclencheurs des questions —
+ * un type additif par question (`reponseVrai` / `reponseFausse` /
+ * `reponseTexte`), combinées en OU par le moteur (sémantique standard d'une
+ * même faille).
+ */
+export function reglesDetectionPourQuestions(
+  dynamiques: readonly QuestionDynamique[],
+): RegleDetection[] {
+  const regles: RegleDetection[] = [];
+  for (const q of dynamiques) {
+    if (q.type === "TEXT") {
+      regles.push({ type: "reponseTexte", champ: q.id });
+    } else if (q.declencheur === false) {
+      regles.push({ type: "reponseFausse", champ: q.id });
+    } else {
+      // `true` et `"TEXT_PRESENT"` sur une case : la réponse avérée est « oui ».
+      regles.push({ type: "reponseVrai", champ: q.id });
+    }
+  }
+  return regles;
 }

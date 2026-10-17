@@ -25,6 +25,9 @@ export const TYPE_LABELS: Record<string, string> = {
   // Lot R3 — pièces des questions amende (cliché radar, marquage stationnement).
   CLICHE_ANTAI: "Cliché de contrôle (photo du flash)",
   PHOTO_MARQUAGE: "Photo du marquage au sol",
+  // Veille 2.0 — pièce demandée par le catalogue quand aucun type existant
+  // ne correspond : l'intitulé réel est porté par la suggestion (raison).
+  PIECE_LIBRE: "Pièce complémentaire (catalogue)",
   AUTRE: "Autre pièce",
   METEO: "Météo (source externe)",
   RADAR: "Fiche radar (donnée officielle)",

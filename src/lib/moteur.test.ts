@@ -878,3 +878,80 @@ describe("marges arithmétiques (chantier 1)", () => {
     });
   });
 });
+
+describe("règles questionnaire (veille 2.0 — reponseVrai / reponseFausse / reponseTexte)", () => {
+  const uneSeule = (id: string, regle: unknown) => [
+    { id, reglesDetection: [regle as RegleDetection] },
+  ];
+  const ID = "faille-veille-dyn";
+
+  it("reponseVrai : case cochée (true) → candidature", () => {
+    // Clé hors ExtractedData : le moteur lit le champ tel quel (Record).
+    const liste = uneSeule(ID, { type: "reponseVrai", champ: "question_dyn" });
+    expect(detecterFailles({ question_dyn: true } as never, null, liste)).toEqual([ID]);
+    // Absence, false ou valeur fausse → jamais.
+    expect(detecterFailles({}, null, liste)).toEqual([]);
+    expect(detecterFailles({ question_dyn: false } as never, null, liste)).toEqual([]);
+    expect(detecterFailles({ question_dyn: "true" } as never, null, liste)).toEqual([]);
+  });
+
+  it("reponseFausse : case NON cochée (absente / false) → candidature", () => {
+    const liste = uneSeule(ID, { type: "reponseFausse", champ: "question_dyn" });
+    // Absence (jamais cochée) = la réponse avérée est « non » → match.
+    expect(detecterFailles({}, null, liste)).toEqual([ID]);
+    expect(detecterFailles({ question_dyn: false } as never, null, liste)).toEqual([ID]);
+    // Cochée (true) → pas de match.
+    expect(detecterFailles({ question_dyn: true } as never, null, liste)).toEqual([]);
+  });
+
+  it("reponseTexte : champ texte non vide (trim) → candidature", () => {
+    const liste = uneSeule(ID, { type: "reponseTexte", champ: "question_dyn" });
+    expect(detecterFailles({ question_dyn: "12345678901234" } as never, null, liste)).toEqual([ID]);
+    expect(detecterFailles({ question_dyn: "  " } as never, null, liste)).toEqual([]);
+    expect(detecterFailles({ question_dyn: "" } as never, null, liste)).toEqual([]);
+    expect(detecterFailles({}, null, liste)).toEqual([]);
+    expect(detecterFailles({ question_dyn: 0 } as never, null, liste)).toEqual([]);
+  });
+
+  it("reponseVrai : une valeur texte (radio) ne matche jamais — seuls les booléens true", () => {
+    // Le mapping `reglesDetectionPourQuestions` n'émet `reponseVrai` que pour
+    // une case booléenne ; une valeur de radio (string) n'est jamais érigée en
+    // « true » par le moteur (anti-fabrique de fondement).
+    const liste = uneSeule(ID, { type: "reponseVrai", champ: "question_dyn" });
+    expect(detecterFailles({ question_dyn: true } as never, null, liste)).toEqual([ID]);
+    expect(detecterFailles({ question_dyn: "salarie" } as never, null, liste)).toEqual([]);
+    expect(detecterFailles({}, null, liste)).toEqual([]);
+  });
+
+  it("plusieurs règles d'une même faille : sémantique OU", () => {
+    const liste = [
+      {
+        id: ID,
+        reglesDetection: [
+          { type: "reponseVrai", champ: "paiementDejaFait" },
+          { type: "reponseVrai", champ: "vehiculeVole" },
+        ] as RegleDetection[],
+      },
+    ];
+    expect(detecterFailles({ paiementDejaFait: true }, null, liste)).toEqual([ID]);
+    expect(detecterFailles({ vehiculeVole: true }, null, liste)).toEqual([ID]);
+    expect(detecterFailles({}, null, liste)).toEqual([]);
+  });
+
+  it("cloisonnement docType : une règle questionnaire pack ne matche jamais sans classement", () => {
+    const liste = uneSeule("faille-3f-delai-retention", {
+      type: "reponseVrai",
+      champ: "suspSignataireNonPrefet",
+      docType: "3F",
+    });
+    expect(
+      detecterFailles({ docType: "3F", suspSignataireNonPrefet: true }, null, liste),
+    ).toEqual(["faille-3f-delai-retention"]);
+    expect(
+      detecterFailles({ suspSignataireNonPrefet: true }, null, liste),
+    ).toEqual([]);
+    expect(
+      detecterFailles({ docType: "AMENDE", suspSignataireNonPrefet: true }, null, liste),
+    ).toEqual([]);
+  });
+});

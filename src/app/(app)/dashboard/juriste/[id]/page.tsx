@@ -29,7 +29,12 @@ import {
   remplirTemplate,
   type ExtractedData,
 } from "@/lib/moteur";
-import { LIBELLES_REPONSES, suggestionsPreuvesClient } from "@/lib/questions";
+import {
+  LIBELLES_REPONSES,
+  libellesPourDynamiques,
+  suggestionsPreuvesClient,
+} from "@/lib/questions";
+import { chargerQuestionsDynamiques } from "@/lib/questions-dyn";
 import {
   formaterLettreOfficielle,
   identiteExtrait,
@@ -354,9 +359,13 @@ export default async function JuristeCasePage(
   }));
   // Pièces attendues d'après les réponses du client (capteur de fait) : le
   // juriste voit ce qui reste à joindre, sans que la pièce devienne un fondement.
+  // Veille 2.0 : les questions dynamiques complètent le registre.
+  const questionsDynamiques =
+    (await chargerQuestionsDynamiques().catch(() => null))?.[item.type] ?? [];
   const suggestionsPreuves = suggestionsPreuvesClient(
     item.extractedData,
     preuves.map((p) => p.type),
+    questionsDynamiques,
   );
   const numPvExtrait =
     typeof item.extractedData === "object" && item.extractedData !== null
@@ -507,8 +516,10 @@ export default async function JuristeCasePage(
   const questionnaire = data
     ? [
         // Registre unique `lib/questions.ts` (mêmes libellés que le client) +
-        // la case plaque, posée hors groupes dans le formulaire.
+        // les questions dynamiques (veille 2.0) + la case plaque, posée hors
+        // groupes dans le formulaire.
         ...LIBELLES_REPONSES,
+        ...libellesPourDynamiques(questionsDynamiques),
         {
           cle: "plaqueIncorrecte" as const,
           lib: "Plaque du PV différente de la mienne",

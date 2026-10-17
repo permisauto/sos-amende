@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { appelerGeminiJson } from "@/lib/ia-gemini";
 import type { JurisprudenceRef } from "@/lib/catalogue-sources";
+import {
+  normaliserQuestionsDynamiques,
+  type QuestionDynamique,
+} from "@/lib/questions";
 
 /**
  * Extraction de propositions structurées sur les publications de la veille
@@ -72,10 +76,66 @@ export type PropositionVeille = {
    * (propositions stockées avant cette distinction).
    */
   methode?: "ia" | "locale";
+  /**
+   * Veille 2.0 — issue de l'analyse prédiction : la décision est-elle
+   * favorable aux automobilistes (gagnante) ou les rejette-t-elle (perdante) ?
+   * **L'IA n'écartera jamais seule** (invariant D1 2026-10-12) : l'état
+   * `extrait` peut porter un statut PERDANT, affiché en badge rouge — le clic
+   * admin reste la seule voie d'écarter.
+   */
+  statutAnalyse?:
+    | "SUCCES_AUTOMOBILISTE_GAGNANT"
+    | "REJETE_AUTOMOBILISTE_PERDANT";
+  /**
+   * Métadonnées d'analyse (juridiction, ECLI, date, validité 2026) — pure
+   * transparence pour l'admin, jamais un changement de statut.
+   */
+  analyse?: {
+    juridiction: string;
+    ecli: string;
+    dateDecision: string;
+    /** L'extraction signale une réforme postérieure (pas de censure seule). */
+    valide2026: boolean;
+    fondement: string;
+  };
+  /**
+   * Motifs décisifs typés (considérant / attendu) — verbatim, max 3, chaque
+   * citation passant le garde-fou `contenuVerbatim`.
+   */
+  motifsCles?: { type: "CONSIDERANT" | "ATTENDU"; verbatim: string; vice: string }[];
+  /**
+   * 3ᵉ parcours (veille 2.0) — recours gracieux / demandes gracieuses
+   * (LRAR, préfet ou ministre) : même lint que `templateLettre`.
+   * `undefined` sur les amendes (le parcours gracieux n'y est pas produit).
+   */
+  templateGracieux?: string;
+  /**
+   * Questions dynamiques pré-rédigées par l'extraction (capteurs de fait +
+   * checklists de preuves) — bornées par `normaliserQuestionsDynamiques` (6
+   * max). La faille ACTIVE les expose au questionnaire client ; le moteur ne
+   * les lit que via les règles `reponseVrai`/`reponseFausse`/`reponseTexte`
+   * mappées depuis `reglesDetectionPourQuestions`.
+   */
+  questionsDynamiques?: QuestionDynamique[];
+  /**
+   * Version du schéma de l'analyse. `2` = format Veille 2.0 (statutAnalyse,
+   * analyse, motifsCles, questionsDynamiques, templateGracieux). Absent =
+   * analyse héritée (avant la Veille 2.0) — c'est ce qui distingue, sans
+   * migration de schéma, une analyse à régénérer d'une déjà régénérée.
+   */
+  schemaVeille?: 2;
   /** Date ISO de l'extraction. */
   extraitLe: string;
   /** (Ré)extractions automatiques déjà tentées sur cette proposition. */
   tentatives?: number;
+  /**
+   * Reprises de la **régénération** (`regenererAnalysesAnciennes`) sur une
+   * proposition déjà au format v2. Compteur distinct de `tentatives` : celui-ci
+   * est hérité des passages automatiques antérieurs et ne dit rien de la
+   * régénération. `incomplet` n'est repris qu'une seule fois (même arbitrage
+   * que `estCandidatExtraction`) — au-delà, l'admin corrige à la main.
+   */
+  regenTentatives?: number;
   /** Date ISO de la dernière correction manuelle (admin). */
   corrigeLe?: string;
 };
@@ -202,6 +262,39 @@ export function assainirTemplate(
 }
 
 // ---------------------------------------------------------------------------
+// Verbatim des articles
+// ---------------------------------------------------------------------------
+
+/**
+ * L'article est-il **cité dans la publication** ? Contrairement à
+ * `contenuVerbatim`, la comparaison porte sur la **référence légale**
+ * (`RE_MENTION_ARTICLE` → « artl1211 ») et non sur la chaîne complète :
+ *
+ *  * un article nu (« L. 223-3 » = 8 car.) était rejeté par le plancher de
+ *    15 caractères de `contenuVerbatim` — plancher qui, ailleurs, est déjà
+ *    assuré par le minimum du champ appelant (conditions ≥ 15, motifs ≥ 20) ;
+ *  * la forme libre du modèle (« C. route, art. L. 223-3 ») n'est presque
+ *    jamais contiguë au texte publié.
+ *
+ * L'anti-invention est préservée : la référence doit être littéralement
+ * citée dans le document, sinon `false`. Une citation qui n'est aucune
+ * référence d'article (`L. 121` sans groupe `-n`) est rejetée.
+ */
+export function articleVerbatim(texte: string, citation: string): boolean {
+  const cibles = referencesLegales(citation);
+  if (cibles.length === 0) return false;
+  const cites = new Set(referencesLegales(texte));
+  return cibles.every((c) => cites.has(c));
+}
+
+/** Références légales normalisées d'une citation : « artl1211 », « r471 »… */
+function referencesLegales(citation: string): string[] {
+  return [...citation.matchAll(RE_MENTION_ARTICLE)].map((m) =>
+    normaliserMentionArticle(m[1]),
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Prompt + parsing
 // ---------------------------------------------------------------------------
 
@@ -217,6 +310,75 @@ const schemaReponse = z.object({
   obsolescence: z.string().max(400).default(""),
   templateLettre: z.string().max(6000).default(""),
   templateRefere: z.string().max(4000).default(""),
+  // 3ᵉ parcours (veille 2.0) : émis par le mock/secours local pour les
+  // suspensions ; strippé des anciennes propositions stockées.
+  templateGracieux: z.string().max(6000).default(""),
+  // Optionnel : le mock/secours local ne l'émettent pas (legacy pur) — le
+  // parser v2 lit aussi ce champ pour étiqueter les sorties anciennes.
+  statut_analyse: z
+    .enum(["SUCCES_AUTOMOBILISTE_GAGNANT", "REJETE_AUTOMOBILISTE_PERDANT"])
+    .optional(),
+});
+
+/** Schéma **v2** (veille 2.0) — cible du prompt Gemini : enveloppe structurée
+ * avec analyse de prédiction, motifs typés (considérant/attendu), 3 parcours
+ * de courriers (OMP / référé / gracieux) et questions UX. Chaque bloc est
+ * tolérant (l'IA peut omettre un paragraphe inapplicable). */
+const schemaReponseV2 = z.object({
+  statut_analyse: z.enum([
+    "SUCCES_AUTOMOBILISTE_GAGNANT",
+    "REJETE_AUTOMOBILISTE_PERDANT",
+  ]),
+  analyse: z
+    .object({
+      juridiction: z.string().max(200).default(""),
+      ecli: z.string().max(120).default(""),
+      date_decision: z.string().max(40).default(""),
+      jurisprudence_valide_en_2026: z.boolean().default(true),
+      fondement_regle_de_droit_degagee: z.string().max(2500).default(""),
+    })
+    .prefault({}),
+  motifs_cles: z
+    .array(
+      z.object({
+        type: z.enum(["CONSIDERANT", "ATTENDU"]),
+        verbatim: z.string().max(700).default(""),
+        vice: z.string().max(200).default(""),
+      }),
+    )
+    .max(5)
+    .default([]),
+  generation_templates_recours: z
+    .object({
+      titre_faille_catalogue: z.string().max(200).default(""),
+      conditions_application: z.array(z.string()).max(6).default([]),
+      articles_loi_vises: z.array(z.string()).max(5).default([]),
+      parcours_amende_contestation_omp: z
+        .object({
+          applicable: z.boolean().default(false),
+          paragraphe_lettre_contestation_amende: z.string().max(6000).default(""),
+        })
+        .prefault({}),
+      parcours_suspension_recours_au_fond_avec_refere: z
+        .object({
+          applicable: z.boolean().default(false),
+          paragraphe_recours_exces_de_pouvoir_fond: z.string().max(6000).default(""),
+          paragraphe_memoire_refere_suspension_urgence: z.string().max(4000).default(""),
+        })
+        .prefault({}),
+      parcours_suspension_amiable: z
+        .object({
+          applicable: z.boolean().default(false),
+          paragraphe_recours_gracieux_prefet_ou_ministre: z.string().max(6000).default(""),
+        })
+        .prefault({}),
+    })
+    .prefault({}),
+  auto_alimentation_questions_ux_et_preuves: z
+    .object({
+      questions: z.array(z.unknown()).max(8).default([]),
+    })
+    .prefault({}),
 });
 
 export function construirePromptExtraction(pub: PublicationVeille): string {
@@ -229,23 +391,40 @@ export function construirePromptExtraction(pub: PublicationVeille): string {
     .join(" · ");
 
   return [
-    "Tu analyses une publication officielle de veille juridique française (décision de juridiction ou texte publié).",
+    "Tu es analyste juridique (droit des transports et contentieux routier français). Tu analyses une publication officielle de veille : décision de juridiction (TA, CAA, CE, Cass.) ou texte réglementaire.",
     "",
-    "Réponds UNIQUEMENT par un objet JSON sans texte autour, de la forme :",
-    '{"titre":"...","typeInfraction":"AMENDE|SUSPENSION","articles":["..."],"regle":"...","conditions":["..."],"resume":"...","extraits":["..."],"motifDecisif":"...","obsolescence":"...","templateLettre":"...","templateRefere":"..."}',
+    "Réponds UNIQUEMENT par un objet JSON valide — aucun texte autour, aucune balise ```markdown, aucun commentaire.",
+    "Forme exacte attendue :",
+    '{',
+    '"statut_analyse": "SUCCES_AUTOMOBILISTE_GAGNANT" | "REJETE_AUTOMOBILISTE_PERDANT",',
+    '"analyse": {"juridiction":"...","ecli":"...","date_decision":"...","jurisprudence_valide_en_2026":true,"fondement_regle_de_droit_degagee":"..."},',
+    '"motifs_cles": [{"type":"CONSIDERANT"|"ATTENDU","verbatim":"...","vice":"..."}],',
+    '"generation_templates_recours": {',
+    '  "titre_faille_catalogue":"...",',
+    '  "conditions_application":["..."],',
+    '  "articles_loi_vises":["..."],',
+    '  "parcours_amende_contestation_omp": {"applicable":false,"paragraphe_lettre_contestation_amende":""},',
+    '  "parcours_suspension_recours_au_fond_avec_refere": {"applicable":false,"paragraphe_recours_exces_de_pouvoir_fond":"","paragraphe_memoire_refere_suspension_urgence":""},',
+    '  "parcours_suspension_amiable": {"applicable":false,"paragraphe_recours_gracieux_prefet_ou_ministre":""}',
+    '},',
+    '"auto_alimentation_questions_ux_et_preuves": {"questions": [{"id":"...","libelle":"...","type":"BOOLEAN"|"TEXT","declencheur":true|false|"TEXT_PRESENT","preuves":[{"intitule":"...","argument":"..."}]}]}',
+    "}",
     "",
     "Règles absolues :",
-    '1. articles : UNIQUEMENT les articles EXPLICITEMENT cités dans le document fourni, recopiés tels quels (ex. "C. route, art. L. 224-16"). Max 3. Jamais d\'article inventé, induit ou général.',
-    "2. regle : en 2 à 4 phrases, ce que cette décision ou ce texte RETIENT (la solution retenue par la juridiction, le motif de la décision), uniquement à partir du document fourni. Aucun avis personnel, aucune prédiction.",
-    '3. conditions : 2 à 5 conditions d\'application PRÉCISES de la règle — ce qu\'il faut que le cas d\'espèce vérifie pour que la règle joue (fait, délai, vice, qualité de la personne…) — recopiées mot pour mot dans le document (mêmes exigences de verbatim que les extraits). Si aucune condition n\'est textuellement dans le document, renvoie un tableau vide.',
-    "4. resume : une phrase sur l'objet du litige ou la portée.",
-    "5. extraits : 1 à 3 citations VERBATIM (20 à 400 caractères, recopiées mot pour mot) du document qui fondent la règle.",
-    "6. typeInfraction : SUSPENSION si la décision porte sur le permis de conduire (suspension, invalidation, annulation, retrait de points, stage…) ; sinon AMENDE.",
-    '7. Si le document ne permet pas d\'identifier au moins un article cité et une règle : renvoie {"titre":"...","typeInfraction":"...","articles":[],"regle":"","conditions":[],"resume":"","extraits":[],"motifDecisif":"","obsolescence":"","templateLettre":"","templateRefere":""} — n\'invente jamais.',
-    '8. motifDecisif : le passage VERBATIM (20 à 600 caractères, recopié mot pour mot) où la juridiction énonce le motif décisif de sa décision (l\'attendu ou le considérant qui fonde la solution). Si aucun passage distinct ne se détache du texte, renvoie "".',
-    '9. obsolescence : si la DATE du document est manifestement antérieure à une réforme connue du régime traité, une phrase courte de mise en garde pour l\'administrateur ; sinon "". N\'affirme aucune réforme qui n\'apparaît pas au document lui-même.',
-    '10. templateLettre : rédige le CORPS d\'une lettre de contestation au 1ère personne (style soutenu, 400 à 2 500 caractères) qui reprend la regle et le motifDecisif : declaration de contestation, invocation UNIQUEMENT des articles de la liste "articles", moyens decoulant du document. Variables autorisees — exactement celles-ci entre accolades, aucune autre : {nom} {plaque} {num_pv} {date} {montant} {radarId} {lieu}. Ne reprend AUCUN fait d\'espèce qui n\'est pas dans le document (pas de temoin, pas de lieu invente, pas de date inventee). Si tu ne peux pas le faire proprement, renvoie "".',
-    '11. templateRefere : UNIQUEMENT si typeInfraction vaut SUSPENSION — le paragraphe du moyen de refere (doute serieux sur la legalite, article L. 521-2 du code de justice administrative, 400 a 1 500 caracteres), retenant la meme regle. Variables autorisees : {nom} {num_pv} {date} {metier} {entreprise} {siret} {risque_licenciement}. Sinon renvoie "".',
+    '1. statut_analyse : SUCCES_AUTOMOBILISTE_GAGNANT si la décision est FAVORABLE aux automobilistes / usagers (annulation, décharge, sursis, réduction de sanction, exigences de motivation ou de délai retenues contre l\'administration…). REJETE_AUTOMOBILISTE_PERDANT si la juridiction REJETE le recours de l\'usager (irrecevable, non fondé, moyens écartés). Cette appréciation n\'entraîne JAMAIS l\'écartement automatique : elle est un signal pour l\'humain.',
+    "2. articles_loi_vises : UNIQUEMENT les articles EXPLICITEMENT cités dans le document, recopiés tels quels (ex. \"C. route, art. L. 224-16\"). Max 3. Jamais d'article inventé, induit ou général.",
+    "3. fondement_regle_de_droit_degagee : en 2 à 4 phrases, ce que cette décision RETIENT (solution, motif), uniquement à partir du document. Aucun avis, aucune prédiction.",
+    "4. conditions_application : 2 à 5 conditions d'application PRÉCISES (fait, délai, vice, qualité…) recopiées mot pour mot dans le document. Tableau vide si aucune n'est textuellement présente.",
+    "5. motifs_cles : 1 à 3 passages VERBATIM (20 à 600 caractères, recopiés mot pour mot) où la juridiction énonce le motif décisif — type CONSIDERANT pour les cours d'appel / cour administrative d'appel et le Conseil d'État, ATTENDU pour les tribunaux administratifs et la Cour de cassation. `vice` = nom court du vice (ex. \"défaut de motivation\", \"vice de procédure\") ou \"\". Tableau vide si aucun passage distinct ne se détache.",
+    '6. analyse.jurisprudence_valide_en_2026 : true si le texte ne montre AUCUNE trace de réforme postérieure le rendant obsolète ; false seulement si une réforme est MANIFESTE dans le document (date + texte). Ne jamais spéculer.',
+    "7. typeInfraction implicite : parcours_amende_contestation_omp.applicable = true SI et SEULEMENT si la décision porte sur une AMENDE / contravention / transaction pénale. parcours_suspension_* applicable = true SI la décision porte sur le PERMIS (suspension, invalidation, annulation, retrait de points, stage). Un seul parcours principal est applicable.",
+    "8. titre_faille_catalogue : titre court (10 à 120 caractères) résumant le fondement exploitable (ex. \"Défaut de motivation de la suspension du permis\").",
+    "9. parcours_amende_contestation_omp.paragraphe_lettre_contestation_amende : SI applicable, le CORPS d'une lettre de contestation OMP au 1ère personne (style soutenu, 400 à 2 500 caractères) qui reprend le fondement et les motifs_cles, invoquant UNIQUEMENT les articles de articles_loi_vises. Variables autorisées — exactement celles-ci entre accolades, aucune autre : {nom} {plaque} {num_pv} {date} {montant} {radarId} {lieu}. Ne reprends AUCUN fait d'espèce absent du document. Sinon \"\".",
+    "10. parcours_suspension_recours_au_fond_avec_refere.paragraphe_recours_exces_de_pouvoir_fond : SI applicable, le paragraphe du recours au fond (400 à 2 500 caractères, mêmes variables que 9).",
+    "11. parcours_suspension_recours_au_fond_avec_refere.paragraphe_memoire_refere_suspension_urgence : SI applicable, le moyen du référé-suspension — l'article applicable est L. 521-2 du code de justice administrative (doute sérieux + atteinte grave et manifestement illégale). 400 à 1 500 caractères. Variables : {nom} {num_pv} {date} {metier} {entreprise} {siret} {risque_licenciement}. Sinon \"\".",
+    "12. parcours_suspension_amiable.paragraphe_recours_gracieux_prefet_ou_ministre : SI applicable (et seulement pour une suspension/invalidation où un recours gracieux a du sens), le CORPS d'une demande gracieuse au 1ère personne (400 à 2 500 caractères, mêmes variables que 9) — elle est envoyée en lettre recommandée, elle est autonome de la lettre de recours. Sinon \"\".",
+    "13. auto_alimentation_questions_ux_et_preuves.questions : 0 à 6 questions que le CLIENT doit pouvoir répondre par oui/non (BOOLEAN) ou par un texte court (TEXT) pour documenter le cas d'espèce AU TITRE de ce fondement. Chaque question a un id court [a-z0-9_]{3,60} (ex. \"notification_recu_48h\"), un libellé en français, un declencheur (true = la réponse oui déclenche le fondement ; false = la réponse non le déclenche ; \"TEXT_PRESENT\" pour une question TEXT), et 0 ou 1 preuve suggérée {intitule, argument} que le client pourrait téléverser. Les questions portent sur des FAITS vérifiables par le client (notification reçue, délai respecté, état du véhicule…), JAMAIS sur des qualifications juridiques. Si aucune question utile, tableau vide.",
+    "14. Si le document ne permet pas d'identifier au moins un article cité et un fondement : renvoie le JSON complet avec tableaux vides et chaînes vides — n'invente JAMAIS.",
     "",
     "=== PUBLICATION ===",
     `${pub.titre}${entete ? ` — ${entete}` : ""}`,
@@ -268,10 +447,15 @@ function sansFences(brut: string): string {
 /**
  * Parse + valide la réponse de l'IA, puis applique les garde-fous de
  * verbatim. `null` = réponse illisible (l'appelant marque `echec`).
+ *
+ * **Veille 2.0** : le schéma v2 (enveloppe structurée) est essayé en premier ;
+ * une réponse au format plat legacy (mock, secours local, anciennes
+ * propositions) bascule sur le parser historique — jamais de perte.
  */
 export function parserExtraction(
   brut: string,
   contenu: string,
+  titreSource?: string,
 ): PropositionVeille | null {
   let json: unknown;
   try {
@@ -279,18 +463,216 @@ export function parserExtraction(
   } catch {
     return null;
   }
-  const parsed = schemaReponse.safeParse(json);
-  if (!parsed.success) return null;
-  const d = parsed.data;
+  const v2 = schemaReponseV2.safeParse(json);
+  if (v2.success) return proposerDepuisV2(v2.data, contenu, titreSource);
+  const legacy = schemaReponse.safeParse(json);
+  if (legacy.success) return proposerDepuisLegacy(legacy.data, contenu);
+  return null;
+}
 
+/** Dérive le type d'infraction depuis les parcours applicables (v2) — avec
+ * repli sur les mots-clés du titre + du contenu si aucun parcours n'est marqué. */
+function typeInfractionDepuisParcours(
+  d: z.infer<typeof schemaReponseV2>,
+  contenu: string,
+  titreSource?: string,
+): "AMENDE" | "SUSPENSION" {
+  const s = d.generation_templates_recours;
+  if (
+    s.parcours_suspension_recours_au_fond_avec_refere.applicable ||
+    s.parcours_suspension_amiable.applicable
+  ) {
+    return "SUSPENSION";
+  }
+  if (s.parcours_amende_contestation_omp.applicable) return "AMENDE";
+  return /permis|suspension|invalidation|retrait de points|annulation du permis/i.test(
+    `${titreSource ?? ""} ${contenu}`,
+  )
+    ? "SUSPENSION"
+    : "AMENDE";
+}
+
+/** Mapping v2 → `PropositionVeille`, garde-fous verbatim + lint templates. */
+function proposerDepuisV2(
+  d: z.infer<typeof schemaReponseV2>,
+  contenu: string,
+  titreSource?: string,
+): PropositionVeille {
+  const s = d.generation_templates_recours;
+  const typeInfraction = typeInfractionDepuisParcours(d, contenu, titreSource);
+  const perdant = d.statut_analyse === "REJETE_AUTOMOBILISTE_PERDANT";
+
+  // Articles : verbatim exigé (référence légale), max 3, dédup **par
+  // référence** — « L. 223-3 » et « C. route, art. L. 223-3 » désignent le
+  // même article et ne doivent pas consommer deux des trois emplacements.
+  const articlesVus = new Set<string>();
+  const articles: string[] = [];
+  for (const a of s.articles_loi_vises.slice(0, 5)) {
+    const article = a.trim();
+    if (article.length < 3 || article.length > 120) continue;
+    const refs = referencesLegales(article);
+    if (refs.length === 0) continue;
+    const cle = refs.join("+");
+    if (articlesVus.has(cle)) continue;
+    if (!articleVerbatim(contenu, article)) continue;
+    articlesVus.add(cle);
+    articles.push(article);
+    if (articles.length >= 3) break;
+  }
+
+  // Motifs clés : verbatim exigé, max 3, dédup + typage conservé.
+  const motifsVus = new Set<string>();
+  const motifsCles: NonNullable<PropositionVeille["motifsCles"]> = [];
+  const extraits: string[] = [];
+  let motifDecisif: string | undefined;
+  for (const m of d.motifs_cles.slice(0, 5)) {
+    const verbatim = m.verbatim.trim();
+    if (verbatim.length < 20 || verbatim.length > 600) continue;
+    const cle = normaliserPourComparaison(verbatim);
+    if (motifsVus.has(cle)) continue;
+    if (!contenuVerbatim(contenu, verbatim)) continue;
+    motifsVus.add(cle);
+    const vice = m.vice.trim().slice(0, 200);
+    motifsCles.push({ type: m.type, verbatim, vice });
+    extraits.push(verbatim);
+    if (!motifDecisif) motifDecisif = verbatim;
+    if (motifsCles.length >= 3) break;
+  }
+
+  // Conditions d'application : verbatim exigé, max 5, dédup.
+  const conditionsVues = new Set<string>();
+  const conditions: string[] = [];
+  for (const c of s.conditions_application.slice(0, 6)) {
+    const condition = c.trim();
+    if (condition.length < 15 || condition.length > 300) continue;
+    const cle = normaliserPourComparaison(condition);
+    if (conditionsVues.has(cle)) continue;
+    if (!contenuVerbatim(contenu, condition)) continue;
+    conditionsVues.add(cle);
+    conditions.push(condition);
+    if (conditions.length >= 5) break;
+  }
+
+  const regle = d.analyse.fondement_regle_de_droit_degagee.trim();
+
+  // Templates : lint pur — le champ est vidé en cas d'échec. Sur une décision
+  // PERDANTE, aucun template n'est conservé (invariant : rien de rédigable à
+  // partir d'un fondement que la juridiction a elle-même écarté).
+  const templateLettre = perdant
+    ? undefined
+    : typeInfraction === "AMENDE"
+      ? assainirTemplate(
+          s.parcours_amende_contestation_omp.paragraphe_lettre_contestation_amende,
+          articles,
+        )
+      : assainirTemplate(
+          s.parcours_suspension_recours_au_fond_avec_refere
+            .paragraphe_recours_exces_de_pouvoir_fond,
+          articles,
+        );
+  const templateRefere =
+    !perdant && typeInfraction === "SUSPENSION"
+      ? assainirTemplate(
+          s.parcours_suspension_recours_au_fond_avec_refere
+            .paragraphe_memoire_refere_suspension_urgence,
+          articles,
+          { refere: true },
+        )
+      : undefined;
+  const templateGracieux =
+    !perdant &&
+    typeInfraction === "SUSPENSION" &&
+    s.parcours_suspension_amiable.applicable
+      ? assainirTemplate(
+          s.parcours_suspension_amiable.paragraphe_recours_gracieux_prefet_ou_ministre,
+          articles,
+        )
+      : undefined;
+
+  // Questions dynamiques : défensif (normalisation bornée), jamais sur perdant.
+  const questionsDynamiques = perdant
+    ? []
+    : normaliserQuestionsDynamiques(
+        d.auto_alimentation_questions_ux_et_preuves.questions,
+      );
+
+  // Obsolescence : jamais d'affirmation hors document — le seul signal
+  // structurel est le booléen `jurisprudence_valide_en_2026`. La date de la
+  // décision est rappelée dans la phrase pour situer le lecteur.
+  const dateDecision = d.analyse.date_decision.trim().slice(0, 40);
+  const obsolescence = d.analyse.jurisprudence_valide_en_2026
+    ? undefined
+    : `Extraction : la jurisprudence n'est plus réputée valide en 2026 (réforme détectée dans le document${dateDecision ? `, décision du ${dateDecision}` : ""}). Vérifier sur la source avant usage.`;
+
+  const complet =
+    articles.length > 0 &&
+    regle.length >= 15 &&
+    extraits.length > 0 &&
+    conditions.length > 0;
+
+  const motif = complet
+    ? undefined
+    : [
+        articles.length === 0
+          ? "aucun article cité textuellement dans le document"
+          : null,
+        regle.length < 15 ? "règle dégagée absente ou trop courte" : null,
+        conditions.length === 0
+          ? "aucune condition d'application textuellement trouvée"
+          : null,
+        extraits.length === 0
+          ? "aucun extrait verbatim trouvé à l'appui de la règle"
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" ; ") || "proposition incomplète";
+
+  return {
+    etat: complet ? "extrait" : "incomplet",
+    titre: (s.titre_faille_catalogue.trim() || titreSource?.trim() || "Proposition de veille").slice(0, 200),
+    typeInfraction,
+    articles,
+    regle,
+    conditions,
+    resume: regle.slice(0, 1200) || (titreSource ?? "").slice(0, 1200),
+    extraits,
+    ...(motifDecisif ? { motifDecisif } : {}),
+    ...(obsolescence ? { obsolescence } : {}),
+    ...(templateLettre ? { templateLettre } : {}),
+    ...(templateRefere ? { templateRefere } : {}),
+    ...(templateGracieux ? { templateGracieux } : {}),
+    statutAnalyse: d.statut_analyse,
+    analyse: {
+      juridiction: d.analyse.juridiction.trim().slice(0, 200),
+      ecli: d.analyse.ecli.trim().slice(0, 120),
+      dateDecision: d.analyse.date_decision.trim().slice(0, 40),
+      valide2026: d.analyse.jurisprudence_valide_en_2026,
+      fondement: regle.slice(0, 2500),
+    },
+    ...(motifsCles.length ? { motifsCles } : {}),
+    ...(questionsDynamiques.length ? { questionsDynamiques } : {}),
+    motif,
+    schemaVeille: 2,
+    extraitLe: new Date().toISOString(),
+  };
+}
+
+/** Parser historique (format plat) — conservé pour le mock, le secours local
+ * et la relecture des propositions stockées avant le v2. */
+function proposerDepuisLegacy(
+  d: z.infer<typeof schemaReponse>,
+  contenu: string,
+): PropositionVeille {
   const articlesVus = new Set<string>();
   const articles: string[] = [];
   for (const a of d.articles.slice(0, 5)) {
     const article = a.trim();
     if (article.length < 3 || article.length > 120) continue;
-    const cle = normaliserPourComparaison(article);
+    const refs = referencesLegales(article);
+    if (refs.length === 0) continue;
+    const cle = refs.join("+");
     if (articlesVus.has(cle)) continue;
-    if (!contenuVerbatim(contenu, article)) continue;
+    if (!articleVerbatim(contenu, article)) continue;
     articlesVus.add(cle);
     articles.push(article);
     if (articles.length >= 3) break;
@@ -342,11 +724,20 @@ export function parserExtraction(
   })();
 
   // Templates (lot 3) : lint pur — soit le texte passe, soit il est rejeté
-  // (champ vidé). Ne touche jamais à l'état de la proposition.
-  const templateLettre = assainirTemplate(d.templateLettre, articles);
+  // (champ vidé). Ne touche jamais à l'état de la proposition. Sur une
+  // décision PERDANTE, aucun template n'est conservé (même discipline que le
+  // parser v2 : rien de rédigable sur un fondement écarté par la juridiction).
+  const perdant = d.statut_analyse === "REJETE_AUTOMOBILISTE_PERDANT";
+  const templateLettre = perdant
+    ? undefined
+    : assainirTemplate(d.templateLettre, articles);
   const templateRefere =
-    d.typeInfraction === "SUSPENSION"
+    !perdant && d.typeInfraction === "SUSPENSION"
       ? assainirTemplate(d.templateRefere, articles, { refere: true })
+      : undefined;
+  const templateGracieux =
+    !perdant && d.typeInfraction === "SUSPENSION"
+      ? assainirTemplate(d.templateGracieux, articles)
       : undefined;
 
   const complet =
@@ -385,6 +776,8 @@ export function parserExtraction(
     ...(obsolescence ? { obsolescence } : {}),
     ...(templateLettre ? { templateLettre } : {}),
     ...(templateRefere ? { templateRefere } : {}),
+    ...(templateGracieux ? { templateGracieux } : {}),
+    ...(d.statut_analyse ? { statutAnalyse: d.statut_analyse } : {}),
     motif,
     extraitLe: new Date().toISOString(),
   };
@@ -404,7 +797,11 @@ export function parserExtraction(
 export function templatesMechaniques(
   articles: string[],
   typeInfraction: "AMENDE" | "SUSPENSION",
-): { templateLettre: string; templateRefere: string } {
+): {
+  templateLettre: string;
+  templateRefere: string;
+  templateGracieux: string;
+} {
   const brut = articles[0] ?? "";
   const article = brut.replace(/^(?:article|art\.)\s*/i, "");
   const objet =
@@ -426,10 +823,25 @@ export function templatesMechaniques(
           `En l'espèce, l'application de l'article ${article} est contestable au regard des éléments constants du dossier : le doute sérieux sur la légalité de la décision contestée justifie la suspension de son exécution.`,
         ].join("\n\n")
       : "";
-  return { templateLettre, templateRefere };
+  // 3ᵉ parcours (veille 2.0) : demande gracieuse autonome (LRAR) — squelette
+  // mécanique identique au lettrage, même discipline de variables.
+  const templateGracieux =
+    typeInfraction === "SUSPENSION" && article
+      ? [
+          `Je soussigné(e) {nom}, forme par la présente une demande de grâce gracieuse à l'encontre de ${objet}.`,
+          `La mesure de sanction repose sur l'application de l'article ${article} ; je demande respectueusement qu'il soit renoncé à son exécution au vu des circonstances du dossier et de ma situation personnelle.`,
+          `Je vous prie de bien vouloir faire droit à ma demande et vous prie d'agréer, Monsieur le Préfet, l'expression de ma haute considération.`,
+        ].join("\n\n")
+      : "";
+  return { templateLettre, templateRefere, templateGracieux };
 }
 
-/** Réponse simulée : articles repérés par regex, règle = citation de tête. */
+/**
+ * Réponse simulée au **format v2** (veille 2.0) : articles repérés par regex,
+ * règle = citation de tête, statut d'analyse déterministe (`PERDANT` dans le
+ * titre/ECLI) — le parser v2 s'applique donc au mock comme en prod. Aucune
+ * question UX simulée (le mock n'invente jamais de capteur de fait).
+ */
 export function extractionMock(pub: PublicationVeille): string {
   const re = /(?:article|art\.)\s*([LRDC]\.?\s*\d{1,3}(?:-\d{1,3})?)/gi;
   const articles: string[] = [];
@@ -455,32 +867,71 @@ export function extractionMock(pub: PublicationVeille): string {
   if (conditions.length === 0 && pub.contenu.trim().length >= 15) {
     conditions.push(pub.contenu.trim().slice(0, 150));
   }
-  // Motif décisif simulé : première citation suffisamment longue réellement
-  // présente dans le contenu (passe le garde-fou verbatim du parser).
-  const motifDecisif = pub.citations.find(
-    (c) => c.trim().length >= 20 && contenuVerbatim(pub.contenu, c),
-  );
-  // Obsolescence simulée et déterministe : décision datant d'avant 2020 →
-  // drapeau testable en E2E sans appel réseau.
+  // Motifs décisifs simulés : citations suffisamment longues réellement
+  // présentes dans le contenu (passent le garde-fou verbatim du parser v2).
+  const motifs = pub.citations
+    .filter((c) => c.trim().length >= 20 && contenuVerbatim(pub.contenu, c))
+    .slice(0, 3)
+    .map((c) => ({ type: "ATTENDU" as const, verbatim: c.trim().slice(0, 600), vice: "" }));
+  // Obsolescence simulée et déterministe : décision d'avant 2020 →
+  // drapeau testable en E2E sans appel réseau (booléen v2, la phrase de
+  // mise en garde est fabriquée par le parser).
   const annee = pub.dateSource
     ? Number.parseInt(pub.dateSource.slice(0, 4), 10)
     : Number.NaN;
-  const obsolescence =
-    Number.isFinite(annee) && annee < 2020
-      ? `Décision de ${annee} : vérifier qu'aucune réforme postérieure n'a modifié le régime applicable avant de l'invoquer.`
-      : undefined;
+  const obsolete = Number.isFinite(annee) && annee < 2020;
+  // Statut d'analyse : marqueur `PERDANT` dans le titre ou l'ECLI →
+  // décision rejetée (badge rouge, templates/questions jamais proposés).
+  const statutAnalyse: "SUCCES_AUTOMOBILISTE_GAGNANT" | "REJETE_AUTOMOBILISTE_PERDANT" =
+    /PERDANT/i.test(`${pub.titre} ${pub.ecli ?? ""}`)
+      ? "REJETE_AUTOMOBILISTE_PERDANT"
+      : "SUCCES_AUTOMOBILISTE_GAGNANT";
+  const perdant = statutAnalyse === "REJETE_AUTOMOBILISTE_PERDANT";
   const templates = templatesMechaniques(articles, typeInfraction);
+  const regle = `Simulation (mock) : la juridiction retient que ${citation}`;
+  const s = {
+    titre_faille_catalogue: pub.titre.slice(0, 120),
+    conditions_application: conditions,
+    articles_loi_vises: articles,
+    parcours_amende_contestation_omp:
+      typeInfraction === "AMENDE"
+        ? {
+            applicable: true,
+            paragraphe_lettre_contestation_amende: perdant ? "" : templates.templateLettre,
+          }
+        : { applicable: false, paragraphe_lettre_contestation_amende: "" },
+    parcours_suspension_recours_au_fond_avec_refere:
+      typeInfraction === "SUSPENSION"
+        ? {
+            applicable: true,
+            paragraphe_recours_exces_de_pouvoir_fond: perdant ? "" : templates.templateLettre,
+            paragraphe_memoire_refere_suspension_urgence: perdant ? "" : templates.templateRefere,
+          }
+        : {
+            applicable: false,
+            paragraphe_recours_exces_de_pouvoir_fond: "",
+            paragraphe_memoire_refere_suspension_urgence: "",
+          },
+    parcours_suspension_amiable:
+      typeInfraction === "SUSPENSION"
+        ? {
+            applicable: true,
+            paragraphe_recours_gracieux_prefet_ou_ministre: perdant ? "" : templates.templateGracieux,
+          }
+        : { applicable: false, paragraphe_recours_gracieux_prefet_ou_ministre: "" },
+  };
   return JSON.stringify({
-    titre: pub.titre.slice(0, 120),
-    typeInfraction,
-    articles,
-    regle: `Simulation (mock) : la juridiction retient que ${citation}`,
-    conditions,
-    resume: `Simulation (mock) : ${pub.titre.slice(0, 120)}`,
-    extraits: pub.citations.slice(0, 2),
-    motifDecisif: motifDecisif ? motifDecisif.trim().slice(0, 600) : "",
-    obsolescence: obsolescence ?? "",
-    ...templates,
+    statut_analyse: statutAnalyse,
+    analyse: {
+      juridiction: pub.juridiction ?? "",
+      ecli: pub.ecli ?? "",
+      date_decision: pub.dateSource ?? "",
+      jurisprudence_valide_en_2026: !obsolete,
+      fondement_regle_de_droit_degagee: regle,
+    },
+    motifs_cles: motifs,
+    generation_templates_recours: s,
+    auto_alimentation_questions_ux_et_preuves: { questions: [] },
   });
 }
 
@@ -566,7 +1017,7 @@ export async function extraireProposition(
   const dispo = extractionDispo();
 
   if (dispo === "mock") {
-    const prop = parserExtraction(extractionMock(pub), pub.contenu);
+    const prop = parserExtraction(extractionMock(pub), pub.contenu, pub.titre);
     if (!prop) return { ok: false, motif: "réponse simulée illisible" };
     return { ok: true, proposition: prop };
   }
@@ -580,7 +1031,7 @@ export async function extraireProposition(
     "veille-extraction",
   );
   if (appel.ok) {
-    const prop = parserExtraction(appel.texte, pub.contenu);
+    const prop = parserExtraction(appel.texte, pub.contenu, pub.titre);
     if (prop) return { ok: true, proposition: prop };
   }
   // IA en échec (429 quota, 503, réponse illisible…) : le secours local
@@ -591,7 +1042,7 @@ export async function extraireProposition(
 
 /** Parse la réponse locale et l'étiquette `methode: "locale"`. */
 function secoursLocal(pub: PublicationVeille): ResultatExtraction {
-  const prop = parserExtraction(extractionLocale(pub), pub.contenu);
+  const prop = parserExtraction(extractionLocale(pub), pub.contenu, pub.titre);
   if (!prop) return { ok: false, motif: "extraction locale illisible" };
   prop.methode = "locale";
   return { ok: true, proposition: prop };
@@ -632,6 +1083,8 @@ export type ValeursProposition = {
   templateLettre?: string;
   /** Moyen de référé relu/écrit par l'admin (suspension seulement). */
   templateRefere?: string;
+  /** Demande gracieuse relu/écrite par l'admin (3ᵉ parcours, suspension). */
+  templateGracieux?: string;
 };
 
 export type ResultatFormulation =
@@ -680,6 +1133,12 @@ export function propositionDepuisFormulaire(
     extraitLe?: string;
     /** Drapeau d'obsolescence IA conservé à la correction (jamais édité). */
     obsolescence?: string;
+    /** Champs v2 préservés à la correction (l'admin n'édite pas l'analyse
+     * prédiction ni les questions — il peut rédiger le 3ᵉ template). */
+    statutAnalyse?: PropositionVeille["statutAnalyse"];
+    analyse?: PropositionVeille["analyse"];
+    motifsCles?: PropositionVeille["motifsCles"];
+    questionsDynamiques?: QuestionDynamique[];
   } = {},
 ): ResultatFormulation {
   const titre = valeurs.titre.trim();
@@ -742,6 +1201,10 @@ export function propositionDepuisFormulaire(
   if (templateRefere.length > 4000) {
     return { ok: false, erreur: "Moyen de référé trop long (4 000 caractères maximum)." };
   }
+  const templateGracieux = (valeurs.templateGracieux ?? "").trim();
+  if (templateGracieux.length > 6000) {
+    return { ok: false, erreur: "Demande gracieuse trop longue (6 000 caractères maximum)." };
+  }
 
   const complet = articles.length > 0 && regle.length >= 15 && conditions.length > 0;
   const motif = complet
@@ -770,6 +1233,15 @@ export function propositionDepuisFormulaire(
       ...(templateLettre ? { templateLettre } : {}),
       ...(templateRefere && valeurs.typeInfraction === "SUSPENSION"
         ? { templateRefere }
+        : {}),
+      ...(templateGracieux && valeurs.typeInfraction === "SUSPENSION"
+        ? { templateGracieux }
+        : {}),
+      ...(options.statutAnalyse ? { statutAnalyse: options.statutAnalyse } : {}),
+      ...(options.analyse ? { analyse: options.analyse } : {}),
+      ...(options.motifsCles?.length ? { motifsCles: options.motifsCles } : {}),
+      ...(options.questionsDynamiques?.length
+        ? { questionsDynamiques: options.questionsDynamiques }
         : {}),
       motif,
       extraitLe: options.extraitLe ?? new Date().toISOString(),
