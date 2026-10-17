@@ -45,6 +45,7 @@ import {
   SCORE_SEUIL_EXTRACTION,
   composerRegleProposition,
   extraireProposition,
+  extractionDispo,
   propositionEchec,
   refPropositionDepuisSource,
   type PropositionVeille,
@@ -63,6 +64,14 @@ const TIMEOUT_ARCHIVE_MS = 60_000;
 /** Le zip mensuel TA fait ~64 Mo : on laisse largement la marge. */
 const TIMEOUT_ARCHIVE_TA_MS = 180_000;
 export const TAILLE_MAX_ZIP_TA = 200 * 1024 * 1024;
+
+/**
+ * Nombre de replis locaux consécutifs tolérés avant d'arrêter un lot de
+ * régénération (`regenererAnalysesAnciennes`) : au-delà, l'IA est réellement
+ * indisponible (quota 429, panne) et continuer ne ferait que retraiter des
+ * lignes sans le marqueur v2 — donc re-sélectionnées au clic suivant.
+ */
+const MAX_REPLIS_AVANT_ARRET = 3;
 
 export const SOURCES_VEILLE: CodeSource[] = ["JADE", "CASS", "JORF"];
 
@@ -426,9 +435,19 @@ export type BilanExtraction = {
   extraites: number;
   incompletes: number;
   echecs: number;
+  /** Passages retombés sur le **secours local** (`methode: "locale"`). */
+  locales: number;
+  /** IA globalement indisponible (coupée ou sans clé) : lot non entamé. */
+  iaIndisponible: boolean;
 };
 
-const BILAN_VIDE: BilanExtraction = { extraites: 0, incompletes: 0, echecs: 0 };
+const BILAN_VIDE: BilanExtraction = {
+  extraites: 0,
+  incompletes: 0,
+  echecs: 0,
+  locales: 0,
+  iaIndisponible: false,
+};
 
 function publicationDepuisRow(row: SourceJuridique): PublicationVeille {
   return {
@@ -445,11 +464,17 @@ function publicationDepuisRow(row: SourceJuridique): PublicationVeille {
 
 function propositionEnregistree(
   row: SourceJuridique,
-): { etat?: string; tentatives?: number; regenTentatives?: number } | null {
+): {
+  etat?: string;
+  tentatives?: number;
+  regenTentatives?: number;
+  schemaVeille?: number;
+} | null {
   return row.proposition as {
     etat?: string;
     tentatives?: number;
     regenTentatives?: number;
+    schemaVeille?: number;
   } | null;
 }
 
@@ -517,13 +542,20 @@ export function estRepriseRegeneration(p: {
 async function extraireEtStocker(
   row: SourceJuridique,
   options: { regen?: boolean } = {},
-): Promise<PropositionVeille | null> {
+): Promise<{ proposition: PropositionVeille; repliLocal: boolean } | null> {
   try {
     const avant = propositionEnregistree(row);
     const res = await extraireProposition(publicationDepuisRow(row));
     const proposition: PropositionVeille = res.ok
       ? res.proposition
       : propositionEchec(res.motif);
+    // `methode: "locale"` n'est posé que par le secours sans IA (quota/panne/clé).
+    const repliLocal = proposition.methode === "locale";
+    // Régénération : **jamais** remplacer une analyse v2 (issue de l'IA) par un
+    // repli local — l'IA est momentanément indisponible, l'existant vaut mieux.
+    if (options.regen && repliLocal && estSchemaVeille2(avant)) {
+      return { proposition: avant as unknown as PropositionVeille, repliLocal: true };
+    }
     if (avant) proposition.tentatives = (avant.tentatives ?? 0) + 1;
     if (options.regen) {
       proposition.regenTentatives = (avant?.regenTentatives ?? 0) + 1;
@@ -534,7 +566,7 @@ async function extraireEtStocker(
       where: { id: row.id },
       data: { proposition: proposition as unknown as Prisma.InputJsonValue },
     });
-    return proposition;
+    return { proposition, repliLocal };
   } catch (e) {
     console.error(`veille-extraction: ${row.id} impossible`, e);
     return null;
@@ -573,9 +605,14 @@ export async function extrairePropositionsEnAttente(
   const fin = Date.now() + BUDGET_TEMPS_EXTRACTION_MS;
   for (const row of candidats) {
     if (Date.now() > fin) break;
-    const prop = await extraireEtStocker(row);
-    if (prop?.etat === "extrait") bilan.extraites++;
-    else if (prop?.etat === "incomplet") bilan.incompletes++;
+    const res = await extraireEtStocker(row);
+    if (!res) {
+      bilan.echecs++;
+      continue;
+    }
+    if (res.repliLocal) bilan.locales++;
+    if (res.proposition.etat === "extrait") bilan.extraites++;
+    else if (res.proposition.etat === "incomplet") bilan.incompletes++;
     else bilan.echecs++;
   }
   // Après chaque lot d'extraction : les propositions complètes non encore
@@ -632,6 +669,14 @@ export function estSchemaVeille2(
 export async function regenererAnalysesAnciennes(
   limite = BUDGET_EXTRACTION,
 ): Promise<BilanExtraction> {
+  // IA coupée ou sans clé : inutile d'entamer le lot — chaque ligne retomberait
+  // sur le secours local (sans marqueur v2), se ferait re-sélectionner au clic
+  // suivant et bouclerait sans jamais progresser. On sort avant toute écriture.
+  const dispo = extractionDispo();
+  if (dispo === "off" || dispo === "absent") {
+    return { ...BILAN_VIDE, iaIndisponible: true };
+  }
+
   let rows: SourceJuridique[];
   try {
     rows = await prisma.sourceJuridique.findMany({
@@ -677,20 +722,33 @@ export async function regenererAnalysesAnciennes(
   const fin = Date.now() + BUDGET_TEMPS_EXTRACTION_MS;
   for (const { row, reprise } of aTraiter) {
     if (Date.now() > fin) break;
-    const prop = await extraireEtStocker(row, { regen: reprise });
-    if (prop?.etat === "extrait") bilan.extraites++;
-    else if (prop?.etat === "incomplet") bilan.incompletes++;
+    const res = await extraireEtStocker(row, { regen: reprise });
+    if (!res) {
+      bilan.echecs++;
+      continue;
+    }
+    // Repli local pendant la régénération = l'IA est en train d'échouer (quota
+    // 429, panne). Ces passages ne produisent pas d'analyse v2 : on les compte
+    // à part et, au-delà de quelques-uns, on **stoppe le lot** plutôt que de
+    // brûler le budget sur des lignes qui resteraient en file de toute façon.
+    if (res.repliLocal) {
+      bilan.locales++;
+      if (bilan.locales >= MAX_REPLIS_AVANT_ARRET) break;
+      continue;
+    }
+    if (res.proposition.etat === "extrait") bilan.extraites++;
+    else if (res.proposition.etat === "incomplet") bilan.incompletes++;
     else bilan.echecs++;
   }
 
   const traitees = bilan.extraites + bilan.incompletes + bilan.echecs;
-  if (traitees > 0) {
+  if (traitees > 0 || bilan.locales > 0) {
     await enregistrerTraceAutoAlimentation({
       campagne: "regeneration-veille-2",
       statut: bilan.echecs === 0 ? "OK" : "ECHEC",
       traitees,
       nouvelles: bilan.extraites,
-      detail: `extraites=${bilan.extraites} incompletes=${bilan.incompletes} echecs=${bilan.echecs}`,
+      detail: `extraites=${bilan.extraites} incompletes=${bilan.incompletes} echecs=${bilan.echecs} replis=${bilan.locales}`,
     });
   }
   return bilan;

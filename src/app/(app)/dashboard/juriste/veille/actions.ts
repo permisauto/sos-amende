@@ -103,6 +103,24 @@ export async function regenererAnalysesVeille(
   await requireAdmin();
   const bilan = await regenererAnalysesAnciennes(BUDGET_EXTRACTION_LOT);
   revalidatePath("/dashboard/juriste/veille");
+  if (bilan.iaIndisponible) {
+    return {
+      error:
+        "IA indisponible (coupée ou sans clé) — aucune analyse régénérée. Les analyses existantes sont conservées.",
+    };
+  }
+  // Repli local = l'IA a échoué (quota 429, panne) : le lot a été interrompu.
+  // Ne surtout pas annoncer « régénéré » — ces passages ne sont pas des
+  // analyses Veille 2.0 et resteraient en file.
+  if (bilan.locales > 0) {
+    const total = bilan.extraites + bilan.incompletes + bilan.echecs;
+    return {
+      error:
+        total > 0
+          ? `IA momentanément indisponible (quota atteint ou panne) : ${total} analyse(s) régénérée(s) avant l'arrêt du lot. Réessayez plus tard — les analyses non traitées restent en file.`
+          : "IA momentanément indisponible (quota atteint ou panne) : aucune analyse régénérée. Réessayez plus tard.",
+    };
+  }
   const total = bilan.extraites + bilan.incompletes + bilan.echecs;
   if (total === 0) {
     return {
