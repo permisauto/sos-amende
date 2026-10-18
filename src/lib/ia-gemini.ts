@@ -7,6 +7,8 @@
  * 4xx jamais retenté, jamais d'exception — l'appelant reçoit un motif prêt
  * à afficher. Un 503 Gemini est presque toujours une surcharge transitoire.
  */
+import { enregistrerAppelGemini } from "@/lib/gemini-quota";
+
 export const TIMEOUT_IA_MS = 30_000;
 export const TENTATIVES_IA = 3;
 
@@ -35,6 +37,9 @@ export async function appelerGeminiJson(
   let statut = 0;
   try {
     for (let essai = 1; essai <= TENTATIVES_IA; essai++) {
+      // Chaque tentative HTTP consomme le quota réel : on la compte
+      // (best-effort, jamais bloquant) pour ne jamais dépasser le plafond.
+      await enregistrerAppelGemini();
       try {
         res = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,

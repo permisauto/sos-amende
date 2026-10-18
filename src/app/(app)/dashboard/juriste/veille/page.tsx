@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireJuriste } from "@/lib/dal";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@/generated/prisma/client";
 import { VeilleList, type SourceDto } from "./veille-list";
 
 /**
@@ -11,14 +12,22 @@ import { VeilleList, type SourceDto } from "./veille-list";
  * les écarte, ou promeut l'une d'elles en proposition de faille à compléter.
  * Aucune décision juridique n'est prise automatiquement.
  */
+
+/** Publications affichées par page (la file « À lire » peut compter des centaines d'entrées). */
+const TAILLE_PAGE = 50;
+
 export default async function VeillePage({
   searchParams,
 }: {
-  searchParams: Promise<{ s?: string | string[] }>;
+  searchParams: Promise<{ s?: string | string[]; page?: string | string[] }>;
 }) {
   const user = await requireJuriste();
-  const { s } = await searchParams;
+  const { s, page: pageBrute } = await searchParams;
   const filtre = typeof s === "string" ? s.toUpperCase() : "NOUVEAU";
+  const page = Math.max(
+    1,
+    Number.parseInt(typeof pageBrute === "string" ? pageBrute : "", 10) || 1,
+  );
   const compteurs: Record<"NOUVEAU" | "A_VALIDER" | "PROMU" | "ECARTE", number> = {
     NOUVEAU: 0,
     A_VALIDER: 0,
@@ -26,6 +35,7 @@ export default async function VeillePage({
     ECARTE: 0,
   };
   let sources: SourceDto[] = [];
+  let total = 0;
   let dbOk = true;
   try {
     // Compteurs par statut : après une promotion ou un écart, la publication
@@ -33,19 +43,24 @@ export default async function VeillePage({
     // totalement inaperçue (la carte et son message disparaissent ensemble).
     // `A_VALIDER` = propositions extraites et complètes, prêtes pour l'admin.
     const propositionComplete = { path: ["etat"], equals: "extrait" } as const;
-    const [rows, groupes, aValider] = await Promise.all([
+    const where = (
+      filtre === "TOUTES"
+        ? {}
+        : filtre === "PROMU" || filtre === "ECARTE"
+          ? { statut: filtre }
+          : filtre === "A_VALIDER"
+            ? { statut: "NOUVEAU", proposition: propositionComplete }
+            : { statut: "NOUVEAU" }
+    ) as Prisma.SourceJuridiqueWhereInput;
+
+    const [rows, totalFiltre, groupes, aValider] = await Promise.all([
       prisma.sourceJuridique.findMany({
-        where:
-          filtre === "TOUTES"
-            ? {}
-            : filtre === "PROMU" || filtre === "ECARTE"
-              ? { statut: filtre }
-              : filtre === "A_VALIDER"
-                ? { statut: "NOUVEAU", proposition: propositionComplete }
-                : { statut: "NOUVEAU" },
+        where,
         orderBy: [{ score: "desc" }, { createdAt: "desc" }],
-        take: 100,
+        skip: (page - 1) * TAILLE_PAGE,
+        take: TAILLE_PAGE,
       }),
+      prisma.sourceJuridique.count({ where }),
       prisma.sourceJuridique.groupBy({ by: ["statut"], _count: true }),
       prisma.sourceJuridique.count({
         where: { statut: "NOUVEAU", proposition: propositionComplete },
@@ -75,10 +90,15 @@ export default async function VeillePage({
       archive: r.archive,
       failleId: r.failleId,
     }));
+    total = totalFiltre;
   } catch (e) {
     console.error("veille: lecture des sources impossible", e);
     dbOk = false;
   }
+
+  const pages = Math.max(1, Math.ceil(total / TAILLE_PAGE));
+  const lien = (n: number) =>
+    `/dashboard/juriste/veille?s=${encodeURIComponent(filtre)}&page=${n}`;
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -133,6 +153,37 @@ export default async function VeillePage({
           </p>
         )}
       </div>
+
+      {dbOk && pages > 1 ? (
+        <nav
+          data-testid="pagination-veille"
+          className="mt-6 flex items-center justify-between gap-3 text-xs"
+        >
+          {page > 1 ? (
+            <Link
+              href={lien(page - 1)}
+              className="rounded-full border border-zinc-300 px-3.5 py-1.5 font-semibold text-zinc-700 hover:bg-zinc-50"
+            >
+              ← Précédent
+            </Link>
+          ) : (
+            <span />
+          )}
+          <span className="text-zinc-500">
+            Page {page} / {pages} — {total} publication(s)
+          </span>
+          {page < pages ? (
+            <Link
+              href={lien(page + 1)}
+              className="rounded-full border border-zinc-300 px-3.5 py-1.5 font-semibold text-zinc-700 hover:bg-zinc-50"
+            >
+              Suivant →
+            </Link>
+          ) : (
+            <span />
+          )}
+        </nav>
+      ) : null}
     </div>
   );
 }

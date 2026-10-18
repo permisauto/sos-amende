@@ -78,6 +78,12 @@ export async function extrairePropositionsLot(
   await requireJuriste();
   const bilan = await extrairePropositionsEnAttente(BUDGET_EXTRACTION_LOT);
   revalidatePath("/dashboard/juriste/veille");
+  if (bilan.quotaAtteint) {
+    return {
+      message:
+        "Quota IA du jour atteint : les extractions restantes seront reprises automatiquement (cron nocturne) ou demain.",
+    };
+  }
   const total = bilan.extraites + bilan.incompletes + bilan.echecs;
   if (total === 0) {
     return {
@@ -103,6 +109,12 @@ export async function regenererAnalysesVeille(
   await requireAdmin();
   const bilan = await regenererAnalysesAnciennes(BUDGET_EXTRACTION_LOT);
   revalidatePath("/dashboard/juriste/veille");
+  if (bilan.quotaAtteint) {
+    return {
+      error:
+        "Quota IA du jour atteint : la régénération reprendra automatiquement cette nuit (cron) — réessayez demain. Les analyses déjà traitées sont conservées.",
+    };
+  }
   if (bilan.iaIndisponible) {
     return {
       error:

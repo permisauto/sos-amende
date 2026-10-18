@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { verifierSecretCron } from "@/lib/cron-auth";
 import { revalidatePath } from "next/cache";
-import { executerVeilleDila } from "@/lib/veille-ingestion";
+import {
+  executerVeilleDila,
+  regenererAnalysesAnciennes,
+} from "@/lib/veille-ingestion";
 
 /**
  * Veille juridique automatique (auto-alimentation §H) : télécharge les
@@ -15,6 +18,9 @@ import { executerVeilleDila } from "@/lib/veille-ingestion";
  * est remontée : métadonnées, liens Légifrance et citations littérales. Aucune
  * faille n'est créée ni activée ici — la promotion en proposition de faille
  * est une décision humaine.
+ *
+ * Le même passage **régénère** un lot d'analyses héritées vers le format
+ * Veille 2.0 (`regenererAnalysesAnciennes`), borné par le quota Gemini du jour.
  *
  * Hors dev, `CRON_SECRET` est requis (header `Authorization: Bearer <secret>`).
  * `?sources=JADE,CASS` permet de restreindre l'exécution (utile en test ;
@@ -40,12 +46,21 @@ export async function GET(req: Request) {
   const filtre = url.searchParams.get("sources");
   const res = await executerVeilleDila(filtre ? new Set(filtre.split(",")) : undefined);
 
+  // Reprise progressive des analyses héritées (avant Veille 2.0) vers le format
+  // courant — **bornée par le quota Gemini du jour** (`quotaGeminiRestant`) :
+  // quelques analyses par nuit, sans jamais dépasser le palier gratuit. Une
+  // fois le quota épuisé, la suite est reprise la nuit suivante.
+  const regeneration = await regenererAnalysesAnciennes();
+  const regenerees =
+    regeneration.extraites + regeneration.incompletes + regeneration.echecs;
+
   revalidatePath("/dashboard/juriste/veille");
   return NextResponse.json({
     ok: true,
     totalRetenues: res.totalRetenues,
     sources: res.sources,
-    message: `${res.totalRetenues} publication(s) pertinente(s) ajoutée(s) à la veille.`,
+    regeneration: { regenerees, quotaAtteint: regeneration.quotaAtteint },
+    message: `${res.totalRetenues} publication(s) pertinente(s) ajoutée(s) à la veille ; ${regenerees} analyse(s) régénérée(s) au format Veille 2.0.`,
   });
 }
 

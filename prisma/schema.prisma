@@ -408,6 +408,20 @@ model AutoAlimentationTrace {
 }
 
 // ---------------------------------------------------------------------------
+// Quota IA (Gemini) — compteur d'appels par jour
+// ---------------------------------------------------------------------------
+
+// Le palier gratuit de l'API Gemini impose un nombre de requêtes par jour.
+// Les traitements de masse de la veille (extraction des propositions,
+// régénération Veille 2.0) partagent ce compteur pour ne jamais dépasser le
+// quota : on lit le restant avant un lot, et chaque appel l'incrémente.
+model GeminiUsage {
+  jour      String   @id // date UTC "YYYY-MM-DD"
+  appels    Int      @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
 // Paiements par virement bancaire (inscription inversée, remboursements sect. 9)
 // ---------------------------------------------------------------------------
 

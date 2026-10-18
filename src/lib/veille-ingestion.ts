@@ -58,6 +58,10 @@ import {
 } from "@/lib/veille-perteinence";
 import { reglesDetectionPourQuestions } from "@/lib/questions";
 import { enregistrerTraceAutoAlimentation } from "@/lib/auto-alimentation";
+import {
+  partExtractionJournaliere,
+  quotaGeminiRestant,
+} from "@/lib/gemini-quota";
 
 const TIMEOUT_LISTING_MS = 15_000;
 const TIMEOUT_ARCHIVE_MS = 60_000;
@@ -439,6 +443,8 @@ export type BilanExtraction = {
   locales: number;
   /** IA globalement indisponible (coupée ou sans clé) : lot non entamé. */
   iaIndisponible: boolean;
+  /** Quota Gemini du jour épuisé : lot non entamé (reprise au prochain passage). */
+  quotaAtteint: boolean;
 };
 
 const BILAN_VIDE: BilanExtraction = {
@@ -447,6 +453,7 @@ const BILAN_VIDE: BilanExtraction = {
   echecs: 0,
   locales: 0,
   iaIndisponible: false,
+  quotaAtteint: false,
 };
 
 function publicationDepuisRow(row: SourceJuridique): PublicationVeille {
@@ -597,14 +604,34 @@ export async function extrairePropositionsEnAttente(
     return { ...BILAN_VIDE };
   }
 
+  // Garde-fou quota : l'extraction des nouvelles sources ne consomme qu'une
+  // part bornée du quota Gemini du jour — le reste revient à la régénération
+  // des analyses héritées. Seul le chemin IA (`gemini`) consomme le réseau :
+  // en simulé (`mock`) ou en secours local (`off`/`absent`, sans requête), on
+  // ne plafonne pas.
+  const iaActive = extractionDispo() === "gemini";
+  let budget = limite;
+  if (iaActive) {
+    const restant = await quotaGeminiRestant();
+    if (restant <= 0) return { ...BILAN_VIDE, quotaAtteint: true };
+    budget = Math.min(limite, partExtractionJournaliere(), restant);
+  }
+
   const candidats = rows
     .filter((r) => estCandidatExtraction(propositionEnregistree(r)))
-    .slice(0, limite);
+    .slice(0, Math.max(0, budget));
 
   const bilan = { ...BILAN_VIDE };
   const fin = Date.now() + BUDGET_TEMPS_EXTRACTION_MS;
   for (const row of candidats) {
     if (Date.now() > fin) break;
+    // Garde-fou quota en cours de lot : les tentatives (429/5xx) ont pu
+    // consommer les derniers appels depuis le contrôle initial — on s'arrête
+    // net plutôt que d'enchaîner des replis locaux jusqu'à la fin du lot.
+    if (extractionDispo() === "gemini" && (await quotaGeminiRestant()) <= 0) {
+      bilan.quotaAtteint = true;
+      break;
+    }
     const res = await extraireEtStocker(row);
     if (!res) {
       bilan.echecs++;
@@ -677,6 +704,16 @@ export async function regenererAnalysesAnciennes(
     return { ...BILAN_VIDE, iaIndisponible: true };
   }
 
+  // Garde-fou quota : on ne régénère que dans la limite des appels Gemini
+  // encore disponibles aujourd'hui. Quota épuisé → lot non entamé (le cron
+  // reprendra demain) plutôt qu'une cascade de replis locaux sans valeur.
+  let budget = limite;
+  if (dispo === "gemini") {
+    const restant = await quotaGeminiRestant();
+    if (restant <= 0) return { ...BILAN_VIDE, quotaAtteint: true };
+    budget = Math.min(limite, restant);
+  }
+
   let rows: SourceJuridique[];
   try {
     rows = await prisma.sourceJuridique.findMany({
@@ -716,7 +753,7 @@ export async function regenererAnalysesAnciennes(
       heritees.push({ row, reprise: false });
     }
   }
-  const aTraiter = [...reprises, ...heritees].slice(0, limite);
+  const aTraiter = [...reprises, ...heritees].slice(0, Math.max(0, budget));
 
   const bilan = { ...BILAN_VIDE };
   const fin = Date.now() + BUDGET_TEMPS_EXTRACTION_MS;
