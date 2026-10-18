@@ -89,6 +89,41 @@ async function checkSupabase(): Promise<HealthCheckResult> {
   }
 }
 
+/**
+ * Vérifie le chemin **réel** de l'application : une requête Prisma sur le
+ * pooler Supabase (même connexion que les pages et les actions). Indispensable :
+ * `checkSupabase` interroge PostgREST (HTTPS) et ne détecte donc **pas** une
+ * panne de la connexion Postgres — ex. l'incident TLS « self-signed certificate
+ * in certificate chain » du 13/10/2026, resté invisible du health pendant
+ * 4 jours (seul le cron `veille-dila` échouait, silencieusement).
+ */
+async function checkPrisma(): Promise<HealthCheckResult> {
+  const start = Date.now();
+  if (!process.env.DATABASE_URL) {
+    return { name: "prisma", status: "unhealthy", error: "DATABASE_URL manquante" };
+  }
+  try {
+    const { prisma } = await import("@/lib/prisma");
+    await prisma.$queryRaw`SELECT 1`;
+    const latencyMs = Date.now() - start;
+    return {
+      name: "prisma",
+      status: getStatus(latencyMs),
+      latencyMs,
+      details: {
+        message: "Connexion Prisma OK (TLS vérifié sur la base applicative)",
+      },
+    };
+  } catch (err: unknown) {
+    return {
+      name: "prisma",
+      status: "unhealthy",
+      latencyMs: Date.now() - start,
+      error: err instanceof Error ? err.message : "Erreur inconnue",
+    };
+  }
+}
+
 async function checkGroq(): Promise<HealthCheckResult> {
   const start = Date.now();
 
@@ -421,8 +456,8 @@ function checkOcr(): HealthCheckResult {
  */
 export async function runHealthChecks(full = true): Promise<HealthCheckResponse> {
   const checksEnVue = full
-    ? [checkSupabase(), checkGroq(), checkResend(), checkDataGouv(), checkOpenMeteo(), checkBan(), checkTravaux(), checkStorage(), Promise.resolve(checkOcr())]
-    : [checkSupabase(), checkResend()];
+    ? [checkSupabase(), checkPrisma(), checkGroq(), checkResend(), checkDataGouv(), checkOpenMeteo(), checkBan(), checkTravaux(), checkStorage(), Promise.resolve(checkOcr())]
+    : [checkSupabase(), checkPrisma(), checkResend()];
   const results = await Promise.allSettled(checksEnVue);
 
   const checks: HealthCheckResult[] = results.map((r) =>
