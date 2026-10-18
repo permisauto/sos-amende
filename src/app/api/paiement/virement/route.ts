@@ -82,6 +82,9 @@ export async function POST(req: Request) {
   } catch (e) {
     console.error("virement DB fail, fallback mock", e);
     // Fallback mock si DB down — on continue pour envoyer l'email quand même
+    // Avertissement opérationnel : ce chemin ne doit pas rester silencieux en
+    // production (paiement créé fictivement) — l'alerting (Sentry/Git) pourra
+    // repérer ce log. Ne pas lever d'exception pour ne pas bloquer l'e-mail.
   }
 
   // Email de confirmation d'inscription (défensif : sans clé, on log seulement) — même si DB down
