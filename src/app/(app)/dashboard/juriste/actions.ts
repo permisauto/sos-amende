@@ -386,18 +386,28 @@ export async function validerDossier(
         });
         if (debit.count === 0) throw new Error("CREDIT_INSUFFISANT");
       }
-      await tx.dossier.update({
-        where: { id: dossier.id },
+      const maj = await tx.dossier.updateMany({
+        where: {
+          id: dossier.id,
+          statut: { in: ["EN_ATTENTE_VALIDATION", "PRET", "A_VERIFIER"] },
+        },
         data: {
           statut: estSigne ? "PRET" : "EN_ATTENTE_PRE_SIGNATURE",
           valideLe: new Date(),
           canalEnvoi: canal,
           lettreGeneree: lettreFinale,
           ...(differeNonConsome
-            ? { extractedData: { ...dataExt, creditConsome: true } as object }
+            ? {
+                extractedData: { ...dataExt, creditConsome: true } as object,
+                creditDebite: true,
+              }
             : {}),
         },
       });
+      // Verrou anti double-validation concurrente : la transition n'est acceptée
+      // que depuis un statut éligible — un second appel simultané n'écrit rien et
+      // provoque le rollback du débit éventuel (jamais de double débit).
+      if (maj.count === 0) throw new Error("STATUT_INVALIDE");
       if (pdfSigne) {
         await tx.courrier.create({
           data: {
@@ -439,6 +449,12 @@ export async function validerDossier(
       return {
         error:
           "Crédit client indisponible : ce dossier « déjà payé » attendait son débit différé. Faites valider son paiement (admin → Paiements) puis relancez la validation.",
+      };
+    }
+    if (e instanceof Error && e.message === "STATUT_INVALIDE") {
+      return {
+        error:
+          "Ce dossier n'est plus en attente de validation (déjà traité par un autre appel). Rechargez la page.",
       };
     }
     throw e;
@@ -584,7 +600,12 @@ export async function envoyerContestation(
  * (jamais d'envoi en ligne sur ce canal), accusé de dépôt LRAR généré et
  * rattaché au courrier existant.
  */
-export async function envoyerParLrar(
+// NON exportée volontairement : dans un fichier "use server", tout export
+// devient un endpoint POST public. Cette fonction agit sur un dossier arbitraire
+// et n'a aucune garde propre (elle est toujours appelée par `envoyerContestation`,
+// elle-même gardée par `requireJuristeRedacteur`). La garder privée ferme la
+// faille : aucun ID d'action n'est exposé au client.
+async function envoyerParLrar(
   dossierId: string,
   opts: { numeroRecommandé?: string } = {},
 ) {
@@ -1398,15 +1419,11 @@ export async function rejeterDossier(
     await tx.dossierEvent.create({
       data: { dossierId: dossier.id, type: "REJET", detail: motif },
     });
-    // Aucune lettre transmise : le crédit consommé est rendu au client (il peut
-    // lancer un nouveau dossier sans repayer) — **sauf** débit différé jamais
-    // consommé (dossier « déjà payé » : rendre un crédit ici serait offrir une
-    // analyse gratuite). Le marqueur `creditConsome: false` distingue les deux.
-    const differeNonConsome =
-      ((dossier.extractedData ?? {}) as Record<string, unknown>)[
-        "creditConsome"
-      ] === false;
-    if (!differeNonConsome) {
+    // Aucune lettre transmise : le crédit **réellement débité** est rendu au
+    // client (il peut relancer sans repayer). Source de vérité : la colonne
+    // `creditDebite` — on ne rend jamais un crédit qui n'a pas été débité
+    // (dossier sans faille, en attente de paiement, ou « déjà payé » non débité).
+    if (dossier.creditDebite === true) {
       await tx.user.update({
         where: { id: dossier.userId },
         data: { credits: { increment: 1 } },

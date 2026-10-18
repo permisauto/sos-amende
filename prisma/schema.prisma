@@ -125,6 +125,12 @@ model Dossier {
   dateLimite       DateTime? // délai de contestation : 45 j (amende) / 2 mois (suspension)
   travaux_présents Boolean? //TRUE si travaux connus sur la route au jour de l'infraction
   prix             Decimal       @db.Decimal(10, 2)
+  // Marquage financier : `true` dès qu'un crédit a réellement été débité pour
+  // ce dossier (à l'analyse, à la validation d'un « déjà payé », ou à la
+  // validation du virement rattaché). Sert de source de vérité au remboursement
+  // (`rejeterDossier`) : on ne rend que ce qui a été débité. Laisser à `false`
+  // quand aucun débit n'a eu lieu (dossier sans faille, en attente de paiement).
+  creditDebite     Boolean       @default(false)
   failleJuridiqueId String? // faille retenue (principale) par le moteur (sect. 5)
   failleJuridique FailleJuridique? @relation(fields: [failleJuridiqueId], references: [id])
   faillesRetenues  DossierFaille[] // toutes les failles candidates (détection par scan)
