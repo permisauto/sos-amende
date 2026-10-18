@@ -1,0 +1,51 @@
+name: Surveillance production
+
+# Vérifie régulièrement que le site de production répond et que sa base de
+# données est accessible. En cas de panne, le job échoue et GitHub envoie un
+# e-mail d'alerte au propriétaire du dépôt.
+#
+# Historique : l'incident TLS Supabase du 13/10/2026 (connexion base cassée)
+# est resté invisible 4 jours car la page santé ne testait pas Prisma.
+#
+# Note : GitHub désactive les workflows planifiés après 60 jours sans activité
+# sur le dépôt — un simple commit les réactive.
+
+on:
+  schedule:
+    # Toutes les 30 minutes.
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+jobs:
+  health:
+    name: Page santé
+    runs-on: ubuntu-latest
+    steps:
+      - name: Interroger /api/health en production
+        run: |
+          set -euo pipefail
+          URL="https://recours-permis-pv.com/api/health"
+
+          code=$(curl -sS --max-time 30 --retry 3 --retry-delay 5 --retry-all-errors \
+            -o body.json -w '%{http_code}' "$URL" || echo "000")
+
+          echo "HTTP $code"
+          echo "--- Corps de la réponse ---"
+          cat body.json 2>/dev/null || true
+          echo "----------------------------"
+
+          if [ "$code" != "200" ]; then
+            echo "::error::Production KO (HTTP $code). Détail :"
+            jq -r '.checks[]? | select(.status != "healthy") | "  - \(.name) : \(.status) — \(.error // .details.message // "")"' body.json 2>/dev/null || true
+            exit 1
+          fi
+
+          status=$(jq -r '.status // "inconnu"' body.json)
+
+          if [ "$status" != "healthy" ]; then
+            echo "::error::État de production : $status — détail :"
+            jq -r '.checks[]? | select(.status != "healthy") | "  - \(.name) : \(.status) — \(.error // .details.message // "")"' body.json 2>/dev/null || true
+            exit 1
+          fi
+
+          echo "✅ Production en bonne santé."
