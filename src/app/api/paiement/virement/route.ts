@@ -6,6 +6,16 @@ import { consommerCreneau } from "@/lib/rate-limit";
 import { montantAvecOption, libelleMontant, PRIX_OPTION_LRAR } from "@/lib/tarifs";
 import { RIB } from "@/lib/rib";
 
+/** Échappement HTML minimal : les valeurs d'un formulaire public sont
+ *  réinjectées dans un e-mail — jamais de HTML brut (anti-injection). */
+function echapper(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 const schema = z.object({
   type: z.enum(["AMENDE", "SUSPENSION"]),
   nom: z.string().min(1),
@@ -44,12 +54,19 @@ export async function POST(req: Request) {
   try {
     const user = await prisma.user.upsert({
       where: { email },
-      update: { name: `${prenom} ${nom}`, telephone: whatsapp },
+      // Non destructif : une route non authentifiée ne doit JAMAIS écraser le
+      // nom/le téléphone d'un compte existant (un tiers connaissant l'e-mail
+      // pourrait le faire). On ne remplit ces champs qu'à la création.
+      update: {},
       create: { email, name: `${prenom} ${nom}`, telephone: whatsapp, credits: 0 },
     });
+    let dossierLieId: string | null = null;
     if (dossierId) {
       const dossier = await prisma.dossier.findFirst({ where: { id: dossierId, userId: user.id } });
       if (dossier) {
+        // Le paiement est rattaché au dossier : à la validation admin, le crédit
+        // sert directement le dossier (net à zéro), cf. admin/actions.ts.
+        dossierLieId = dossier.id;
         const data = (dossier.extractedData as Record<string, unknown> | null) ?? {};
         await prisma.dossier.update({
           where: { id: dossier.id },
@@ -58,7 +75,7 @@ export async function POST(req: Request) {
       }
     }
     const payment = await prisma.payment.create({
-      data: { userId: user.id, amount: montant, currency: "EUR", status: "PENDING_VIREMENT", kind: type, optionLrar },
+      data: { userId: user.id, amount: montant, currency: "EUR", status: "PENDING_VIREMENT", kind: type, optionLrar, dossierId: dossierLieId },
     });
     paymentId = payment.id;
     ref = payment.id.slice(0, 8).toUpperCase();
@@ -80,7 +97,7 @@ export async function POST(req: Request) {
         from,
         to: email,
         subject: "SOS Amende — votre compte est créé, virement en attente",
-        html: `<p>Bonjour ${prenom},</p><p>Votre compte SOS Amende (${email}) est créé. Votre dossier ${type} est en attente de virement ${libelle}.</p>${optionLinee}${offreLinee}<p><strong>RIB :</strong> ${RIB.iban} / BIC ${RIB.bic} / Titulaire ${RIB.titulaire}</p><p><strong>Référence obligatoire :</strong> ${ref} — ${prenom} ${nom}</p><p>Dès que le virement est effectué, envoyez la référence + capture par email à contact@recours-permis-pv.com ou WhatsApp ${whatsapp}. Un juriste validera sous 24h et débloquera votre lettre. Accédez à votre espace : ${(process.env.NEXT_PUBLIC_APP_URL ?? "https://recours-permis-pv.com")}/dashboard</p>`,
+        html: `<p>Bonjour ${echapper(prenom)},</p><p>Votre compte SOS Amende (${echapper(email)}) est créé. Votre dossier ${type} est en attente de virement ${libelle}.</p>${optionLinee}${offreLinee}<p><strong>RIB :</strong> ${echapper(RIB.iban)} / BIC ${echapper(RIB.bic)} / Titulaire ${echapper(RIB.titulaire)}</p><p><strong>Référence obligatoire :</strong> ${ref} — ${echapper(prenom)} ${echapper(nom)}</p><p>Dès que le virement est effectué, envoyez la référence + capture par email à contact@recours-permis-pv.com ou WhatsApp ${echapper(whatsapp)}. Un juriste validera sous 24h et débloquera votre lettre. Accédez à votre espace : ${(process.env.NEXT_PUBLIC_APP_URL ?? "https://recours-permis-pv.com")}/dashboard</p>`,
       });
     } else {
       console.log(`[DEV] Email confirmation pour ${email} (sans clé Resend) — ref ${ref}`);

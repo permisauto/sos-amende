@@ -593,7 +593,9 @@ export async function validerVirement(
         dossierEnValidation = dossierLie.id;
         await tx.dossier.update({
           where: { id: dossierLie.id },
-          data: { statut: "EN_ATTENTE_VALIDATION" },
+          // Le client a réellement payé (virement validé) : on marque le débit
+          // pour qu'un rejet ultérieur rende bien le crédit (rejeterDossier).
+          data: { statut: "EN_ATTENTE_VALIDATION", creditDebite: true },
         });
         await tx.dossierEvent.create({
           data: {

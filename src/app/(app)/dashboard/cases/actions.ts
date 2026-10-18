@@ -474,13 +474,21 @@ export async function analyserDossier(
   try {
     statut = await prisma.$transaction(async (tx) => {
       let next: "EN_ATTENTE_VALIDATION" | "EN_ATTENTE_PAIEMENT";
+      // Source de vérité du remboursement (`rejeterDossier`) : `true` uniquement
+      // si un crédit a réellement été débité. Sur une relance, on n'écrit rien
+      // (le marquage de la 1ʳᵉ analyse est conservé — jamais de double débit).
+      let creditDebite = false;
       if (faille && !dejaAnalyse && !dejaPaye) {
         const debit = await tx.user.updateMany({
           where: { id: user.id, credits: { gte: 1 } },
           data: { credits: { decrement: 1 } },
         });
-        next =
-          debit.count === 1 ? "EN_ATTENTE_VALIDATION" : "EN_ATTENTE_PAIEMENT";
+        if (debit.count === 1) {
+          next = "EN_ATTENTE_VALIDATION";
+          creditDebite = true;
+        } else {
+          next = "EN_ATTENTE_PAIEMENT";
+        }
       } else {
         next = "EN_ATTENTE_VALIDATION";
       }
@@ -497,6 +505,7 @@ export async function analyserDossier(
           refereGenere,
           dateLimite: dateLimitePv(data.date, dossier.type),
           statut: next,
+          ...(creditDebite ? { creditDebite: true } : {}),
         },
       });
       if (maj.count === 0) throw new Error("ANALYSE_DEJA_TRAITEE");
