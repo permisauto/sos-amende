@@ -805,6 +805,20 @@ export function normaliserTitreProposition(t: string): string {
 }
 
 /**
+ * Une proposition de veille n'est promouvable en faille que si elle dégage une
+ * vraie matière : extraction complète (`etat = "extrait"`) **et** ni PERDANT
+ * (signal IA) ni **secours local** (`methode: "locale"` — aucune règle, juste
+ * une citation de tête).
+ */
+export function estPropositionPromouvable(
+  p: PropositionVeille | null,
+): boolean {
+  if (!p || p.etat !== "extrait") return false;
+  if (p.statutAnalyse === "REJETE_AUTOMOBILISTE_PERDANT") return false;
+  return p.methode !== "locale";
+}
+
+/**
  * Propose **automatiquement** une faille en statut `PROPOSEE` pour chaque
  * publication dont l'extraction est complète (`etat = extrait`) et qui n'est
  * encore liée à aucune faille.
@@ -818,6 +832,11 @@ export function normaliserTitreProposition(t: string): string {
  *    décision que l'IA juge rejetée pour l'usager ne produit aucune faille —
  *    la source reste `NOUVEAU` avec son badge rouge, l'admin l'écarte (ou
  *    promeut en connaissance) depuis le drawer ;
+ *  - **secours local jamais auto-proposé** (incident 2026-10-18) : une
+ *    extraction `methode: "locale"` (sans IA) ne dégage aucune règle — sa
+ *    « règle » est une citation de tête du texte, souvent la paraphrase d'un
+ *    rejet, et son template est un squelette mécanique. La publication reste
+ *    une simple source à lire ; l'admin la rédige en connaissance de cause ;
  *  - seule l'administration tranche (drawer de la veille → flip
  *    `PROPOSEE → ACTIVE`, ou bibliothèque → « Écarter ») ;
  *  - idempotent : liason par `SourceJuridique.failleId` + dédup par titre
@@ -828,6 +847,7 @@ export function normaliserTitreProposition(t: string): string {
 export async function proposerFaillesDepuisExtraction(): Promise<{
   creees: number;
   liees: number;
+  /** publications sautées : PERDANT (IA) ou secours local (sans règle). */
   ecartees: number;
 }> {
   try {
@@ -860,8 +880,12 @@ export async function proposerFaillesDepuisExtraction(): Promise<{
       const p = row.proposition as PropositionVeille | null;
       if (!p || p.etat !== "extrait" || !Array.isArray(p.articles)) continue;
       // Veille 2.0 : PERDANT = aucune faille auto-créée (l'IA n'écartera
-      // jamais seule — le badge + le drawer admin portent la décision).
-      if (p.statutAnalyse === "REJETE_AUTOMOBILISTE_PERDANT") {
+      // jamais seule — le badge + le drawer admin portent la décision) ;
+      // secours local (`methode: "locale"`) : aucune règle dégagée, seulement
+      // une citation de tête (souvent la paraphrase d'un rejet) + un template
+      // squelette — on ne fabrique pas de faille (incident 2026-10-18 : 55
+      // failles inutilisables ainsi créées).
+      if (!estPropositionPromouvable(p)) {
         ecartees++;
         continue;
       }
@@ -920,7 +944,7 @@ export async function proposerFaillesDepuisExtraction(): Promise<{
         statut: "OK",
         traitees: creees + liees,
         nouvelles: creees,
-        detail: `creees=${creees} liees=${liees} perdants_sautes=${ecartees}`,
+        detail: `creees=${creees} liees=${liees} sautees=${ecartees}`,
       });
     }
     return { creees, liees, ecartees };

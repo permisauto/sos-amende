@@ -10,8 +10,13 @@
  *
  * C'est notamment le cas des propositions issues de la **veille juridique** :
  * elles arrivent avec la référence de la source et ses citations, mais `regle` et
- * `templateLettre` peuvent être vides (extraction locale ou correction admin
- * partielle). Le juriste doit les rédiger avant validation.
+ * `templateLettre` peuvent être vides (correction admin partielle) **ou réduits
+ * au marqueur du secours local** (`extractionLocale`, sans IA) — qui n'est pas
+ * une règle dégagée mais une citation de tête du texte, souvent la paraphrase
+ * d'un rejet. Le juriste doit les rédiger avant validation.
+ *
+ * Incident 2026-10-18 : 38 failles `ACTIVE` n'étaient faites que de ce squelette
+ * local (article procédural + lettre mécanique) et étaient donc envoyables.
  *
  * La synchronisation manuelle de l'admin active d'office les propositions
  * **complètes** (`activerPropositionsCompletes`) ; les incomplètes restent en
@@ -25,12 +30,28 @@ export type ChampsActivation = {
   templateLettre: string | null;
 };
 
-/** Champs manquants ou vides (espaces seuls = vide) bloquant l'activation. */
+/**
+ * Marqueur du **secours local** de la veille (`extractionLocale`) : la « règle »
+ * y est étiquetée explicitement et ne fait que citer la tête du texte — souvent
+ * le résumé d'un recours **rejeté**. Ce n'est pas une règle dégagée : on la
+ * compte comme absente à l'activation.
+ */
+const REGLE_PLACEHOLDER = /extraction locale \(sans ia\)/i;
+
+/** true si la « règle » n'est que le marqueur de secours local de la veille. */
+export function estReglePlaceholder(regle: string | null | undefined): boolean {
+  return !!regle && REGLE_PLACEHOLDER.test(regle);
+}
+
+/**
+ * Champs manquants ou vides (espaces seuls = vide) bloquant l'activation. Une
+ * règle réduite au marqueur du secours local compte comme absente.
+ */
 export function manquantsPourActivation(
   f: ChampsActivation,
 ): ("regle" | "templateLettre")[] {
   const manquants: ("regle" | "templateLettre")[] = [];
-  if (!f.regle?.trim()) manquants.push("regle");
+  if (!f.regle?.trim() || estReglePlaceholder(f.regle)) manquants.push("regle");
   if (!f.templateLettre?.trim()) manquants.push("templateLettre");
   return manquants;
 }
