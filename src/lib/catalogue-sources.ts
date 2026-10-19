@@ -340,16 +340,16 @@ En conséquence, je vous demande de bien vouloir retirer la décision de suspens
         juridiction: "Conseil d'État",
         date: "2018-02-14",
         url: "https://www.legifrance.gouv.fr/ceta/id/CETATEXT000036601993",
-        verifiee: false,
+        verifiee: true,
         resume:
           "Le Conseil d'État juge que la suspension pour alcoolémie suppose que le seuil légal soit effectivement dépassé compte tenu de la marge d'erreur maximale tolérée de l'éthylomètre ; une décision fondée sur un résultat brut, sans prise en compte de cette marge, est annulée.",
       },
       {
-        reference: "Cass. crim., 26 mars 2019, n° 18-94.900",
+        reference: "Cass. crim., 26 mars 2019, n° 18-84.900",
         juridiction: "Cour de cassation",
         date: "2019-03-26",
-        url: "https://www.legifrance.gouv.fr/juri/id/JURITEXT000038388467",
-        verifiee: false,
+        url: "https://www.legifrance.gouv.fr/juri/id/JURITEXT000038373181",
+        verifiee: true,
         resume:
           "La chambre criminelle confirme que la preuve de l'alcoolémie doit reposer sur des mesures fiables, la marge d'erreur de l'éthylomètre devant être prise en compte pour retenir le dépassement des seuils.",
       },
@@ -358,7 +358,7 @@ En conséquence, je vous demande de bien vouloir retirer la décision de suspens
 
 Cette suspension se fonde sur une mesure d'alcoolémie obtenue au moyen d'un éthylomètre, sans prise en compte de la marge d'erreur maximale tolérée de l'appareil.
 
-En application des articles L. 224-2 et L. 234-1 du Code de la route et de l'article 15 de l'arrêté du 8 juillet 2003, une suspension pour alcoolémie ne peut être prononcée que si le seuil légal a été effectivement dépassé, la marge d'erreur maximale tolérée de 8 % devant être prise en compte, sauf lorsque le résultat communiqué l'intègre déjà (Conseil d'État, 14 février 2018, n° 407914 ; Cass. crim., 26 mars 2019, n° 18-94.900).
+En application des articles L. 224-2 et L. 234-1 du Code de la route et de l'article 15 de l'arrêté du 8 juillet 2003, une suspension pour alcoolémie ne peut être prononcée que si le seuil légal a été effectivement dépassé, la marge d'erreur maximale tolérée de 8 % devant être prise en compte, sauf lorsque le résultat communiqué l'intègre déjà (Conseil d'État, 14 février 2018, n° 407914 ; Cass. crim., 26 mars 2019, n° 18-84.900).
 
 En conséquence, je vous demande de bien vouloir retirer la décision de suspension prise à mon encontre.`,
   },
@@ -379,7 +379,7 @@ En conséquence, je vous demande de bien vouloir retirer la décision de suspens
         juridiction: "Conseil d'État",
         date: "2018-02-14",
         url: "https://www.legifrance.gouv.fr/ceta/id/CETATEXT000036601993",
-        verifiee: false,
+        verifiee: true,
         resume:
           "La marge d'erreur maximale tolérée de l'éthylomètre (8 %) doit être prise en compte pour retenir le dépassement d'un seuil légal d'alcoolémie ; le principe s'applique à tout seuil, y compris celui de 0,20 g/L des nouveaux conducteurs.",
       },
@@ -459,7 +459,7 @@ En conséquence, je vous demande de bien vouloir retirer la décision de suspens
     source: "Legifrance",
     regle: "La peine d'amende forfaitaire majorée (titre exécutoire signé par le MP) se prescrit par 3 ans à compter de sa signature ; à défaut d'acte d'exécution pendant 3 ans, elle est prescrite.",
     reglesDetection: [{ type: "texteContient", motif: "titre exécutoire" }],
-    jurisprudence: [{ reference: "Cass. crim., 25 fév. 2025, n° 24-85.473", juridiction: "Cour de cassation", url: "https://www.legifrance.gouv.fr/juri/id/JURITEXT000051234567", verifiee: false, resume: "Le titre exécutoire (AFM) fait courir la prescription triennale de la peine à compter de sa signature par le MP." }],
+    jurisprudence: [{ reference: "Cass. crim., 25 fév. 2025, n° 24-85.473", juridiction: "Cour de cassation", url: "https://www.legifrance.gouv.fr/juri/id/JURITEXT000051283967", verifiee: false, resume: "Le titre exécutoire (AFM) fait courir la prescription triennale de la peine à compter de sa signature par le MP." }],
     templateLettre: `Je soussigné(e) {nom}, conteste le titre exécutoire n° {num_pv} qui m'est réclamé au titre de l'amende forfaitaire majorée.
 
 Plus de trois années se sont écoulées depuis la signature de ce titre sans qu'aucun acte d'exécution n'ait été accompli à mon encontre.
@@ -581,7 +581,7 @@ En application de l'article R. 411-25 du Code de la route et de l'article L. 221
     source: "Cons. const. ; Cass. crim.",
     regle: "Contestation 45j dès envoi avis. AFM : réclamation 30j (3 mois si LRAR à adresse carte grise). Si changement d'adresse déclaré à temps, délai rallongé et majoration annulée.",
     reglesDetection: [{ type: "texteContient", motif: "délai" }],
-    jurisprudence: [{ reference: "Cons. const., QPC 7 mai 2015 n°2015-467", juridiction: "Conseil constitutionnel", url: null, verifiee: false, resume: "Validation du régime des délais de contestation avec aménagement en cas de changement d'adresse déclaré." }],
+    jurisprudence: [{ reference: "Cons. const., QPC 7 mai 2015 n° 2015-467", juridiction: "Conseil constitutionnel", url: null, verifiee: false, resume: "Décision 2015-467 QPC (M. Mohamed D.) : l'obligation de joindre l'avis d'amende forfaitaire majorée à la réclamation (art. 530 CPP) est conforme à la Constitution, sous réserve que le contrevenant conserve un recours effectif." }],
     templateLettre: `Je soussigné(e) {nom}, conteste l'avis de contravention n° {num_pv} qui m'a été notifié.
 
 Cet avis m'a été adressé à une adresse erronée, alors que mon changement d'adresse avait été dûment déclaré, notamment auprès de l'Agence nationale des titres sécurisés, avant l'envoi de l'avis.
@@ -679,7 +679,7 @@ En application de l'article L. 224-2 du Code de la route, la suspension devait �
     source: "Cass. crim.",
     regle: "Vérification annuelle obligatoire du DRAGER, carnet métrologique à produire si demandé.",
     reglesDetection: [{ type: "texteAbsent", motif: "carnet" }],
-    jurisprudence: [{ reference: "Cass. crim., 8 jan. 2019", juridiction: "Cour de cassation", url: null, verifiee: false, resume: "Absence de production du carnet = cassation." }],
+    jurisprudence: [{ reference: "Cass. crim., 8 janvier 2019, n° 18-83.661", juridiction: "Cour de cassation", url: null, verifiee: false, resume: "Absence de production du carnet métrologique = cassation." }],
     templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} en date du {date} par laquelle le préfet a prononcé la suspension de mon permis de conduire.
 
 La mesure d'alcoolémie a été réalisée au moyen d'un éthylomètre qui n'a pas fait l'objet de la vérification annuelle obligatoire par un organisme agréé, comme devait en attester le carnet métrologique de l'appareil.
