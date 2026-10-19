@@ -541,6 +541,16 @@ function FailleRow({
                   : " — vérifiée(s)"}
               </span>
             )}
+            {faille.statut === "ACTIVE" &&
+              !faille.reglesDetection?.length && (
+                <span
+                  className="rounded-full bg-amber-100 px-2.5 py-0.5 font-medium text-amber-800"
+                  data-testid="chip-sans-detection"
+                  title="Aucune règle de détection : cette faille ne sera jamais proposée automatiquement par le moteur — seule l'analyse IA peut la faire remonter."
+                >
+                  Détection auto : à définir
+                </span>
+              )}
           </div>
           {jurisprudence.length > 0 && (
             <ul className="mt-3 flex flex-col gap-1.5">

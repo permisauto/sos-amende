@@ -56,6 +56,15 @@ describe("failles — activation", () => {
     const f = { regle: "règle complète", templateLettre: "lettre complète" };
     expect(estActivable(f)).toBe(true);
   });
+
+  it("refuse une proposition de veille sans lettre même avec un référé (SUSPENSION)", () => {
+    // Verrou 2026-10-18 : `validerPropositionSource` passe désormais par
+    // `estActivable`. Un `templateRefere` ne remplace pas la lettre au fond —
+    // la faille doit rester PROPOSEE tant que `templateLettre` est vide.
+    expect(
+      estActivable({ regle: "obligation préalable au contradictoire", templateLettre: "" }),
+    ).toBe(false);
+  });
 });
 
 /**
