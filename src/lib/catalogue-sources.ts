@@ -405,16 +405,7 @@ En conséquence, je vous demande de bien vouloir retirer la décision de suspens
     reglesDetection: [
       { type: "valeurPlageMesure", min: 0.2, max: 0.5, unite: "g/L" },
     ],
-    jurisprudence: [
-      {
-        reference: "Code de la route, art. R. 234-1",
-        juridiction: "Légifrance",
-        url: null,
-        verifiee: false,
-        resume:
-          "Le seuil de 0,20 g/L est réservé aux nouveaux conducteurs (permis de moins de 3 ans) ; le seuil général est de 0,50 g/L. Le statut de nouveau conducteur est une condition de l'infraction que l'administration doit prouver.",
-      },
-    ],
+    jurisprudence: [],
     templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} en date du {date} par laquelle le préfet a suspendu mon permis de conduire pour conduite sous l'empire d'un état alcoolique.
 
 La décision retient un taux d'alcoolémie compris entre 0,20 et 0,50 g/L et applique le seuil de 0,20 g/L réservé aux nouveaux conducteurs, sans que mon statut de nouveau conducteur — c'est-à-dire un permis de conduire délivré depuis moins de trois ans — soit établi.
@@ -476,7 +467,7 @@ En conséquence, je vous demande de bien vouloir constater la prescription de la
     source: "Legifrance ; Cass. crim.",
     regle: "Le PV doit être signé sur chaque feuillet par l'agent ayant constaté personnellement ; l'avis (copie) n'a pas à l'être, seul l'original fait foi. Absence sur l'original = nullité si grief.",
     reglesDetection: [{ type: "texteAbsent", motif: "signature" }],
-    jurisprudence: [{ reference: "Cass. crim., 6 mars 2013", juridiction: "Cour de cassation", url: null, verifiee: false, resume: "Absence de signature de l'agent sur le PV original = nullité substantielle si grief établi." }],
+    jurisprudence: [],
     templateLettre: `Je soussigné(e) {nom}, conteste l'avis de contravention n° {num_pv} qui m'a été notifié.
 
 Le procès-verbal original d'infraction n'est pas signé par l'agent verbalisateur, en méconnaissance de l'article 429 du Code de procédure pénale, qui exige que le procès-verbal soit signé par l'agent ayant personnellement constaté l'infraction, ainsi que de l'article 66 du même code.
@@ -491,7 +482,7 @@ En conséquence, je vous demande de bien vouloir me communiquer le procès-verba
     source: "Legifrance ; CA Lyon",
     regle: "Le lieu exact (voie, PR, commune, sens) doit permettre de vérifier la limitation et la compétence de l'agent. Mention vague type 'Route de X' = nullité.",
     reglesDetection: [{ type: "texteAbsent", motif: "commune" }],
-    jurisprudence: [{ reference: "Cass. crim., 23 oct. 2007", juridiction: "Cour de cassation", url: null, verifiee: false, resume: "Le juge doit vérifier la limitation applicable si le lieu est précis ; a contrario lieu vague = nullité." }],
+    jurisprudence: [],
     templateLettre: `Je soussigné(e) {nom}, conteste l'avis de contravention n° {num_pv} qui m'a été notifié.
 
 Le lieu de l'infraction est mentionné de manière imprécise ({lieu}) : il ne permet ni de vérifier la limitation de vitesse applicable sur la portion de voie concernée, ni la compétence territoriale de l'agent verbalisateur.
@@ -506,7 +497,7 @@ En application des articles 429, 537 et 43 du Code de procédure pénale, le pro
     source: "Legifrance",
     regle: "L'appareil doit être homologué par le LNE et vérifié par un organisme désigné par le ministre. Sans homologation, le contrôle est illégal.",
     reglesDetection: [{ type: "texteAbsent", motif: "homologué" }],
-    jurisprudence: [{ reference: "Cass. crim., 2012-2016 (défaut vérification)", juridiction: "Cour de cassation", url: null, verifiee: false, resume: "Annulation de PV pour défaut de vérification périodique et d'homologation." }],
+    jurisprudence: [],
     templateLettre: `Je soussigné(e) {nom}, conteste l'avis de contravention n° {num_pv} qui m'a été notifié.
 
 La vitesse a été mesurée au moyen du cinémomètre n° {radarId}, lequel ne justifie pas d'une homologation délivrée par le laboratoire national de métrologie, ni d'une vérification périodique effectuée par un organisme agréé par le ministre chargé des transports.
@@ -521,7 +512,7 @@ En application de l'article R. 110-10 du Code de la route, du décret n° 2001-3
     source: "Sécurité Routière ; ANTAI",
     regle: "Marge légale : fixe -5 km/h (<100) ou -5% (>100), embarqué -10 km/h / -10%. Vitesse retenue = mesurée - marge.",
     reglesDetection: [{ type: "margeTechniqueVitesse" }],
-    jurisprudence: [{ reference: "Principe constant — Arrêté 4 juin 2009", juridiction: "Conseil d'État", url: null, verifiee: false, resume: "La vitesse retenue doit être la vitesse mesurée minorée de la tolérance réglementaire." }],
+    jurisprudence: [],
     templateLettre: `Je soussigné(e) {nom}, conteste l'avis de contravention n° {num_pv} qui m'a été notifié.
 
 La vitesse enregistrée par le cinémomètre n'a pas été minorée de la marge technique réglementaire destinée à tenir compte de l'incertitude de mesure de l'appareil.
@@ -536,7 +527,7 @@ En application des articles 14 et 15 de l'arrêté du 4 juin 2009, la vitesse re
     source: "ANTAI ; Doctrine",
     regle: "La photo doit permettre d'identifier le véhicule. Photo tronquée/floue/plaque illisible = contestation sur les points recevable (l'amende reste due).",
     reglesDetection: [{ type: "texteContient", motif: "photo" }],
-    jurisprudence: [{ reference: "Doctrine ANTAI — droit à communication du cliché", juridiction: "ANTAI", url: null, verifiee: false, resume: "Droit à communication du cliché complet sur demande CACIR pour vérifier l'identification." }],
+    jurisprudence: [],
     templateLettre: `Je soussigné(e) {nom}, conteste l'avis de contravention n° {num_pv} qui m'a été notifié.
 
 La photographie annexée à l'avis est inexploitable : floue, tronquée ou ne permettant pas de lire la plaque d'immatriculation du véhicule, elle ne permet pas l'identification certaine du véhicule et de son conducteur.
@@ -551,7 +542,7 @@ En application de l'article L. 121-3 du Code de la route et de l'article 537 du 
     source: "Cass. crim.",
     regle: "Les deux agents (opérateur cinémomètre + intercepteur) participent à la constatation ; un seul signataire suffit, mais aucun ne doit être étranger à la constatation.",
     reglesDetection: [{ type: "texteContient", motif: "intercepté" }],
-    jurisprudence: [{ reference: "Cass. crim., 3 mars 2004", juridiction: "Cour de cassation", url: null, verifiee: false, resume: "Les deux agents participent personnellement à la constatation, même si un seul signe." }],
+    jurisprudence: [],
     templateLettre: `Je soussigné(e) {nom}, conteste l'avis de contravention n° {num_pv} qui m'a été notifié.
 
 Le procès-verbal d'infraction n'a été dressé par aucun agent ayant personnellement constaté l'infraction : la constatation a été opérée sans qu'un agent intercepteur présent sur les lieux ait procédé à la vérification et à la notification régulière des faits.
@@ -566,7 +557,7 @@ En application de l'article 429 du Code de procédure pénale, le procès-verbal
     source: "Legifrance",
     regle: "L'interdiction n'est opposable que si arrêté municipal publié + panneau fidèle (horaires, périmètre).",
     reglesDetection: [{ type: "texteAbsent", motif: "arrêté" }],
-    jurisprudence: [{ reference: "Principe opposabilité R411-25", juridiction: "Conseil d'État", url: null, verifiee: false, resume: "L'interdiction doit être matérialisée par un arrêté et une signalisation fidèle pour être opposable." }],
+    jurisprudence: [],
     templateLettre: `Je soussigné(e) {nom}, conteste l'avis de contravention n° {num_pv} qui m'a été notifié.
 
 La prescription édictée au lieu dit {lieu} n'est pas opposable : elle n'est matérialisée ni par un arrêté municipal régulièrement publié, ni par une signalisation conforme aux prescriptions réglementaires.
@@ -614,20 +605,13 @@ En application des articles L. 211-2 et L. 211-5 du Code des relations entre le 
     reglesDetection: [{ type: "texteContient", motif: "mois" }],
     jurisprudence: [
       {
-        reference: "CE, 15 février 1961, Lagrange",
+        reference: "CE, 23 octobre 2019, n° 427431",
         juridiction: "Conseil d'État",
-        url: null,
-        verifiee: false,
+        date: "2019-10-23",
+        url: "https://www.conseil-etat.fr/fr/arianeweb/CE/decision/2019-10-23/427431",
+        verifiee: true,
         resume:
-          "Arrêt d'origine du contrôle d'erreur manifeste d'appréciation (première annulation sur ce fondement) — notion confirmée par la doctrine, texte intégral non relu au catalogage.",
-      },
-      {
-        reference: "CE, 3 février 1975, Sieur Pardov",
-        juridiction: "Conseil d'État",
-        url: null,
-        verifiee: false,
-        resume:
-          "Exemple type : décision manifestement disproportionnée aux faits = erreur manifeste d'appréciation (source : encyclopédie juridique ; texte intégral non relu). Aucune décision annulant une durée de suspension sur ce fondement n'a été retrouvée.",
+          "Le juge exerce un contrôle normal tant sur le principe que sur la durée de la suspension prononcée par le préfet sur le fondement de l'article L. 224-7 du Code de la route ; ce contrôle porte aussi sur les décisions prises au titre de l'article L. 224-2.",
       },
     ],
     templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} en date du {date} par laquelle le préfet a prononcé la suspension de mon permis de conduire.
@@ -724,7 +708,7 @@ Dans ces conditions, seule la contravention de l'article R. 234-1 du Code de la 
     source: "Service-Public",
     regle: "Recours gracieux/hiérarchique (2 mois) puis REP + référé-suspension (suspension provisoire en 48h-15j). Restitution subordonnée à visite médicale + test psycho.",
     reglesDetection: [{ type: "texteContient", motif: "référé" }],
-    jurisprudence: [{ reference: "Art. L.521-2 CJA", juridiction: "Légifrance", url: null, verifiee: false, resume: "Référé-suspension : urgence + doute sérieux en 48h-15j." }],
+    jurisprudence: [],
     templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} en date du {date} par laquelle le préfet a prononcé la suspension de mon permis de conduire.
 
 L'exécution de cette décision me cause un préjudice grave et immédiat en me privant de la possibilité de conduire, alors que ma contestation présente un doute sérieux quant à la légalité de la suspension.
@@ -904,7 +888,7 @@ En conséquence, je vous demande de bien vouloir annuler la décision de suspens
       "Arrêté de suspension (3F) signé par le secrétaire général sans délégation de signature expresse (incompétence)",
     articleLoi:
       "art. L. 224-2 du Code de la route (compétence du préfet) ; principes généraux sur la délégation de signature",
-    source: "Conseil d'État, 6 novembre 2019, n° 412051 (Légifrance)",
+    source: "Légifrance (art. L. 224-2) ; principes généraux sur la délégation de signature",
     regle:
       "La décision de suspension relève de la compétence du préfet (art. L. 224-2 du Code de la route). Un signataire autre que le préfet — secrétaire général, sous-préfet — ne peut la signer qu'en vertu d'une délégation de signature expresse et couvrant l'acte. À défaut de délégation expresse, l'arrêté est entaché d'incompétence et annulable.",
     reglesDetection: [
@@ -917,22 +901,12 @@ En conséquence, je vous demande de bien vouloir annuler la décision de suspens
         docType: "3F",
       },
     ],
-    jurisprudence: [
-      {
-        reference: "Conseil d'État, 4e et 1ères chambres réunies, 6 novembre 2019, n° 412051",
-        juridiction: "Conseil d'État",
-        date: "2019-11-06",
-        url: "https://www.legifrance.gouv.fr/ceta/id/CETATEXT000039335815",
-        verifiee: false,
-        resume:
-          "Le juge administratif contrôle l'existence d'une délégation de signature expresse au profit du signataire d'un acte administratif : sans délégation couvrant l'acte, celui-ci est entaché d'incompétence.",
-      },
-    ],
+    jurisprudence: [],
     templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} en date du {date} par laquelle le préfet a prononcé la suspension de mon permis de conduire.
 
 Cette décision a été signée par le secrétaire général, sans que soit mentionnée aucune délégation de signature l'y autorisant, alors que la compétence de prononcer la suspension appartient au préfet.
 
-En application de l'article L. 224-2 du Code de la route et des principes généraux régissant la délégation de signature, un acte administratif ne peut être signé au nom d'un autorité par un autre que lui sans délégation expresse couvrant l'acte ; à défaut, l'acte est entaché d'incompétence (Conseil d'État, 6 novembre 2019, n° 412051).
+En application de l'article L. 224-2 du Code de la route et des principes généraux régissant la délégation de signature, un acte administratif ne peut être signé au nom d'un autorité par un autre que lui sans délégation expresse couvrant l'acte ; à défaut, l'acte est entaché d'incompétence.
 
 En conséquence, je vous demande de bien vouloir annuler la décision de suspension prise à mon encontre pour incompétence du signataire.`,
     templateRefere: REFERE_SUSPENSION_PACK,
@@ -956,16 +930,7 @@ En conséquence, je vous demande de bien vouloir annuler la décision de suspens
         docType: "48SI",
       },
     ],
-    jurisprudence: [
-      {
-        reference: "Art. L. 223-3 et L. 223-1 du Code de la route (Légifrance)",
-        juridiction: "Légifrance",
-        url: null,
-        verifiee: false,
-        resume:
-          "L'auteur avisé d'une infraction entraînant retrait de points est informé des dispositions de l'article L. 223-2, de l'existence du traitement automatisé de son permis et de la possibilité d'exercer son droit d'accès (L. 223-3). Si le retrait aboutit à un nombre nul, la lettre notifiant l'invalidation récapitule les précédents retraits ayant concouru au solde nul, prononce l'invalidation du permis et enjoint sa restitution dans un délai de dix jours francs.",
-      },
-    ],
+    jurisprudence: [],
     templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} en date du {date} par laquelle il m'a été notifié l'invalidation de mon permis de conduire pour solde de points nul.
 
 La décision ne récapitule pas les précédents retraits de points ayant concouru au solde nul que l'administration entend me opposer. Elle ne me permet donc pas de contrôler le calcul aboutissant à ce prétendu solde nul, ni d'en vérifier l'exactitude.
@@ -992,16 +957,7 @@ En conséquence, je vous demande de bien vouloir retirer la décision d'invalida
         docType: "48SI",
       },
     ],
-    jurisprudence: [
-      {
-        reference: "Art. L. 223-2 et R. 223-2 du Code de la route (Légifrance)",
-        juridiction: "Légifrance",
-        url: null,
-        verifiee: false,
-        resume:
-          "Pour les infractions commises simultanément, les retraits de points se cumulent dans la limite de huit points (deux tiers du nombre maximal de douze points).",
-      },
-    ],
+    jurisprudence: [],
     templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} en date du {date} par laquelle il m'a été notifié l'invalidation de mon permis de conduire pour solde de points nul.
 
 Les retraits de points pris en compte pour constater ce solde nul dépassent le plafond légal de huit points applicable aux infractions commises simultanément. La somme des retraits excédant ce plafond, le calcul du solde nul sur lequel repose la décision est erroné et la privation de mon permis de conduire infondée.
@@ -1028,16 +984,7 @@ En conséquence, je vous demande de bien vouloir revoir le calcul des points ret
         docType: "48SI",
       },
     ],
-    jurisprudence: [
-      {
-        reference: "Art. L. 223-1 et L. 223-6 du Code de la route (Légifrance)",
-        juridiction: "Légifrance",
-        url: null,
-        verifiee: false,
-        resume:
-          "L'attestation délivrée à l'issue du stage ouvre droit à la récupération de quatre points dans la limite du plafond ; le préfet procède à la reconstitution dans un délai d'un mois à compter de la réception de l'attestation. Une invalidation constatée malgré un stage antérieur à la notification doit être réexaminée.",
-      },
-    ],
+    jurisprudence: [],
     templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} en date du {date} par laquelle il m'a été notifié l'invalidation de mon permis de conduire pour solde de points nul.
 
 Le stage de sensibilisation à la sécurité routière que j'ai suivi avait été accompli antérieurement à la notification de la décision contestée. L'attestation correspondante ouvrait droit à la récupération de quatre points, qui devaient être recrédités sur mon permis avant que ne soit constaté un quelconque solde nul.
