@@ -18,7 +18,7 @@ export async function POST(req: Request) {
   // session) — rate-limit IP obligatoire, réponse 429 si épuisé.
   const ip =
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "inconnue";
-  const restants = consommerCreneau(`virement-preuve:${ip}`, 30, 15 * 60 * 1000);
+  const restants = await consommerCreneau(`virement-preuve:${ip}`, 30, 15 * 60 * 1000);
   if (restants === 0) {
     return NextResponse.json(
       { error: "Trop d'envois récents, réessayez dans quelques minutes." },

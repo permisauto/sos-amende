@@ -38,8 +38,8 @@ export async function POST(req: Request) {
   // la limite email (une seule IP ne doit pas bloquer un Integral/E2E légitime,
   // mais reste freinée : ~2 000 comptes/jour max au pire).
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "inconnue";
-  const essaisIp = consommerCreneau(`virement-ip:${ip}`, 20, 15 * 60 * 1000);
-  const essaisEmail = consommerCreneau(`virement-email:${email.toLowerCase()}`, 3, 15 * 60 * 1000);
+  const essaisIp = await consommerCreneau(`virement-ip:${ip}`, 20, 15 * 60 * 1000);
+  const essaisEmail = await consommerCreneau(`virement-email:${email.toLowerCase()}`, 3, 15 * 60 * 1000);
   if (essaisIp <= 0 || essaisEmail <= 0) {
     return NextResponse.json(
       { error: "Trop de demandes. Attendez quelques minutes avant de réessayer." },

@@ -55,14 +55,17 @@ export async function loginWithPassword(
   if (process.env.AUTH_RESEND_KEY) {
     const { email } = parsed.data;
     const creneauParams = { max: MAX_EMAIL, fenetreMs: FENETRE_MS } as const;
-    const emailOk = consommerCreneau(
+    const emailOk = await consommerCreneau(
       `password:${email.toLowerCase()}`,
       creneauParams.max,
       creneauParams.fenetreMs,
     );
-    const ipOk =
-      consommerCreneau(`password:ip:${await ipClient()}`, MAX_IP, FENETRE_MS) > 0;
-    if (emailOk === 0 || !ipOk) {
+    const ipOk = await consommerCreneau(
+      `password:ip:${await ipClient()}`,
+      MAX_IP,
+      FENETRE_MS,
+    );
+    if (emailOk === 0 || ipOk === 0) {
       return {
         error: "Trop de tentatives. Attendez quelques minutes avant de réessayer.",
       };
@@ -106,8 +109,8 @@ export async function loginWithEmail(
     const email = parsed.data.email.toLowerCase();
     const ip = await ipClient();
     if (
-      consommerCreneau(`login:${email}`, MAX_EMAIL, FENETRE_MS) === 0 ||
-      consommerCreneau(`login:ip:${ip}`, MAX_IP, FENETRE_MS) === 0
+      (await consommerCreneau(`login:${email}`, MAX_EMAIL, FENETRE_MS)) === 0 ||
+      (await consommerCreneau(`login:ip:${ip}`, MAX_IP, FENETRE_MS)) === 0
     ) {
       return {
         error:
@@ -182,8 +185,8 @@ export async function motDePasseOublie(
     const email = parsed.data.email.toLowerCase();
     const ip = await ipClient();
     if (
-      consommerCreneau(`login:${email}`, MAX_EMAIL, FENETRE_MS) === 0 ||
-      consommerCreneau(`login:ip:${ip}`, MAX_IP, FENETRE_MS) === 0
+      (await consommerCreneau(`login:${email}`, MAX_EMAIL, FENETRE_MS)) === 0 ||
+      (await consommerCreneau(`login:ip:${ip}`, MAX_IP, FENETRE_MS)) === 0
     ) {
       return {
         error:
