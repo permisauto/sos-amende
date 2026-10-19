@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, requireJuriste } from "@/lib/dal";
 import { Prisma } from "@/generated/prisma/client";
+import { estActivable } from "@/lib/failles";
 import {
   executerVeilleDila,
   extrairePropositionsEnAttente,
@@ -298,6 +299,35 @@ export async function validerPropositionSource(
   // additifs du moteur) + 3ᵉ template (gracieux) — champs distincts (D5).
   const regles = reglesDetectionPourQuestions(proposition.questionsDynamiques ?? []);
 
+  // Deuxième entrée (auto-proposition de la veille) : la faille existe déjà
+  // en PROPOSEE — on la met à jour (flip) au lieu d'en créer une seconde. Un
+  // template déjà rédigé dans la bibliothèque est conservé ; sinon on reprend
+  // celui de la proposition (lot 3).
+  const dejaLiee = source.failleId
+    ? await prisma.failleJuridique.findUnique({ where: { id: source.failleId } })
+    : null;
+  const templateLettre =
+    dejaLiee?.templateLettre || proposition.templateLettre || "";
+  const templateRefere =
+    dejaLiee?.templateRefere || proposition.templateRefere || "";
+  const templateGracieux =
+    dejaLiee?.templateGracieux || proposition.templateGracieux || "";
+
+  // Garde-fou lettre vide (mêmes règles que les autres chemins d'activation,
+  // via `estActivable` — source unique de vérité) : sans règle dégagée ni
+  // template de lettre, une faille ACTIVE ne peut alimenter aucune
+  // contestation (le moteur l'écarte d'office comme lettre principale). On
+  // crée donc la faille en **PROPOSEE** — elle apparaît dans la bibliothèque
+  // avec le chip « Template à rédiger », l'admin la rédige puis l'active.
+  // Avant ce verrou, valider une proposition sans template la passait quand
+  // même en ACTIVE (3 failles lettre-vide constatées en prod le 2026-10-18).
+  const statutFaille: "ACTIVE" | "PROPOSEE" = estActivable({
+    regle,
+    templateLettre,
+  })
+    ? "ACTIVE"
+    : "PROPOSEE";
+
   const donnees = {
     typeInfraction: proposition.typeInfraction,
     titreFaille,
@@ -305,7 +335,7 @@ export async function validerPropositionSource(
     regle,
     source: source.url ?? source.archive,
     jurisprudence: [ref] as unknown as Prisma.InputJsonValue,
-    statut: "ACTIVE" as const,
+    statut: statutFaille,
     ...(regles.length
       ? { reglesDetection: regles as unknown as Prisma.InputJsonValue }
       : {}),
@@ -317,19 +347,6 @@ export async function validerPropositionSource(
       : {}),
   };
 
-  // Deuxième entrée (auto-proposition de la veille) : la faille existe déjà
-  // en PROPOSEE — on la **met à jour et l'active** (flip) au lieu d'en créer
-  // une seconde. Un template déjà rédigé dans la bibliothèque est conservé ;
-  // sinon on reprend celui de la proposition (lot 3).
-  const dejaLiee = source.failleId
-    ? await prisma.failleJuridique.findUnique({ where: { id: source.failleId } })
-    : null;
-  const templateLettre =
-    dejaLiee?.templateLettre || proposition.templateLettre || "";
-  const templateRefere =
-    dejaLiee?.templateRefere || proposition.templateRefere || "";
-  const templateGracieux =
-    dejaLiee?.templateGracieux || proposition.templateGracieux || "";
   let failleId: string;
   if (dejaLiee) {
     failleId = dejaLiee.id;
@@ -359,14 +376,15 @@ export async function validerPropositionSource(
 
   revalidatePath("/dashboard/juriste/veille");
   revalidatePath("/dashboard/juriste/failles");
+  const etat = statutFaille === "ACTIVE" ? "ACTIVÉE" : "enregistrée en proposition";
   return {
     ok: true,
     message: `Lecture validée : faille « ${titreFaille} » ${
-      dejaLiee ? "mise à jour et ACTIVÉE" : "créée et ACTIVÉE"
+      dejaLiee ? `mise à jour et ${etat}` : `créée et ${etat}`
     }. ${
-      templateLettre
+      statutFaille === "ACTIVE"
         ? "Template de lettre pré-rédigé inclus : relisez-le dans la bibliothèque juridique avant usage."
-        : "Rédigez son template de lettre dans la bibliothèque juridique — sans template, elle ne peut pas encore alimenter une contestation."
+        : "Aucun template de lettre exploitable : elle reste en « Proposition » dans la bibliothèque juridique (chip « Template à rédiger ») — rédigez la lettre puis activez-la."
     }${
       templateGracieux
         ? " Demande gracieuse (3ᵉ parcours) également pré-rédigée."
