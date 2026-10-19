@@ -20,7 +20,11 @@ export type RateLimitStore = "memory" | "postgres";
 
 /** Moteur actif : `postgres` seulement sur choix explicite (`RATE_LIMIT_STORE`). */
 export function rateLimitStore(): RateLimitStore {
-  return process.env.RATE_LIMIT_STORE === "postgres" ? "postgres" : "memory";
+  // `trim()` + nettoyage du BOM : une valeur saisie via un pipe Windows peut
+  // arriver polluée d'un U+FEFF invisible, ce qui ferait basculer silencieusement
+  // en mémoire. On compare donc sur la valeur normalisée.
+  const brut = (process.env.RATE_LIMIT_STORE ?? "").replace(/^\uFEFF/, "").trim();
+  return brut === "postgres" ? "postgres" : "memory";
 }
 
 function consommerMemoire(key: string, max: number, windowMs: number): number {
@@ -77,8 +81,9 @@ async function consommerPostgres(
          WHERE key = ${key}`;
       return max - suite.length;
     });
-  } catch {
+  } catch (e) {
     // BDD indisponible : repli mémoire (une instance) plutôt qu'une 500.
+    console.warn("[rate-limit] postgres indisponible, repli mémoire :", e);
     return null;
   }
 }
