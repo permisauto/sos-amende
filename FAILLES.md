@@ -166,7 +166,7 @@ cf. §I).
 | Motif | Article (source) | Jurisprudence | Statut |
 |---|---|---|---|
 | Suspension **sans procédure contradictoire préalable** | art. **L. 121-1 + L. 211-2 CRPA** ; art. **L. 224-2 CR** | **CE 20 avr. 2021 n° 438114** (texte intégral Legifrance) ; CE 24 mai 2024 n° 474548 ; CE 7 déc. 2017 n° 407700 | `PROPOSEE` — à vérifier |
-| Suspension pour alcoolémie **sans marge d'erreur éthylomètre (8 %)** | art. **L. 224-2 + L. 234-1 CR** ; art. 15 **arrêté du 8 juil. 2003** | **CE 14 févr. 2018 n° 407914** ; Cass. crim., 26 mars 2019, n° 18-94.900 | `PROPOSEE` — à vérifier |
+| Suspension pour alcoolémie **sans marge d'erreur éthylomètre (8 %)** | art. **L. 224-2 + L. 234-1 CR** ; art. 15 **arrêté du 8 juil. 2003** | **CE 14 févr. 2018 n° 407914** ; Cass. crim., 26 mars 2019, n° 18-84.900 | `PROPOSEE` — à vérifier |
 | Décision de suspension **non notifiée** | art. **L. 224-16 + R. 224-4 CR** | Cass. crim., 1er avr. 2021, n° 20-82.815 | `PROPOSEE` — à vérifier |
 
 Thèmes restant **à couvrir** (à rédiger par un juriste) : invalidation du permis
@@ -289,7 +289,7 @@ juriste avant toute activation** (pas de jurisprudence non vérifiée).
 | Erreur de plaque d'immatriculation | art. **530-1 CPP** ; art. **L. 121-3 CR** (responsabilité pécuniaire du titulaire) | Cass. crim., 14 nov. 2017, n° 17-81.047 (champ du contrôle des juges) | query-juriste.com | `À VÉRIFIER` (source secondaire) |
 | Certificat d'étalonnage du cinémomètre | art. **L. 130-3 CR** ; art. **R. 130-11 CR** (vérification périodique par organisme agréé) | Cass. crim., 12 janv. 2026, n° 25-80.412 (relaxe faute de production du certificat) — **non retrouvée sur Judilibre** | contraventionavocat.fr (blog) ; legifrance | `À VÉRIFIER` (jurisprudence non confirmée) |
 | **Suspension sans procédure contradictoire préalable** | art. **L. 121-1 + L. 211-2 CRPA** (CRPA 2015, reprise loi 11 juil. 1979) ; art. **L. 224-1 / L. 224-2 CR** | **CE, 5e ch., 20 avr. 2021, n° 438114** (texte intégral) ; CE, 5e ch., 24 mai 2024, n° 474548 (Inédit) ; CE, 7 déc. 2017, n° 407700 ; CE, 4 nov. 2016, n° 388030 ; CE, 28 sept. 2016, n° 390439 | legifrance.gouv.fr (CETATEXT000043411148) ; reinsdidier-avocat.com | `V` (CE 438114) / `À VÉRIFIER` (autres) |
-| **Suspension alcoolémie sans marge d'erreur éthylomètre** | art. **L. 224-2 + L. 234-1 CR** ; art. 15 **arrêté du 8 juil. 2003** (tolérance 8 % ≥ 0,40 mg/l) | **CE, 14 févr. 2018, n° 407914** (marge obligatoire pour le préfet) ; Cass. crim., 26 mars 2019, n° 18-94.900 (marge obligatoire pour le juge) | legifrance.gouv.fr (CETATEXT000036601993) ; ledall-avocat.fr ; capital.fr | `V` (CE 407914) / `À VÉRIFIER` (Cass. crim.) |
+| **Suspension alcoolémie sans marge d'erreur éthylomètre** | art. **L. 224-2 + L. 234-1 CR** ; art. 15 **arrêté du 8 juil. 2003** (tolérance 8 % ≥ 0,40 mg/l) | **CE, 14 févr. 2018, n° 407914** (marge obligatoire pour le préfet) ; Cass. crim., 26 mars 2019, n° 18-84.900 (marge obligatoire pour le juge) | legifrance.gouv.fr (CETATEXT000036601993) ; ledall-avocat.fr ; capital.fr | `V` (CE 407914) / `À VÉRIFIER` (Cass. crim.) |
 | **Décision de suspension non notifiée** | art. **L. 224-16 CR** (notification exigée) ; **R. 224-1 à R. 224-4 CR** (avis de rétention, restitution LRAR) | Cass. crim. (notification exigée par L. 224-16 — ref. exacte à confirmer) | legifrance.gouv.fr (R. 224-1 / R. 224-4) ; ledall-avocat.fr | `V` (articles) / `À VÉRIFIER` (jurisprudence) |
 
 **Notes** :

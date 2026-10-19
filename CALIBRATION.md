@@ -90,7 +90,8 @@ confirmer ou corriger.
    date (2026) est incohérente avec les autres références. Ne pas calibrer tant
    que la source primaire n'est pas confirmée.
 2. **`faille-prescription-peine-3ans`** — jurisprudence dont l'URL Legifrance
-   (`JURITEXT000051234567`) paraît avoir été posée manuellement. À vérifier.
+   avait été posée manuellement (`JURITEXT000051234567`) ; corrigée le
+   2026-10-19 en l'identifiant réel `JURITEXT000051283967`. Résumé à confirmer.
 3. **`faille-usurpation-plaque`** — aucune jurisprudence, source « à confirmer ».
    Candidat à l'exclusion ou à la fusion avec `faille-exoneration-vol-usurpation`.
 4. **`faille-avis-mentions-obligatoires`** — doublon possible de
