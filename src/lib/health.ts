@@ -509,7 +509,7 @@ export async function GET(req: Request) {
   // relais de spam (même en mode lite, chaque appel ouvre une connexion base).
   const ip =
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "inconnue";
-  const essais = consommerCreneau(`health:${ip}`, 20, 15 * 60 * 1000);
+  const essais = await consommerCreneau(`health:${ip}`, 20, 15 * 60 * 1000);
   if (essais <= 0) {
     return new Response(JSON.stringify({ error: "Trop de requêtes." }), {
       status: 429,

@@ -422,6 +422,26 @@ model GeminiUsage {
 }
 
 // ---------------------------------------------------------------------------
+// Rate-limit distribué (lot 4, P0-05) — fenêtres glissantes par clé
+// ---------------------------------------------------------------------------
+
+// Les compteurs en mémoire (`src/lib/rate-limit.ts`) ne valent qu'une instance :
+// en serverless, chaque lambda garde son propre Map. En production,
+// `RATE_LIMIT_STORE=postgres` place les fenêtres dans cette table (une ligne
+// par clé : email, IP…) — lecture-modification-écriture atomique (UPSERT
+// `ON CONFLICT … RETURNING` qui prend le verrou de ligne), toutes instances
+// confondues. `expireLe` porte la fin de la fenêtre glissante : le cron
+// `/api/cron/rappels` purge les lignes expirées (meilleur effort).
+model RateLimitBucket {
+  key       String   @id // ex. « virement-email:a@b.fr », « login:ip:1.2.3.4 »
+  essais    Json     // horodatages (epoch ms) encore dans la fenêtre
+  expireLe  DateTime // purgé dès qu'il est passé (fenêtre complète écoulée)
+  updatedAt DateTime @updatedAt
+
+  @@index([expireLe])
+}
+
+// ---------------------------------------------------------------------------
 // Paiements par virement bancaire (inscription inversée, remboursements sect. 9)
 // ---------------------------------------------------------------------------
 

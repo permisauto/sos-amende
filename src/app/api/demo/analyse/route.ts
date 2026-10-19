@@ -129,7 +129,7 @@ export async function POST(req: Request) {
       .split(",")[0]
       .trim()
       .slice(0, 64);
-    if (consommerCreneau(`demo:${ip}`, 20, 60 * 1000) === 0) {
+    if ((await consommerCreneau(`demo:${ip}`, 20, 60 * 1000)) === 0) {
       return new Response(
         JSON.stringify({
           erreur:

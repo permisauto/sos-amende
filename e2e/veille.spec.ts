@@ -60,7 +60,7 @@ async function insererSource(cle: string, suffixe: string): Promise<void> {
     "",
     `**Source** : CAA de BORDEAUX — ${titre}`,
     `**Lien source** : https://www.legifrance.gouv.fr/juri/id/CETATEXT000000000001`,
-    "**Termes retenus** : code de la route, permis de conduire (score 18)",
+    "**Termes retenus** : code de la route, permis de conduire (score 11)",
     "",
     "**Passages retenus (citation littérale, non réécrit)**",
     `> ${CITATION}`,
@@ -71,6 +71,13 @@ async function insererSource(cle: string, suffixe: string): Promise<void> {
     "ne qualifie pas le texte, elle ne fait que le citer.]",
   ].join("\n");
 
+  // Score volontairement sous le seuil d'extraction (`SCORE_SEUIL_EXTRACTION`
+  // = 12) : sinon le bouton « Extraire les propositions » de
+  // `veille-proposition.spec.ts` traite ces grains (requête
+  // `score >= 12` sur tous les NOUVEAU, suite `fullyParallel`) et écrit une
+  // proposition sur la carte — ses extraits s'affichent alors en `<li>`
+  // supplémentaires et font échouer l'assertion « 1 seule citation » du test
+  // « publication retenue » ci-dessous.
   await avecClient(async (c) => {
     await c.query(`DELETE FROM "SourceJuridique" WHERE "cle" = $1`, [cle]);
     await c.query(
@@ -81,7 +88,7 @@ async function insererSource(cle: string, suffixe: string): Promise<void> {
        VALUES (gen_random_uuid(), $1, $2, 'JADE', 'ARRET', $3, 'CAA de BORDEAUX',
          '2026-09-15', $4, $5,
          'https://www.legifrance.gouv.fr/juri/id/CETATEXT000000000001',
-         $6, $7::jsonb, $8::jsonb, $9::jsonb, 18, $10, 'NOUVEAU', now())`,
+         $6, $7::jsonb, $8::jsonb, $9::jsonb, 11, $10, 'NOUVEAU', now())`,
       [
         cle,
         `CETATEXT0000000${suffixe}`,
