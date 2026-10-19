@@ -39,6 +39,10 @@ describe("rateLimitStore", () => {
   it("postgres sur choix explicite", () => {
     process.env.RATE_LIMIT_STORE = "postgres";
     expect(rateLimitStore()).toBe("postgres");
+    process.env.RATE_LIMIT_STORE = "  postgres  ";
+    expect(rateLimitStore()).toBe("postgres");
+    process.env.RATE_LIMIT_STORE = "\uFEFFpostgres";
+    expect(rateLimitStore()).toBe("postgres");
   });
 });
 
