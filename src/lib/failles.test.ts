@@ -3,6 +3,7 @@ import {
   FAILLES_PACK_ACTIVES,
   activerPropositionsCompletes,
   estActivable,
+  estReglePlaceholder,
   injecterFaillesPack,
   manquantsPourActivation,
   messageActivationBloquee,
@@ -22,6 +23,27 @@ describe("failles — activation", () => {
     expect(manquantsPourActivation(COMPLETE)).toEqual([]);
     expect(estActivable(COMPLETE)).toBe(true);
     expect(messageActivationBloquee(COMPLETE)).toBeNull();
+  });
+
+  it("refuse une « règle » réduite au marqueur du secours local (incident 2026-10-18)", () => {
+    // Cas réel : faille `ACTIVE` issue du secours local de la veille — la
+    // « règle » ne fait que citer la tête du texte (ici la paraphrase d'un
+    // rejet) et la lettre est un squelette mécanique. Elle était envoyable.
+    const placeholder = {
+      regle:
+        "Extraction locale (sans IA) — citation de tête retenue : « 1°) d'ordonner la suspension de l'exécution »",
+      templateLettre: COMPLETE.templateLettre,
+    };
+    expect(estReglePlaceholder(placeholder.regle)).toBe(true);
+    expect(manquantsPourActivation(placeholder)).toEqual(["regle"]);
+    expect(estActivable(placeholder)).toBe(false);
+    expect(messageActivationBloquee(placeholder)).toMatch(/règle/i);
+  });
+
+  it("estReglePlaceholder ne confond pas une vraie règle avec le marqueur", () => {
+    expect(estReglePlaceholder(COMPLETE.regle)).toBe(false);
+    expect(estReglePlaceholder(null)).toBe(false);
+    expect(estReglePlaceholder("")).toBe(false);
   });
 
   it("refuse une proposition de veille (règle et template vides)", () => {

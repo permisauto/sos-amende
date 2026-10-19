@@ -2,11 +2,47 @@ import { describe, it, expect } from "vitest";
 import {
   archivesATraiter,
   estCandidatExtraction,
+  estPropositionPromouvable,
   estRepriseRegeneration,
   estSchemaVeille2,
   listerArchives,
   normaliserTitreProposition,
 } from "@/lib/veille-ingestion";
+
+describe("estPropositionPromouvable — pas de faille depuis le secours local", () => {
+  // Champs requis par `PropositionVeille` (le reste est optionnel).
+  const base = {
+    etat: "extrait" as const,
+    titre: "TA Nice, ordonnance du 15 septembre 2026",
+    typeInfraction: "SUSPENSION" as const,
+    articles: ["article L. 224-2 du code de la route"],
+    regle: "règle rédigée par l'IA",
+    conditions: ["condition d'application"],
+    resume: "résumé",
+    extraits: ["extrait verbatim"],
+    extraitLe: "2026-10-01T00:00:00.000Z",
+  };
+
+  it("accepte une extraction IA complète (méthode absente = ia)", () => {
+    expect(estPropositionPromouvable(base)).toBe(true);
+    expect(estPropositionPromouvable({ ...base, methode: "ia" })).toBe(true);
+  });
+
+  it("refuse le secours local : aucune règle dégagée (incident 2026-10-18)", () => {
+    expect(estPropositionPromouvable({ ...base, methode: "locale" })).toBe(false);
+  });
+
+  it("refuse une décision perdante, une extraction incomplète et l'absence", () => {
+    expect(
+      estPropositionPromouvable({
+        ...base,
+        statutAnalyse: "REJETE_AUTOMOBILISTE_PERDANT",
+      }),
+    ).toBe(false);
+    expect(estPropositionPromouvable({ ...base, etat: "incomplet" })).toBe(false);
+    expect(estPropositionPromouvable(null)).toBe(false);
+  });
+});
 
 describe("listerArchives — index DILA", () => {
   it("extrait et trie les archives de la source (ordre chronologique)", () => {
