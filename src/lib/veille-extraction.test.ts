@@ -361,6 +361,16 @@ describe("motif décisif + obsolescence (lot 2 — 2026-10-10)", () => {
     expect(p).toContain("jurisprudence_valide_en_2026");
   });
 
+  it("prompt : n'accepte comme GAGNANT qu'un moyen utile (rejets = PERDANT)", () => {
+    const p = construirePromptExtraction(PUB);
+    expect(p).toContain("MOYEN UTILE AU DEMANDEUR");
+    // Motifs non transférables explicitement listés comme des rejets.
+    expect(p).toContain("inopérant");
+    expect(p).toContain("incompétence du juge administratif");
+    expect(p).toContain("défaut d'urgence");
+    expect(p).toContain("En cas de doute");
+  });
+
   it("conserve le motif décisif verbatim et l'obsolescence bornée", () => {
     const p = parserExtraction(
       JSON.stringify({

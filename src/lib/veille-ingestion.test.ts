@@ -2,12 +2,25 @@ import { describe, it, expect } from "vitest";
 import {
   archivesATraiter,
   estCandidatExtraction,
+  estPropositionLocale,
   estPropositionPromouvable,
   estRepriseRegeneration,
   estSchemaVeille2,
   listerArchives,
   normaliserTitreProposition,
 } from "@/lib/veille-ingestion";
+
+describe("estPropositionLocale — source unique du secours local", () => {
+  it("true seulement pour methode = locale", () => {
+    expect(estPropositionLocale({ methode: "locale" })).toBe(true);
+    expect(estPropositionLocale({ methode: "ia" })).toBe(false);
+    // Proposition IA ancienne : methode absent — jamais locale (le filtre
+    // « À valider » doit la conserver).
+    expect(estPropositionLocale({})).toBe(false);
+    expect(estPropositionLocale(null)).toBe(false);
+    expect(estPropositionLocale(undefined)).toBe(false);
+  });
+});
 
 describe("estPropositionPromouvable — pas de faille depuis le secours local", () => {
   // Champs requis par `PropositionVeille` (le reste est optionnel).

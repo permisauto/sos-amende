@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireJuriste } from "@/lib/dal";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
+import { estPropositionLocale } from "@/lib/veille-ingestion";
 import { VeilleList, type SourceDto } from "./veille-list";
 
 /**
@@ -41,19 +42,44 @@ export default async function VeillePage({
     // Compteurs par statut : après une promotion ou un écart, la publication
     // quitte la file « À lire » — sans ce compteur, l'action passerait
     // totalement inaperçue (la carte et son message disparaissent ensemble).
-    // `A_VALIDER` = propositions extraites et complètes, prêtes pour l'admin.
-    const propositionComplete = { path: ["etat"], equals: "extrait" } as const;
+    // `A_VALIDER` = propositions extraites et complètes, prêtes pour l'admin —
+    // **hors secours local** (`methode: "locale"`, sans IA : aucune règle
+    // dégagée, simple citation de tête souvent paraphrasant un rejet). Ces
+    // propositions restent une matière à **lire manuellement** (`?s=NOUVEAU` /
+    // `?s=TOUTES`) et ne doivent jamais peupler la file de validation.
+    //
+    // Filtre JSON : on part de la définition SQL `etat = "extrait"` et on
+    // **retire** les `methode = "locale"` — la négation `not` de Prisma sur un
+    // chemin JSON n'est **pas null-safe** (une proposition IA ancienne a
+    // `methode` **absent** : `not "locale"` l'exclurait à tort). On soustrait
+    // donc les deux comptes (égalité = fiable) et on filtre la page en
+    // mémoire (`estPropositionLocale`).
+    const propositionExtraite = { path: ["etat"], equals: "extrait" } as const;
+    const propositionLocale = { path: ["methode"], equals: "locale" } as const;
     const where = (
       filtre === "TOUTES"
         ? {}
         : filtre === "PROMU" || filtre === "ECARTE"
           ? { statut: filtre }
           : filtre === "A_VALIDER"
-            ? { statut: "NOUVEAU", proposition: propositionComplete }
+            ? { statut: "NOUVEAU", proposition: propositionExtraite }
             : { statut: "NOUVEAU" }
     ) as Prisma.SourceJuridiqueWhereInput;
 
-    const [rows, totalFiltre, groupes, aValider] = await Promise.all([
+    const localeCount =
+      filtre === "A_VALIDER"
+        ? prisma.sourceJuridique.count({
+            where: {
+              statut: "NOUVEAU",
+              AND: [
+                { proposition: propositionExtraite },
+                { proposition: propositionLocale },
+              ],
+            },
+          })
+        : Promise.resolve(0);
+
+    const [rows, totalFiltre, groupes, aValider, locales] = await Promise.all([
       prisma.sourceJuridique.findMany({
         where,
         orderBy: [{ score: "desc" }, { createdAt: "desc" }],
@@ -63,14 +89,22 @@ export default async function VeillePage({
       prisma.sourceJuridique.count({ where }),
       prisma.sourceJuridique.groupBy({ by: ["statut"], _count: true }),
       prisma.sourceJuridique.count({
-        where: { statut: "NOUVEAU", proposition: propositionComplete },
+        where: { statut: "NOUVEAU", proposition: propositionExtraite },
       }),
+      localeCount,
     ]);
     compteurs.NOUVEAU = groupes.find((g) => g.statut === "NOUVEAU")?._count ?? 0;
-    compteurs.A_VALIDER = aValider;
+    // File de validation : extraits **hors secours local** (cf. commentaire
+    // ci-dessus — on soustrait les `methode = "locale"`).
+    compteurs.A_VALIDER = aValider - locales;
     compteurs.PROMU = groupes.find((g) => g.statut === "PROMU")?._count ?? 0;
     compteurs.ECARTE = groupes.find((g) => g.statut === "ECARTE")?._count ?? 0;
-    sources = rows.map((r) => ({
+    const lignes =
+      filtre === "A_VALIDER"
+        ? rows.filter((r) => !estPropositionLocale(r.proposition as SourceDto["proposition"]))
+        : rows;
+    total = filtre === "A_VALIDER" ? totalFiltre - locales : totalFiltre;
+    sources = lignes.map((r) => ({
       id: r.id,
       statut: r.statut,
       source: r.source,
@@ -90,7 +124,6 @@ export default async function VeillePage({
       archive: r.archive,
       failleId: r.failleId,
     }));
-    total = totalFiltre;
   } catch (e) {
     console.error("veille: lecture des sources impossible", e);
     dbOk = false;

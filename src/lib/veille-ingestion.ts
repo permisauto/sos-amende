@@ -805,6 +805,22 @@ export function normaliserTitreProposition(t: string): string {
 }
 
 /**
+ * Proposition issue du **secours local** (`methode: "locale"`, sans IA) —
+ * aucune règle dégagée, simple citation de tête souvent paraphrasant un rejet.
+ * Ces propositions ne doivent jamais peupler la file « À valider » (elles
+ * restent une matière à **lire manuellement**) ni produire de faille. Source
+ * unique : `estPropositionPromouvable` et le filtre `A_VALIDER` la partagent.
+ *
+ * `true` seulement si `methode` vaut exactement `"locale"` — une proposition
+ * IA ancienne a `methode` **absent** et n'est donc **pas** locale.
+ */
+export function estPropositionLocale(
+  p: Pick<PropositionVeille, "methode"> | null | undefined,
+): boolean {
+  return p?.methode === "locale";
+}
+
+/**
  * Une proposition de veille n'est promouvable en faille que si elle dégage une
  * vraie matière : extraction complète (`etat = "extrait"`) **et** ni PERDANT
  * (signal IA) ni **secours local** (`methode: "locale"` — aucune règle, juste
@@ -815,7 +831,7 @@ export function estPropositionPromouvable(
 ): boolean {
   if (!p || p.etat !== "extrait") return false;
   if (p.statutAnalyse === "REJETE_AUTOMOBILISTE_PERDANT") return false;
-  return p.methode !== "locale";
+  return !estPropositionLocale(p);
 }
 
 /**
