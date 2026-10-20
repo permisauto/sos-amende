@@ -44,6 +44,7 @@ import {
   libelleDocType,
 } from "@/lib/envoi";
 import { faillesPourTypePreuve, listePiecesJointes } from "@/lib/preuves-api";
+import { texteReferePour } from "@/lib/pack-telerecours";
 import { documentNonDetermine, libelleCategorie, lireCategorie } from "@/lib/doc-v2";
 import { FilMessages, type MessageDto } from "@/components/messages";
 import {
@@ -542,6 +543,19 @@ export default async function JuristeCasePage(
         })
     : [];
   const courrier = item.courriers[item.courriers.length - 1];
+  // Référé-suspension affiché au juriste : le texte relu/modifié en base prime,
+  // sinon on le recalcule à l'affichage (template de la faille ou urgence
+  // identifiée) — les dossiers analysés avant l'ajout du champ `refereGenere`
+  // montrent ainsi leur référé sans attendre une action de relance.
+  const refereAffiche =
+    item.type === "SUSPENSION"
+      ? item.refereGenere ??
+        texteReferePour({
+          type: item.type,
+          templateRefere: item.failleJuridique?.templateRefere ?? null,
+          data: (item.extractedData ?? {}) as ExtractedData,
+        })
+      : null;
   const pjData = (item.extractedData ?? {}) as Record<string, unknown>;
   const piecesJointes = listePiecesJointes({
     type: item.type,
@@ -909,11 +923,11 @@ export default async function JuristeCasePage(
                   modes (lecture et édition) — le juriste le relit, et le
                   modifie si besoin, avant validation ; le pack PDF déposé
                   reprendra exactement ce texte (Dossier.refereGenere). */}
-              {item.type === "SUSPENSION" && item.refereGenere && (
+              {item.type === "SUSPENSION" && refereAffiche && (
                 <div className="mt-4">
                   <RefereEdition
                     dossierId={item.id}
-                    refere={item.refereGenere}
+                    refere={refereAffiche}
                     modifiable={editable}
                     lectureSeule={lectureSeule}
                   />

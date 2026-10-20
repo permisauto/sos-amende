@@ -17,18 +17,20 @@ export type PackTelecours = {
   bordereau?: string;
 };
 
-/** Le pack n'est rendu que pour un dossier SUSPENSION déposé en ligne via
- * Télérecours dont le document a été classé 3F ou 48SI à l'OCR. */
+/**
+ * Le pack est rendu pour toute suspension déposée en ligne via Télérecours.
+ * Le `docType` OCR n'entre plus en compte (2026-10-20) : il n'est pas fiable
+ * (arrêté mal classé, suspension de droit commun) et ne doit pas priver le
+ * client du recours pour excès de pouvoir ni du référé-suspension. Le référé
+ * lui-même reste conditionné à un `templateRefere` validé ou à l'urgence
+ * identifiée (`texteReferePour`) — jamais de texte hors base.
+ */
 export function estPackTelecours(opts: {
   type: string;
   canal: string | null | undefined;
-  docType: unknown;
+  docType?: unknown;
 }): boolean {
-  return (
-    opts.type === "SUSPENSION" &&
-    opts.canal === "TELERECOURS" &&
-    (opts.docType === "3F" || opts.docType === "48SI")
-  );
+  return opts.type === "SUSPENSION" && opts.canal === "TELERECOURS";
 }
 
 /**

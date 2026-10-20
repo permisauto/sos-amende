@@ -21,17 +21,14 @@ import {
 } from "./pack-telerecours";
 
 describe("estPackTelecours", () => {
-  it("accepte SUSPENSION + TELEECOURS + 3F", () => {
-    expect(
-      estPackTelecours({ type: "SUSPENSION", canal: "TELERECOURS", docType: "3F" }),
-    ).toBe(true);
+  it("accepte toute suspension déposée en Télérecours (docType ignoré)", () => {
+    for (const docType of ["3F", "48SI", null, "AMENDE", "AUTRE", undefined]) {
+      expect(
+        estPackTelecours({ type: "SUSPENSION", canal: "TELERECOURS", docType }),
+      ).toBe(true);
+    }
   });
-  it("accepte SUSPENSION + TELEECOURS + 48SI", () => {
-    expect(
-      estPackTelecours({ type: "SUSPENSION", canal: "TELERECOURS", docType: "48SI" }),
-    ).toBe(true);
-  });
-  it("refuse une amende, le LRAR ou un document non classé", () => {
+  it("refuse une amende et le canal LRAR", () => {
     expect(
       estPackTelecours({ type: "AMENDE", canal: "TELERECOURS", docType: "3F" }),
     ).toBe(false);
@@ -39,13 +36,7 @@ describe("estPackTelecours", () => {
       estPackTelecours({ type: "SUSPENSION", canal: "LRAR", docType: "3F" }),
     ).toBe(false);
     expect(
-      estPackTelecours({ type: "SUSPENSION", canal: "TELERECOURS", docType: null }),
-    ).toBe(false);
-    expect(
-      estPackTelecours({ type: "SUSPENSION", canal: "TELERECOURS", docType: "AUTRE" }),
-    ).toBe(false);
-    expect(
-      estPackTelecours({ type: "SUSPENSION", canal: "TELERECOURS", docType: "AMENDE" }),
+      estPackTelecours({ type: "SUSPENSION", canal: null, docType: "3F" }),
     ).toBe(false);
   });
 });
