@@ -5,6 +5,8 @@
  * des `FailleJuridique.templateLettre` validés par l'admin.
  */
 
+import { destinataireRequete, tribunalPourAdresse } from "./tribunal-administratif";
+
 export type InfractionType = "AMENDE" | "SUSPENSION";
 
 export type CanalEnvoi = "ANTAI" | "TELERECOURS" | "LRAR";
@@ -54,11 +56,33 @@ export function libelleCanalDepuisStockage(
  *   auteur de la notification (art. L. 223-3 : « le ministre de l'Intérieur
  *   notifie la décision ») ;
  * - docType inconnu → repli prudent sur le préfet (défaut SUSPENSION).
+ *
+ * Usage : courrier adressé à l'administration (LRAR — recours gracieux ou
+ * hiérarchique). La voie contentieuse (Télérecours — recours pour excès de
+ * pouvoir) vise le **tribunal administratif** et non l'administration :
+ * voir `civiliteJugeAdministratif`.
  */
 function civiliteSuspension(docType?: DocTypeAnalyse | null): string {
   return docType === "48SI"
     ? "Monsieur le Ministre de l'Intérieur"
     : "Monsieur le Préfet";
+}
+
+/**
+ * Formule d'appel et destinataire de la **requête contentieuse** (recours pour
+ * excès de pouvoir) : le juge, non l'administration. La juridiction
+ * territorialement compétente (R. 221-3 CJA) est déduite du département du
+ * requérant quand son adresse est connue (voir `tribunal-administratif.ts`) ;
+ * sans adresse exploitable la formule reste générique, la juridiction étant
+ * précisée au dépôt (Télérecours).
+ */
+export function civiliteJugeAdministratif(tribunal?: string | null): string {
+  return destinataireRequete(tribunal ?? null);
+}
+
+/** Titre de tête de la requête introductive d'instance (REP). */
+export function titreRequete(): string {
+  return "REQUÊTE INTRODUCTIVE D'INSTANCE EN ANNULATION POUR EXCÈS DE POUVOIR";
 }
 
 export function destinataireLrar(
@@ -146,8 +170,12 @@ export function portailEnLigne(type: InfractionType): {
 export function formuleAppel(
   type: InfractionType,
   docType?: DocTypeAnalyse | null,
+  contentieux = false,
 ): string {
   if (type === "AMENDE") return "Madame, Monsieur,";
+  if (contentieux) {
+    return "Monsieur le Président, Mesdames et Messieurs les Conseillers,";
+  }
   return `${civiliteSuspension(docType)},`;
 }
 
@@ -159,9 +187,13 @@ export function formuleAppel(
 export function formulePolitesse(
   type: InfractionType,
   docType?: DocTypeAnalyse | null,
+  contentieux = false,
 ): string {
   if (type === "AMENDE") {
     return "Je vous prie d'agréer, Madame, Monsieur, l'expression de ma considération distinguée.";
+  }
+  if (contentieux) {
+    return "Je vous prie d'agréer, Monsieur le Président, Mesdames et Messieurs les Conseillers, l'expression de ma haute considération.";
   }
   return `Je vous prie d'agréer, ${civiliteSuspension(docType)}, l'expression de ma considération distinguée.`;
 }
@@ -173,6 +205,7 @@ export function politessesConnues(): string[] {
     formulePolitesse("SUSPENSION", "3F"),
     formulePolitesse("SUSPENSION", "48SI"),
     formulePolitesse("SUSPENSION"),
+    formulePolitesse("SUSPENSION", null, true),
   ];
 }
 
@@ -239,8 +272,14 @@ export function objetLettre(opts: {
 export function formuleEnTeteDestinataire(
   type: InfractionType,
   docType?: DocTypeAnalyse | null,
+  contentieux = false,
+  tribunal?: string | null,
 ): string {
-  if (type === "SUSPENSION") return civiliteSuspension(docType);
+  if (type === "SUSPENSION") {
+    return contentieux
+      ? civiliteJugeAdministratif(tribunal)
+      : civiliteSuspension(docType);
+  }
   return "Monsieur l'Officier du ministère public";
 }
 
@@ -273,6 +312,8 @@ export function identiteExtrait(
 export function enTeteLettre(opts: {
   type: InfractionType;
   docType?: DocTypeAnalyse | null;
+  contentieux?: boolean;
+  tribunal?: string | null;
   nom?: string | null;
   adresse?: string | null;
   dateRedaction?: string | null;
@@ -282,7 +323,15 @@ export function enTeteLettre(opts: {
   if (expediteur.length > 0) {
     lignes.push(...(expediteur as string[]));
   }
-  lignes.push(formuleEnTeteDestinataire(opts.type, opts.docType));
+  if (opts.contentieux) lignes.push(titreRequete());
+  lignes.push(
+    formuleEnTeteDestinataire(
+      opts.type,
+      opts.docType,
+      opts.contentieux,
+      opts.tribunal,
+    ),
+  );
   lignes.push("");
   const dateFr = formaterDateFr(opts.dateRedaction);
   if (dateFr) lignes.push(`Le ${dateFr}`);
@@ -291,43 +340,98 @@ export function enTeteLettre(opts: {
 }
 
 /**
+ * Extrait le corps d'une lettre déjà habillée (en-tête + Objet + formule
+ * d'appel + corps + politesse) : renvoie le texte situé entre la formule
+ * d'appel et la formule de politesse finale. Sert à ré-habiller une lettre
+ * lorsqu'on change de destinataire (ex. lettre d'abord adressée au préfet puis
+ * convertie en requête contentieuse adressée au tribunal administratif).
+ * Une lettre non reconnue comme habillée est renvoyée telle quelle (aucune
+ * altération hasardeuse).
+ */
+export function corpsDepuisLettreHabillee(lettre: string): string {
+  const texte = lettre.trim();
+  const appels = [
+    formuleAppel("AMENDE"),
+    formuleAppel("SUSPENSION", null, true),
+    formuleAppel("SUSPENSION", "3F"),
+    formuleAppel("SUSPENSION", "48SI"),
+    formuleAppel("SUSPENSION"),
+  ];
+  let debut = -1;
+  for (const a of appels) {
+    const i = texte.indexOf(a);
+    if (i !== -1 && (debut === -1 || i < debut)) debut = i + a.length;
+  }
+  if (debut === -1) return texte;
+  let fin = -1;
+  for (const p of politessesConnues()) {
+    const j = texte.lastIndexOf(p);
+    if (j !== -1 && j > debut && (fin === -1 || j < fin + p.length)) {
+      fin = j;
+    }
+  }
+  if (fin === -1 || fin <= debut) return texte;
+  return texte.slice(debut, fin).trim();
+}
+
+/**
  * Habillage professionnel de la lettre générée : en-tête administrative
  * (coordonnées requérant si connues, destinataire type-aware, date de
  * rédaction en toutes lettres), Objet, formule d'appel type-aware
- * (« Madame, Monsieur, » à l'OMP / « Monsieur le Préfet » en suspension),
- * corps validé par l'admin puis formule de politesse finale alignée sur le
- * destinataire. La liste des
+ * (« Madame, Monsieur, » à l'OMP / « Monsieur le Préfet » en suspension / au
+ * tribunal administratif en voie contentieuse), corps validé par l'admin puis
+ * formule de politesse finale alignée sur le destinataire. La liste des
  * pièces jointes figure UNE seule fois, sous la signature, dans le PDF signé
  * (voir generateLettrePdf) — jamais doublée dans le corps. Pure : chaque bloc
  * n'apparaît que si sa donnée existe réellement (aucune valeur fabriquée).
  *
- * Idempotent : si la lettre a déjà été habillée (formule de politesse
- * présente), elle est retournée telle quelle — aucune re-formulation.
+ * Idempotent : une lettre déjà habillée avec le **même destinataire** est
+ * retournée telle quelle. En revanche, si la lettre porte une politesse d'un
+ * autre destinataire et que le canal demandé change la voie (contentieuse vs
+ * administrative), le corps est extrait et re-habillé au bon destinataire.
  */
 export function formaterLettreOfficielle(opts: {
   type: InfractionType;
   corps: string;
   docType?: DocTypeAnalyse | null;
+  /** Canal d'envoi : `TELERECOURS` = requête contentieuse (tribunal
+   * administratif, REP) ; `LRAR`/`ANTAI`/vide = courrier à l'administration. */
+  canal?: CanalEnvoi | null;
   numRef?: string | null;
   dateRef?: string | null;
   nom?: string | null;
   adresse?: string | null;
   date?: string | null;
 }): string {
-  const corps = opts.corps.trim();
-  if (!corps) return "";
-  // Idempotent : une lettre déjà habillée (une quelconque des politesses
-  // connues — neutre, préfet ou ministre) est retournée telle quelle —
-  // aucune re-formulation, aucune double habilitation.
-  if (politessesConnues().some((p) => corps.includes(p))) {
-    return corps;
+  const brut = opts.corps.trim();
+  if (!brut) return "";
+
+  // Voie contentieuse (recours pour excès de pouvoir déposé via Télérecours) :
+  // la requête vise le tribunal administratif, non l'administration.
+  const contentieux = opts.type === "SUSPENSION" && opts.canal === "TELERECOURS";
+  // Juridiction territorialement compétente déduite du département du requérant
+  // (R. 221-3 CJA) — `null` si l'adresse ne permet pas de l'identifier.
+  const tribunal = contentieux ? tribunalPourAdresse(opts.adresse) : null;
+  const politesseCible = formulePolitesse(opts.type, opts.docType, contentieux);
+
+  // Idempotent : déjà habillée au **bon** destinataire.
+  if (brut.includes(politesseCible)) {
+    return brut;
   }
+
+  // Déjà habillée à un **autre** destinataire : on récupère le corps et on le
+  // ré-habille (changement de voie — ex. lettre préfet → requête TA). Sinon on
+  // part du corps brut.
+  const dejaHabillee = politessesConnues().some((p) => brut.includes(p));
+  const corps = dejaHabillee ? corpsDepuisLettreHabillee(brut) : brut;
 
   const lignes: string[] = [];
   lignes.push(
     ...enTeteLettre({
       type: opts.type,
       docType: opts.docType,
+      contentieux,
+      tribunal,
       nom: opts.nom,
       adresse: opts.adresse,
       dateRedaction: opts.date,
@@ -335,10 +439,10 @@ export function formaterLettreOfficielle(opts: {
   );
   lignes.push(`Objet : ${objetLettre(opts)}`);
   lignes.push("");
-  lignes.push(formuleAppel(opts.type, opts.docType));
+  lignes.push(formuleAppel(opts.type, opts.docType, contentieux));
   lignes.push("");
   lignes.push(corps);
   lignes.push("");
-  lignes.push(formulePolitesse(opts.type, opts.docType));
+  lignes.push(formulePolitesse(opts.type, opts.docType, contentieux));
   return lignes.join("\n");
 }

@@ -21,7 +21,12 @@ import { extrairePv, getOcrProvider, fusionnerPrefill } from "@/lib/ocr";
 import { alignerDocType, lireCategorie } from "@/lib/doc-v2";
 import { notifierStatut } from "@/lib/notifications";
 import { prixBase } from "@/lib/tarifs";
-import { formaterLettreOfficielle, identiteExtrait } from "@/lib/envoi";
+import {
+  formaterLettreOfficielle,
+  identiteExtrait,
+  type CanalEnvoi,
+  type DocTypeAnalyse,
+} from "@/lib/envoi";
 import {
   listePiecesJointes,
   recupererPreuvesPourDossierId,
@@ -673,15 +678,36 @@ export async function signerDossier(
     preuves: dossier.preuves.map((p) => ({ nom: p.nom, type: p.type, url: p.url })),
   });
 
+  // Habillage aligné sur le canal (une suspension Télérecours devient une
+  // requête adressée au tribunal administratif) — idempotent.
+  const identiteSign = identiteExtrait(dataExt, null);
+  const lettreFinale = formaterLettreOfficielle({
+    type: dossier.type,
+    corps: dossier.lettreGeneree,
+    docType: dataExt["docType"] as DocTypeAnalyse | null,
+    canal: (dossier.canalEnvoi as CanalEnvoi | null) ?? null,
+    numRef: typeof dataExt["num_pv"] === "string" ? (dataExt["num_pv"] as string) : null,
+    dateRef: typeof dataExt["date"] === "string" ? (dataExt["date"] as string) : null,
+    nom: identiteSign.nom,
+    adresse: identiteSign.adresse,
+    date: new Date().toISOString().slice(0, 10),
+  });
+  if (lettreFinale !== dossier.lettreGeneree) {
+    await prisma.dossier.update({
+      where: { id: dossier.id },
+      data: { lettreGeneree: lettreFinale },
+    });
+  }
+
   const pdfBuffer = await generateLettrePdf(
-    dossier.lettreGeneree,
+    lettreFinale,
     signatureDataUrl,
     piecesJointes,
   );
   const pdfName = `pdfs/lettre-${dossier.id}.pdf`;
   const pdfUrl = await storageWrite(pdfName, pdfBuffer);
 
-  // Pack Télérecours (3F/48SI, Cas B) : la validation juriste n'a pas pu le
+  // Pack Télérecours (Cas B) : la validation juriste n'a pas pu le
   // produire (lettre alors non signée) — il est généré ici, avec la
   // signature, et rattaché au courrier créé. Best-effort jamais bloquant.
   let packUrls: PackTelecours | undefined;
@@ -695,7 +721,7 @@ export async function signerDossier(
     try {
       packUrls = await genererPackTelecours({
         dossierId: dossier.id,
-        lettreFinale: dossier.lettreGeneree,
+        lettreFinale,
         data: dataExt as unknown as ExtractedData,
         templateRefere: dossier.failleJuridique?.templateRefere ?? null,
         refereGenere: dossier.refereGenere ?? null,

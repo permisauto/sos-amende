@@ -42,6 +42,7 @@ import {
   destinataireLrar,
   libelleCanalDepuisStockage,
   libelleDocType,
+  type CanalEnvoi,
 } from "@/lib/envoi";
 import { faillesPourTypePreuve, listePiecesJointes } from "@/lib/preuves-api";
 import { texteReferePour } from "@/lib/pack-telerecours";
@@ -459,6 +460,7 @@ export default async function JuristeCasePage(
     formaterLettreOfficielle({
       type: item.type,
       corps,
+      canal: (item.canalEnvoi as CanalEnvoi | null) ?? null,
       numRef: dataLettres.num_pv ?? null,
       dateRef: dataLettres.date ?? null,
       nom: identiteLettres.nom,

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   canauxEnvoi,
+  civiliteJugeAdministratif,
+  corpsDepuisLettreHabillee,
   dateRefLibelle,
   delaiLibelle,
   destinataireLrar,
@@ -18,6 +20,7 @@ import {
   pieceAJoindre,
   portailEnLigne,
   titreAnalyse,
+  titreRequete,
 } from "./envoi";
 
 describe("envoi — libellés par type d'infraction", () => {
@@ -146,7 +149,7 @@ describe("envoi — formalisme de la lettre", () => {
     expect(nbPolitesses).toBe(1);
   });
 
-  it("en-tête destinataire type-aware : préfet pour une suspension", () => {
+  it("en-tête destinataire type-aware : préfet pour une suspension (voie administrative)", () => {
     const lettre = formaterLettreOfficielle({
       type: "SUSPENSION",
       corps: "Je conteste la décision du 1er août 2026.",
@@ -220,13 +223,18 @@ describe("envoi — destinataire par docType (lot H1)", () => {
     expect(lettre).toContain("Monsieur le Ministre de l'Intérieur");
     expect(lettre).not.toContain("Monsieur le Préfet");
     expect(lettre.endsWith(formulePolitesse("SUSPENSION", "48SI"))).toBe(true);
-    // Idempotent même après changement de docType (aucune double habilitation).
+    // Changement de docType = changement de destinataire : la lettre est
+    // re-habillée au préfet (3F), sans double habilitation ni perte du corps.
     const relance = formaterLettreOfficielle({
       type: "SUSPENSION",
       docType: "3F",
       corps: lettre,
     });
-    expect(relance).toBe(lettre);
+    expect(relance).toContain("Monsieur le Préfet");
+    expect(relance).not.toContain("Monsieur le Ministre de l'Intérieur");
+    const corpsAttendu = "Je conteste l'invalidation pour solde de points nul.";
+    expect(relance.split(corpsAttendu).length - 1).toBe(1);
+    expect(relance.split("Objet :").length - 1).toBe(1);
   });
 
   it("non-régression amende : le docType ne change rien au tunnel 39 €", () => {
@@ -298,5 +306,119 @@ describe("identiteExtrait — en-tête = identité OCR, profil en repli", () => 
       true,
     );
     expect(lettre).not.toContain("Jean Dupont");
+  });
+});
+
+describe("envoi — requête contentieuse (REP, Télérecours)", () => {
+  const corps = "Je soussigné(e) DUPONT, conteste la décision de suspension.";
+
+  it("civiliteJugeAdministratif sans tribunal : générique, sans ville inventée", () => {
+    expect(civiliteJugeAdministratif()).toContain("Tribunal administratif");
+    expect(civiliteJugeAdministratif()).toContain("Président");
+    expect(civiliteJugeAdministratif()).not.toContain("Tribunal administratif de ");
+    expect(titreRequete()).toContain("EXCÈS DE POUVOIR");
+  });
+
+  it("suspension + TELERECOURS : titre de requête + destinataire TA + politesse juge", () => {
+    const lettre = formaterLettreOfficielle({
+      type: "SUSPENSION",
+      canal: "TELERECOURS",
+      corps,
+      numRef: "456",
+      date: "2026-10-20",
+    });
+    expect(lettre).toContain(titreRequete());
+    expect(lettre).toContain("Tribunal administratif");
+    expect(lettre).not.toContain("Monsieur le Préfet");
+    expect(lettre).not.toContain("Monsieur le Ministre");
+    expect(lettre).toContain("Monsieur le Président");
+    expect(lettre).toContain(
+      "Objet : Recours contre la décision de suspension n° 456",
+    );
+    expect(lettre.endsWith(formulePolitesse("SUSPENSION", null, true))).toBe(
+      true,
+    );
+  });
+
+  it("suspension + TELERECOURS : TA nommé d'après le département de l'adresse", () => {
+    const lettre = formaterLettreOfficielle({
+      type: "SUSPENSION",
+      canal: "TELERECOURS",
+      corps,
+      adresse: "12 RUE DE LA PAIX 69001 LYON",
+      numRef: "456",
+      date: "2026-10-20",
+    });
+    expect(lettre).toContain("Tribunal administratif de Lyon");
+    // Sans adresse exploitable : formule générique, aucune ville inventée.
+    const sansAdresse = formaterLettreOfficielle({
+      type: "SUSPENSION",
+      canal: "TELERECOURS",
+      corps,
+    });
+    expect(sansAdresse).toContain("Tribunal administratif");
+    expect(sansAdresse).not.toContain("Tribunal administratif de");
+  });
+
+  it("suspension + LRAR : reste à l'administration (préfet), pas de titre de requête", () => {
+    const lettre = formaterLettreOfficielle({
+      type: "SUSPENSION",
+      canal: "LRAR",
+      corps,
+    });
+    expect(lettre).toContain("Monsieur le Préfet");
+    expect(lettre).not.toContain(titreRequete());
+    expect(lettre).not.toContain("Tribunal administratif");
+  });
+
+  it("amende : le canal TELERECOURS ne détourne jamais la lettre vers le juge", () => {
+    const lettre = formaterLettreOfficielle({
+      type: "AMENDE",
+      canal: "TELERECOURS",
+      corps: "Je conteste le PV 42.",
+    });
+    expect(lettre).toContain("Monsieur l'Officier du ministère public");
+    expect(lettre).not.toContain("Tribunal administratif");
+  });
+
+  it("ré-habilitation : une lettre au préfet convertie en requête vise le TA, sans perdre le corps", () => {
+    const auPrefet = formaterLettreOfficielle({
+      type: "SUSPENSION",
+      canal: "LRAR",
+      corps,
+      numRef: "456",
+      date: "2026-10-20",
+    });
+    const requete = formaterLettreOfficielle({
+      type: "SUSPENSION",
+      canal: "TELERECOURS",
+      corps: auPrefet,
+      numRef: "456",
+      date: "2026-10-20",
+    });
+    expect(requete).toContain("Tribunal administratif");
+    expect(requete).not.toContain("Monsieur le Préfet");
+    // Le corps d'origine est conservé, une seule fois.
+    expect(requete.split(corps).length - 1).toBe(1);
+    // Re-habillage idempotent une fois au bon destinataire.
+    const relance = formaterLettreOfficielle({
+      type: "SUSPENSION",
+      canal: "TELERECOURS",
+      corps: requete,
+      numRef: "456",
+      date: "2026-10-20",
+    });
+    expect(relance).toBe(requete);
+    expect(relance.split(titreRequete()).length - 1).toBe(1);
+  });
+
+  it("corpsDepuisLettreHabillee : extrait le corps entre appel et politesse", () => {
+    expect(corpsDepuisLettreHabillee(corps)).toBe(corps);
+    const habillee = formaterLettreOfficielle({
+      type: "SUSPENSION",
+      canal: "LRAR",
+      corps,
+    });
+    expect(corpsDepuisLettreHabillee(habillee)).toBe(corps);
   });
 });
