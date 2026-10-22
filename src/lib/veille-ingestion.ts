@@ -56,6 +56,11 @@ import {
   redigerBrouillonRegle,
   scorerPertinence,
 } from "@/lib/veille-perteinence";
+import {
+  classerParPriorite,
+  extraireArticles,
+  type SourcePreparable,
+} from "@/lib/veille-prefiltre";
 import { reglesDetectionPourQuestions } from "@/lib/questions";
 import { enregistrerTraceAutoAlimentation } from "@/lib/auto-alimentation";
 import {
@@ -445,6 +450,10 @@ export type BilanExtraction = {
   iaIndisponible: boolean;
   /** Quota Gemini du jour épuisé : lot non entamé (reprise au prochain passage). */
   quotaAtteint: boolean;
+  /** Candidats retenus par le **pré-filtre déterministe** (file complète). */
+  prefiltrees: number;
+  /** Candidats pré-filtrés mais **différés** (budget d'IA atteint ce jour). */
+  deferes: number;
 };
 
 const BILAN_VIDE: BilanExtraction = {
@@ -454,6 +463,8 @@ const BILAN_VIDE: BilanExtraction = {
   locales: 0,
   iaIndisponible: false,
   quotaAtteint: false,
+  prefiltrees: 0,
+  deferes: 0,
 };
 
 function publicationDepuisRow(row: SourceJuridique): PublicationVeille {
@@ -581,9 +592,102 @@ async function extraireEtStocker(
 }
 
 /**
+ * Nombre maximal de publications ramenées en mémoire pour le pré-filtre
+ * déterministe. Au-delà, la queue attend le passage suivant (le tri reste
+ * déterministe sur le lot remonté).
+ */
+export const CANDIDATS_PRE_FILTRE = 600;
+
+/**
+ * Fenêtre de lecture du pré-filtre : deux moitiés fusionnées —
+ *   - la moitié « score » (les mieux notées) ;
+ *   - la moitié « ancienneté » (les plus anciennes, encore non extraites).
+ *
+ * Pourquoi deux fenêtres : avec une seule fenêtre triée par score, la file
+ * resterait figée sur les mêmes publications (les mieux notées) et les autres
+ * n'entreraient jamais dans le lot — le pré-filtre n'aurait aucun effet sur
+ * la file. La fenêtre par ancienneté fait tourner la queue : à mesure que les
+ * publications sont extraites, les plus anciennes sortent du lot et les
+ * suivantes entrent.
+ */
+export const FENETRE_PRE_FILTRE = CANDIDATS_PRE_FILTRE / 2;
+
+/**
+ * Publications candidates à l'extraction (NOUVEAU, score ≥ seuil).
+ * Deux lectures triées fusionnées et dédupliquées par id.
+ */
+export async function lireCandidatesExtraction(
+  minScore: number,
+): Promise<SourceJuridique[]> {
+  const where = { statut: "NOUVEAU", score: { gte: minScore } } as const;
+  const [parScore, parAnciennete] = await Promise.all([
+    prisma.sourceJuridique.findMany({
+      where,
+      orderBy: [{ score: "desc" }, { createdAt: "desc" }],
+      take: FENETRE_PRE_FILTRE,
+    }),
+    prisma.sourceJuridique.findMany({
+      where,
+      orderBy: [{ createdAt: "asc" }],
+      take: FENETRE_PRE_FILTRE,
+    }),
+  ]);
+  const vus = new Map<string, SourceJuridique>();
+  for (const r of [...parAnciennete, ...parScore]) vus.set(r.id, r);
+  return [...vus.values()];
+}
+
+/**
+ * Références d'articles **déjà couvertes** par une faille ACTIVE : une
+ * publication qui ne cite qu'un article déjà traité est probablement un
+ * doublon (le pré-filtre la dépriorise). Best-effort : une base en rade
+ * renvoie un ensemble vide (aucune dépriorisation).
+ */
+export async function articlesCouvertsParFaillesActives(): Promise<Set<string>> {
+  try {
+    const failles = await prisma.failleJuridique.findMany({
+      where: { statut: "ACTIVE" },
+      select: { articleLoi: true },
+    });
+    const set = new Set<string>();
+    for (const f of failles) {
+      for (const a of extraireArticles(f.articleLoi ?? "")) set.add(a);
+    }
+    return set;
+  } catch (e) {
+    console.error("veille-prefiltre: lecture des failles actives impossible", e);
+    return new Set<string>();
+  }
+}
+
+export function sourcePreparable(row: SourceJuridique): SourcePreparable {
+  const prop = propositionEnregistree(row);
+  return {
+    id: row.id,
+    titre: row.titre,
+    contenu: row.contenu,
+    score: row.score,
+    matchsCore: Array.isArray(row.matchsCore) ? (row.matchsCore as string[]) : [],
+    dateSource: row.dateSource ? row.dateSource.toISOString().slice(0, 10) : null,
+    etatProposition: prop?.etat ?? null,
+    tentatives: prop?.tentatives ?? null,
+  };
+}
+
+/**
  * Extrait les propositions des publications NOUVEAU encore non extraites,
- * en échec, ou incomplètes jamais retentées (`estCandidatExtraction`), mieux
- * scorées d'abord : `limite` au plus, score >= `minScore`, boîte de temps
+ * en échec, ou incomplètes jamais retentées (`estCandidatExtraction`).
+ *
+ * **Pré-filtre déterministe** (Lot 1) : les candidats ne sont plus pris dans
+ * l'ordre du score de pertinence — qui favorise les textes les plus bavards
+ * (les publications écartées à la main scorcent *mieux* que la file « À
+ * lire ») — mais dans l'ordre de la **priorité déterministe**
+ * (`veille-prefiltre` : termes du domaine, article de code cité, doublon,
+ * dispositif extractible, familles, fraîcheur, échecs déjà subis). Le budget
+ * d'IA du jour est ainsi dépensé sur les publications les plus exploitables,
+ * et une publication qui échoue à l'extraction ne le monopolise plus.
+ *
+ * `limite` au plus, score >= `minScore`, boîte de temps
  * `BUDGET_TEMPS_EXTRACTION_MS`. IA indisponible ou en échec : **secours local**
  * (`extractionLocale`, sans réseau) — la proposition reste immédiatement
  * disponible pour l'admin.
@@ -594,11 +698,7 @@ export async function extrairePropositionsEnAttente(
 ): Promise<BilanExtraction> {
   let rows: SourceJuridique[];
   try {
-    rows = await prisma.sourceJuridique.findMany({
-      where: { statut: "NOUVEAU", score: { gte: minScore } },
-      orderBy: [{ score: "desc" }, { createdAt: "desc" }],
-      take: 100,
-    });
+    rows = await lireCandidatesExtraction(minScore);
   } catch (e) {
     console.error("veille-extraction: lecture des candidats impossible", e);
     return { ...BILAN_VIDE };
@@ -617,11 +717,22 @@ export async function extrairePropositionsEnAttente(
     budget = Math.min(limite, partExtractionJournaliere(), restant);
   }
 
-  const candidats = rows
-    .filter((r) => estCandidatExtraction(propositionEnregistree(r)))
-    .slice(0, Math.max(0, budget));
+  const eligibles = rows.filter((r) =>
+    estCandidatExtraction(propositionEnregistree(r)),
+  );
+  const articlesCouverts = await articlesCouvertsParFaillesActives();
+  const classes = classerParPriorite(
+    eligibles.map(sourcePreparable),
+    articlesCouverts,
+  );
+  const parId = new Map(rows.map((r) => [r.id, r]));
+  const candidats = classes
+    .slice(0, Math.max(0, budget))
+    .map((c) => parId.get(c.source.id))
+    .filter((r): r is SourceJuridique => Boolean(r));
 
-  const bilan = { ...BILAN_VIDE };
+  const bilan = { ...BILAN_VIDE, prefiltrees: eligibles.length };
+  bilan.deferes = Math.max(0, eligibles.length - candidats.length);
   const fin = Date.now() + BUDGET_TEMPS_EXTRACTION_MS;
   for (const row of candidats) {
     if (Date.now() > fin) break;
@@ -645,6 +756,15 @@ export async function extrairePropositionsEnAttente(
   // Après chaque lot d'extraction : les propositions complètes non encore
   // liées deviennent des failles PROPOSEE (auto-proposition, cf. plus bas).
   await proposerFaillesDepuisExtraction();
+  // Trace du pré-filtre : combien de publications ont été triées et combien
+  // ont été différées faute de budget d'IA (visible dans les campagnes).
+  await enregistrerTraceAutoAlimentation({
+    campagne: "pre-filtre-veille",
+    statut: bilan.quotaAtteint ? "PARTIEL" : "OK",
+    traitees: bilan.prefiltrees,
+    nouvelles: candidats.length,
+    detail: `${candidats.length} publication(s) extraite(s) sur ${bilan.prefiltrees} pré-filtrée(s) — ${bilan.deferes} différée(s) (budget d'IA atteint)`,
+  });
   return bilan;
 }
 

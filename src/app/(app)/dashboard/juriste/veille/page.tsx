@@ -3,6 +3,11 @@ import { requireJuriste } from "@/lib/dal";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
 import { estPropositionLocale } from "@/lib/veille-ingestion";
+import {
+  articlesCouvertsParFaillesActives,
+  sourcePreparable,
+} from "@/lib/veille-ingestion";
+import { prioritePrefiltre } from "@/lib/veille-prefiltre";
 import { VeilleList, type SourceDto } from "./veille-list";
 
 /**
@@ -104,26 +109,37 @@ export default async function VeillePage({
         ? rows.filter((r) => !estPropositionLocale(r.proposition as SourceDto["proposition"]))
         : rows;
     total = filtre === "A_VALIDER" ? totalFiltre - locales : totalFiltre;
-    sources = lignes.map((r) => ({
-      id: r.id,
-      statut: r.statut,
-      source: r.source,
-      nature: r.nature,
-      titre: r.titre,
-      juridiction: r.juridiction,
-      dateSource: r.dateSource ? r.dateSource.toISOString().slice(0, 10) : null,
-      reference: r.reference,
-      ecli: r.ecli,
-      url: r.url,
-      citations: Array.isArray(r.citations) ? (r.citations as string[]) : [],
-      matchsCore: Array.isArray(r.matchsCore) ? (r.matchsCore as string[]) : [],
-      matchsAppui: Array.isArray(r.matchsAppui) ? (r.matchsAppui as string[]) : [],
-      score: r.score,
-      brouillonRegle: r.brouillonRegle,
-      proposition: (r.proposition as SourceDto["proposition"]) ?? null,
-      archive: r.archive,
-      failleId: r.failleId,
-    }));
+    // Pré-filtre déterministe (Lot 1) : chaque publication affichée reçoit un
+    // score de triage **mécanique** (termes du domaine, article de code cité,
+    // doublon, dispositif extractible, familles, fraîcheur) — jamais une
+    // conclusion juridique. C'est ce tri qui détermine l'ordre d'extraction
+    // par IA (budget quotidien strict) : le juriste voit donc d'où viennent
+    // les publications qui passent en premier.
+    const articlesCouverts = await articlesCouvertsParFaillesActives();
+    sources = lignes.map((r) => {
+      const p = prioritePrefiltre(sourcePreparable(r), articlesCouverts);
+      return {
+        id: r.id,
+        statut: r.statut,
+        source: r.source,
+        nature: r.nature,
+        titre: r.titre,
+        juridiction: r.juridiction,
+        dateSource: r.dateSource ? r.dateSource.toISOString().slice(0, 10) : null,
+        reference: r.reference,
+        ecli: r.ecli,
+        url: r.url,
+        citations: Array.isArray(r.citations) ? (r.citations as string[]) : [],
+        matchsCore: Array.isArray(r.matchsCore) ? (r.matchsCore as string[]) : [],
+        matchsAppui: Array.isArray(r.matchsAppui) ? (r.matchsAppui as string[]) : [],
+        score: r.score,
+        brouillonRegle: r.brouillonRegle,
+        proposition: (r.proposition as SourceDto["proposition"]) ?? null,
+        archive: r.archive,
+        failleId: r.failleId,
+        priorite: { score: p.score, explication: p.explication },
+      };
+    });
   } catch (e) {
     console.error("veille: lecture des sources impossible", e);
     dbOk = false;

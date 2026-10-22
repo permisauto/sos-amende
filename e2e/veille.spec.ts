@@ -193,6 +193,9 @@ test("veille : publication retenue, citations littérales et brouillon", async (
       "href",
       /legifrance\.gouv\.fr/,
     );
+    // Lot 1 — pré-filtre déterministe : la carte affiche la priorité de
+    // traitement (ordre d'extraction), jamais une qualification juridique.
+    await expect(c.getByTestId("chip-priorite")).toBeVisible();
     // Les passages cités sont littéraux, et le brouillon est vide côté
     // articulation (garde-fou anti-hallucination). La même phrase apparaît
     // légitimement deux fois (liste des citations + brouillon) : on scope sur

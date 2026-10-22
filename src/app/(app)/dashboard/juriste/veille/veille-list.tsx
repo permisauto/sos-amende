@@ -33,6 +33,12 @@ export type SourceDto = {
   archive: string | null;
   /** Faille `PROPOSEE` créée automatiquement après extraction (auto-proposition). */
   failleId: string | null;
+  /**
+   * Pré-filtre déterministe (Lot 1) : score de triage **mécanique** de la
+   * publication — c'est cet ordre qui détermine qui passe en premier dans le
+   * budget d'extraction IA. Ce n'est pas une qualification juridique.
+   */
+  priorite?: { score: number; explication: string } | null;
 };
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -273,6 +279,15 @@ function CarteSource({ s, role }: { s: SourceDto; role: string }) {
             <span className="rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-semibold text-sky-800">
               score {s.score}
             </span>
+            {s.priorite && (
+              <span
+                className="rounded-full bg-violet-50 px-2.5 py-1 text-[11px] font-medium text-violet-800"
+                data-testid="chip-priorite"
+                title={`Pré-filtre déterministe (ordre d'extraction) : ${s.priorite.explication}`}
+              >
+                priorité {s.priorite.score} · {s.priorite.explication}
+              </span>
+            )}
             {s.matchsCore.slice(0, 3).map((m) => (
               <span
                 key={m}
