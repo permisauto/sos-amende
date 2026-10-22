@@ -6,6 +6,7 @@ import type { RegleDetection } from "@/lib/moteur";
 import type { JurisprudenceRef } from "@/lib/catalogue-sources";
 import { getMockFailles, getMockStats, getSuspensionActiveCount } from "@/lib/mock-failles";
 import { rechercherFailles } from "@/lib/failles-recherche";
+import { chargerHistoriqueFailles } from "@/lib/failles-historique";
 import { FaillesAdmin, type FailleDto } from "../../admin/failles/failles-admin";
 import { MisesAJourCatalogue } from "../../admin/failles/mises-a-jour-catalogue";
 import { FaillesList } from "./FaillesList";
@@ -53,7 +54,7 @@ export default async function BibliothequeFaillesPage(
   let aSuspensionActive = false;
 
   try {
-    const [rows, grouped] = await Promise.all([
+    const [rows, grouped, historique] = await Promise.all([
       prisma.failleJuridique.findMany({
         orderBy: [{ statut: "asc" }, { createdAt: "desc" }],
         include: { sources: { select: { id: true } } },
@@ -62,7 +63,9 @@ export default async function BibliothequeFaillesPage(
         by: ["statut"],
         _count: { _all: true },
       }),
+      chargerHistoriqueFailles(),
     ]);
+    const histoParId = new Map(historique.map((h) => [h.failleId, h]));
     failles = rows.map((r) => ({
       id: r.id,
       typeInfraction: r.typeInfraction as "AMENDE" | "SUSPENSION",
@@ -76,6 +79,12 @@ export default async function BibliothequeFaillesPage(
       jurisprudence: r.jurisprudence as JurisprudenceRef[] | null,
       createdAt: r.createdAt,
       deLaVeille: r.sources.length > 0,
+      historique: histoParId.get(r.id)
+        ? {
+            gagnes: histoParId.get(r.id)!.gagnes,
+            perdus: histoParId.get(r.id)!.perdus,
+          }
+        : undefined,
     }));
     stats = ["ACTIVE", "PROPOSEE", "INACTIVE"].map((s) => ({
       statut: s,

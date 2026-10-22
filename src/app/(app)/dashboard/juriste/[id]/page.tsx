@@ -45,7 +45,17 @@ import {
   type CanalEnvoi,
 } from "@/lib/envoi";
 import { faillesPourTypePreuve, listePiecesJointes } from "@/lib/preuves-api";
+import {
+  classerCandidats,
+  detecterContradictions,
+  MAX_MOYENS_LETTRE,
+  type CandidatAclasser,
+} from "@/lib/failles-classement";
+import { chargerHistoriqueFailles } from "@/lib/failles-historique";
+import { contexteEtalonnage } from "@/lib/etalonnage";
+import { scoreFaille } from "@/lib/moteur";
 import { texteReferePour } from "@/lib/pack-telerecours";
+import { faitsDepuisPreuves } from "@/lib/verif-failles";
 import { documentNonDetermine, libelleCategorie, lireCategorie } from "@/lib/doc-v2";
 import { FilMessages, type MessageDto } from "@/components/messages";
 import {
@@ -140,6 +150,7 @@ type JuristeCaseDetail = {
       titreFaille: string;
       articleLoi: string;
       templateLettre?: string | null;
+      reglesDetection?: unknown;
     };
   }>;
   courriers: Array<{
@@ -403,23 +414,78 @@ export default async function JuristeCasePage(
   await marquerMessagesLus(item.id).catch(() => {});
   await marquerInternesLus(item.id).catch(() => {});
 
-  const candidats = item.faillesRetenues.map((df) => ({
-    failleId: df.failleId,
-    statut: df.statut,
-    statutFaille: df.faille.statut,
-    titre: df.faille.titreFaille,
-    articleLoi: df.faille.articleLoi,
-    principale: item.failleJuridiqueId === df.failleId,
-    suggestionIa: df.suggestionIa as {
-      source?: string;
-      pertinence?: string;
-      justification?: string;
-      controle?: string;
-      signalement?: string;
-      nouvelleProposition?: boolean;
-      at?: string;
-    } | null,
+  // Ordonnancement des failles candidates (Lot 2.1) : on calcule pour chaque
+  // faille retenue son score de corroboration (scoreFaille) + le bonus
+  // historique borné (taux de succès, calcul à la volée — Lot 2.5), puis on
+  // classe. Les contradictions factuelles du questionnaire sont signalées à
+  // part (information seule, Lot 2.2). Rien n'est décidé ici : le juriste
+  // reste seul décideur.
+  //
+  // Les faits retenus pour le scoring et les contradictions sont ceux du
+  // dossier **enrichis par les pièces versées** (attestation de vol, de
+  // cession, relevé de paiement, cliché, marquage) : une pièce depositionnée
+  // après l'analyse vaut fait avéré, même si le questionnaire a été mal coché
+  // ou non coché (cohérence facts/pièces — Lot 2.1).
+  const dataFaits = faitsDepuisPreuves(
+    (item.extractedData ?? {}) as ExtractedData,
+    item.preuves.map((p) => ({ type: p.type, url: p.url })),
+  );
+  const contexteEtal = await contexteEtalonnage(dataFaits).catch(() => ({
+    dateExpiration: null,
+    preuveUrl: null,
   }));
+  const scoresParFaille = new Map<string, number>();
+  for (const df of item.faillesRetenues) {
+    const s = scoreFaille(
+      { id: df.failleId, reglesDetection: df.faille.reglesDetection as never },
+      dataFaits,
+      item.pvTexte,
+      { dateExpirationEtalonnage: contexteEtal.dateExpiration },
+    );
+    scoresParFaille.set(df.failleId, s?.score ?? 0);
+  }
+  const historique = await chargerHistoriqueFailles().catch(() => []);
+  const candidatsAclasser: CandidatAclasser[] = item.faillesRetenues.map(
+    (df) => ({
+      failleId: df.failleId,
+      score: scoresParFaille.get(df.failleId) ?? 0,
+      active: df.faille.statut === "ACTIVE",
+      confirmee: df.statut === "CONFIRMEE",
+      rejetee: df.statut === "REJETEE",
+    }),
+  );
+  const classement = classerCandidats(candidatsAclasser, historique);
+  const rangParId = new Map(classement.map((c) => [c.failleId, c.rangOrdre]));
+  const contradictions = detecterContradictions(dataFaits);
+
+  const candidats = item.faillesRetenues
+    .map((df) => ({
+      failleId: df.failleId,
+      statut: df.statut,
+      statutFaille: df.faille.statut,
+      titre: df.faille.titreFaille,
+      articleLoi: df.faille.articleLoi,
+      principale: item.failleJuridiqueId === df.failleId,
+      rangOrdre: rangParId.get(df.failleId) ?? -1,
+      score: scoresParFaille.get(df.failleId) ?? 0,
+      suggestionIa: df.suggestionIa as {
+        source?: string;
+        pertinence?: string;
+        justification?: string;
+        controle?: string;
+        signalement?: string;
+        nouvelleProposition?: boolean;
+        at?: string;
+      } | null,
+    }))
+    // Les failles non classables (écartées / non ACTIVE) ferment la liste ;
+    // les autres suivent le rang (0 = principale proposée).
+    .sort((a, b) => {
+      if (a.rangOrdre < 0 && b.rangOrdre < 0) return 0;
+      if (a.rangOrdre < 0) return 1;
+      if (b.rangOrdre < 0) return -1;
+      return a.rangOrdre - b.rangOrdre;
+    });
 
   // Dernière « Vérifier les failles » (horodatage affiché dans le drawer).
   const derniereVerifEvent = item.evenements
@@ -467,9 +533,22 @@ export default async function JuristeCasePage(
       adresse: identiteLettres.adresse,
       date: new Date().toISOString().slice(0, 10),
     });
-  const faillesActivesAvecTemplate = item.faillesRetenues
+  // Failles exploitables dans la lettre : ACTIVE + template non vide, ORDONNÉES
+  // par le classement (rang 0 = principale proposée) et PLAFONNÉES à
+  // MAX_MOYENS_LETTRE (Lot 2.4) : au-delà de 3 moyens, la requête se dilue
+  // juridiquement. Les moyens écartés sont signalés au juriste (jamais de
+  // troncature silencieuse) — il peut les ajouter via le générateur de lettre.
+  const faillesAvecTemplateOrdonnees = item.faillesRetenues
     .filter((df) => df.faille.statut === "ACTIVE" && df.faille.templateLettre)
+    .sort((a, b) => {
+      const ra = rangParId.get(a.failleId) ?? 999;
+      const rb = rangParId.get(b.failleId) ?? 999;
+      return ra - rb;
+    })
     .map((df) => df.faille);
+  const moyensRetenus = faillesAvecTemplateOrdonnees.slice(0, MAX_MOYENS_LETTRE);
+  const moyensEcartes = faillesAvecTemplateOrdonnees.slice(MAX_MOYENS_LETTRE);
+  const faillesActivesAvecTemplate = moyensRetenus;
   const lettresProposees = faillesActivesAvecTemplate.map((f) => ({
     failleId: f.id,
     titreFaille: f.titreFaille,
@@ -489,15 +568,16 @@ export default async function JuristeCasePage(
     return brute ? habiller(brute) : null;
   })();
   // Variantes du générateur de lettre : une combinaison possible par sous-ensemble
-  // (toutes les failles actives, ou chacune seule) — le juriste choisit celle
-  // qu'il souhaite appliquer, avec résumé avant application.
-  const variantes = faillesActivesAvecTemplate.length
+  // (les moyens retenus, ou chacun seule) — le juriste choisit celle qu'il
+  // souhaite appliquer, avec résumé avant application. Les moyens écartés par
+  // le plafond (Lot 2.4) restent accessibles en variante individuelle.
+  const variantes = faillesAvecTemplateOrdonnees.length
     ? [
         ...(lettreCombine && faillesActivesAvecTemplate.length > 1
           ? [
               {
                 cle: "combinee",
-                titre: "Toutes les failles (lettre complète)",
+                titre: `Moyens retenus (${faillesActivesAvecTemplate.length}) — lettre complète`,
                 failleIds: faillesActivesAvecTemplate.map((f) => f.id),
                 fondements: faillesActivesAvecTemplate.map((f) => ({
                   titre: f.titreFaille,
@@ -507,7 +587,7 @@ export default async function JuristeCasePage(
               },
             ]
           : []),
-        ...faillesActivesAvecTemplate.map((f) => ({
+        ...faillesAvecTemplateOrdonnees.map((f) => ({
           cle: `seule-${f.id}`,
           titre: `Faille seule : ${f.titreFaille}`,
           failleIds: [f.id],
@@ -1500,6 +1580,11 @@ export default async function JuristeCasePage(
         lettresProposees={lettresProposees}
         lettreCombine={lettreCombine}
         lettrePrincipale={item.lettreGeneree}
+        contradictions={contradictions}
+        moyensEcartes={moyensEcartes.map((f) => ({
+          failleId: f.id,
+          titreFaille: f.titreFaille,
+        }))}
       />
     </div>
   );

@@ -1613,6 +1613,17 @@ export async function rejeterFaille(
 
   const dossierId = String(formData.get("dossierId") ?? "");
   const failleId = String(formData.get("failleId") ?? "");
+  const motif = String(formData.get("motifEcartement") ?? "").trim();
+
+  // Le motif est OBLIGATOIRE (comme en écartement en masse) : un écartement
+  // sans motif n'apprend rien au filtre de veille (Lot 1) et n'est pas
+  // traçable pour le juriste.
+  if (motif.length < 5) {
+    return {
+      error:
+        "Un motif d'écartement d'au moins 5 caractères est requis (il alimente l'apprentissage du filtre).",
+    };
+  }
 
   const dossier = await prisma.dossier.findUnique({
     where: { id: dossierId },
@@ -1622,17 +1633,122 @@ export async function rejeterFaille(
     return { error: "Dossier introuvable." };
   }
 
+  // La faille doit être une candidature RÉELLEMENT rattachée au dossier :
+  // sinon une requête forgée pourrait créer un lien vers une faille
+  // étrangère au dossier (intégrité des données du moteur).
+  const liee = await prisma.dossierFaille.findFirst({
+    where: { dossierId, failleId },
+    select: { id: true },
+  });
+  if (!liee) {
+    return { error: "Cette faille ne fait pas partie du dossier." };
+  }
+
   await prisma.$transaction([
     prisma.dossierFaille.upsert({
       where: { dossierId_failleId: { dossierId, failleId } },
-      create: { dossierId, failleId, statut: "REJETEE" },
-      update: { statut: "REJETEE" },
+      create: { dossierId, failleId, statut: "REJETEE", motifEcartement: motif },
+      update: { statut: "REJETEE", motifEcartement: motif },
     }),
     prisma.dossierEvent.create({
       data: {
         dossierId: dossier.id,
         type: "ANALYSE",
-        detail: "Faille écartée par le juriste.",
+        detail: motif
+          ? `Faille écartée par le juriste — motif : ${motif}.`
+          : "Faille écartée par le juriste.",
+      },
+    }),
+  ]);
+
+  revalidatePath(`/dashboard/juriste/${dossier.id}`);
+  revalidatePath(`/dashboard/cases/${dossier.id}`);
+  revalidatePath("/dashboard/admin/dossiers");
+  return undefined;
+}
+
+/**
+ * Écartement EN MASSE de plusieurs failles candidates (Lot 2.3) : le juriste
+ * trie un dossier à 7 failles sans devoir actionner 7 fois.
+ *
+ * Garde-fous :
+ * - le motif est obligatoire (≥ 5 caractères) : sans motif, l'écartement
+ *   n'enseigne rien et la boucle d'apprentissage (Lot 1) est inopérante ;
+ * - un dossierId unique est exigé (pas d'écartement transversal) ;
+ * - les failles déjà CONFIRMEE ne sont pas déclassées : le juriste doit
+ *   d'abord les écarter une par une s'il change d'avis.
+ */
+export async function ecarterCandidats(
+  _prev: TraiterFailleState,
+  formData: FormData,
+): Promise<TraiterFailleState> {
+  await requireJuristeRedacteur();
+
+  const dossierId = String(formData.get("dossierId") ?? "");
+  const motif = String(formData.get("motifEcartement") ?? "").trim();
+  const failleIds = formData
+    .getAll("failleIds")
+    .map((v) => String(v))
+    .filter((v) => v.length > 0);
+
+  if (failleIds.length === 0) {
+    return { error: "Sélectionnez au moins une faille à écarter." };
+  }
+  if (motif.length < 5) {
+    return {
+      error:
+        "Un motif d'écartement d'au moins 5 caractères est requis (il alimente l'apprentissage du filtre).",
+    };
+  }
+
+  const dossier = await prisma.dossier.findUnique({
+    where: { id: dossierId },
+    select: { id: true },
+  });
+  if (!dossier) {
+    if (isDemoId(dossierId)) return undefined;
+    return { error: "Dossier introuvable." };
+  }
+
+  const confirmees = await prisma.dossierFaille.findMany({
+    where: { dossierId, failleId: { in: failleIds }, statut: "CONFIRMEE" },
+    select: { failleId: true },
+  });
+  // Seules les failles RÉELLEMENT rattachées au dossier sont écartables : une
+  // liste forgée ne doit pas créer de lien vers une faille étrangère.
+  const liees = await prisma.dossierFaille.findMany({
+    where: { dossierId, failleId: { in: failleIds } },
+    select: { failleId: true },
+  });
+  const lieesIds = new Set(liees.map((l) => l.failleId));
+  const cibles = failleIds.filter(
+    (id) =>
+      lieesIds.has(id) && !confirmees.some((c) => c.failleId === id),
+  );
+  if (cibles.length === 0) {
+    const toutesConfirmees = failleIds.every((id) =>
+      confirmees.some((c) => c.failleId === id),
+    );
+    return {
+      error: toutesConfirmees
+        ? "Toutes les failles sélectionnées sont déjà retenues : écartez-les une par une si vous changez d'avis."
+        : "Aucune des failles sélectionnées ne fait partie de ce dossier.",
+    };
+  }
+
+  await prisma.$transaction([
+    ...cibles.map((failleId) =>
+      prisma.dossierFaille.upsert({
+        where: { dossierId_failleId: { dossierId, failleId } },
+        create: { dossierId, failleId, statut: "REJETEE", motifEcartement: motif },
+        update: { statut: "REJETEE", motifEcartement: motif },
+      }),
+    ),
+    prisma.dossierEvent.create({
+      data: {
+        dossierId: dossier.id,
+        type: "ANALYSE",
+        detail: `${cibles.length} faille(s) écartée(s) par le juriste — motif : ${motif}.`,
       },
     }),
   ]);

@@ -257,6 +257,10 @@ model DossierFaille {
   // signalement} — affichée au juriste, jamais utilisée pour générer une
   // lettre (templates ACTIVE uniquement).
   suggestionIa Json?
+  // Motif d'écartement saisi par le juriste (Lot 2.3) : alimente l'apprentissage
+  // du filtre de veille (une faille souvent écartée pour un même motif est un
+  // signal). Optionnel — historique sans motif conservé (null).
+  motifEcartement String? @db.Text
 
   dossier Dossier         @relation(fields: [dossierId], references: [id], onDelete: Cascade)
   faille  FailleJuridique @relation(fields: [failleId], references: [id])

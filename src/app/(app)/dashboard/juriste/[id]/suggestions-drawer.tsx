@@ -25,6 +25,8 @@ export function SuggestionsDrawer({
   lettreCombine,
   lettrePrincipale,
   derniereVerification = null,
+  contradictions = [],
+  moyensEcartes = [],
 }: {
   dossierId: string;
   candidats: CandidatDto[];
@@ -35,6 +37,9 @@ export function SuggestionsDrawer({
   lettreCombine: string | null;
   lettrePrincipale: string | null;
   derniereVerification?: string | null;
+  contradictions?: { cle: string; message: string }[];
+  /** Moyens écartés par le plafond de moyens (non tronqués en silence). */
+  moyensEcartes?: { failleId: string; titreFaille: string }[];
 }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
@@ -122,6 +127,7 @@ export function SuggestionsDrawer({
                   dossierId={dossierId}
                   candidats={candidats}
                   lectureSeule={lectureSeule}
+                  contradictions={contradictions}
                 />
               </div>
             </section>
@@ -157,6 +163,26 @@ export function SuggestionsDrawer({
                 </div>
               )}
               <div className="mt-3 flex flex-col gap-3">
+                {moyensEcartes.length > 0 && (
+                  <div
+                    data-testid="moyens-ecartes"
+                    className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-600"
+                  >
+                    <p className="font-semibold text-zinc-800">
+                      {moyensEcartes.length} autre(s) moyen(s) non assemblé(s)
+                    </p>
+                    <ul className="mt-1 list-disc pl-4">
+                      {moyensEcartes.map((m) => (
+                        <li key={m.failleId}>{m.titreFaille}</li>
+                      ))}
+                    </ul>
+                    <p className="mt-1">
+                      La lettre est limitée à {lettresProposees.length} moyen(s)
+                      (au-delà, l&apos;argumentaire se dilue). Ces moyens restent
+                      disponibles dans le générateur de lettre.
+                    </p>
+                  </div>
+                )}
                 {lettresProposees.map((lp) => (
                   <div
                     key={lp.failleId}

@@ -28,6 +28,8 @@ interface FailleDto {
   jurisprudence: JurisprudenceRef[] | null;
   createdAt: Date;
   deLaVeille?: boolean;
+  /** Historique de résultat (Lot 2.5) : dossiers gagnés / perdus. */
+  historique?: { gagnes: number; perdus: number };
 }
 
 interface FaillesListProps {
@@ -164,6 +166,17 @@ export function FaillesList({
                             title="Aucune règle de détection : cette faille ne sera jamais proposée automatiquement par le moteur — seule l'analyse IA peut la faire remonter."
                           >
                             Détection auto : à définir
+                          </span>
+                        )}
+                      {faille.historique &&
+                        faille.historique.gagnes + faille.historique.perdus > 0 && (
+                          <span
+                            className="rounded-full bg-zinc-100 px-2.5 py-0.5 font-medium text-zinc-700"
+                            data-testid="chip-historique"
+                            title="Dossiers clôturés ayant retenu cette faille : acceptés / rejetés par l'administration. Indicateur de résultat, jamais une probabilité."
+                          >
+                            Résultat : {faille.historique.gagnes} accepted(ies) /{" "}
+                            {faille.historique.perdus} rejet(é)s
                           </span>
                         )}
                       {faille.deLaVeille && (
