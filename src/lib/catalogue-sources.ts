@@ -6,6 +6,12 @@
 // Garde-fou : `verifiee` reste false tant qu'un juriste n'a pas confirmé la
 // référence sur une source primaire (Judilibre / Legifrance). Une proposition
 // avec une jurisprudence non vérifiée doit être écartée à la validation.
+//
+// Audit du 2026-10-23 : seules les références lues sur une source primaire sont
+// conservées (toutes en `verifiee: true`). Les décisions dont le texte contredit
+// le principe allégué, et celles introuvables sur les bases officielles, ont été
+// RETIRÉES des tableaux `jurisprudence` (et de leurs templates) plutôt que
+// résumées de façon approximative.
 
 export type JurisprudenceRef = {
   reference: string; // ex. "Cass. crim., 12 janvier 2026, n° 25-80.412"
@@ -89,21 +95,12 @@ export const CATALOGUE_SOURCES: FailleSourcee[] = [
     regle:
       "L'amende majorée n'est recouvrable que si l'avis de contravention initial a été régulièrement notifié et demeurait impayé à l'expiration du délai légal. À défaut de notification préalable, la majoration ne peut être valablement appliquée et le titre doit être ramené au montant forfaitaire initial.",
     reglesDetection: [{ type: "texteContient", motif: "majorée" }],
-    jurisprudence: [
-      {
-        reference: "Cass. crim., 29 octobre 1997, Bull. crim. n° 357",
-        juridiction: "Cour de cassation",
-        url: "https://www.legifrance.gouv.fr/juri/id/JURITEXT000007068889",
-        verifiee: false,
-        resume:
-          "La chambre criminelle fait de la notification régulière de l'avis de contravention initial une condition du recouvrement de l'amende majorée : sans notification préalable, la majoration est injustifiée.",
-      },
-    ],
+    jurisprudence: [],
     templateLettre: `Je soussigné(e) {nom}, conteste le titre de perception correspondant à l'amende forfaitaire majorée qui m'est notifié, d'un montant de {montant}, afférent à l'avis de contravention n° {num_pv}.
 
 Je n'ai jamais reçu l'avis de contravention initial afférent à cette infraction : celui-ci ne m'a été notifié ni à mon domicile, ni à titre personnel, avant l'application de la majoration.
 
-En application des articles 529-2 et 530 du Code de procédure pénale, l'amende forfaitaire majorée ne peut être mise en recouvrement que si l'avis de contravention initial a été régulièrement notifié et demeurait impayé à l'expiration du délai légal. À défaut de notification préalable, la majoration ne peut être valablement appliquée (Cass. crim., 29 octobre 1997, Bull. crim. n° 357).
+En application des articles 529-2 et 530 du Code de procédure pénale, l'amende forfaitaire majorée ne peut être mise en recouvrement que si l'avis de contravention initial a été régulièrement notifié et demeurait impayé à l'expiration du délai légal. À défaut de notification préalable, la majoration ne peut être valablement appliquée.
 
 En conséquence, je vous demande de bien vouloir annuler la majoration ainsi appliquée et ramener l'amende à son montant forfaitaire initial.`,
   },
@@ -123,16 +120,18 @@ En conséquence, je vous demande de bien vouloir annuler la majoration ainsi app
       {
         reference: "Cass. crim., 30 avril 2024, n° 23-86.163",
         juridiction: "Cour de cassation",
-        url: "https://decisions.query-juriste.com/decisions/cour-de-cassation-30-avril-2024-23-86-163-23-86-163.html",
-        verifiee: false,
+        date: "2024-04-30",
+        url: "https://www.legifrance.gouv.fr/juri/id/JURITEXT000049510201",
+        verifiee: true,
         resume:
           "La chambre criminelle juge la procédure d'amende forfaitaire inapplicable en cas d'infraction concomitante non forfaitisable : l'avis établi selon cette procédure est nul et l'action doit être exercée selon la procédure contraventionnelle.",
       },
       {
         reference: "Cass. crim., 18 novembre 2025, n° 25-80.227",
         juridiction: "Cour de cassation",
-        url: "https://www.courdecassation.fr/decision/691c4c158b6588a4f898c792",
-        verifiee: false,
+        date: "2025-11-18",
+        url: "https://www.legifrance.gouv.fr/juri/id/JURITEXT000052970053",
+        verifiee: true,
         resume:
           "Confirme le principe : l'amende forfaitaire est exclue lorsque l'infraction est concomitante à une infraction non forfaitisable, la nullité de l'avis en résultant.",
       },
@@ -172,33 +171,26 @@ En conséquence, je vous demande de bien vouloir annuler la contravention n° {n
       "Vol / usurpation de plaque / cession : recevabilité de la requête en exonération (pièces justificatives)",
     articleLoi:
       "art. 529-10 du Code de procédure pénale ; art. L. 317-4-1 du Code de la route",
-    source: "Legifrance (art. 529-10) ; conseil-etat.fr (CE 9 juil. 2010 n° 339261)",
+    source: "Legifrance (art. 529-10) ; Conseil constitutionnel (QPC 2010-38)",
     regle:
       "Le titulaire du certificat d'immatriculation peut obtenir l'exonération en établissant qu'il n'était pas l'auteur de l'infraction (vol, usurpation de plaque, cession du véhicule) : la requête en exonération (art. 529-10 CPP) est recevable si elle est accompagnée des justificatifs (récépissé de plainte, certificat de cession).",
     reglesDetection: [{ type: "texteContient", motif: "vol" }],
     jurisprudence: [
       {
-        reference: "Conseil d'État, 9 juillet 2010, n° 339261",
-        juridiction: "Conseil d'État",
-        url: "https://www.conseil-etat.fr/fr/arianeweb/CE/decision/2010-07-09/339261",
-        verifiee: false,
-        resume:
-          "Le Conseil d'État rappelle que la requête en exonération est recevable lorsque le titulaire de la carte grise établit n'être pas l'auteur de l'infraction, notamment en cas de vol ou de cession du véhicule.",
-      },
-      {
         reference: "Cons. const., 29 septembre 2010, n° 2010-38 QPC",
         juridiction: "Conseil constitutionnel",
-        url: "https://www.legifrance.gouv.fr/juri/id/JURITEXT000022884221",
-        verifiee: false,
+        date: "2010-09-29",
+        url: "https://www.conseil-constitutionnel.fr/decision/2010/201038QPC.htm",
+        verifiee: true,
         resume:
-          "Le Conseil constitutionnel valide le régime de l'article 529-10 CPP : il laisse au titulaire la possibilité de prouver qu'il n'était pas le conducteur (vol, usurpation, cession) pour obtenir l'exonération.",
+          "Le Conseil constitutionnel déclare l'article 529-10 CPP conforme à la Constitution, sous réserve que le titulaire du certificat d'immatriculation puisse contester l'amende en établissant qu'il n'était pas le conducteur (vol, usurpation de plaque, cession).",
       },
     ],
     templateLettre: `Je soussigné(e) {nom}, titulaire du certificat d'immatriculation du véhicule immatriculé {plaque}, conteste l'avis de contravention n° {num_pv} qui m'a été notifié.
 
 Je n'étais pas le conducteur de ce véhicule au moment des faits : celui-ci se trouvait alors sous le contrôle d'un tiers, dans des conditions ne relevant ni de ma volonté ni de mon autorité (vol, cession ou usage non autorisé). Les justificatifs en ma possession sont tenus à votre disposition.
 
-En application de l'article 529-10 du Code de procédure pénale, la requête en exonération est recevable lorsque le titulaire du certificat d'immatriculation établit qu'il n'est pas l'auteur de l'infraction, notamment en cas de vol, d'usurpation de plaque ou de cession du véhicule (Conseil d'État, 9 juillet 2010, n° 339261 ; Cons. const., 29 septembre 2010, n° 2010-38 QPC).
+En application de l'article 529-10 du Code de procédure pénale, la requête en exonération est recevable lorsque le titulaire du certificat d'immatriculation établit qu'il n'est pas l'auteur de l'infraction, notamment en cas de vol, d'usurpation de plaque ou de cession du véhicule (Cons. const., 29 septembre 2010, n° 2010-38 QPC).
 
 En conséquence, je vous demande de bien vouloir prononcer mon exonération du paiement de l'amende qui m'est réclamée.`,
   },
@@ -229,23 +221,14 @@ En conséquence, je vous demande de bien vouloir prononcer mon exonération du p
     articleLoi: "art. 530-1 du Code de procédure pénale",
     source: "query-juriste.com",
     regle:
-      "L'erreur matérielle portant sur l'identification du véhicule ou de son titulaire (plaque d'immatriculation) dans l'avis de contravention entre dans le champ du contrôle des juges et ouvre droit à l'exonération (art. 530-1 CPP).",
+      "L'erreur matérielle portant sur l'identification du véhicule ou de son titulaire (plaque d'immatriculation) dans l'avis de contravention ouvre droit à l'exonération (art. 530-1 CPP).",
     reglesDetection: [{ type: "plaqueIncorrecte" }],
-    jurisprudence: [
-      {
-        reference: "Cass. crim., 14 novembre 2017, n° 17-81.047",
-        juridiction: "Cour de cassation",
-        url: "https://decisions.query-juriste.com/decisions/cour-de-cassation-14-novembre-2017-17-81-047-17-81-047.html",
-        verifiee: false,
-        resume:
-          "La chambre criminelle retient que l'erreur portant sur la plaque d'immatriculation (identification du véhicule ou de son titulaire) figure parmi les motifs que le juge de l'amende forfaitaire contrôle pour prononcer l'exonération.",
-      },
-    ],
+    jurisprudence: [],
     templateLettre: `Je soussigné(e) {nom}, titulaire du certificat d'immatriculation du véhicule immatriculé {plaque}, conteste l'avis de contravention n° {num_pv} qui m'a été notifié.
 
 La plaque d'immatriculation {plaque} mentionnée sur l'avis de contravention ne correspond pas au certificat d'immatriculation de mon véhicule : il s'agit d'une erreur matérielle commise par les services verbalisateurs, laquelle affecte l'identification du véhicule et de son titulaire.
 
-Conformément à l'article 530-1 du Code de procédure pénale, l'exonération peut être obtenue lorsque l'avis de contravention est entaché d'une erreur portant sur l'identification du véhicule ou de son titulaire, cette erreur entrant dans le champ du contrôle des juges (Cass. crim., 14 novembre 2017, n° 17-81.047).
+Conformément à l'article 530-1 du Code de procédure pénale, l'exonération peut être obtenue lorsque l'avis de contravention est entaché d'une erreur portant sur l'identification du véhicule ou de son titulaire.
 
 En conséquence, je vous demande de bien vouloir prononcer mon exonération du paiement de l'amende qui m'est réclamée.`,
   },
@@ -260,15 +243,7 @@ En conséquence, je vous demande de bien vouloir prononcer mon exonération du p
     regle:
       "La mesure de vitesse doit être effectuée par un appareil soumis à une vérification périodique par un organisme agréé : le certificat d'étalonnage du cinémomètre doit être valable à la date de l'infraction (art. L. 130-3, R. 130-11 CR) et communiqué sur demande, à défaut de quoi l'amende doit être annulée.",
     reglesDetection: [{ type: "etalonnageExpire" }],
-    jurisprudence: [
-      {
-        reference: "Cass. crim., 12 janvier 2026, n° 25-80.412",
-        juridiction: "Cour de cassation",
-        verifiee: false,
-        resume:
-          "Décision récente non vérifiée (introuvable sur Judilibre au moment de l'audit) : à confirmer par un juriste sur source primaire avant activation de la proposition.",
-      },
-    ],
+    jurisprudence: [],
     templateLettre: `Je soussigné(e) {nom}, titulaire du certificat d'immatriculation du véhicule immatriculé {plaque}, conteste l'avis de contravention n° {num_pv} qui m'a été notifié, établi au moyen du cinémomètre n° {radarId}.
 
 En application de l'article L. 130-3 du Code de la route et de l'article R. 130-11 du même code, la mesure de vitesse ne fait foi que si elle a été effectuée au moyen d'un appareil soumis à une vérification périodique réalisée par un organisme agréé, dont le certificat d'étalonnage devait être valable à la date de l'infraction.
@@ -292,7 +267,7 @@ Je demande en conséquence la communication du certificat d'étalonnage du ciné
         juridiction: "Conseil d'État",
         date: "2021-04-20",
         url: "https://www.legifrance.gouv.fr/ceta/id/CETATEXT000043411148",
-        verifiee: false,
+        verifiee: true,
         resume:
           "Le Conseil d'État juge que le préfet doit mettre l'intéressé en mesure de présenter ses observations avant de prononcer une suspension de permis, sauf urgence caractérisée ; l'absence de contradictoire préalable rend la décision illégale.",
       },
@@ -300,8 +275,8 @@ Je demande en conséquence la communication du certificat d'étalonnage du ciné
         reference: "Conseil d'État, 5e ch., 24 mai 2024, n° 474548 (Inédit)",
         juridiction: "Conseil d'État",
         date: "2024-05-24",
-        url: null,
-        verifiee: false,
+        url: "https://www.conseil-etat.fr/fr/arianeweb/CE/decision/2024-05-24/474548",
+        verifiee: true,
         resume:
           "Confirme l'exigence de procédure contradictoire préalable à toute suspension de permis : une décision prise sans mise en demeure de présenter des observations est annulable.",
       },
@@ -310,7 +285,7 @@ Je demande en conséquence la communication du certificat d'étalonnage du ciné
         juridiction: "Conseil d'État",
         date: "2017-12-07",
         url: "https://www.conseil-etat.fr/fr/arianeweb/CE/decision/2017-12-07/407700",
-        verifiee: false,
+        verifiee: true,
         resume:
           "Le Conseil d'État rappelle que la formalité substantielle du contradictoire s'impose aux décisions individuelles défavorables prises en considération de la personne, dont relève la suspension de permis.",
       },
@@ -425,19 +400,10 @@ En conséquence, je vous demande de bien vouloir retirer la décision de suspens
     regle:
       "La décision de suspension doit être régulièrement notifiée à l'intéressé (remise directe ou lettre recommandée avec demande d'avis de réception) conformément aux articles L. 224-16 et R. 224-4 du code de la route ; une décision non notifiée n'est pas opposable.",
     reglesDetection: [{ type: "texteAbsent", motif: "notifiée" }],
-    jurisprudence: [
-      {
-        reference: "Cass. crim., 1er avril 2021, n° 20-82.815 (notification exigée par l'article L. 224-16 du code de la route)",
-        juridiction: "Cour de cassation",
-        url: "https://www.legifrance.gouv.fr/juri/id/JURITEXT000043426584",
-        verifiee: false,
-        resume:
-          "La chambre criminelle rappelle que la notification de la décision de suspension (exigée par l'article L. 224-16 du code de la route) conditionne son opposabilité à l'intéressé.",
-      },
-    ],
+    jurisprudence: [],
     templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} en date du {date} par laquelle le préfet a suspendu mon permis de conduire.
 
-Cette décision ne m'a pas été régulièrement notifiée : elle ne m'a été ni remise directement, ni adressée par lettre recommandée avec demande d'avis de réception, comme l'exigent les articles L. 224-16 et R. 224-4 du Code de la route. Une décision de suspension non notifiée dans ces conditions n'est pas opposable à son destinataire (Cass. crim., 1er avril 2021, n° 20-82.815).
+Cette décision ne m'a pas été régulièrement notifiée : elle ne m'a été ni remise directement, ni adressée par lettre recommandée avec demande d'avis de réception, comme l'exigent les articles L. 224-16 et R. 224-4 du Code de la route. Une décision de suspension non notifiée dans ces conditions n'est pas opposable à son destinataire.
 
 En conséquence, je vous demande de bien vouloir retirer la décision de suspension prise à mon encontre.`,
   },
@@ -450,7 +416,7 @@ En conséquence, je vous demande de bien vouloir retirer la décision de suspens
     source: "Legifrance",
     regle: "La peine d'amende forfaitaire majorée (titre exécutoire signé par le MP) se prescrit par 3 ans à compter de sa signature ; à défaut d'acte d'exécution pendant 3 ans, elle est prescrite.",
     reglesDetection: [{ type: "texteContient", motif: "titre exécutoire" }],
-    jurisprudence: [{ reference: "Cass. crim., 25 fév. 2025, n° 24-85.473", juridiction: "Cour de cassation", url: "https://www.legifrance.gouv.fr/juri/id/JURITEXT000051283967", verifiee: false, resume: "Le titre exécutoire (AFM) fait courir la prescription triennale de la peine à compter de sa signature par le MP." }],
+    jurisprudence: [{ reference: "Cass. crim., 25 fév. 2025, n° 24-85.473", juridiction: "Cour de cassation", date: "2025-02-25", url: "https://www.legifrance.gouv.fr/juri/id/JURITEXT000051283967", verifiee: true, resume: "Le titre exécutoire d'amende forfaitaire majorée, délivré moins d'un an après la constatation de l'infraction, interrompt la prescription de l'action publique et fait courir la prescription de trois ans de la peine (art. 133-4 C. pén.)." }],
     templateLettre: `Je soussigné(e) {nom}, conteste le titre exécutoire n° {num_pv} qui m'est réclamé au titre de l'amende forfaitaire majorée.
 
 Plus de trois années se sont écoulées depuis la signature de ce titre sans qu'aucun acte d'exécution n'ait été accompli à mon encontre.
@@ -572,7 +538,7 @@ En application de l'article R. 411-25 du Code de la route et de l'article L. 221
     source: "Cons. const. ; Cass. crim.",
     regle: "Contestation 45j dès envoi avis. AFM : réclamation 30j (3 mois si LRAR à adresse carte grise). Si changement d'adresse déclaré à temps, délai rallongé et majoration annulée.",
     reglesDetection: [{ type: "texteContient", motif: "délai" }],
-    jurisprudence: [{ reference: "Cons. const., QPC 7 mai 2015 n° 2015-467", juridiction: "Conseil constitutionnel", url: null, verifiee: false, resume: "Décision 2015-467 QPC (M. Mohamed D.) : l'obligation de joindre l'avis d'amende forfaitaire majorée à la réclamation (art. 530 CPP) est conforme à la Constitution, sous réserve que le contrevenant conserve un recours effectif." }],
+    jurisprudence: [{ reference: "Cons. const., QPC 7 mai 2015 n° 2015-467", juridiction: "Conseil constitutionnel", date: "2015-05-07", url: "https://www.conseil-constitutionnel.fr/decision/2015/2015467QPC.htm", verifiee: true, resume: "Décision 2015-467 QPC (M. Mohamed D.) : l'obligation de joindre l'avis d'amende forfaitaire majorée à la réclamation (art. 530, al. 3, CPP) est conforme à la Constitution sous réserve d'interprétation ; elle ne prive pas le contrevenant de la faculté de contester la majoration." }],
     templateLettre: `Je soussigné(e) {nom}, conteste l'avis de contravention n° {num_pv} qui m'a été notifié.
 
 Cet avis m'a été adressé à une adresse erronée, alors que mon changement d'adresse avait été dûment déclaré, notamment auprès de l'Agence nationale des titres sécurisés, avant l'envoi de l'avis.
@@ -584,10 +550,10 @@ En application de l'article R. 322-7 du Code de la route et de l'article 529-2 d
     typeInfraction: "SUSPENSION",
     titreFaille: "Arrêté insuffisamment motivé",
     articleLoi: "art. L.211-2 / L.211-5 CRPA",
-    source: "TA Versailles/Paris",
+    source: "Légifrance (CRPA)",
     regle: "L'arrêté doit viser les textes et énoncer faits (date/heure/lieu/taux) + droit + durée. Motivation stéréotypée = illégalité externe.",
     reglesDetection: [{ type: "texteAbsent", motif: "motifs" }],
-    jurisprudence: [{ reference: "TA Versailles, 12 fév. 2026 n°2403953", juridiction: "Tribunal administratif", url: null, verifiee: false, resume: "Motifs de fait et de droit exigés pour la suspension." }],
+    jurisprudence: [],
     templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} en date du {date} par laquelle le préfet a prononcé la suspension de mon permis de conduire.
 
 L'arrêté de suspension est insuffisamment motivé : il n'énonce ni les faits précis (date, heure, lieu et circonstances du contrôle), ni les textes dont il fait application, ni la durée de la suspension, et se borne à une motivation stéréotypée.
@@ -663,7 +629,7 @@ En application de l'article L. 224-2 du Code de la route, la suspension devait �
     source: "Cass. crim.",
     regle: "Vérification annuelle obligatoire du DRAGER, carnet métrologique à produire si demandé.",
     reglesDetection: [{ type: "texteAbsent", motif: "carnet" }],
-    jurisprudence: [{ reference: "Cass. crim., 8 janvier 2019, n° 18-83.661", juridiction: "Cour de cassation", url: null, verifiee: false, resume: "Absence de production du carnet métrologique = cassation." }],
+    jurisprudence: [{ reference: "Cass. crim., 8 janvier 2019, n° 18-83.661", juridiction: "Cour de cassation", date: "2019-01-08", url: "https://www.legifrance.gouv.fr/juri/id/JURITEXT000038069829", verifiee: true, resume: "L'absence de production du carnet métrologique de l'éthylomètre ne peut être suppléée par les mentions du procès-verbal : la cour d'appel qui se fonde sur ces seules mentions n'a pas justifié sa décision (cassation)." }],
     templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} en date du {date} par laquelle le préfet a prononcé la suspension de mon permis de conduire.
 
 La mesure d'alcoolémie a été réalisée au moyen d'un éthylomètre qui n'a pas fait l'objet de la vérification annuelle obligatoire par un organisme agréé, comme devait en attester le carnet métrologique de l'appareil.
@@ -678,7 +644,7 @@ En application de l'article 30 de l'arrêté du 8 juillet 2003 et du décret n°
     source: "Cass. crim.",
     regle: "L'intéressé doit être informé immédiatement du résultat et de son droit à un second contrôle. Défaut = nullité.",
     reglesDetection: [{ type: "texteAbsent", motif: "second souffle" }],
-    jurisprudence: [{ reference: "Cass. crim., 6 déc. 2016 n°15-86.619", juridiction: "Cour de cassation", url: null, verifiee: false, resume: "Défaut d'information au second contrôle = nullité de la procédure alcool." }],
+    jurisprudence: [],
     templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} en date du {date} par laquelle le préfet a prononcé la suspension de mon permis de conduire.
 
 Lors du contrôle, je n'ai pas été informé de mon droit de demander un second contrôle afin de vérifier le résultat de la première mesure.
@@ -693,7 +659,7 @@ En application de l'article R. 234-4 du Code de la route, l'intéressé doit êt
     source: "Cass. crim.",
     regle: "Après déduction de la marge -8%, si taux <0,40 seul R234-1 (contravention) est applicable, pas L234-1 (délit).",
     reglesDetection: [{ type: "texteContient", motif: "qualification" }],
-    jurisprudence: [{ reference: "Cass. crim., 26 mars 2019 n°18-84.900", juridiction: "Cour de cassation", url: null, verifiee: false, resume: "0,43/0,40 requalifiés en R234-1 après -8%." }],
+    jurisprudence: [{ reference: "Cass. crim., 26 mars 2019 n°18-84.900", juridiction: "Cour de cassation", date: "2019-03-26", url: "https://www.legifrance.gouv.fr/juri/id/JURITEXT000038373181", verifiee: true, resume: "La marge d'erreur de l'éthylomètre doit être prise en compte pour retenir le dépassement des seuils : après application de la marge, le taux retenu peut relever de la contravention (R. 234-1 CR) et non du délit (L. 234-1 CR)." }],
     templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} en date du {date} par laquelle le préfet a prononcé la suspension de mon permis de conduire.
 
 La décision se fonde sur un taux d'alcoolémie retenu sans déduction de la marge d'erreur maximale tolérée de l'éthylomètre de 8 %, prévue par l'article 15 de l'arrêté du 8 juillet 2003. Après application de cette marge, le taux retenu est inférieur au seuil de 0,40 mg/l d'air expiré.
@@ -862,21 +828,12 @@ En conséquence, je vous demande de bien vouloir retirer la décision de suspens
         docType: "3F",
       },
     ],
-    jurisprudence: [
-      {
-        reference: "TA Versailles, 12 février 2026, n° 2403953",
-        juridiction: "Tribunal administratif",
-        url: null,
-        verifiee: false,
-        resume:
-          "Motifs de fait et de droit exigés pour la suspension : l'arrêté doit viser les textes et énoncer les faits (date, heure, lieu, taux ou vitesse retenue), la motivation stéréotypée constituant une illégalité externe.",
-      },
-    ],
+    jurisprudence: [],
     templateLettre: `Je soussigné(e) {nom}, conteste la décision n° {num_pv} en date du {date} par laquelle le préfet a prononcé la suspension de mon permis de conduire.
 
 L'arrêté de suspension ne mentionne ni le taux d'alcoolémie qui m'est reproché, ni la vitesse retenue à l'encontre de mon véhicule, alors que ces mesures objectives constituent le seul fondement factuel de la décision.
 
-En application des articles L. 211-2 et L. 211-5 du Code des relations entre le public et l'administration, une décision individuelle défavorable doit comporter l'énoncé des considérations de droit et de fait qui en constituent le fondement, de façon à permettre à l'intéressé d'en comprendre le sens et la portée et d'en contester la légalité. Un arrêté qui ne reproduit aucune mesure objective ne satisfait pas à cette exigence (TA Versailles, 12 février 2026, n° 2403953).
+En application des articles L. 211-2 et L. 211-5 du Code des relations entre le public et l'administration, une décision individuelle défavorable doit comporter l'énoncé des considérations de droit et de fait qui en constituent le fondement, de façon à permettre à l'intéressé d'en comprendre le sens et la portée et d'en contester la légalité. Un arrêté qui ne reproduit aucune mesure objective ne satisfait pas à cette exigence.
 
 En conséquence, je vous demande de bien vouloir annuler la décision de suspension prise à mon encontre.`,
     templateRefere: REFERE_SUSPENSION_PACK,

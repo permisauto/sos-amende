@@ -157,7 +157,7 @@ de l'avis) — sinon l'écarter (INACTIVE).
 
 Le parcours produit existe (type-aware, LRAR préfet, délai 2 mois). Le catalogue
 (`src/lib/catalogue-sources.ts`) porte **3 propositions SUSPENSION**
-(`verifiee: false` — jurisprudences à confirmer sur Legifrance avant activation),
+(jurisprudences vérifiées sur source primaire le 2026-10-23),
 auxquelles le pack 3F/48SI (§I) en ajoute **6 autres**. Elles arrivent en
 `PROPOSEE` par l'auto-alimentation ; le moteur ne les utilise **jamais** tant
 qu'elles ne sont pas `ACTIVE` (les 4 ids du pack sont injectés automatiquement,
@@ -165,9 +165,9 @@ cf. §I).
 
 | Motif | Article (source) | Jurisprudence | Statut |
 |---|---|---|---|
-| Suspension **sans procédure contradictoire préalable** | art. **L. 121-1 + L. 211-2 CRPA** ; art. **L. 224-2 CR** | **CE 20 avr. 2021 n° 438114** (texte intégral Legifrance) ; CE 24 mai 2024 n° 474548 ; CE 7 déc. 2017 n° 407700 | `PROPOSEE` — à vérifier |
-| Suspension pour alcoolémie **sans marge d'erreur éthylomètre (8 %)** | art. **L. 224-2 + L. 234-1 CR** ; art. 15 **arrêté du 8 juil. 2003** | **CE 14 févr. 2018 n° 407914** ; Cass. crim., 26 mars 2019, n° 18-84.900 | `PROPOSEE` — à vérifier |
-| Décision de suspension **non notifiée** | art. **L. 224-16 + R. 224-4 CR** | Cass. crim., 1er avr. 2021, n° 20-82.815 | `PROPOSEE` — à vérifier |
+| Suspension **sans procédure contradictoire préalable** | art. **L. 121-1 + L. 211-2 CRPA** ; art. **L. 224-2 CR** | **CE 20 avr. 2021 n° 438114** (CETATEXT000043411148) ; **CE 24 mai 2024 n° 474548** ; **CE 7 déc. 2017 n° 407700** | `PROPOSEE` — jurisprudences vérifiées |
+| Suspension pour alcoolémie **sans marge d'erreur éthylomètre (8 %)** | art. **L. 224-2 + L. 234-1 CR** ; art. 15 **arrêté du 8 juil. 2003** | **CE 14 févr. 2018 n° 407914** (CETATEXT000036601993) ; **Cass. crim., 26 mars 2019, n° 18-84.900** (JURITEXT000038373181) | `PROPOSEE` — jurisprudences vérifiées |
+| Décision de suspension **non notifiée** | art. **L. 224-16 + R. 224-4 CR** | *référence retirée* : la décision Cass. crim., 1er avr. 2021, n° 20-82.815 est introuvable sur les bases officielles | `PROPOSEE` — fondement textuel seul |
 
 Thèmes restant **à couvrir** (à rédiger par un juriste) : invalidation du permis
 (médical), avis de la commission médicale, recours gracieux au préfet sur les
@@ -282,15 +282,15 @@ juriste avant toute activation** (pas de jurisprudence non vérifiée).
 | Motif / faille | Article (source) | Jurisprudence trouvée | Source consultée | Statut |
 |---|---|---|---|---|
 | Mentions obligatoires de l'avis de contravention | art. **A. 37-1 CPP**, **A. 37-4 CPP** (LEGIARTI000024079513 / …4499) ; art. **429 CPP** (PV constaté personnellement, LEGIARTI000006576551) | — | legifrance.gouv.fr | `V` (articles) |
-| Nullité de l'avis si procédure d'amende forfaitaire **inapplicable** (infraction concomitante non forfaitisable) | art. **529 CPP** | Cass. crim., 30 avr. 2024, n° 23-86.163 ; Cass. crim., 18 nov. 2025, n° 25-80.227 (cassation sans renvoi, avis nul) | query-juriste.com ; kohenavocats.com (renvoie vers courdecassation.fr/decision/691c4c158b6588a4f898c792) | `À VÉRIFIER` (sources secondaires) |
-| Amende **majorée** non notifiée / réclamation | art. **530 CPP** (LEGIARTI000048844676), art. **529-2 CPP** (LEGIARTI000048844668) | Cass. crim., 29 oct. 1997, Bull. crim. n° 357 (annulation du titre exécutoire par l'OMP) | legifrance.gouv.fr (articles) ; village-justice.com | `V` (articles) / `À VÉRIFIER` (jurisprudence) |
-| Recevabilité requête en exonération (vol, usurpation de plaque, cession, destruction…) | art. **529-10 CPP** (LEGIARTI000043375922) | Cons. const., 29 sept. 2010, n° 2010-38 QPC (conforme à la Constitution) ; Conseil d'État, 9 juil. 2010, n° 339261 (application de l'art. 529-10) | legifrance.gouv.fr ; conseil-etat.fr ; lexbase.fr | `V` (art. 529-10, CE 339261) / `À VÉRIFIER` (QPC) |
+| Nullité de l'avis si procédure d'amende forfaitaire **inapplicable** (infraction concomitante non forfaitisable) | art. **529 CPP** | Cass. crim., 30 avr. 2024, n° 23-86.163 (JURITEXT000049510201) ; Cass. crim., 18 nov. 2025, n° 25-80.227 (JURITEXT000052970053) — cassations sans renvoi, avis nul | legifrance.gouv.fr (textes intégrés lus) | `V` |
+| Amende **majorée** non notifiée / réclamation | art. **530 CPP** (LEGIARTI000048844676), art. **529-2 CPP** (LEGIARTI000048844668) | *référence retirée* : Cass. crim., 29 oct. 1997, Bull. crim. n° 357 (n° 97-81904) porte sur l'obligation de joindre l'**original de l'avis** à la réclamation, pas sur la notification | legifrance.gouv.fr (articles) | `V` (articles) — faille conservée sans jurisprudence |
+| Recevabilité requête en exonération (vol, usurpation de plaque, cession, destruction…) | art. **529-10 CPP** (LEGIARTI000043375922) | Cons. const., 29 sept. 2010, n° 2010-38 QPC (conforme **sous réserve**, consid. 7) | conseil-constitutionnel.fr (décision lue) | `V` — CE 9 juil. 2010 n° 339261 retiré (simple décision de **renvoi QPC**) |
 | Usurpation de plaque (délit) | art. **L. 317-4-1 CR** | — | mesamendes.fr (article cité) | `À VÉRIFIER` (article à confirmer sur Legifrance) |
-| Erreur de plaque d'immatriculation | art. **530-1 CPP** ; art. **L. 121-3 CR** (responsabilité pécuniaire du titulaire) | Cass. crim., 14 nov. 2017, n° 17-81.047 (champ du contrôle des juges) | query-juriste.com | `À VÉRIFIER` (source secondaire) |
-| Certificat d'étalonnage du cinémomètre | art. **L. 130-3 CR** ; art. **R. 130-11 CR** (vérification périodique par organisme agréé) | Cass. crim., 12 janv. 2026, n° 25-80.412 (relaxe faute de production du certificat) — **non retrouvée sur Judilibre** | contraventionavocat.fr (blog) ; legifrance | `À VÉRIFIER` (jurisprudence non confirmée) |
-| **Suspension sans procédure contradictoire préalable** | art. **L. 121-1 + L. 211-2 CRPA** (CRPA 2015, reprise loi 11 juil. 1979) ; art. **L. 224-1 / L. 224-2 CR** | **CE, 5e ch., 20 avr. 2021, n° 438114** (texte intégral) ; CE, 5e ch., 24 mai 2024, n° 474548 (Inédit) ; CE, 7 déc. 2017, n° 407700 ; CE, 4 nov. 2016, n° 388030 ; CE, 28 sept. 2016, n° 390439 | legifrance.gouv.fr (CETATEXT000043411148) ; reinsdidier-avocat.com | `V` (CE 438114) / `À VÉRIFIER` (autres) |
-| **Suspension alcoolémie sans marge d'erreur éthylomètre** | art. **L. 224-2 + L. 234-1 CR** ; art. 15 **arrêté du 8 juil. 2003** (tolérance 8 % ≥ 0,40 mg/l) | **CE, 14 févr. 2018, n° 407914** (marge obligatoire pour le préfet) ; Cass. crim., 26 mars 2019, n° 18-84.900 (marge obligatoire pour le juge) | legifrance.gouv.fr (CETATEXT000036601993) ; ledall-avocat.fr ; capital.fr | `V` (CE 407914) / `À VÉRIFIER` (Cass. crim.) |
-| **Décision de suspension non notifiée** | art. **L. 224-16 CR** (notification exigée) ; **R. 224-1 à R. 224-4 CR** (avis de rétention, restitution LRAR) | Cass. crim. (notification exigée par L. 224-16 — ref. exacte à confirmer) | legifrance.gouv.fr (R. 224-1 / R. 224-4) ; ledall-avocat.fr | `V` (articles) / `À VÉRIFIER` (jurisprudence) |
+| Erreur de plaque d'immatriculation | art. **530-1 CPP** ; art. **L. 121-3 CR** (responsabilité pécuniaire du titulaire) | *référence retirée* : Cass. crim., 14 nov. 2017, n° 17-81.047 (JURITEXT000036051759) juge au contraire que les juges saisis d'une citation directe **n'ont pas à se prononcer sur la validité de l'avis** | legifrance.gouv.fr | `V` (articles) — faille conservée sans jurisprudence |
+| Certificat d'étalonnage du cinémomètre | art. **L. 130-3 CR** ; art. **R. 130-11 CR** (vérification périodique par organisme agréé) | *référence retirée* : Cass. crim., 12 janv. 2026, n° 25-80.412 introuvable sur Judilibre / Legifrance | legifrance.gouv.fr | `V` (articles) — faille conservée sans jurisprudence |
+| **Suspension sans procédure contradictoire préalable** | art. **L. 121-1 + L. 211-2 CRPA** (CRPA 2015, reprise loi 11 juil. 1979) ; art. **L. 224-1 / L. 224-2 CR** | **CE, 5e ch., 20 avr. 2021, n° 438114** (CETATEXT000043411148) ; **CE, 5e ch., 24 mai 2024, n° 474548** ; **CE, 7 déc. 2017, n° 407700** | legifrance.gouv.fr ; conseil-etat.fr | `V` |
+| **Suspension alcoolémie sans marge d'erreur éthylomètre** | art. **L. 224-2 + L. 234-1 CR** ; art. 15 **arrêté du 8 juil. 2003** (tolérance 8 % ≥ 0,40 mg/l) | **CE, 14 févr. 2018, n° 407914** (CETATEXT000036601993) ; **Cass. crim., 26 mars 2019, n° 18-84.900** (JURITEXT000038373181) | legifrance.gouv.fr | `V` |
+| **Décision de suspension non notifiée** | art. **L. 224-16 CR** (notification exigée) ; **R. 224-1 à R. 224-4 CR** (avis de rétention, restitution LRAR) | *référence retirée* : Cass. crim., 1er avr. 2021, n° 20-82.815 introuvable sur les bases officielles | legifrance.gouv.fr (R. 224-1 / R. 224-4) | `V` (articles) — faille conservée sans jurisprudence |
 
 **Notes** :
 - Les 4 failles seedées (section A) restent la base de travail. Ce brouillon
@@ -300,9 +300,15 @@ juriste avant toute activation** (pas de jurisprudence non vérifiée).
 - **Pas de nouvelle faille activée avant validation juriste** : l'insertion
   d'une faille se fait par l'admin (bibliothèque juridique unifiée) avec `reglesDetection`
   (ex. `texteContient` « majorée ») et un template rédigé/validé.
-- La **Jurisprudence du 12/01/2026 n° 25-80.412** est signalée **non
-  confirmée** : l'intégrer dans un produit uniquement si le juriste la
-  retrouve sur Judilibre, sinon l'écarter.
+- **Audit des références du 2026-10-23** : seules les décisions dont le texte a été
+  lu sur une source primaire restent citées (`verifiee: true` dans
+  `catalogue-sources.ts`). Ont été **retirées** — et non « approximées » — les
+  références dont le texte contredit le principe allégué (Cass. 29 oct. 1997
+  n° 97-81904, Cass. 14 nov. 2017 n° 17-81.047, Cass. 6 déc. 2016 n° 15-86.619,
+  CE 9 juil. 2010 n° 339261 qui n'est qu'un renvoi QPC) et celles introuvables
+  sur les bases officielles (Cass. 12 janv. 2026 n° 25-80.412, Cass. 1er avr.
+  2021 n° 20-82.815, TA Versailles 12 févr. 2026 n° 2403953). Les failles
+  concernées restent dans le catalogue, adossées à leurs seuls articles.
 ---
 
 ## I. PACK TÉLÉRECOURS 3F / 48SI (implémenté 2026-10-07)
