@@ -111,6 +111,29 @@ const { Client } = require("pg");
         ],
       ],
     );
+    // Failles AMENDE exploitables (règle dégagée + règles de détection +
+    // template rédigé) : le seed les laisse en PROPOSEE — c'est le comportement
+    // de production (l'admin les valide via « Synchroniser et activer »). En
+    // E2E, aucun admin ne valide, et le PV mock (OCR provider mock) ne
+    // déclencherait alors aucune détection → aucune lettre, et tous les specs
+    // d'analyse casseraient. On reproduit donc l'action admin : ces failles
+    // sont activées à chaque run (état déterministe, indépendant de
+    // l'historique de la base).
+    //
+    // On n'active que des failles réellement exploitables : sans règle de
+    // détection le moteur ne peut pas les proposer, sans template elles ne
+    // peuvent pas produire de lettre (garde-fou « lettre vide »).
+    await client.query(
+      `UPDATE "FailleJuridique"
+          SET statut = 'ACTIVE'
+        WHERE "typeInfraction" = 'AMENDE'
+          AND statut = 'PROPOSEE'
+          AND COALESCE(btrim("regle"), '') <> ''
+          AND COALESCE(btrim("templateLettre"), '') <> ''
+          AND "reglesDetection" IS NOT NULL
+          AND jsonb_typeof("reglesDetection") = 'array'
+          AND jsonb_array_length("reglesDetection") > 0`,
+    );
   } finally {
     await client.end();
   }
