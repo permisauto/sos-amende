@@ -414,14 +414,14 @@ En conséquence, je vous demande de bien vouloir retirer la décision de suspens
     titreFaille: "Prescription de la peine 3 ans (titre exécutoire)",
     articleLoi: "art. 133-4 du Code pénal ; art. 530 al.1 CPP",
     source: "Legifrance",
-    regle: "La peine d'amende forfaitaire majorée (titre exécutoire signé par le MP) se prescrit par 3 ans à compter de sa signature ; à défaut d'acte d'exécution pendant 3 ans, elle est prescrite.",
+    regle: "La peine d'amende forfaitaire majorée (titre exécutoire délivré par le MP) se prescrit par 3 ans à compter de la délivrance du titre exécutoire ; à défaut d'acte d'exécution pendant 3 ans, elle est prescrite.",
     reglesDetection: [{ type: "texteContient", motif: "titre exécutoire" }],
     jurisprudence: [{ reference: "Cass. crim., 25 fév. 2025, n° 24-85.473", juridiction: "Cour de cassation", date: "2025-02-25", url: "https://www.legifrance.gouv.fr/juri/id/JURITEXT000051283967", verifiee: true, resume: "Le titre exécutoire d'amende forfaitaire majorée, délivré moins d'un an après la constatation de l'infraction, interrompt la prescription de l'action publique et fait courir la prescription de trois ans de la peine (art. 133-4 C. pén.)." }],
     templateLettre: `Je soussigné(e) {nom}, conteste le titre exécutoire n° {num_pv} qui m'est réclamé au titre de l'amende forfaitaire majorée.
 
-Plus de trois années se sont écoulées depuis la signature de ce titre sans qu'aucun acte d'exécution n'ait été accompli à mon encontre.
+Plus de trois années se sont écoulées depuis la délivrance de ce titre sans qu'aucun acte d'exécution n'ait été accompli à mon encontre.
 
-En application de l'article 133-4 du Code pénal et de l'article 530, alinéa 1er, du Code de procédure pénale, la peine d'amende forfaitaire majorée se prescrit par trois ans à compter de la signature du titre par le ministère public.
+En application de l'article 133-4 du Code pénal et de l'article 530, alinéa 1er, du Code de procédure pénale, la peine d'amende forfaitaire majorée se prescrit par trois ans à compter de la délivrance du titre exécutoire.
 
 En conséquence, je vous demande de bien vouloir constater la prescription de la peine et annuler la somme qui m'est réclamée.`,
   },

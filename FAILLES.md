@@ -309,6 +309,16 @@ juriste avant toute activation** (pas de jurisprudence non vérifiée).
   sur les bases officielles (Cass. 12 janv. 2026 n° 25-80.412, Cass. 1er avr.
   2021 n° 20-82.815, TA Versailles 12 févr. 2026 n° 2403953). Les failles
   concernées restent dans le catalogue, adossées à leurs seuls articles.
+- **Assainissement des failles déjà actives (même audit)** : 13 failles `ACTIVE`
+  portaient encore en base une « jurisprudence » qui n'en était pas une ou qui
+  n'avait jamais été lue — articles recopiés (`Art. L. 223-3…`, `Art. L.521-2 CJA`),
+  mentions floues (« Cass. crim., 2012-2016 », « Principe constant », « Doctrine
+  ANTAI »), arrêt sans numéro de pourvoi, et **CE 6 nov. 2019 n° 412051** qui
+  concerne le portage salarial et n'a aucun rapport. Ces entrées ont été
+  **supprimées** (catalogue + base), les articles restant cités par `articleLoi`.
+  `faille-suspension-duree-disproportionnee` est alignée sur **CE 23 oct. 2019
+  n° 427431** (contrôle normal du principe et de la durée). Effet de bord : le
+  badge « À vérifier » ne subsiste plus sur aucune faille active.
 ---
 
 ## I. PACK TÉLÉRECOURS 3F / 48SI (implémenté 2026-10-07)
