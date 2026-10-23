@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  FAILLES_PAR_REPONSE,
   GROUPE_DYNAMIQUE,
   LIBELLES_REPONSES,
   QUESTIONS_CIBLEES,
+  faillesDepuisReponses,
   fusionnerQuestionsDynamiques,
   libellesPourDynamiques,
   lireReponses,
@@ -805,5 +807,50 @@ describe("questions dynamiques (veille 2.0 — fondations)", () => {
         { type: "reponseTexte", champ: "question_texte" },
       ]);
     });
+  });
+});
+
+describe("faillesDepuisReponses — N3 (capteur de fait → candidature)", () => {
+  const DISPO = [
+    "faille-exoneration-vol-usurpation",
+    "faille-stationnement-panneau",
+    "faille-48si-defaut-info",
+    "faille-48si-plafond-8pts",
+  ];
+
+  it("propose la faille ACTIVE correspondant à une case cochée", () => {
+    expect(
+      faillesDepuisReponses({ vehiculeCede: true }, DISPO),
+    ).toEqual(["faille-exoneration-vol-usurpation"]);
+    expect(
+      faillesDepuisReponses({ suspPrecedentsNonRecapitules: true }, DISPO),
+    ).toEqual(["faille-48si-defaut-info"]);
+  });
+
+  it("ne propose rien sans case cochée ou hors failles disponibles", () => {
+    expect(faillesDepuisReponses({ vehiculeCede: false }, DISPO)).toEqual([]);
+    expect(faillesDepuisReponses({ caractereLibre: true }, DISPO)).toEqual([]);
+    expect(
+      faillesDepuisReponses({ suspPointsCumulesJour: true }, [
+        "faille-48si-defaut-info",
+      ]),
+    ).toEqual([]);
+  });
+
+  it("dédoublonne quand deux réponses pointent la même faille", () => {
+    expect(
+      faillesDepuisReponses(
+        { stationnementPanneau: true, marquageEfface: true },
+        DISPO,
+      ),
+    ).toEqual(["faille-stationnement-panneau"]);
+  });
+
+  it("ne référence que des failles du catalogue validé", async () => {
+    const { CATALOGUE_SOURCES } = await import("./catalogue-sources");
+    const ids = new Set(CATALOGUE_SOURCES.map((f) => f.id));
+    for (const cible of Object.values(FAILLES_PAR_REPONSE)) {
+      for (const id of cible ?? []) expect(ids.has(id)).toBe(true);
+    }
   });
 });

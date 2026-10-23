@@ -334,7 +334,12 @@ export async function validerPropositionSource(
     articleLoi,
     regle,
     source: source.url ?? source.archive,
-    jurisprudence: [ref] as unknown as Prisma.InputJsonValue,
+    // La référence est celle de la décision que l'admin vient de lire dans le
+    // drawer : sur une activation, elle est donc vérifiée (plus de badge
+    // « À vérifier » sur une faille ACTIVE). En PROPOSEE, elle reste à vérifier.
+    jurisprudence: [
+      { ...ref, verifiee: statutFaille === "ACTIVE" },
+    ] as unknown as Prisma.InputJsonValue,
     statut: statutFaille,
     ...(regles.length
       ? { reglesDetection: regles as unknown as Prisma.InputJsonValue }

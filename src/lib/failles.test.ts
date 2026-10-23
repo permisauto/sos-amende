@@ -7,6 +7,7 @@ import {
   injecterFaillesPack,
   manquantsPourActivation,
   messageActivationBloquee,
+  referencesVerifiees,
 } from "@/lib/failles";
 
 /**
@@ -105,14 +106,14 @@ describe("activerPropositionsCompletes", () => {
     templateLettre: "",
   };
 
-  function fakeDep(proposees: Array<{ id: string; regle: string | null; templateLettre: string | null }>) {
+  function fakeDep(proposees: Array<{ id: string; regle: string | null; templateLettre: string | null; jurisprudence?: unknown }>) {
     const updates: Array<{ where: unknown; data: unknown }> = [];
     const dep = {
       failleJuridique: {
         findMany: async () => proposees,
-        updateMany: async (args: { where: unknown; data: unknown }) => {
+        update: async (args: { where: unknown; data: unknown }) => {
           updates.push(args);
-          return { count: 0 };
+          return {};
         },
       },
     };
@@ -127,9 +128,21 @@ describe("activerPropositionsCompletes", () => {
     expect(bilan.ignorees).toBe(1);
     expect(bilan.examinees).toBe(2);
     expect(updates).toHaveLength(1);
-    expect(updates[0]?.data).toEqual({ statut: "ACTIVE" });
-    expect(updates[0]?.where).toEqual({
-      id: { in: ["faille-complete"] },
+    expect(updates[0]?.data).toEqual({ statut: "ACTIVE", jurisprudence: [] });
+    expect(updates[0]?.where).toEqual({ id: "faille-complete" });
+  });
+
+  it("ne conserve à l'activation que les références vérifiées", async () => {
+    const verifiee = { juridiction: "CE", numero: "427431", verifiee: true };
+    const brute = { reference: "2432996" };
+    const { dep, updates } = fakeDep([
+      { ...COMPLETE, jurisprudence: [verifiee, brute] },
+    ]);
+    await activerPropositionsCompletes(dep as never);
+
+    expect(updates[0]?.data).toEqual({
+      statut: "ACTIVE",
+      jurisprudence: [verifiee],
     });
   });
 
@@ -162,15 +175,15 @@ describe("injecterFaillesPack (injection pack 3F/48SI)", () => {
   };
 
   function fakeDep(
-    proposees: Array<{ id: string; regle: string | null; templateLettre: string | null }>,
+    proposees: Array<{ id: string; regle: string | null; templateLettre: string | null; jurisprudence?: unknown }>,
   ) {
     const updates: Array<{ where: unknown; data: unknown }> = [];
     const dep = {
       failleJuridique: {
         findMany: async () => proposees,
-        updateMany: async (args: { where: unknown; data: unknown }) => {
+        update: async (args: { where: unknown; data: unknown }) => {
           updates.push(args);
-          return { count: 0 };
+          return {};
         },
       },
     };
@@ -199,9 +212,9 @@ describe("injecterFaillesPack (injection pack 3F/48SI)", () => {
 
     expect(activees).toEqual(["faille-3f-delai-retention"]);
     expect(updates).toHaveLength(1);
-    expect(updates[0]?.data).toEqual({ statut: "ACTIVE" });
+    expect(updates[0]?.data).toEqual({ statut: "ACTIVE", jurisprudence: [] });
     expect(updates[0]?.where).toEqual({
-      id: { in: ["faille-3f-delai-retention"] },
+      id: "faille-3f-delai-retention",
       statut: "PROPOSEE",
     });
   });
@@ -222,5 +235,23 @@ describe("injecterFaillesPack (injection pack 3F/48SI)", () => {
 
     expect(activees).toEqual([]);
     expect(updates).toHaveLength(0);
+  });
+});
+describe("referencesVerifiees", () => {
+  it("ne garde que les entrées explicitement vérifiées", () => {
+    expect(
+      referencesVerifiees([
+        { numero: "a", verifiee: true },
+        { numero: "b" },
+        { numero: "c", verifiee: false },
+      ]),
+    ).toEqual([{ numero: "a", verifiee: true }]);
+  });
+
+  it("tolère une valeur absente ou invalide", () => {
+    expect(referencesVerifiees(null)).toEqual([]);
+    expect(referencesVerifiees(undefined)).toEqual([]);
+    expect(referencesVerifiees("texte")).toEqual([]);
+    expect(referencesVerifiees([null, "x"])).toEqual([]);
   });
 });

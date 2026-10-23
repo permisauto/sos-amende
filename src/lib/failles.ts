@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Règles d'activation d'une faille — logique testée.
  *
  * Une `FailleJuridique` `ACTIVE` alimente deux choses sensibles :
@@ -23,12 +23,41 @@
  * PROPOSEE jusqu'à rédaction.
  */
 
-import type { PrismaClient } from "@/generated/prisma/client";
+import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 
 export type ChampsActivation = {
   regle: string | null;
   templateLettre: string | null;
 };
+
+/**
+ * Références de jurisprudence réellement lues sur une source primaire.
+ *
+ * Une entrée `jurisprudence` dont `verifiee !== true` n'est pas une décision
+ * publiable (article recopié, numéro brut de veille, mention floue) : la
+ * bibliothèque affiche « À vérifier » et la lettre ne doit pas s'appuyer
+ * dessus. À l'activation on ne conserve donc que les références vérifiées —
+ * les autres sont retirées plutôt qu'affichées comme un fondement.
+ */
+export function referencesVerifiees(
+  jurisprudence: unknown,
+): Prisma.InputJsonValue[] {
+  if (!Array.isArray(jurisprudence)) return [];
+  return (jurisprudence as Prisma.InputJsonValue[]).filter(
+    (r) =>
+      typeof r === "object" &&
+      r !== null &&
+      (r as { verifiee?: unknown }).verifiee === true,
+  );
+}
+
+/** Données d'écriture communes à toute activation (`PROPOSEE` → `ACTIVE`). */
+export function donneesActivation(jurisprudence: unknown): {
+  statut: "ACTIVE";
+  jurisprudence: Prisma.InputJsonValue[];
+} {
+  return { statut: "ACTIVE", jurisprudence: referencesVerifiees(jurisprudence) };
+}
 
 /**
  * Marqueur du **secours local** de la veille (`extractionLocale`) : la « règle »
@@ -97,13 +126,16 @@ export async function activerPropositionsCompletes(
 ): Promise<BilanActivation> {
   const proposees = await dep.failleJuridique.findMany({
     where: { statut: "PROPOSEE" },
-    select: { id: true, regle: true, templateLettre: true },
+    select: { id: true, regle: true, templateLettre: true, jurisprudence: true },
   });
   const activables = proposees.filter((f) => estActivable(f));
-  if (activables.length > 0) {
-    await dep.failleJuridique.updateMany({
-      where: { id: { in: activables.map((f) => f.id) } },
-      data: { statut: "ACTIVE" },
+  // Une écriture par ligne : seule une référence de jurisprudence réellement
+  // vérifiée survit à l'activation (les autres sont retirées, cf.
+  // `referencesVerifiees`).
+  for (const f of activables) {
+    await dep.failleJuridique.update({
+      where: { id: f.id },
+      data: donneesActivation(f.jurisprudence),
     });
   }
   return {
@@ -140,7 +172,7 @@ export async function injecterFaillesPack(
 ): Promise<string[]> {
   const proposees = await dep.failleJuridique.findMany({
     where: { id: { in: [...FAILLES_PACK_ACTIVES] }, statut: "PROPOSEE" },
-    select: { id: true, regle: true, templateLettre: true },
+    select: { id: true, regle: true, templateLettre: true, jurisprudence: true },
   });
   // Double filtre (défense en profondeur) : jamais un id hors pack, même si la
   // requête ci-dessus est un jour réécrite.
@@ -148,10 +180,10 @@ export async function injecterFaillesPack(
   const activables = proposees.filter(
     (f) => packIds.has(f.id) && estActivable(f),
   );
-  if (activables.length > 0) {
-    await dep.failleJuridique.updateMany({
-      where: { id: { in: activables.map((f) => f.id) }, statut: "PROPOSEE" },
-      data: { statut: "ACTIVE" },
+  for (const f of activables) {
+    await dep.failleJuridique.update({
+      where: { id: f.id, statut: "PROPOSEE" },
+      data: donneesActivation(f.jurisprudence),
     });
   }
   return activables.map((f) => f.id);

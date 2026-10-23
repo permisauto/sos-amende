@@ -7,6 +7,7 @@ import {
   composerRegleProposition,
   construirePromptExtraction,
   contenuVerbatim,
+  dateLongueFr,
   extraireProposition,
   extractionDispo,
   extractionLocale,
@@ -707,9 +708,38 @@ describe("refPropositionDepuisSource — référence au format base juridique", 
     expect(ref.resume).toBeTruthy();
   });
 
+  it("rend une référence lisible : juridiction, date longue, numéro", () => {
+    const ref = refPropositionDepuisSource(
+      {
+        ...source,
+        ecli: null,
+        reference: "2201999",
+        juridiction: "Tribunal Administratif Amiens",
+      },
+      p,
+    );
+    expect(ref.reference).toBe(
+      "Tribunal Administratif Amiens, 15 septembre 2026, n° 2201999",
+    );
+  });
+
   it("replie sur l'id DILA sans ecli ni référence", () => {
     const ref = refPropositionDepuisSource({ ...source, ecli: null, reference: null }, p);
-    expect(ref.reference).toBe("DILA00001");
+    expect(ref.reference).toContain("n° DILA00001");
+  });
+});
+
+describe("dateLongueFr", () => {
+  it("formate une date ISO", () => {
+    expect(dateLongueFr("2026-09-18")).toBe("18 septembre 2026");
+    expect(dateLongueFr("2026-01-01")).toBe("1 janvier 2026");
+  });
+
+  it("refuse tout ce qui n'est pas une date ISO valide", () => {
+    expect(dateLongueFr(null)).toBeNull();
+    expect(dateLongueFr("")).toBeNull();
+    expect(dateLongueFr("18/09/2026")).toBeNull();
+    expect(dateLongueFr("2026-13-01")).toBeNull();
   });
 });
 

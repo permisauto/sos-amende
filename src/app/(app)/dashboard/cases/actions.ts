@@ -33,6 +33,7 @@ import {
   typesPreuvesPourFailles,
 } from "@/lib/preuves-api";
 import {
+  faillesDepuisReponses,
   lireReponses,
   preuvesPourReponses,
   fusionnerQuestionsDynamiques,
@@ -540,6 +541,20 @@ export async function analyserDossier(
       // (une relance de l'analyse relance aussi la détection automatique).
       await tx.dossierFaille.deleteMany({ where: { dossierId: dossier.id } });
       for (const failleId of candidats) {
+        await tx.dossierFaille.create({
+          data: { dossierId: dossier.id, failleId, statut: "CANDIDATE" },
+        });
+      }
+      // N3 — faits déclarés au questionnaire : une réponse peut établir un fait
+      // que le texte du PV ne révèle pas. On ajoute la faille ACTIVE
+      // correspondante en **candidate** (jamais dans la lettre, jamais
+      // principale) : le juriste la voit et reste seul décideur.
+      const parReponses = faillesDepuisReponses(
+        data,
+        failles.map((f) => f.id),
+      );
+      for (const failleId of parReponses) {
+        if (candidats.includes(failleId)) continue;
         await tx.dossierFaille.create({
           data: { dossierId: dossier.id, failleId, statut: "CANDIDATE" },
         });

@@ -554,6 +554,68 @@ export function lireReponses(
   return out;
 }
 
+/**
+ * N3 — capteurs de fait → **candidatures** de faille.
+ *
+ * Une réponse du questionnaire peut établir un fait que le texte du PV ne
+ * révèle pas (véhicule cédé, panneau absent, précédents non récapitulés…).
+ * On rattache alors la faille `ACTIVE` correspondante au dossier en
+ * `CANDIDATE` : le moteur ne l'a pas vue, le juriste la voit et reste seul
+ * décideur (aucune lettre n'est générée depuis cette table).
+ *
+ * Règle stricte : uniquement des failles **existantes et validées** — aucune
+ * règle, aucun article, aucun template n'est créé ici.
+ */
+export const FAILLES_PAR_REPONSE: Partial<
+  Record<ChampReponse, readonly string[]>
+> = {
+  vehiculeCede: ["faille-exoneration-vol-usurpation"],
+  vehiculeVole: ["faille-exoneration-vol-usurpation"],
+  adresseIncorrecte: ["faille-delai-notification"],
+  stationnementPanneau: ["faille-stationnement-panneau"],
+  marquageEfface: ["faille-stationnement-panneau"],
+  stationnementGene: ["faille-stationnement-travaux"],
+  stationnementLieu: ["faille-stationnement-lieu"],
+  clicheDeuxVehicules: ["faille-photo-illisible"],
+  suspNotifIrreguliere: ["faille-suspension-notification-irreguliere"],
+  suspDelaiNotification: ["faille-suspension-delai-notification-72h"],
+  suspMotifsAbsents: [
+    "faille-suspension-motivation-insuffisante",
+    "faille-3f-defaut-motivation",
+  ],
+  suspObservations: ["faille-suspension-sans-contradictoire"],
+  suspEthylometreCarnet: ["faille-suspension-ethylometre-carnet"],
+  suspSecondSouffle: ["faille-suspension-second-souffle"],
+  suspSignataireNonPrefet: ["faille-3f-incompetence"],
+  suspPrecedentsNonRecapitules: ["faille-48si-defaut-info"],
+  suspPointsCumulesJour: ["faille-48si-plafond-8pts"],
+  suspStageAvantNotif: ["faille-48si-stage-avant-notification"],
+};
+
+/**
+ * Ids de failles à proposer comme candidats pour un dossier, d'après les
+ * seules cases cochées et les failles réellement chargées (`disponibles` :
+ * `ACTIVE` du type du dossier). Ordre stable, sans doublon.
+ */
+export function faillesDepuisReponses(
+  reponses: Record<string, unknown> | Partial<ExtractedData>,
+  disponibles: readonly string[],
+): string[] {
+  const connues = new Set(disponibles);
+  const out: string[] = [];
+  for (const [champ, ids] of Object.entries(FAILLES_PAR_REPONSE) as [
+    ChampReponse,
+    readonly string[],
+  ][]) {
+    if ((reponses as Record<string, unknown>)[champ] !== true) continue;
+    for (const id of ids) {
+      if (!connues.has(id) || out.includes(id)) continue;
+      out.push(id);
+    }
+  }
+  return out;
+}
+
 /** Entrée d'affichage d'une réponse côté juriste (clé → phrase). */
 export type LibelleReponse = {
   cle: ChampReponse;

@@ -1281,6 +1281,57 @@ type ChampsSourceRef = {
   url: string | null;
 };
 
+const MOIS_FR = [
+  "janvier",
+  "février",
+  "mars",
+  "avril",
+  "mai",
+  "juin",
+  "juillet",
+  "août",
+  "septembre",
+  "octobre",
+  "novembre",
+  "décembre",
+] as const;
+
+/** "2026-09-18" → "18 septembre 2026" ; `null` si la date n'est pas ISO. */
+export function dateLongueFr(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return null;
+  const mois = MOIS_FR[Number(m[2]) - 1];
+  if (!mois) return null;
+  return `${Number(m[3])} ${mois} ${m[1]}`;
+}
+
+/**
+ * Référence lisible d'une décision : « Tribunal administratif d'Amiens,
+ * 18 septembre 2026, n° 2201999 ». Les sources TA n'ont ni ECLI ni URL
+ * pérenne : le numéro de dossier suffit, rien n'est inventé.
+ */
+export function formaterReferenceJurisprudence(opts: {
+  juridiction: string | null | undefined;
+  date: Date | string | null | undefined;
+  numero: string | null | undefined;
+}): string {
+  const iso =
+    opts.date instanceof Date
+      ? Number.isNaN(opts.date.getTime())
+        ? null
+        : opts.date.toISOString()
+      : opts.date ?? null;
+  const numero = opts.numero?.trim();
+  return [
+    opts.juridiction?.trim(),
+    dateLongueFr(iso),
+    numero ? `n° ${numero}` : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
 /**
  * Référence de jurisprudence au format de la base juridique, depuis la
  * publication source (partagée validation drawer / auto-proposition) :
@@ -1290,9 +1341,15 @@ export function refPropositionDepuisSource(
   s: ChampsSourceRef,
   p: PropositionVeille,
 ): JurisprudenceRef {
+  const juridiction = s.juridiction ?? s.source;
+  const numero = s.reference ?? s.ecli ?? s.idDila;
   return {
-    reference: [s.ecli ?? s.reference ?? s.idDila].filter(Boolean).join(" — "),
-    juridiction: s.juridiction ?? s.source,
+    reference: formaterReferenceJurisprudence({
+      juridiction,
+      date: s.dateSource,
+      numero,
+    }),
+    juridiction,
     date: s.dateSource ? s.dateSource.toISOString().slice(0, 10) : null,
     url: s.url,
     verifiee: false,

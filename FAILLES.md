@@ -319,6 +319,17 @@ juriste avant toute activation** (pas de jurisprudence non vérifiée).
   `faille-suspension-duree-disproportionnee` est alignée sur **CE 23 oct. 2019
   n° 427431** (contrôle normal du principe et de la durée). Effet de bord : le
   badge « À vérifier » ne subsiste plus sur aucune faille active.
+- **Garde-fou structurel (2026-10-23)** : l'assainissement ne tient plus à une
+  passe manuelle — `referencesVerifiees` (`src/lib/failles.ts`) retire de toute
+  activation les entrées `jurisprudence` sans `verifiee: true`
+  (`donneesActivation`, appliqué par la synchro admin, l'injection du pack et
+  les 3 actions d'activation). Une promotion depuis la veille marque la
+  référence lue comme vérifiée ; les références sont désormais rédigées en
+  clair (« Tribunal administratif d'Amiens, 18 septembre 2026, n° 2201999 »).
+  Les 3 propositions restantes de la base prod ont été **écartées** (carte
+  mobilité inclusion hors périmètre, doublon du 48 SI L. 223-3, règle
+  circulaire « solde inexact ») et les `jurisprudence` non vérifiées des
+  failles `INACTIVE`/`PROPOSEE` vidées (prod : 66 inactives, 0 référence).
 ---
 
 ## I. PACK TÉLÉRECOURS 3F / 48SI (implémenté 2026-10-07)

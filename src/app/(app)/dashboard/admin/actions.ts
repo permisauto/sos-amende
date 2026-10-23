@@ -15,7 +15,11 @@ import {
   synchroniserCatalogue,
 } from "@/lib/auto-alimentation";
 import { validateMockFaille } from "@/lib/mock-failles";
-import { messageActivationBloquee, activerPropositionsCompletes } from "@/lib/failles";
+import {
+  donneesActivation,
+  messageActivationBloquee,
+  activerPropositionsCompletes,
+} from "@/lib/failles";
 import { synchroniserSourceLiee } from "@/lib/veille-ingestion";
 
 export type FailleState =
@@ -180,9 +184,9 @@ export async function basculerFaille(
 
   await prisma.failleJuridique.update({
     where: { id },
-    data: {
-      statut: devientActive ? "ACTIVE" : "INACTIVE",
-    },
+    data: devientActive
+      ? donneesActivation(faille.jurisprudence)
+      : { statut: "INACTIVE" },
   });
   // Faille née de la veille : la publication liée suit la décision de l'admin
   // (invariant « la source suit sa faille », best-effort).
@@ -379,7 +383,10 @@ export async function validerPropositionFaille(
 
     await prisma.failleJuridique.update({
       where: { id },
-      data: { statut: action },
+      data:
+        action === "ACTIVE"
+          ? donneesActivation(faille.jurisprudence)
+          : { statut: "INACTIVE" },
     });
   } catch (e) {
     console.error("validerPropositionFaille: DB indisponible, fallback mock", e);
@@ -424,7 +431,7 @@ export async function activerFailleProposee(
 
   const maj = await prisma.failleJuridique.updateMany({
     where: { id, statut: "PROPOSEE" },
-    data: { statut: "ACTIVE" },
+    data: donneesActivation(faille.jurisprudence),
   });
   if (maj.count === 0) {
     return { error: "Cette proposition a déjà été activée ou écartée." };
