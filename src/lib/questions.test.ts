@@ -485,6 +485,25 @@ describe("suggestionsPreuvesClient — pièces attendues du client", () => {
     ]);
   });
 
+  it("contentieux contraventionnel → preuve de consignation (non bloquante)", () => {
+    const suggestions = suggestionsPreuvesClient({
+      voieProcedure: "CONTENTIEUX_CONTRAVENTION",
+    });
+    expect(suggestions.map((s) => s.type)).toEqual(["CONSIGNATION"]);
+    expect(suggestions[0].raison).toMatch(/consignez/i);
+    // Déjà versée : plus de suggestion.
+    expect(
+      suggestionsPreuvesClient(
+        { voieProcedure: "CONTENTIEUX_CONTRAVENTION" },
+        ["CONSIGNATION"],
+      ),
+    ).toEqual([]);
+    // Amende simple : aucune consignation.
+    expect(
+      suggestionsPreuvesClient({ voieProcedure: "AMENDE_FORFAITAIRE" }),
+    ).toEqual([]);
+  });
+
   it("questions pack 3F/48SI → pièces corroborent le fait déclaré", () => {
     expect(
       suggestionsPreuvesClient({ suspSignataireNonPrefet: true })[0],

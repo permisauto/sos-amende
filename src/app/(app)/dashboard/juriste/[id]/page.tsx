@@ -76,6 +76,7 @@ const statusLabels: Record<string, string> = {
   A_VERIFIER: "À vérifier",
   PRET: "Prêt",
   ENVOYE: "Envoyé",
+  AVOCAT_REQUIS: "Délit — avocat requis",
   REJETE: "Rejeté",
   ERREUR_TECHNIQUE: "Erreur technique",
   RESOLU: "Résolu",
@@ -102,7 +103,11 @@ const statutChip: Record<string, { label: string; cls: string }> = {
   PRET: { label: "Signée — à valider", cls: "bg-emerald-100 text-emerald-800" },
   ENVOYE: {
     label: "Envoyée (ANTAI/Télérecours)",
-    cls: "bg-blue-100 text-blue-800",
+    cls: "bg-emerald-100 text-emerald-800",
+  },
+  AVOCAT_REQUIS: {
+    label: "Délit — orientation vers un avocat",
+    cls: "bg-orange-100 text-orange-800",
   },
   RESOLU: { label: "Résolu", cls: "bg-emerald-100 text-emerald-800" },
   REJETE: { label: "Rejetée", cls: "bg-red-100 text-red-700" },

@@ -2,13 +2,20 @@ import { describe, expect, it } from "vitest";
 
 import {
   PRIX_AMENDE,
+  PRIX_CONTENTIEUX,
   PRIX_OPTION_LRAR,
   PRIX_SUSPENSION,
+  estOffreContentieux,
   estOffreSuspension,
+  kindPaiementAmende,
   libelleMontant,
   libelleMontantCentimes,
+  libelleMontantCentimesDossier,
+  libelleMontantDossier,
   montantAvecOption,
   prixBase,
+  prixBaseAmende,
+  prixDossier,
 } from "./tarifs";
 
 describe("prixBase", () => {
@@ -78,5 +85,52 @@ describe("offre Suspension & Invalidation (offre unique 199 €)", () => {
     expect(prixBase("AMENDE")).toBe(39);
     expect(montantAvecOption("AMENDE", true)).toBe(49);
     expect(libelleMontant("AMENDE")).toBe("39 €");
+  });
+});
+
+describe("contentieux contraventionnel (149 €)", () => {
+  it("expose le tarif de l'offre contentieux", () => {
+    expect(PRIX_CONTENTIEUX).toBe(149);
+  });
+
+  it("prixBaseAmende distingue amende simple et contentieux", () => {
+    expect(prixBaseAmende("AMENDE_FORFAITAIRE")).toBe(39);
+    expect(prixBaseAmende("CONTENTIEUX_CONTRAVENTION")).toBe(149);
+    expect(prixBaseAmende(null)).toBe(39);
+    expect(prixBaseAmende("INCONNU")).toBe(39);
+  });
+
+  it("l'option LRAR ajoute 10 € au contentieux (159 €)", () => {
+    expect(prixBaseAmende("CONTENTIEUX_CONTRAVENTION", true)).toBe(159);
+  });
+
+  it("prixDossier garde la suspension à 199 € quel que soit le champ voie", () => {
+    expect(prixDossier("SUSPENSION", null)).toBe(199);
+    expect(prixDossier("SUSPENSION", "CONTENTIEUX_CONTRAVENTION")).toBe(199);
+    expect(prixDossier("AMENDE", "CONTENTIEUX_CONTRAVENTION")).toBe(149);
+    expect(prixDossier("AMENDE", "AMENDE_FORFAITAIRE", true)).toBe(49);
+  });
+
+  it("libellés dossier", () => {
+    expect(libelleMontantDossier("AMENDE", "CONTENTIEUX_CONTRAVENTION")).toBe(
+      "149 €",
+    );
+    expect(
+      libelleMontantCentimesDossier("AMENDE", "CONTENTIEUX_CONTRAVENTION"),
+    ).toBe("149,00 €");
+    expect(libelleMontantDossier("SUSPENSION", null)).toBe("199 €");
+  });
+
+  it("kindPaiementAmende classe le contentieux à part", () => {
+    expect(kindPaiementAmende("CONTENTIEUX_CONTRAVENTION")).toBe("CONTENTIEUX");
+    expect(kindPaiementAmende("AMENDE_FORFAITAIRE")).toBe("AMENDE");
+    expect(kindPaiementAmende(null)).toBe("AMENDE");
+  });
+
+  it("estOffreContentieux s'appuie sur le montant débité", () => {
+    expect(estOffreContentieux("CONTENTIEUX", 149)).toBe(true);
+    expect(estOffreContentieux("CONTENTIEUX", 159)).toBe(true);
+    expect(estOffreContentieux("CONTENTIEUX", 39)).toBe(false);
+    expect(estOffreContentieux("AMENDE", 149)).toBe(false);
   });
 });

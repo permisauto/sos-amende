@@ -170,6 +170,69 @@ describe("notifierStatut — avec AUTH_RESEND_KEY", () => {
     expect(arg.html).toContain("lien de dépôt assisté");
     expect(arg.html).not.toContain("transmise automatiquement");
   });
+
+  it("AVOCAT_REQUIS oriente vers un avocat et précise qu'aucun paiement n'est débité", async () => {
+    const { notifierStatut } = await charger({ key: "re_test" });
+    findUnique.mockResolvedValue({ ...dossierBase, statut: "AVOCAT_REQUIS" });
+
+    expect(await notifierStatut("dossier-1")).toBe(true);
+    const arg = send.mock.calls[0][0] as { subject: string; html: string };
+    expect(arg.subject).toContain("procédure pénale");
+    expect(arg.html).toContain("avocat");
+    expect(arg.html).toContain("Aucun paiement n'a été débité");
+  });
+
+  it("REJETE d'un contentieux annonce le remboursement des 149 €", async () => {
+    const { notifierStatut } = await charger({ key: "re_test" });
+    findUnique.mockResolvedValue({
+      ...dossierBase,
+      statut: "REJETE",
+      motifRejet: "Faits non contestables",
+      voieProcedure: "CONTENTIEUX_CONTRAVENTION",
+    });
+
+    expect(await notifierStatut("dossier-1")).toBe(true);
+    const arg = send.mock.calls[0][0] as { html: string };
+    expect(arg.html).toContain("remboursé");
+  });
+
+  it("REJETE d'une amende forfaitaire ne parle pas de remboursement", async () => {
+    const { notifierStatut } = await charger({ key: "re_test" });
+    findUnique.mockResolvedValue({
+      ...dossierBase,
+      statut: "REJETE",
+      motifRejet: "Faits non contestables",
+      voieProcedure: "AMENDE_FORFAITAIRE",
+    });
+
+    expect(await notifierStatut("dossier-1")).toBe(true);
+    const arg = send.mock.calls[0][0] as { html: string };
+    expect(arg.html).not.toContain("remboursé");
+  });
+});
+
+describe("notifierRemboursement", () => {
+  it("renvoie false sans clé Resend", async () => {
+    const { notifierRemboursement } = await charger({ key: undefined });
+    expect(await notifierRemboursement("client@test.local", "Alex", 149)).toBe(
+      false,
+    );
+  });
+
+  it("envoie le montant remboursé au client", async () => {
+    const { notifierRemboursement } = await charger({ key: "re_test" });
+    expect(
+      await notifierRemboursement("client@test.local", "Alex Martin", 149),
+    ).toBe(true);
+    const arg = send.mock.calls[0][0] as {
+      to: string;
+      subject: string;
+      html: string;
+    };
+    expect(arg.to).toBe("client@test.local");
+    expect(arg.subject).toContain("remboursement");
+    expect(arg.html).toContain("149,00 €");
+  });
 });
 
 describe("notifierLienDepot", () => {

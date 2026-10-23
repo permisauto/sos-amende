@@ -577,6 +577,11 @@ export async function validerVirement(
     return { error: "Paiement introuvable." };
   }
   if (payment.status !== "PENDING_VIREMENT") return { error: "Seuls les virements en attente peuvent être validés." };
+  // Le contentieux (149 €) est une offre rattachée à un dossier : jamais un
+  // crédit générique. Un paiement orphelin serait une erreur de flux.
+  if (payment.kind === "CONTENTIEUX" && !payment.dossierId) {
+    return { error: "Un paiement contentieux doit être rattaché à un dossier." };
+  }
 
   // Paiement rattaché à un dossier en attente (EN_ATTENTE_PAIEMENT) : le
   // crédit sert directement le dossier — il passe en EN_ATTENTE_VALIDATION
@@ -598,22 +603,34 @@ export async function validerVirement(
       });
       if (dossierLie && dossierLie.statut === "EN_ATTENTE_PAIEMENT") {
         dossierEnValidation = dossierLie.id;
+        const estContentieux = payment.kind === "CONTENTIEUX";
         await tx.dossier.update({
           where: { id: dossierLie.id },
           // Le client a réellement payé (virement validé) : on marque le débit
           // pour qu'un rejet ultérieur rende bien le crédit (rejeterDossier).
-          data: { statut: "EN_ATTENTE_VALIDATION", creditDebite: true },
+          // Un contentieux est payé 149 € : aucun crédit n'est débité — le
+          // remboursement éventuel est manuel et tracé (`REFUND_DUE`).
+          data: {
+            statut: "EN_ATTENTE_VALIDATION",
+            ...(estContentieux ? {} : { creditDebite: true }),
+          },
         });
         await tx.dossierEvent.create({
           data: {
             dossierId: dossierLie.id,
             type: "EN_ATTENTE",
-            detail: "Paiement validé — dossier transmis au juriste",
+            detail: estContentieux
+              ? "Paiement contentieux validé (149 €) — dossier transmis au juriste"
+              : "Paiement validé — dossier transmis au juriste",
           },
         });
         return false;
       }
     }
+
+    // Contentieux : le paiement est consommé par le dossier, jamais converti en
+    // crédit (39 € ≠ 149 €). On ne crédite donc pas le compte.
+    if (payment.kind === "CONTENTIEUX") return false;
 
     await tx.user.update({
       where: { id: payment.userId },
@@ -700,6 +717,57 @@ export async function refuserVirement(
   if (user) {
     const { notifierPaiementRefuse } = await import("@/lib/notifications");
     await notifierPaiementRefuse(user.email, user.name, motif);
+  }
+
+  revalidatePath("/dashboard/admin/paiements");
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
+export async function marquerRembourse(
+  _prev: FailleState,
+  formData: FormData,
+): Promise<FailleState> {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  const payment = await prisma.payment.findUnique({ where: { id } });
+  if (!payment) {
+    if (id.startsWith("pay-mock-")) {
+      revalidatePath("/dashboard/admin/paiements");
+      return { ok: true };
+    }
+    return { error: "Paiement introuvable." };
+  }
+  if (payment.status !== "REFUND_DUE") {
+    return { error: "Ce paiement n'est pas en attente de remboursement." };
+  }
+
+  // Verrou anti double-remboursement : seul REFUND_DUE → REFUNDED passe.
+  const dejaRembourse = await prisma.$transaction(async (tx) => {
+    const verrou = await tx.payment.updateMany({
+      where: { id, status: "REFUND_DUE" },
+      data: { status: "REFUNDED", rembourseLe: new Date() },
+    });
+    if (verrou.count === 0) return true;
+    if (payment.dossierId) {
+      await tx.dossierEvent.create({
+        data: {
+          dossierId: payment.dossierId,
+          type: "REJET",
+          detail: `Remboursement de ${Number(payment.amount).toFixed(2).replace(".", ",")} € effectué`,
+        },
+      });
+    }
+    return false;
+  });
+  if (dejaRembourse) {
+    return { error: "Ce paiement n'est pas en attente de remboursement." };
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: payment.userId } });
+  if (user) {
+    const { notifierRemboursement } = await import("@/lib/notifications");
+    await notifierRemboursement(user.email, user.name, Number(payment.amount));
   }
 
   revalidatePath("/dashboard/admin/paiements");

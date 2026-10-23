@@ -9,6 +9,7 @@ export const statusLabels: Record<string, string> = {
   A_VERIFIER: "À vérifier",
   PRET: "Prêt",
   ENVOYE: "Envoyé",
+  AVOCAT_REQUIS: "Délit — avocat requis",
   REJETE: "Rejeté",
   ERREUR_TECHNIQUE: "Erreur technique",
   RESOLU: "Résolu",
@@ -22,6 +23,7 @@ export const statutBadge: Record<string, string> = {
   PRET: "bg-amber-100 text-amber-800",
   A_VERIFIER: "bg-indigo-100 text-indigo-800",
   ENVOYE: "bg-emerald-100 text-emerald-800",
+  AVOCAT_REQUIS: "bg-orange-100 text-orange-800",
   REJETE: "bg-red-100 text-red-800",
   RESOLU: "bg-emerald-100 text-emerald-800",
   ERREUR_TECHNIQUE: "bg-red-100 text-red-700",
@@ -40,4 +42,9 @@ export const BADGES_PAIEMENT: Record<
   },
   PAID: { label: "Validé", classe: "bg-emerald-100 text-emerald-800" },
   REFUSED: { label: "Refusé", classe: "bg-red-100 text-red-800" },
+  REFUND_DUE: {
+    label: "Remboursement à faire",
+    classe: "bg-orange-100 text-orange-800",
+  },
+  REFUNDED: { label: "Remboursé", classe: "bg-zinc-100 text-zinc-600" },
 };

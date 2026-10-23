@@ -21,7 +21,7 @@ export default async function PaiementPage(props: PageProps<"/dashboard/paiement
   return (
     <div className="mx-auto max-w-3xl">
       <Link href={`/dashboard/cases/${id}`} className="text-sm text-zinc-500 hover:text-zinc-900">← Retour au dossier</Link>
-      <h1 className="mt-2 text-2xl font-bold">Finaliser — {dossier.type === "AMENDE" ? "Contestation d'amende" : "Recours suspension"}</h1>
+      <h1 className="mt-2 text-2xl font-bold">Finaliser — {dossier.type === "AMENDE" ? (dossier.voieProcedure === "CONTENTIEUX_CONTRAVENTION" ? "Contentieux contraventionnel" : "Contestation d'amende") : "Recours suspension"}</h1>
       <div className="mt-4">
         <BandeauPaiement userId={user.id} />
       </div>
@@ -30,8 +30,23 @@ export default async function PaiementPage(props: PageProps<"/dashboard/paiement
         <p className="mt-1 text-sm text-emerald-800">Le scan et la détection des failles sont gratuits. La génération et la validation de la lettre sont payantes.</p>
         <p className="mt-1 text-xs text-emerald-700">Article {dossier.failleJuridique?.articleLoi ?? "—"} — lettre prête à être débloquée après paiement.</p>
       </div>
+      {dossier.voieProcedure === "CONTENTIEUX_CONTRAVENTION" && (
+        <div className="mt-4 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+          <p className="font-semibold">Contentieux contraventionnel (4e/5e classe)</p>
+          <p className="mt-1">
+            Votre avis relève du tribunal de police : une <strong>consignation</strong> de{" "}
+            {dossier.consignationMontant
+              ? `${Number(dossier.consignationMontant)} €`
+              : "votre amende"}
+            {" "}est à effectuer avant le dépôt de la contestation. Vérifiez le montant exact sur votre avis.
+          </p>
+          <p className="mt-1 text-xs">
+            Vous consignez vous-même sur <strong>amendes.gouv.fr</strong> (« Payer ou consigner ») puis joignez la preuve à votre dossier. La consignation n&apos;est pas une reconnaissance : elle est restituée si la contestation aboutit.
+          </p>
+        </div>
+      )}
       <div className="mt-6">
-        <PaiementForm dossierId={dossier.id} type={dossier.type} defaultEmail={user.email ?? ""} defaultName={user.name ?? ""} />
+        <PaiementForm dossierId={dossier.id} type={dossier.type} voie={dossier.voieProcedure} defaultEmail={user.email ?? ""} defaultName={user.name ?? ""} />
       </div>
       <p className="mt-6 text-center text-xs text-zinc-500">Paiement sécurisé par virement bancaire. RIB affiché après formulaire, validation sous 24 h ouvrées.</p>
     </div>

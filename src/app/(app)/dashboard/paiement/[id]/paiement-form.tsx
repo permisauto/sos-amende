@@ -3,17 +3,19 @@
 import { useActionState, useState } from "react";
 import { payerParVirement } from "./actions";
 import { PreuveVirementUpload } from "@/components/preuve-virement-upload";
-import { libelleMontant, libelleMontantCentimes, PRIX_OPTION_LRAR } from "@/lib/tarifs";
+import { libelleMontantDossier, libelleMontantCentimesDossier, PRIX_OPTION_LRAR } from "@/lib/tarifs";
 import { RIB } from "@/lib/rib";
 
 export function PaiementForm({
   dossierId,
   type,
+  voie,
   defaultEmail,
   defaultName,
 }: {
   dossierId: string;
   type: "AMENDE" | "SUSPENSION";
+  voie?: string | null;
   defaultEmail: string;
   defaultName: string;
 }) {
@@ -35,7 +37,7 @@ export function PaiementForm({
       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
         <h3 className="font-semibold text-emerald-900">Demande de virement enregistrée — voici le RIB à utiliser</h3>
         <p className="mt-2 text-sm text-emerald-800">
-          Merci {prenom} — votre demande pour {libelleMontant(type, optionLrar)} (réf. {dossierId.slice(0, 8).toUpperCase()}) est enregistrée. Copiez le RIB ci-dessous dans votre banque :
+          Merci {prenom} — votre demande pour {libelleMontantDossier(type, voie, optionLrar)} (réf. {dossierId.slice(0, 8).toUpperCase()}) est enregistrée. Copiez le RIB ci-dessous dans votre banque :
         </p>
         <div className="mt-4 rounded-xl bg-white p-4 text-sm border-2 border-emerald-200">
           <div className="flex items-center justify-between"><span className="font-semibold">IBAN</span><button type="button" onClick={() => navigator.clipboard.writeText(RIB_IBAN.replace(/\s/g, ""))} className="text-xs text-emerald-700 hover:underline">Copier</button></div>
@@ -43,7 +45,7 @@ export function PaiementForm({
           <div className="mt-2 flex items-center justify-between"><span className="font-semibold">BIC</span><button type="button" onClick={() => navigator.clipboard.writeText(RIB_BIC)} className="text-xs text-emerald-700 hover:underline">Copier</button></div>
           <p className="font-mono text-sm">{RIB_BIC}</p>
           <p className="mt-2"><span className="font-semibold">Titulaire :</span> {RIB_TITULAIRE}</p>
-          <p className="mt-2"><span className="font-semibold">Montant :</span> {libelleMontantCentimes(type, optionLrar)}{optionLrar ? " — option lettre recommandée incluse" : ""}</p>
+          <p className="mt-2"><span className="font-semibold">Montant :</span> {libelleMontantCentimesDossier(type, voie, optionLrar)}{optionLrar ? " — option lettre recommandée incluse" : ""}</p>
           <p className="mt-2 font-mono text-sm bg-amber-50 px-2 py-1 rounded">Référence obligatoire : {dossierId.slice(0, 8).toUpperCase()} — {prenom} {nom}</p>
         </div>
         {!virementConfirme ? (
@@ -95,7 +97,7 @@ export function PaiementForm({
 
       <div className="rounded-2xl border-2 border-emerald-600 bg-white p-6">
         <h4 className="font-semibold text-emerald-700">Payer par virement bancaire</h4>
-        <p className="mt-1 text-sm text-zinc-600">Copiez le RIB ci-dessous dans votre banque. Montant à virer : {libelleMontant(type, optionLrar)}.</p>
+        <p className="mt-1 text-sm text-zinc-600">Copiez le RIB ci-dessous dans votre banque. Montant à virer : {libelleMontantDossier(type, voie, optionLrar)}.</p>
         {RIB.placeholder && (
           <p className="mt-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">
             RIB provisoire de démonstration — à remplacer par les coordonnées bancaires définitives avant mise en production.
@@ -116,7 +118,7 @@ export function PaiementForm({
             <span className="mt-0.5 block text-xs text-emerald-700">SOS Amende envoie votre contestation en recommandé avec accusé de réception. Sans cette option, l'envoi se fait en ligne sur le portail officiel.</span>
           </span>
         </label>
-        <p className="mt-3 text-2xl font-bold">{libelleMontant(type, optionLrar)}</p>
+        <p className="mt-3 text-2xl font-bold">{libelleMontantDossier(type, voie, optionLrar)}</p>
         <form action={virementAction} className="mt-4">
           <input type="hidden" name="dossierId" value={dossierId} />
           <input type="hidden" name="nom" value={nom} />
@@ -125,7 +127,7 @@ export function PaiementForm({
           <input type="hidden" name="whatsapp" value={whatsapp} />
           <input type="hidden" name="optionLrar" value={optionLrar ? "1" : "0"} />
           <button disabled={virementPending} className="w-full rounded-full bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
-            {virementPending ? "Enregistrement…" : `Valider et recevoir le RIB (${libelleMontant(type, optionLrar)})`}
+            {virementPending ? "Enregistrement…" : `Valider et recevoir le RIB (${libelleMontantDossier(type, voie, optionLrar)})`}
           </button>
           {virementState?.error && <p className="mt-2 text-xs text-red-600">{virementState.error}</p>}
         </form>

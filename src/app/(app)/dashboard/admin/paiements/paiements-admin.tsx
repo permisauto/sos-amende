@@ -2,8 +2,16 @@
 
 import Link from "next/link";
 import { useActionState } from "react";
-import { validerVirement, refuserVirement } from "../actions";
-import { estOffreSuspension, PRIX_OPTION_LRAR } from "@/lib/tarifs";
+import {
+  validerVirement,
+  refuserVirement,
+  marquerRembourse,
+} from "../actions";
+import {
+  estOffreSuspension,
+  estOffreContentieux,
+  PRIX_OPTION_LRAR,
+} from "@/lib/tarifs";
 import { BADGES_PAIEMENT } from "@/lib/admin-statuts";
 import { AvancementPaiement } from "@/components/avancement";
 
@@ -17,6 +25,7 @@ type Paiement = {
   createdAt: Date;
   valideLe: Date | null;
   refuseLe: Date | null;
+  rembourseLe?: Date | null;
   refusMotif: string | null;
   preuveUrl?: string | null;
   preuveNom?: string | null;
@@ -48,15 +57,19 @@ export function PaiementsAdmin({
     refuserVirement,
     undefined,
   );
+  const [rembState, rembAction, rembPending] = useActionState(
+    marquerRembourse,
+    undefined,
+  );
 
   const messages = (
     <>
-      {(valState?.error || refState?.error) && (
+      {(valState?.error || refState?.error || rembState?.error) && (
         <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
-          {valState?.error ?? refState?.error}
+          {valState?.error ?? refState?.error ?? rembState?.error}
         </p>
       )}
-      {(valState?.ok || refState?.ok) && (
+      {(valState?.ok || refState?.ok || rembState?.ok) && (
         <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
           Action effectuée.
         </p>
@@ -76,7 +89,9 @@ export function PaiementsAdmin({
                 ? "Aucun virement refusé."
                 : filtre === "VALIDES"
                   ? "Aucun virement validé."
-                  : "Aucun virement en attente. Les demandes de virement apparaissent ici après « Valider et recevoir le RIB »."}
+                  : filtre === "REMBOURSEMENTS"
+                    ? "Aucun remboursement à effectuer."
+                    : "Aucun virement en attente. Les demandes de virement apparaissent ici après « Valider et recevoir le RIB »."}
           </p>
         </div>
       </div>
@@ -107,7 +122,9 @@ export function PaiementsAdmin({
                 classe: "bg-zinc-100 text-zinc-700",
               };
               const enAttente = p.status === "PENDING_VIREMENT";
+              const aRembourser = p.status === "REFUND_DUE";
               const montant = Number(p.amount);
+              const estContentieux = estOffreContentieux(p.kind, montant);
               return (
                 <tr key={p.id} className="hover:bg-zinc-50">
                   <td className="px-4 py-3 align-top">
@@ -123,8 +140,19 @@ export function PaiementsAdmin({
                     </p>
                   </td>
                   <td className="px-4 py-3 align-top">
-                    <p>{p.kind === "AMENDE" ? "Amende" : "Suspension"}</p>
+                    <p>
+                      {estContentieux
+                        ? "Contentieux"
+                        : p.kind === "AMENDE"
+                          ? "Amende"
+                          : "Suspension"}
+                    </p>
                     <div className="mt-1 flex flex-wrap gap-1">
+                      {estContentieux && (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+                          Offre Contentieux (tribunal de police)
+                        </span>
+                      )}
                       {estOffreSuspension(p.kind, montant) && (
                         <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-medium text-sky-800">
                           Offre Suspension &amp; Invalidation
@@ -183,6 +211,20 @@ export function PaiementsAdmin({
                         </span>
                       </span>
                     )}
+                    {aRembourser && (
+                      <span className="text-orange-700">
+                        À rembourser
+                        <span className="mt-0.5 block">
+                          Dossier non traité — remboursement du paiement
+                        </span>
+                      </span>
+                    )}
+                    {p.status === "REFUNDED" && (
+                      <span>
+                        Remboursé
+                        {fr(p.rembourseLe) ? ` le ${fr(p.rembourseLe)}` : ""}
+                      </span>
+                    )}
                     {enAttente && <span className="text-zinc-400">—</span>}
                   </td>
                   <td className="px-4 py-3 align-top">
@@ -194,7 +236,11 @@ export function PaiementsAdmin({
                             disabled={valPending || refPending}
                             className="rounded-full bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
                           >
-                            {valPending ? "..." : "Valider → +1 crédit"}
+                            {valPending
+                              ? "..."
+                              : estContentieux
+                                ? "Valider le paiement"
+                                : "Valider → +1 crédit"}
                           </button>
                         </form>
                         <form
@@ -219,6 +265,17 @@ export function PaiementsAdmin({
                           </button>
                         </form>
                       </div>
+                    ) : aRembourser ? (
+                      <form action={rembAction} className="flex justify-end">
+                        <input type="hidden" name="id" value={p.id} />
+                        <button
+                          data-testid="marquer-rembourse"
+                          disabled={rembPending}
+                          className="rounded-full bg-orange-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-orange-700 disabled:opacity-50"
+                        >
+                          {rembPending ? "..." : "Marquer remboursé"}
+                        </button>
+                      </form>
                     ) : (
                       <span className="text-xs text-zinc-400">—</span>
                     )}

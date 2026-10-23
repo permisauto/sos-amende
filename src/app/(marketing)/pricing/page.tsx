@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { PRIX_AMENDE, PRIX_SUSPENSION, PRIX_OPTION_LRAR } from "@/lib/tarifs";
+import { PRIX_AMENDE, PRIX_CONTENTIEUX, PRIX_SUSPENSION, PRIX_OPTION_LRAR } from "@/lib/tarifs";
 
 export const metadata: Metadata = {
   title: "Tarifs",
@@ -13,11 +13,11 @@ export default function PricingPage() {
         <h1 className="text-4xl font-bold">Des tarifs simples, sans surprise</h1>
         <p className="mx-auto mt-4 max-w-xl text-zinc-600">
           La <span className="font-semibold">démo d&apos;analyse</span> sur la page d&apos;accueil est gratuite et ne stocke rien.
-          Le dépôt d&apos;un <span className="font-semibold">vrai dossier</span> (téléversement de votre PV, génération de la lettre, validation juriste) nécessite un crédit : {PRIX_AMENDE}&nbsp;€ / amende, {PRIX_SUSPENSION}&nbsp;€ / suspension. Paiement à l&apos;acte, sans abonnement.
+          Le dépôt d&apos;un <span className="font-semibold">vrai dossier</span> (téléversement de votre PV, génération de la lettre, validation juriste) nécessite un crédit : {PRIX_AMENDE}&nbsp;€ / amende simple, {PRIX_CONTENTIEUX}&nbsp;€ / contentieux contraventionnel, {PRIX_SUSPENSION}&nbsp;€ / suspension. Paiement à l&apos;acte, sans abonnement.
         </p>
       </div>
 
-      <div className="mx-auto mt-16 grid max-w-4xl gap-8 md:grid-cols-2">
+      <div className="mx-auto mt-16 grid max-w-6xl gap-8 md:grid-cols-3">
         <div className="flex flex-col rounded-2xl border-2 border-emerald-600 p-8">
           <h2 className="text-lg font-semibold text-emerald-700">
             Contestation d'amende
@@ -41,6 +41,31 @@ export default function PricingPage() {
             Contester mon amende — analyse gratuite
           </Link>
           <p className="mt-2 text-center text-xs text-zinc-500">Sans email au départ — scan + scoring offerts</p>
+        </div>
+
+        <div className="flex flex-col rounded-2xl border-2 border-zinc-300 p-8">
+          <h2 className="text-lg font-semibold">Contentieux contraventionnel</h2>
+          <p className="mt-2 text-sm text-zinc-600">
+            Contravention de 4e ou 5e classe (tribunal de police) : requête en
+            contestation avec consignation préalable et suivi dédié.
+          </p>
+          <p className="mt-6 text-5xl font-bold">
+            {PRIX_CONTENTIEUX} €<span className="text-base font-normal text-zinc-500">/dossier</span>
+          </p>
+          <ul className="mt-6 flex-1 space-y-2 text-sm text-zinc-600">
+            <li>Analyse des faits et de la procédure</li>
+            <li>Requête pour le tribunal de police</li>
+            <li>Guide de consignation (montant de votre avis)</li>
+            <li>Signature électronique</li>
+            <li>Validation par un juriste</li>
+            <li>Dépôt assisté et suivi de la décision</li>
+          </ul>
+          <Link href="/deposer?type=AMENDE" className="mt-6 inline-block w-full rounded-full bg-emerald-600 px-6 py-3 text-center font-semibold text-white transition hover:bg-emerald-700">
+            Analyser mon avis — gratuit
+          </Link>
+          <p className="mt-2 text-center text-xs text-zinc-500">
+            La consignation est versée par vous à l&apos;administration, pas à SOS Amende
+          </p>
         </div>
 
         <div className="flex flex-col rounded-2xl border-2 border-zinc-300 p-8">
@@ -75,7 +100,7 @@ export default function PricingPage() {
           Si vous préférez ne pas déposer vous-même sur le portail officiel,
           SOS Amende envoie votre contestation en recommandé avec accusé de
           réception et vous remet la preuve d&apos;envoi. Cette option
-          s&apos;ajoute au tarif de base ({PRIX_AMENDE}&nbsp;€ / {PRIX_SUSPENSION}&nbsp;€)
+          s&apos;ajoute au tarif de base ({PRIX_AMENDE}&nbsp;€ / {PRIX_CONTENTIEUX}&nbsp;€ / {PRIX_SUSPENSION}&nbsp;€)
           et vous est proposée au moment du paiement.
         </p>
       </div>

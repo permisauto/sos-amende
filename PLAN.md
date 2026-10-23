@@ -6,21 +6,22 @@
 
 **Produit :** un SaaS qui capture l'avis de contravention (photo/upload), analyse le dossier contre une base de motifs légaux français, génère le courrier de recours prêt à envoyer (LRAR), et suit les délais + statuts jusqu'à résolution.
 
-**Modèle économique :** abonnement + pack à l'acte (amende 29–49 €, dossier permis 79–149 €), tier « avocat partenaire » en option.
+**Modèle économique :** paiement à l'acte — amende forfaitaire 39 €, contentieux contraventionnel 149 €, suspension/invalidation 199 € (+10 € envoi LRAR) ; tier « avocat partenaire » en option (délits, v2).
 
 ## 2. Cadre juridique FR (contrainte n°1 du produit)
 
 | Cas | Procédure | Délais | Qui agit |
 |---|---|---|---|
 | Amende forfaitaire 1er-3e classe (105e) | Requête en exonération auprès de l'**OMP** (ANTAI ou LRAR) | 45 j (sinon majoration x2/x4) | Le citoyen (pas de monopole avocat) |
-| Amende + consignation (4e-5e classe, délit) | Recours **obligatoirement par avocat** | 45 j | Avocat obligatoire |
+| Amende + consignation (4e-5e classe) | Requête en contestation devant le **tribunal de police**, consignation préalable | 45 j | Le citoyen (avocat **non** obligatoire en contravention) |
+| Délit routier (tribunal correctionnel, AFD) | Procédure pénale | variable | **Avocat obligatoire** |
 | Rejet de l'OMP | Poursuite devant **tribunal de police** | fonction des actes | Le citoyen |
 | Rétention administrative (alcool, stup, grand excès) | Recours **gracieux préfet** puis **référé-suspension** devant TA (art. L521-1 CJA) | 2 mois gracieux ; référé très court (48–72 h avant exécution) | Citoyen (représentation avocat non obligatoire, recommandée) |
 | Invalidation du permis (12 pts) | Stage + **commission médicale** | fixé par le préfet | Le citoyen |
 
 **Conséquences produit :**
-- L'automatisation complète est **légale uniquement** pour les cas où le citoyen peut agir seul (amendes 1re-3e classe + recours gracieux permis).
-- Pour le reste : le SaaS oriente vers un **avocat partenaire** (modèle commission) — sinon le produit fait de la consultation juridique interdite (loi du 31/12/1971, art. 54).
+- L'automatisation complète est **légale** pour les amendes (1re-5e classe, y compris le contentieux contraventionnel devant le tribunal de police) et le recours gracieux permis — le citoyen agit seul.
+- Pour les **délits** : le SaaS oriente vers un **avocat partenaire** (modèle commission), sans encaisser de prestation de contestation — sinon le produit fait de la consultation juridique interdite (loi du 31/12/1971, art. 54).
 - Disclaimer + mentions légales RGPD obligatoires (données = infraction = sensibles).
 
 ## 3. Parcours utilisateur (2 flux MVP)

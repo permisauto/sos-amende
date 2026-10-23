@@ -97,6 +97,7 @@ export default async function DashboardPage() {
     A_VERIFIER: "À signer",
     PRET: "Prêt pour l'envoi",
     ENVOYE: "Envoyé",
+    AVOCAT_REQUIS: "Délit — avocat requis",
     RESOLU: "Réponse de l'administration",
   };
 

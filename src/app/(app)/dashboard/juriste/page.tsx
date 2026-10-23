@@ -17,6 +17,7 @@ const statusLabels: Record<string, string> = {
   A_VERIFIER: "À vérifier",
   PRET: "Prêt",
   ENVOYE: "Envoyé",
+  AVOCAT_REQUIS: "Délit — avocat requis",
   REJETE: "Rejeté",
   ERREUR_TECHNIQUE: "Erreur technique",
   RESOLU: "Résolu",
@@ -32,6 +33,7 @@ const statusValues = [
   "A_VERIFIER",
   "PRET",
   "ENVOYE",
+  "AVOCAT_REQUIS",
   "REJETE",
   "ERREUR_TECHNIQUE",
   "RESOLU",
@@ -80,6 +82,11 @@ const stagesJuriste: Array<{
   },
   { key: "envoye", label: "Envoyés", statuts: ["ENVOYE"] },
   {
+    key: "avocat",
+    label: "Délits — avocat requis",
+    statuts: ["AVOCAT_REQUIS"],
+  },
+  {
     key: "cloture",
     label: "Clôturés",
     statuts: ["RESOLU", "REJETE", "ANNULE", "ERREUR_TECHNIQUE"],
@@ -93,6 +100,7 @@ const statutBadge: Record<string, string> = {
   PRET: "bg-amber-100 text-amber-800",
   A_VERIFIER: "bg-indigo-100 text-indigo-800",
   ENVOYE: "bg-emerald-100 text-emerald-800",
+  AVOCAT_REQUIS: "bg-orange-100 text-orange-800",
   REJETE: "bg-red-100 text-red-800",
   RESOLU: "bg-emerald-100 text-emerald-800",
 };

@@ -377,7 +377,10 @@ export async function validerDossier(
   // `creditConsome` basculant dans la même transaction (jamais l'un sans
   // l'autre). Un dossier sans marqueur suit le flux historique : ni débit ni
   // marqueur à la validation.
-  const differeNonConsome = dataExt["creditConsome"] === false;
+  // Le contentieux est payé à part (149 €, Payment rattaché) : jamais de débit
+  // du crédit générique, même si un marqueur historique traînait.
+  const contentieux = dossier.voieProcedure === "CONTENTIEUX_CONTRAVENTION";
+  const differeNonConsome = !contentieux && dataExt["creditConsome"] === false;
   try {
     await prisma.$transaction(async (tx) => {
       if (differeNonConsome) {
@@ -1422,6 +1425,35 @@ export async function rejeterDossier(
     await tx.dossierEvent.create({
       data: { dossierId: dossier.id, type: "REJET", detail: motif },
     });
+    // Contentieux (149 €) : le paiement est rattaché au dossier, pas un crédit.
+    // On marque le remboursement **dû** : l'admin l'exécute et le trace
+    // manuellement (« Marquer remboursé »), aucune somme n'est rendue ici.
+    if (
+      dossier.type === "AMENDE" &&
+      dossier.voieProcedure === "CONTENTIEUX_CONTRAVENTION"
+    ) {
+      const paiement = await tx.payment.findFirst({
+        where: {
+          dossierId: dossier.id,
+          kind: "CONTENTIEUX",
+          status: "PAID",
+        },
+        select: { id: true },
+      });
+      if (paiement) {
+        await tx.payment.update({
+          where: { id: paiement.id },
+          data: { status: "REFUND_DUE" },
+        });
+        await tx.dossierEvent.create({
+          data: {
+            dossierId: dossier.id,
+            type: "REJET",
+            detail: "Remboursement des 149 € à effectuer par l'équipe",
+          },
+        });
+      }
+    }
     // Aucune lettre transmise : le crédit **réellement débité** est rendu au
     // client (il peut relancer sans repayer). Source de vérité : la colonne
     // `creditDebite` — on ne rend jamais un crédit qui n'a pas été débité

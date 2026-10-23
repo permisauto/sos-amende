@@ -691,7 +691,7 @@ Titulaire : MARTIN Jean
 Adresse : 12 RUE DE LA PAIX 75001 PARIS
 Vous êtes avisé d'une infraction commise le 01/07/2026 à 14h32.
 Véhicule : AB-123-CD
-Montant : 135 €
+Montant : 68 €
 Règlement par télépaiement : 123456789 02
 N° de télé-paiement 123456789, clé 02`;
 

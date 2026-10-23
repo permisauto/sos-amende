@@ -103,6 +103,16 @@ model Dossier {
   userId           String
   type             DossierType   @default(AMENDE) // AMENDE | SUSPENSION
   statut           DossierStatut @default(BROUILLON)
+  // Voie de procédure détectée à l'analyse (module src/lib/procedure.ts) :
+  // AMENDE_FORFAITAIRE (classes 1-3, offre 39 €) | CONTENTIEUX_CONTRAVENTION
+  // (classes 4-5, offre 149 € + consignation) | DELIT (avocat, aucun débit) |
+  // INCONNU (choix du client). Null sur les dossiers antérieurs / suspension.
+  voieProcedure       String?
+  classeContravention Int? // 1 à 5 (amende uniquement, null si délit/inconnu)
+  // Contentieux contraventionnel : montant à consigner avant le dépôt et date
+  // de la preuve de consignation téléversée par le client (jamais bloquant).
+  consignationMontant Decimal?  @db.Decimal(10, 2)
+  consignationPayeeLe DateTime?
   pvUrl            String? // avis de contravention uploadé
   pvTexte          String? @db.Text // texte brut extrait par l'OCR (détection par scan)
   extractedData    Json? // OCR : {nom, plaque, num_pv, date, heure, typeRadar, numTelePaiement, cle}
@@ -466,6 +476,10 @@ model Payment {
   valideLe         DateTime?
   refuseLe         DateTime?
   refusMotif       String?
+  // Remboursement manuel tracé (contentieux contraventionnel 149 €) : posé par
+  // l'admin via « Marquer remboursé ». Le statut REFUND_DUE signale un
+  // remboursement dû (dossier rejeté après paiement), jamais un crédit générique.
+  rembourseLe      DateTime?
 
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   dossier Dossier? @relation(fields: [dossierId], references: [id], onDelete: SetNull)
@@ -516,6 +530,7 @@ enum DossierStatut {
   EN_ATTENTE_PAIEMENT // faille détectée mais crédit manquant — le client finalise son virement
   EN_ATTENTE_VALIDATION // lettre générée, soumise à la validation du juriste
   EN_ATTENTE_PRE_SIGNATURE // lettre validée par le juriste, en attente de la signature du client (cas B)
+  AVOCAT_REQUIS // délit détecté : aucun traitement SOS Amende, le client doit consulter un avocat (aucun débit)
   PRET
   ENVOYE
   REJETE

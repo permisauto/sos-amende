@@ -41,7 +41,7 @@ export async function ajouterPreuve(
 
   // Accès : client propriétaire du dossier OU juriste (JURISTE/ADMIN).
   const user = await requireUser();
-  const dossier = await prisma.dossier.findFirst({
+  let dossier = await prisma.dossier.findFirst({
     where: { id: dossierId, userId: user.id },
   });
   if (dossier) {
@@ -51,8 +51,10 @@ export async function ajouterPreuve(
     if (!juriste) return { error: "Accès refusé." };
     const d = await prisma.dossier.findUnique({ where: { id: dossierId } });
     if (!d) return { error: "Dossier introuvable." };
+    dossier = d;
   }
   const auteurId = user.id;
+  const estConsignation = type === "CONSIGNATION";
 
   if (!(file instanceof File) || file.size === 0) {
     return { error: "Veuillez sélectionner une pièce." };
@@ -69,18 +71,28 @@ export async function ajouterPreuve(
   const buffer = Buffer.from(await file.arrayBuffer());
   const url = await storageWrite(safeName, buffer);
 
-  await prisma.$transaction([
-    prisma.preuve.create({
+  await prisma.$transaction(async (tx) => {
+    await tx.preuve.create({
       data: { dossierId, userId: auteurId, url, nom: nom || file.name, type },
-    }),
-    prisma.dossierEvent.create({
+    });
+    await tx.dossierEvent.create({
       data: {
         dossierId,
         type: "PREUVE",
-        detail: `Pièce ajoutée : ${nom || file.name}`,
+        detail: `${
+          estConsignation ? "Preuve de consignation ajoutée" : "Pièce ajoutée"
+        } : ${nom || file.name}`,
       },
-    }),
-  ]);
+    });
+    // La consignation est une étape du contentieux contraventionnel : la
+    // preuve téléversée date l'étape (indicateur juriste), sans bloquer.
+    if (estConsignation && dossier?.type === "AMENDE") {
+      await tx.dossier.update({
+        where: { id: dossierId },
+        data: { consignationPayeeLe: new Date() },
+      });
+    }
+  });
 
   revalidatePath(`/dashboard/cases/${dossierId}`);
   revalidatePath(`/dashboard/juriste/${dossierId}`);

@@ -20,7 +20,13 @@ import { generateLettrePdf } from "@/lib/lettre-pdf";
 import { extrairePv, getOcrProvider, fusionnerPrefill } from "@/lib/ocr";
 import { alignerDocType, lireCategorie } from "@/lib/doc-v2";
 import { notifierStatut } from "@/lib/notifications";
-import { prixBase } from "@/lib/tarifs";
+import {
+  detecterProcedure,
+  lireMontant,
+  lireVoieProcedure,
+  type VoieProcedureDetectee,
+} from "@/lib/procedure";
+import { prixBase, prixDossier } from "@/lib/tarifs";
 import {
   formaterLettreOfficielle,
   identiteExtrait,
@@ -212,6 +218,17 @@ const analyseSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date invalide"),
   heure: z.string().trim().optional(),
   montant: z.string().trim().optional(),
+  // Choix du client **uniquement** quand la détection est impossible (montant
+  // illisible/hors barème) : la détection serveur reste prioritaire sinon.
+  voieProcedure: z
+    .enum([
+      "AMENDE_FORFAITAIRE",
+      "CONTENTIEUX_CONTRAVENTION",
+      "DELIT",
+      "",
+    ])
+    .optional()
+    .transform((v) => (v === "" ? undefined : v)),
   numTelePaiement: z.string().trim().optional(),
   cle: z.string().trim().optional(),
   typeRadar: z.string().trim().optional(),
@@ -384,6 +401,84 @@ export async function analyserDossier(
     }
   }
 
+  // Voie de procédure (amende uniquement) : la détection serveur fait foi dès
+  // qu'elle est confiante (barème des classes 1-5 ou marqueur de délit) — le
+  // formulaire n'est qu'une aide, jamais une source de sous-facturation. Quand
+  // le montant est illisible/hors barème, le client doit choisir : aucun débit
+  // n'est déclenché avant confirmation.
+  let voie: VoieProcedureDetectee = "INCONNU";
+  if (dossier.type === "AMENDE") {
+    const detection = detecterProcedure({
+      montant: data.montant,
+      texte: dossier.pvTexte,
+    });
+    voie = detection.voie;
+    let classe = detection.classe;
+    let consignation = detection.consignationMontant;
+    if (voie === "INCONNU") {
+      const choix = lireVoieProcedure(formData.get("voieProcedure"));
+      if (!choix) {
+        return {
+          error:
+            "Montant non reconnu : précisez la procédure de votre document (amende simple, contentieux ou délit).",
+        };
+      }
+      voie = choix;
+      if (choix === "CONTENTIEUX_CONTRAVENTION") {
+        consignation = lireMontant(data.montant);
+        classe = null;
+      }
+    }
+    data.voieProcedure = voie;
+    if (classe) data.classeContravention = classe;
+    else delete data.classeContravention;
+    if (consignation) data.consignationMontant = consignation;
+    else delete data.consignationMontant;
+  } else {
+    delete data.voieProcedure;
+  }
+
+  // Délit détecté : SOS Amende ne traite pas les délits (avocat nécessaire).
+  // Aucun débit, aucune lettre, aucune candidature — le dossier est orienté et
+  // le client peut agir immédiatement. La détection serveur prime sur un choix
+  // contradictoire du formulaire.
+  if (voie === "DELIT") {
+    const oriente = await prisma.$transaction(async (tx) => {
+      const maj = await tx.dossier.updateMany({
+        where: { id: dossier.id, statut: "EN_ANALYSE" },
+        data: {
+          extractedData: data as object,
+          statut: "AVOCAT_REQUIS",
+          voieProcedure: "DELIT",
+          classeContravention: null,
+          consignationMontant: null,
+          prix: 0,
+          failleJuridiqueId: null,
+          lettreGeneree: null,
+          refereGenere: null,
+        },
+      });
+      if (maj.count === 0) return false;
+      await tx.dossierFaille.deleteMany({ where: { dossierId: dossier.id } });
+      await tx.dossierEvent.create({
+        data: {
+          dossierId: dossier.id,
+          type: "ANALYSE",
+          detail:
+            "Délit détecté : aucun traitement possible par SOS Amende — orientation vers un avocat (aucun débit)",
+        },
+      });
+      return true;
+    });
+    if (!oriente) {
+      return { error: "Ce dossier n'est plus en attente d'analyse." };
+    }
+    await notifierStatut(dossier.id).catch(() => false);
+    revalidatePath(`/dashboard/cases/${dossier.id}`);
+    revalidatePath("/dashboard/juriste");
+    redirect(`/dashboard/cases/${dossier.id}?avocat=1`);
+  }
+
   // Contexte étalonnage (preuve d'entretien du radar) : registre admin
   // prioritaire, sinon date de vérification lue sur le PV — permet au moteur
   // de détecter la faille « certificat d'étalonnage » avec échéance.
@@ -460,11 +555,24 @@ export async function analyserDossier(
     select: { id: true },
   }));
 
+  const contentieux = voie === "CONTENTIEUX_CONTRAVENTION";
+  // Un dossier contentieux est payé à part (149 €) : la validation du virement
+  // ne crédite pas le compteur de crédits. On vérifie donc l'existence d'un
+  // paiement contentieux encaissé pour ne jamais renvoyer au paywall après un
+  // retour du juriste (relance d'analyse).
+  const paiementContentieuxValide = contentieux
+    ? await prisma.payment.findFirst({
+        where: { dossierId: dossier.id, kind: "CONTENTIEUX", status: "PAID" },
+        select: { id: true },
+      })
+    : null;
+
   // Débit différé : « déjà payé » déclaré à la PREMIÈRE analyse → le crédit
   // n'est pas consommé ici, `creditConsome: false` marque l'attente — le
   // juriste le débite à la validation (validerDossier) et un rejet ne
-  // rembourse que ce qui a réellement été débité (rejeterDossier).
-  const differe = dejaPaye && !dejaAnalyse;
+  // rembourse que ce qui a réellement été débité (rejeterDossier). Le
+  // contentieux n'utilise jamais le crédit générique.
+  const differe = !contentieux && dejaPaye && !dejaAnalyse;
   if (differe) data.creditConsome = false;
 
   let statut: "EN_ATTENTE_VALIDATION" | "EN_ATTENTE_PAIEMENT";
@@ -484,7 +592,14 @@ export async function analyserDossier(
       // si un crédit a réellement été débité. Sur une relance, on n'écrit rien
       // (le marquage de la 1ʳᵉ analyse est conservé — jamais de double débit).
       let creditDebite = false;
-      if (faille && !dejaAnalyse && !dejaPaye) {
+      if (contentieux) {
+        // Offre séparée à 149 € : jamais de crédit générique. Sans faille, le
+        // juriste examine quand même (pas de paiement déclenché à tort).
+        next =
+          faille && !paiementContentieuxValide
+            ? "EN_ATTENTE_PAIEMENT"
+            : "EN_ATTENTE_VALIDATION";
+      } else if (faille && !dejaAnalyse && !dejaPaye) {
         const debit = await tx.user.updateMany({
           where: { id: user.id, credits: { gte: 1 } },
           data: { credits: { decrement: 1 } },
@@ -511,6 +626,16 @@ export async function analyserDossier(
           refereGenere,
           dateLimite: dateLimitePv(data.date, dossier.type),
           statut: next,
+          // Prix de base de l'offre (l'option LRAR est ajoutée au paiement).
+          prix: prixDossier(dossier.type, voie),
+          // La voie est aussi une colonne (lecture rapide fiche/paiement).
+          ...(dossier.type === "AMENDE"
+            ? {
+                voieProcedure: voie,
+                classeContravention: data.classeContravention ?? null,
+                consignationMontant: data.consignationMontant ?? null,
+              }
+            : {}),
           ...(creditDebite ? { creditDebite: true } : {}),
         },
       });
@@ -533,7 +658,9 @@ export async function analyserDossier(
           type: faille ? "LETTRE_GENEREE" : "EN_ATTENTE",
           detail:
             next === "EN_ATTENTE_PAIEMENT"
-              ? "En attente de paiement (virement bancaire)"
+              ? contentieux
+                ? "En attente du paiement contentieux (149 €, virement bancaire)"
+                : "En attente de paiement (virement bancaire)"
               : undefined,
         },
       });

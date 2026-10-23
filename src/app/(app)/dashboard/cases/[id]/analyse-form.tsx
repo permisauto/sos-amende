@@ -5,6 +5,10 @@ import { analyserDossier } from "../actions";
 import { questionsPour, type QuestionDynamique } from "@/lib/questions";
 import { libellePreuve } from "@/lib/preuve-labels";
 import {
+  detecterProcedure,
+  libelleVoieProcedure,
+} from "@/lib/procedure";
+import {
   dateRefLibelle,
   libelleDocType,
   numeroRefLibelle,
@@ -108,6 +112,20 @@ export function AnalyseForm({
     dynamiques: questionsDynamiques,
   });
 
+  // Voie de procédure : information (aucun fondement juridique). Le serveur
+  // refait la détection sur les valeurs soumises et fait foi ; le sélecteur
+  // n'apparaît que si le document ne permet pas de trancher (montant non
+  // reconnu, document illisible) — aucun débit avant confirmation.
+  const procedure =
+    type === "AMENDE"
+      ? detecterProcedure({
+          montant: prefill?.montant,
+          texte: [pvTexte, prefill?.motif, prefill?.lieu]
+            .filter(Boolean)
+            .join("\n"),
+        })
+      : null;
+
   return (
     <form action={formAction} className="flex flex-col gap-4">
       <input type="hidden" name="dossierId" value={dossierId} />
@@ -131,6 +149,55 @@ export function AnalyseForm({
           </>
         )}
       </div>
+
+      {procedure && (
+        <div
+          data-testid="voie-procedure"
+          className={`rounded-xl border px-4 py-3 text-xs ${
+            procedure.voie === "DELIT"
+              ? "border-orange-300 bg-orange-50 text-orange-900"
+              : procedure.voie === "CONTENTIEUX_CONTRAVENTION"
+                ? "border-amber-300 bg-amber-50 text-amber-900"
+                : "border-sky-200 bg-sky-50 text-sky-900"
+          }`}
+        >
+          <p className="font-semibold">
+            {procedure.voie === "AMENDE_FORFAITAIRE"
+              ? "Amende forfaitaire (1re à 3e classe)"
+              : procedure.voie === "CONTENTIEUX_CONTRAVENTION"
+                ? "Contentieux contraventionnel (4e ou 5e classe)"
+                : procedure.voie === "DELIT"
+                  ? "Procédure pénale — délit"
+                  : "Procédure non déterminée"}
+          </p>
+          <p className="mt-1">{procedure.motif}</p>
+          {procedure.voie === "INCONNU" && (
+            <label className="mt-3 flex flex-col gap-1.5">
+              <span className="text-sm font-medium">
+                Précisez la procédure indiquée sur votre document
+              </span>
+              <select
+                name="voieProcedure"
+                required
+                className="rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm"
+              >
+                <option value="">— Choisir —</option>
+                {["AMENDE_FORFAITAIRE", "CONTENTIEUX_CONTRAVENTION", "DELIT"].map(
+                  (v) => (
+                    <option key={v} value={v}>
+                      {libelleVoieProcedure(v)}
+                    </option>
+                  ),
+                )}
+              </select>
+              <span className="text-xs text-zinc-600">
+                En cas de doute, vérifiez la mention « amende forfaitaire » ou
+                « tribunal de police » sur votre avis.
+              </span>
+            </label>
+          )}
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="flex flex-col gap-1.5">

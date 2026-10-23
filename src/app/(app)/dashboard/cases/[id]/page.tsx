@@ -5,7 +5,7 @@ import { requireUser } from "@/lib/dal";
 import { joursRestants } from "@/lib/moteur";
 import { controlerForclusion48si } from "@/lib/delais";
 import { titreAnalyse } from "@/lib/envoi";
-import { libelleMontant } from "@/lib/tarifs";
+import { libelleMontantDossier } from "@/lib/tarifs";
 import { storageRead, storageUrl } from "@/lib/storage";
 import { AnalyseForm, type AnalysePrefill } from "./analyse-form";
 import { SignaturePad } from "./signature-pad";
@@ -30,6 +30,7 @@ const statusLabels: Record<string, string> = {
   A_VERIFIER: "À vérifier",
   PRET: "Prêt",
   ENVOYE: "Envoyé",
+  AVOCAT_REQUIS: "Délit — orientation vers un avocat",
   REJETE: "Rejeté",
   ERREUR_TECHNIQUE: "Erreur technique",
   RESOLU: "Réponse de l'administration",
@@ -42,6 +43,10 @@ type CaseDetail = {
   type: "AMENDE" | "SUSPENSION";
   statut: string;
   canalEnvoi: string | null;
+  voieProcedure: string | null;
+  classeContravention: number | null;
+  consignationMontant: number | null;
+  consignationPayeeLe: Date | null;
   pvUrl: string | null;
   pvTexte: string | null;
   extractedData: Record<string, unknown> | null;
@@ -130,6 +135,10 @@ function demoDossier(id: string, userId: string): CaseDetail | null {
           ? "TELERECOURS"
           : "ANTAI"
         : null,
+    voieProcedure: null,
+    classeContravention: null,
+    consignationMontant: null,
+    consignationPayeeLe: null,
     pvUrl: "/uploads/demo-pv.jpg",
     pvTexte: mock.pvTexte,
     extractedData: mock.extractedData,
@@ -151,7 +160,7 @@ function demoDossier(id: string, userId: string): CaseDetail | null {
     evenements: [{ type: "CREATION", detail: "Dossier de démo", createdAt: new Date() }],
     messages: [],
     lawyerMatch: null,
-    prix: mock.type === "AMENDE" ? 39 : 59,
+    prix: mock.type === "AMENDE" ? 39 : 199,
     createdAt: new Date(),
     dateLimite: new Date(Date.now() + 86400000 * 30),
     motifRejet: null,
@@ -397,7 +406,11 @@ export default async function CaseDetailPage(
       <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-bold">
           {item.type === "AMENDE"
-            ? "Contestation d'amende"
+            ? item.voieProcedure === "CONTENTIEUX_CONTRAVENTION"
+              ? "Contentieux contraventionnel"
+              : item.voieProcedure === "DELIT"
+                ? "Délit routier"
+                : "Contestation d'amende"
             : "Suspension de permis"}
         </h1>
         <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
@@ -457,6 +470,101 @@ export default async function CaseDetailPage(
           </div>
         )}
 
+      {item.statut === "AVOCAT_REQUIS" && (
+        <div
+          data-testid="avocat-requis"
+          className="mt-6 rounded-2xl border-2 border-orange-300 bg-orange-50 p-6"
+        >
+          <h2 className="text-lg font-semibold text-orange-900">
+            Votre document relève d&apos;une procédure pénale (délit)
+          </h2>
+          <p className="mt-2 text-sm text-orange-900">
+            Un avis de contravention délictuelle ou une convocation devant le
+            tribunal correctionnel ne relève pas de la contestation
+            administrative traitée par SOS Amende : ce type de dossier exige
+            l&apos;assistance d&apos;un <strong>avocat</strong>.
+          </p>
+          <p className="mt-2 text-sm text-orange-800">
+            <strong>Aucun paiement n&apos;a été débité.</strong> Vous pouvez
+            demander une mise en relation avec un avocat partenaire ci-dessous.
+          </p>
+          <a
+            href="#avocat"
+            className="mt-4 inline-block rounded-full bg-orange-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-orange-700"
+          >
+            Demander un avocat
+          </a>
+        </div>
+      )}
+
+      {item.type === "AMENDE" &&
+        item.voieProcedure === "CONTENTIEUX_CONTRAVENTION" &&
+        item.statut !== "REJETE" &&
+        item.statut !== "RESOLU" &&
+        item.statut !== "ANNULE" && (
+          <div
+            data-testid="consignation"
+            className="mt-6 rounded-2xl border border-amber-300 bg-amber-50 p-6"
+          >
+            <h2 className="font-semibold text-amber-900">
+              Contentieux contraventionnel : consignation obligatoire
+            </h2>
+            <p className="mt-1 text-sm text-amber-900">
+              Votre avis relève du tribunal de police. Avant de contester, vous
+              devez <strong>consigner</strong>
+              {item.consignationMontant
+                ? ` ${Number(item.consignationMontant)
+                    .toFixed(2)
+                    .replace(".", ",")} €`
+                : " le montant de l'amende"}
+              {" "}— montant indiqué sur votre avis.
+            </p>
+            <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-amber-900">
+              <li>
+                Consignez sur{" "}
+                <a
+                  href="https://www.amendes.gouv.fr"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-semibold underline"
+                >
+                  amendes.gouv.fr
+                </a>{" "}
+                (« Payer ou consigner ») ou sur{" "}
+                <a
+                  href="https://www.antai.gouv.fr"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-semibold underline"
+                >
+                  antai.gouv.fr
+                </a>
+                .
+              </li>
+              <li>Conservez le justificatif de consignation.</li>
+              <li>
+                Joignez-le à votre dossier dans la section « Preuves » ci-dessous.
+              </li>
+            </ol>
+            <p className="mt-3 text-xs text-amber-800">
+              La consignation n&apos;est pas une reconnaissance de
+              l&apos;infraction : elle vous est restituée si la contestation
+              aboutit. Elle est à effectuer <strong>par vous</strong>, avant le
+              dépôt de la contestation.
+            </p>
+            {item.consignationPayeeLe ? (
+              <p className="mt-3 inline-block rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
+                Preuve de consignation reçue le{" "}
+                {item.consignationPayeeLe.toLocaleDateString("fr-FR")}
+              </p>
+            ) : (
+              <p className="mt-3 inline-block rounded-full bg-white px-3 py-1 text-xs font-semibold text-amber-800">
+                En attente de votre justificatif de consignation
+              </p>
+            )}
+          </div>
+        )}
+
       {enAnalyse && (
         <section
           id="analyse"
@@ -501,8 +609,9 @@ export default async function CaseDetailPage(
             {item.motifRejet ?? "—"}
           </p>
           <p className="mt-3 text-xs text-red-700">
-            Votre crédit a été rendu : vous pouvez lancer un nouveau dossier
-            sans repayer.
+            {item.voieProcedure === "CONTENTIEUX_CONTRAVENTION"
+              ? "Votre paiement de 149 € vous sera remboursé : l'équipe exécute le remboursement et vous en informe. Aucun crédit n'est débité sur ce dossier."
+              : "Votre crédit a été rendu : vous pouvez lancer un nouveau dossier sans repayer."}
           </p>
           <p className="mt-1 text-xs text-red-700">
             Pour toute question, contactez le support avec la référence de ce
@@ -769,7 +878,7 @@ export default async function CaseDetailPage(
       {/* La demande de mise en relation reste accessible à tout moment, y
           compris pendant l'analyse : c'est une action du client, pas du
           juriste, et la retirer reviendrait à casser une fonctionnalité. */}
-      <div className="mt-8">
+      <div className="mt-8" id="avocat">
         <AvocatRequest
           dossierId={item.id}
           match={
@@ -826,7 +935,7 @@ export default async function CaseDetailPage(
           <p className="mt-2 text-sm text-emerald-800">
             Le scan et le scoring de votre dossier sont terminés. Pour débloquer
             la lettre et la faire valider par un juriste, réglez votre dossier
-            ({libelleMontant(item.type === "SUSPENSION" ? "SUSPENSION" : "AMENDE")}) par virement bancaire.
+            ({libelleMontantDossier(item.type, item.voieProcedure)}) par virement bancaire.
           </p>
           <Link href={`/dashboard/paiement/${item.id}`} className="mt-4 inline-block rounded-full bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700">
             Payer — virement bancaire
@@ -1062,7 +1171,7 @@ export default async function CaseDetailPage(
             </div>
           )}
         </div>
-      ) : (
+      ) : item.statut === "AVOCAT_REQUIS" ? null : (
         <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-6">
           <h2 className="font-semibold text-amber-900">Prochaines étapes</h2>
           <p className="mt-1 text-sm text-amber-800">

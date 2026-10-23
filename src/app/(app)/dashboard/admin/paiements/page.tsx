@@ -11,6 +11,7 @@ const FILTRES = [
   { value: "EN_ATTENTE", label: "En attente" },
   { value: "VALIDES", label: "Validés" },
   { value: "REFUSES", label: "Refusés" },
+  { value: "REMBOURSEMENTS", label: "Remboursements" },
   { value: "TOUT", label: "Tout" },
 ] as const;
 type Filtre = (typeof FILTRES)[number]["value"];
@@ -19,8 +20,11 @@ const STATUT_PAR_FILTRE: Record<Filtre, string | undefined> = {
   EN_ATTENTE: "PENDING_VIREMENT",
   VALIDES: "PAID",
   REFUSES: "REFUSED",
+  REMBOURSEMENTS: undefined,
   TOUT: undefined,
 };
+
+const STATUTS_REMBOURSEMENT = ["REFUND_DUE", "REFUNDED"];
 
 type LignePaiement = {
   id: string;
@@ -32,6 +36,7 @@ type LignePaiement = {
   createdAt: Date;
   valideLe: Date | null;
   refuseLe: Date | null;
+  rembourseLe?: Date | null;
   refusMotif: string | null;
   preuveUrl?: string | null;
   preuveNom?: string | null;
@@ -53,7 +58,11 @@ export default async function AdminPaiementsPage(props: {
 
   const statut = STATUT_PAR_FILTRE[filtre];
   const where = {
-    ...(statut ? { status: statut } : {}),
+    ...(statut
+      ? { status: statut }
+      : filtre === "REMBOURSEMENTS"
+        ? { status: { in: STATUTS_REMBOURSEMENT } }
+        : {}),
     ...(q
       ? {
           user: {
@@ -68,7 +77,12 @@ export default async function AdminPaiementsPage(props: {
   };
 
   let paiements: LignePaiement[] = [];
-  const counts = { PENDING_VIREMENT: 0, PAID: 0, REFUSED: 0 };
+  const counts = {
+    PENDING_VIREMENT: 0,
+    PAID: 0,
+    REFUSED: 0,
+    REFUND_DUE: 0,
+  };
   try {
     const [found, groupes] = await Promise.all([
       prisma.payment.findMany({
@@ -91,6 +105,7 @@ export default async function AdminPaiementsPage(props: {
       if (g.status === "PENDING_VIREMENT") counts.PENDING_VIREMENT = g._count._all;
       else if (g.status === "PAID") counts.PAID = g._count._all;
       else if (g.status === "REFUSED") counts.REFUSED = g._count._all;
+      else if (g.status === "REFUND_DUE") counts.REFUND_DUE = g._count._all;
     }
   } catch (e) {
     console.error("admin/paiements: DB indisponible", e);
@@ -115,7 +130,7 @@ export default async function AdminPaiementsPage(props: {
       </div>
 
       {/* KPIs réels (groupBy sur tous les statuts) + RIB */}
-      <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
           <p className="text-sm font-medium text-amber-700">En attente</p>
           <p className="mt-1 text-3xl font-bold text-amber-900">
@@ -132,6 +147,14 @@ export default async function AdminPaiementsPage(props: {
           <p className="text-sm font-medium text-red-700">Refusés</p>
           <p className="mt-1 text-3xl font-bold text-red-900">
             {counts.REFUSED}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-orange-200 bg-orange-50 p-5">
+          <p className="text-sm font-medium text-orange-700">
+            Remboursements à faire
+          </p>
+          <p className="mt-1 text-3xl font-bold text-orange-900">
+            {counts.REFUND_DUE}
           </p>
         </div>
         <div className="rounded-2xl border border-zinc-200 bg-white p-5">

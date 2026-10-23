@@ -166,6 +166,37 @@ export async function notifierPaiementRefuse(
 }
 
 /**
+ * Notifie le client qu'un remboursement (contentieux 149 €) a été exécuté.
+ * Défensif : no-op sans AUTH_RESEND_KEY.
+ */
+export async function notifierRemboursement(
+  email: string,
+  name: string | null,
+  montant: number,
+): Promise<boolean> {
+  if (!resend) return false;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://recours-permis-pv.com";
+  const prenom = (name ?? email).split(" ")[0];
+  const libelle = `${montant.toFixed(2).replace(".", ",")} €`;
+  try {
+    await resend.emails.send({
+      from: EMAIL_FROM,
+      to: email,
+      subject: "SOS Amende — remboursement effectué",
+      html: `
+        <p>Bonjour ${prenom},</p>
+        <p>Votre dossier n'a pas pu être traité et le remboursement de
+        <strong>${libelle}</strong> a été effectué.</p>
+        <p>Selon votre banque, le crédit apparaît sous quelques jours ouvrés.</p>
+        <p><a href="${appUrl}/dashboard">Accéder à mon espace</a></p>`,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Notifie le client qu'un juriste lui a adressé un message sur son dossier
  * (demande de complément d'information ou de preuve). Défensif : no-op sans
  * AUTH_RESEND_KEY.
@@ -256,6 +287,7 @@ export async function notifierStatut(dossierId: string): Promise<boolean> {
       decisionDetail: true,
       prix: true,
       type: true,
+      voieProcedure: true,
       user: { select: { email: true, name: true } },
     },
   });
@@ -309,6 +341,18 @@ export async function notifierStatut(dossierId: string): Promise<boolean> {
         <p>Pensez à la signer avant la date limite de contestation.</p>
         ${ACCUEIL}`;
       break;
+    case "AVOCAT_REQUIS":
+      subject = "Votre dossier relève d'une procédure pénale";
+      html = `
+        <p>Bonjour ${prenom},</p>
+        <p>Votre document${ref} relève d'une procédure pénale (délit) : ce type
+        de dossier exige l'assistance d'un avocat et ne peut pas être traité
+        comme une contestation administrative.</p>
+        <p><strong>Aucun paiement n'a été débité.</strong> Vous pouvez demander
+        une mise en relation avec un avocat partenaire depuis votre dossier.</p>
+        <p><a href="${process.env.NEXT_PUBLIC_APP_URL ?? "https://recours-permis-pv.com"}/dashboard/cases/${dossier.id}">Ouvrir mon dossier</a></p>
+        ${ACCUEIL}`;
+      break;
     case "ENVOYE":
       subject = "Votre lettre de contestation a été transmise";
       html = `
@@ -328,6 +372,11 @@ export async function notifierStatut(dossierId: string): Promise<boolean> {
         <p>Après examen par un juriste, aucun motif de contestation n'a été
         retenu pour votre dossier${ref}.</p>
         <p>Motif : ${dossier.motifRejet ?? "non précisé"}</p>
+        ${
+          dossier.voieProcedure === "CONTENTIEUX_CONTRAVENTION"
+            ? "<p>Votre paiement de 149 € vous sera remboursé : l'équipe exécute le remboursement et vous préviendra.</p>"
+            : ""
+        }
         ${ACCUEIL}`;
       break;
     case "EN_ANALYSE":

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { LegalPage } from "@/components/legal-page";
-import { PRIX_AMENDE, PRIX_SUSPENSION, PRIX_OPTION_LRAR } from "@/lib/tarifs";
+import { PRIX_AMENDE, PRIX_CONTENTIEUX, PRIX_SUSPENSION, PRIX_OPTION_LRAR } from "@/lib/tarifs";
 
 export const metadata: Metadata = {
   title: "Conditions générales de vente",
@@ -101,13 +101,34 @@ export default function CgvPage() {
       <p>
         Le crédit acheté est porté au compte du Client et consommé à l'ouverture
         d'un Dossier. En cas de rejet du dossier par le juriste partenaire, le
-        crédit est rendu au Client et peut être réutilisé.
+        crédit est rendu au Client et peut être réutilisé. Pour un dossier
+        relevant du contentieux contraventionnel, le paiement est rattaché au
+        dossier (aucun crédit générique) et remboursé en cas de rejet.
+      </p>
+
+      <h2 className="text-lg font-semibold text-zinc-900">Article 4 bis. Délits</h2>
+      <p>
+        Les faits qualifiés de délit (notamment convocation devant le tribunal
+        correctionnel, amende forfaitaire délictuelle, conduite sans permis ou
+        sans assurance) ne relèvent pas du Service : ils exigent l&apos;assistance
+        d&apos;un avocat. SOS Amende oriente alors le Client vers un avocat
+        partenaire. <strong>Aucun paiement n&apos;est débité</strong> pour un tel
+        dossier.
+      </p>
+
+      <h2 className="text-lg font-semibold text-zinc-900">Article 4 ter. Consignation</h2>
+      <p>
+        Pour les contraventions de 4e et 5e classe, la contestation suppose une
+        consignation préalable du montant de l&apos;amende, versée par le Client
+        directement à l&apos;administration. Cette somme ne constitue pas un
+        paiement du Service et n&apos;est jamais encaissée par SOS Amende ; elle
+        est restituée au Client si la contestation aboutit.
       </p>
 
       <h2 className="text-lg font-semibold text-zinc-900">Article 5. Prix</h2>
       <p>
         Le prix du Service est de <strong>{PRIX_AMENDE} €</strong> TTC pour la contestation
-        d&apos;amende forfaitaire et de <strong>{PRIX_SUSPENSION} €</strong> TTC pour le
+        d&apos;amende forfaitaire, de <strong>{PRIX_CONTENTIEUX} €</strong> TTC pour le contentieux contraventionnel (4e/5e classe, hors consignation) et de <strong>{PRIX_SUSPENSION} €</strong> TTC pour le
         traitement d&apos;une décision de suspension ou d&apos;invalidation du permis.
       </p>
       <p>

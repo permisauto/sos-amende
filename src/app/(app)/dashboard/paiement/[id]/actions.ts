@@ -4,7 +4,12 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/dal";
 import { Resend } from "resend";
-import { montantAvecOption, libelleMontant, PRIX_OPTION_LRAR } from "@/lib/tarifs";
+import {
+  libelleMontantDossier,
+  kindPaiementAmende,
+  prixDossier,
+  PRIX_OPTION_LRAR,
+} from "@/lib/tarifs";
 import { RIB } from "@/lib/rib";
 
 export type VirementState = { ok?: boolean; error?: string; paymentId?: string } | undefined;
@@ -27,7 +32,11 @@ export async function payerParVirement(_prev: VirementState, formData: FormData)
     return { error: "Ce dossier n'est pas en attente de paiement." };
   }
 
-  const montant = montantAvecOption(dossier.type, optionLrar);
+  // Montant de l'offre du dossier : 39 € (amende simple), 149 € (contentieux
+  // contraventionnel) ou 199 € (suspension) + option LRAR. La voie stockée sur
+  // le dossier fait foi — jamais un montant fourni par le formulaire.
+  const montant = prixDossier(dossier.type, dossier.voieProcedure, optionLrar);
+  const kind = dossier.type === "AMENDE" ? kindPaiementAmende(dossier.voieProcedure) : dossier.type;
 
   // Sauvegarde contact dans extractedData et User
   const data = (dossier.extractedData as Record<string, unknown> | null) ?? {};
@@ -39,7 +48,7 @@ export async function payerParVirement(_prev: VirementState, formData: FormData)
         amount: montant,
         currency: "EUR",
         status: "PENDING_VIREMENT",
-        kind: dossier.type,
+        kind,
         optionLrar,
       },
     }),
@@ -59,7 +68,11 @@ export async function payerParVirement(_prev: VirementState, formData: FormData)
     if (key) {
       const resend = new Resend(key);
       const from = process.env.EMAIL_FROM ?? "SOS Amende <onboarding@resend.dev>";
-      const libelle = libelleMontant(dossier.type, optionLrar);
+      const libelle = libelleMontantDossier(
+        dossier.type,
+        dossier.voieProcedure,
+        optionLrar,
+      );
       const optionLinee = optionLrar ? `<p>Option « lettre recommandée » incluse (+${PRIX_OPTION_LRAR} €).</p>` : "";
       await resend.emails.send({
         from,

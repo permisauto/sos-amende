@@ -84,6 +84,14 @@ export type ExtractedData = {
   numTelePaiement?: string;
   cle?: string;
   montant?: string;
+  // Voie de procédure détectée (module `procedure.ts`) : amende forfaitaire
+  // (classes 1-3), contentieux contraventionnel (classes 4-5, consignation
+  // obligatoire) ou délit (avocat nécessaire, aucun débit). Stockée dans
+  // `extractedData` pour que la fiche dossier, le paiement et le juriste la
+  // lisent sans recalcul. `INCONNU` = choix du client.
+  voieProcedure?: "AMENDE_FORFAITAIRE" | "CONTENTIEUX_CONTRAVENTION" | "DELIT" | "INCONNU";
+  classeContravention?: number;
+  consignationMontant?: number;
   typeRadar?: string;
   radarId?: string;
   adresse?: string; // adresse du titulaire / lieu - vérifiable

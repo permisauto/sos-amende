@@ -13,6 +13,7 @@ const statusLabels: Record<string, string> = {
   A_VERIFIER: "À vérifier",
   PRET: "Prêt",
   ENVOYE: "Envoyé",
+  AVOCAT_REQUIS: "Délit — avocat requis",
   REJETE: "Rejeté",
   ERREUR_TECHNIQUE: "Erreur technique",
   RESOLU: "Réponse de l'administration",

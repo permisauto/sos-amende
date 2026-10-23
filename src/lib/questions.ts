@@ -43,6 +43,8 @@ export const PREUVE_CLIENT_TYPES = [
   // Lot R3 — pièces des questions amende (cliché radar, marquage stationnement).
   "CLICHE_ANTAI",
   "PHOTO_MARQUAGE",
+  // Contentieux contraventionnel (classes 4-5) — preuve de consignation.
+  "CONSIGNATION",
   // Veille 2.0 — pièce dont l'intitulé vient du catalogue (IA) quand aucun
   // type existant ne correspond : libellé générique, la raison portée par la
   // suggestion nomme la pièce réellement demandée.
@@ -709,6 +711,21 @@ export function suggestionsPreuvesClient(
       vus.add(cle);
       suggestions.push({ type, raison });
     }
+  }
+  // Contentieux contraventionnel (classes 4-5) : la consignation est une
+  // condition du dépôt (art. 529-10 CPP pour la 4e classe). Pièce non
+  // bloquante : le juriste peut demander la preuve via la messagerie.
+  if (
+    reponses.voieProcedure === "CONTENTIEUX_CONTRAVENTION" &&
+    !presents.has("CONSIGNATION") &&
+    !vus.has("CONSIGNATION")
+  ) {
+    vus.add("CONSIGNATION");
+    suggestions.push({
+      type: "CONSIGNATION",
+      raison:
+        "Contentieux contraventionnel : consignez l'amende avant le dépôt, puis joignez la preuve",
+    });
   }
   return suggestions;
 }
