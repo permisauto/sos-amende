@@ -15,6 +15,7 @@ type DossierRow = {
   decisionDetail: string | null;
   prix: unknown;
   type: "AMENDE" | "SUSPENSION";
+  payments?: { amount: unknown }[];
   user: { email: string; name: string | null };
 };
 
@@ -182,18 +183,22 @@ describe("notifierStatut — avec AUTH_RESEND_KEY", () => {
     expect(arg.html).toContain("Aucun paiement n'a été débité");
   });
 
-  it("REJETE d'un contentieux annonce le remboursement des 149 €", async () => {
+  it("REJETE d'un contentieux annonce le remboursement du montant réellement payé (LRAR)", async () => {
     const { notifierStatut } = await charger({ key: "re_test" });
     findUnique.mockResolvedValue({
       ...dossierBase,
       statut: "REJETE",
       motifRejet: "Faits non contestables",
       voieProcedure: "CONTENTIEUX_CONTRAVENTION",
+      prix: 149,
+      payments: [{ amount: 159 }],
     });
 
     expect(await notifierStatut("dossier-1")).toBe(true);
     const arg = send.mock.calls[0][0] as { html: string };
     expect(arg.html).toContain("remboursé");
+    expect(arg.html).toContain("159 €");
+    expect(arg.html).not.toContain("149 €");
   });
 
   it("REJETE d'une amende forfaitaire ne parle pas de remboursement", async () => {

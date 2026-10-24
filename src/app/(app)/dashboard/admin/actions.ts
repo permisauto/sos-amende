@@ -645,7 +645,11 @@ export async function validerVirement(
   const user = await prisma.user.findUnique({ where: { id: payment.userId } });
   if (user) {
     const { notifierPaiementValide } = await import("@/lib/notifications");
-    await notifierPaiementValide(user.email, user.name);
+    await notifierPaiementValide(
+      user.email,
+      user.name,
+      payment.kind === "CONTENTIEUX",
+    );
   }
 
   // Le dossier venant de basculer en EN_ATTENTE_VALIDATION : le client est

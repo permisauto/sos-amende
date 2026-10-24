@@ -18,12 +18,22 @@ export const PV_PNG = Buffer.from(
   "base64",
 );
 
-/** Dépôt d'un PV (suspension comprise) : crée un dossier EN_ANALYSE et renvoie son id. */
-export async function createDossier(page: Page): Promise<string> {
+/**
+ * Dépôt d'un PV (suspension comprise) : crée un dossier EN_ANALYSE et renvoie
+ * son id. Le provider OCR mock route le document par le nom de fichier :
+ * `contentieux.png` (4e classe) et `delit.png` (AFD) sont utilisés par
+ * `contentieux.spec.ts`.
+ */
+export async function createDossier(
+  page: Page,
+  nomFichier = "pv.png",
+): Promise<string> {
   await page.goto("/dashboard/cases/new");
-  await page
-    .locator('input[type="file"]')
-    .setInputFiles({ name: "pv.png", mimeType: "image/png", buffer: PV_PNG });
+  await page.locator('input[type="file"]').setInputFiles({
+    name: nomFichier,
+    mimeType: "image/png",
+    buffer: PV_PNG,
+  });
   await page.getByRole("button", { name: /Lancer l'analyse/ }).click();
   await page.waitForURL(/\/dashboard\/cases\/(?!new$)[^/]+$/);
   return page.url().split("/").pop() as string;
@@ -32,8 +42,16 @@ export async function createDossier(page: Page): Promise<string> {
 /**
  * Analyse d'un dossier : l'OCR (provider mock) a pré-rempli le formulaire, la
  * relecture humaine confirme puis soumet (garde-fou human-in-the-loop).
+ *
+ * `attente` décrit l'écran d'arrivée, qui dépend de la voie de procédure :
+ * - `validation` (défaut) : amende simple → EN_ATTENTE_VALIDATION ;
+ * - `paiement` : contentieux (4e/5e classe) → redirect `/dashboard/paiement/[id]` ;
+ * - `avocat` : délit → dossier AVOCAT_REQUIS (`?avocat=1`).
  */
-export async function analyserDossier(page: Page): Promise<void> {
+export async function analyserDossier(
+  page: Page,
+  attente: "validation" | "paiement" | "avocat" = "validation",
+): Promise<void> {
   await expect(page.getByLabel("Plaque", { exact: true })).toHaveValue(
     "AB-123-CD",
   );
@@ -51,6 +69,20 @@ export async function analyserDossier(page: Page): Promise<void> {
   await page
     .getByRole("button", { name: "Analyser et générer la lettre" })
     .click();
+
+  if (attente === "paiement") {
+    await page.waitForURL(/\/dashboard\/paiement\/[^/]+$/);
+    await expect(
+      page.getByRole("heading", { name: /Contentieux contraventionnel/ }),
+    ).toBeVisible();
+    return;
+  }
+  if (attente === "avocat") {
+    await page.waitForURL(/\/dashboard\/cases\/[^/?]+\?avocat=1$/);
+    await expect(page.getByTestId("avocat-requis")).toBeVisible();
+    return;
+  }
+
   await expect(
     page.getByRole("heading", {
       name: "Lettre en cours de validation",

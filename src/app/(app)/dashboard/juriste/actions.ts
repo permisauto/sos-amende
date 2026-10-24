@@ -35,6 +35,11 @@ import {
   texteReferePour,
   type PackTelecours,
 } from "@/lib/pack-telerecours";
+import { libelleMontantEncaisse } from "@/lib/tarifs";
+import {
+  contentieuxNonRegle,
+  MESSAGE_CONTENTIEUX_NON_REGLE,
+} from "@/lib/contentieux";
 
 export type ValidationState = { error?: string; ok?: boolean } | undefined;
 
@@ -70,9 +75,17 @@ export async function soumettreEtMarquerEnvoye(dossierId: string) {
     include: {
       preuves: { orderBy: { createdAt: "asc" } },
       courriers: { orderBy: { createdAt: "asc" } },
+      payments: {
+        where: { kind: "CONTENTIEUX", status: "PAID" },
+        select: { id: true },
+        take: 1,
+      },
     },
   });
   if (!dossier) return { ok: false as const, error: "Dossier introuvable." };
+  if (contentieuxNonRegle(dossier, dossier.payments[0])) {
+    return { ok: false as const, error: MESSAGE_CONTENTIEUX_NON_REGLE };
+  }
   // Garde de statut : seul un dossier PRET (signé, validé) peut être envoyé.
   // Évite un double envoi (course de relance, envoi LRAR par nos soins…).
   if (dossier.statut !== "PRET") {
@@ -227,6 +240,11 @@ export async function validerDossier(
       user: { select: { name: true, signatureUrl: true } },
       preuves: { orderBy: { createdAt: "asc" } },
       failleJuridique: { select: { templateRefere: true } },
+      payments: {
+        where: { kind: "CONTENTIEUX", status: "PAID" },
+        select: { id: true },
+        take: 1,
+      },
     },
   });
   if (!dossier) {
@@ -248,6 +266,11 @@ export async function validerDossier(
   }
   if (!dossier.lettreGeneree) {
     return { error: "Aucune lettre générée à valider." };
+  }
+  // Contentieux : examen gratuit, mais validation et envoi verrouillés tant
+  // que les 149 € (virement rattaché au dossier) ne sont pas encaissés.
+  if (contentieuxNonRegle(dossier, dossier.payments[0])) {
+    return { error: MESSAGE_CONTENTIEUX_NON_REGLE };
   }
 
   // Forclusion 48SI (60 jours francs de la notification) : bloquant côté
@@ -527,6 +550,11 @@ export async function envoyerContestation(
     include: {
       preuves: { orderBy: { createdAt: "asc" } },
       courriers: { orderBy: { createdAt: "asc" } },
+      payments: {
+        where: { kind: "CONTENTIEUX", status: "PAID" },
+        select: { id: true },
+        take: 1,
+      },
     },
   });
   if (!dossier) {
@@ -541,6 +569,9 @@ export async function envoyerContestation(
     return {
       error: "La contestation doit être validée et pas encore envoyée.",
     };
+  }
+  if (contentieuxNonRegle(dossier, dossier.payments[0])) {
+    return { error: MESSAGE_CONTENTIEUX_NON_REGLE };
   }
 
   // Canal d'envoi : par défaut celui retenu à la validation ; le juriste peut
@@ -618,6 +649,11 @@ async function envoyerParLrar(
     include: {
       preuves: { orderBy: { createdAt: "asc" } },
       courriers: { orderBy: { createdAt: "asc" } },
+      payments: {
+        where: { kind: "CONTENTIEUX", status: "PAID" },
+        select: { id: true },
+        take: 1,
+      },
     },
   });
   if (!dossier) return { ok: false as const, error: "Dossier introuvable." };
@@ -626,6 +662,9 @@ async function envoyerParLrar(
       ok: false as const,
       error: "La contestation doit être validée et pas encore envoyée.",
     };
+  }
+  if (contentieuxNonRegle(dossier, dossier.payments[0])) {
+    return { ok: false as const, error: MESSAGE_CONTENTIEUX_NON_REGLE };
   }
 
   const numero = opts.numeroRecommandé || `LRAR-${Date.now().toString(36).toUpperCase()}`;
@@ -1438,7 +1477,7 @@ export async function rejeterDossier(
           kind: "CONTENTIEUX",
           status: "PAID",
         },
-        select: { id: true },
+        select: { id: true, amount: true },
       });
       if (paiement) {
         await tx.payment.update({
@@ -1449,7 +1488,7 @@ export async function rejeterDossier(
           data: {
             dossierId: dossier.id,
             type: "REJET",
-            detail: "Remboursement des 149 € à effectuer par l'équipe",
+            detail: `Remboursement des ${libelleMontantEncaisse(Number(paiement.amount))} à effectuer par l'équipe`,
           },
         });
       }

@@ -736,6 +736,25 @@ Titulaire : MARTIN Jean
 Adresse : 12 RUE DE LA PAIX 75001 PARIS
 Le juge des référés annule la décision de suspension du permis de conduire`;
 
+/** Avis de 4e classe (135 €) : contentieux contraventionnel, offre 149 €. */
+const MOCK_PV_CONTENTIEUX = `CONTRAVENTION
+N° 123456789
+Titulaire : MARTIN Jean
+Adresse : 12 RUE DE LA PAIX 75001 PARIS
+Vous êtes avisé d'une infraction commise le 01/07/2026 à 14h32.
+Véhicule : AB-123-CD
+Montant : 135 €
+Règlement par télépaiement : 123456789 02
+N° de télé-paiement 123456789, clé 02`;
+
+/** Amende forfaitaire délictuelle : orientation avocat, aucun débit. */
+const MOCK_PV_DELIT = `AMENDE FORFAITAIRE DÉLICTUELLE
+Titulaire : MARTIN Jean
+Adresse : 12 RUE DE LA PAIX 75001 PARIS
+Infraction commise le 01/07/2026 à 14h32.
+Véhicule : AB-123-CD
+Montant : 200 €`;
+
 async function mockOcr(nomFichier?: string): Promise<OcrResult | null> {
   const nom = (nomFichier ?? "").toLowerCase();
   if (nom.includes("48si")) return { texte: MOCK_LETTRE_48SI, confiance: 100 };
@@ -745,6 +764,10 @@ async function mockOcr(nomFichier?: string): Promise<OcrResult | null> {
   if (nom.includes("retention")) return { texte: MOCK_RETENTION, confiance: 100 };
   if (nom.includes("48n")) return { texte: MOCK_48N, confiance: 100 };
   if (nom.includes("annulation")) return { texte: MOCK_ANNULATION, confiance: 100 };
+  if (nom.includes("contentieux")) {
+    return { texte: MOCK_PV_CONTENTIEUX, confiance: 100 };
+  }
+  if (nom.includes("delit")) return { texte: MOCK_PV_DELIT, confiance: 100 };
   return { texte: MOCK_PV_AMENDE, confiance: 100 };
 }
 

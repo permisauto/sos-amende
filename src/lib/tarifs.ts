@@ -104,6 +104,11 @@ export function libelleMontantCentimesDossier(
   return `${prixDossier(type, voie, optionLrar).toFixed(2).replace(".", ",")} €`;
 }
 
+/** Libellé d'un montant réellement encaissé (« 149 € », « 159,50 € »). */
+export function libelleMontantEncaisse(montant: number): string {
+  return `${Number.isInteger(montant) ? montant : montant.toFixed(2).replace(".", ",")} €`;
+}
+
 /** Nature du `Payment` à créer pour un dossier d'amende. */
 export function kindPaiementAmende(
   voie: string | null | undefined,

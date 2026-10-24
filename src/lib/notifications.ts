@@ -1,6 +1,6 @@
 import { Resend } from "resend";
 import { prisma } from "@/lib/prisma";
-import { prixBase } from "@/lib/tarifs";
+import { libelleMontantEncaisse, prixBase } from "@/lib/tarifs";
 
 const cleanKey = process.env.AUTH_RESEND_KEY?.replace(/^\uFEFF/, "").trim();
 const resend = cleanKey ? new Resend(cleanKey) : null;
@@ -110,9 +110,18 @@ export async function notifierCompteCree(
 }
 
 /**
- * Notifie le client qu'un virement a été validé (crédit débloqué).
+ * Notifie le client qu'un virement a été validé.
+ *
+ * Deux cas : un crédit générique (offre 39/199 €) est débloqué, ou un
+ * contentieux contraventionnel (149 €) est réglé — ce paiement ne crée aucun
+ * crédit, il finance directement le dossier rattaché et le fait passer en
+ * validation juriste.
  */
-export async function notifierPaiementValide(email: string, name?: string | null): Promise<boolean> {
+export async function notifierPaiementValide(
+  email: string,
+  name?: string | null,
+  estContentieux = false,
+): Promise<boolean> {
   if (!resend) return false;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://recours-permis-pv.com";
   const prenom = (name ?? email).split(" ")[0];
@@ -120,8 +129,18 @@ export async function notifierPaiementValide(email: string, name?: string | null
     await resend.emails.send({
       from: EMAIL_FROM,
       to: email,
-      subject: "SOS Amende — paiement validé",
-      html: `
+      subject: estContentieux
+        ? "SOS Amende — paiement validé, dossier transmis au juriste"
+        : "SOS Amende — paiement validé",
+      html: estContentieux
+        ? `
+        <p>Bonjour ${prenom},</p>
+        <p>Votre virement pour le contentieux contraventionnel a été validé.
+        Votre dossier est transmis à un juriste pour validation de la lettre de
+        contestation. Aucun crédit n'est ajouté à votre compte : ce paiement
+        finance directement le dossier.</p>
+        <p><a href="${appUrl}/dashboard">Accéder à mon espace</a></p>`
+        : `
         <p>Bonjour ${prenom},</p>
         <p>Votre virement a été validé : votre crédit est débloqué et vous pouvez
         poursuivre votre dossier.</p>
@@ -288,6 +307,12 @@ export async function notifierStatut(dossierId: string): Promise<boolean> {
       prix: true,
       type: true,
       voieProcedure: true,
+      payments: {
+        where: { kind: "CONTENTIEUX" },
+        select: { amount: true },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
       user: { select: { email: true, name: true } },
     },
   });
@@ -297,6 +322,13 @@ export async function notifierStatut(dossierId: string): Promise<boolean> {
   const ref = data.num_pv ? ` (PV n° ${data.num_pv})` : "";
   const prenom = dossier.user.name ?? "Client";
   const montant = dossier.prix ? `${dossier.prix} €` : `${prixBase(dossier.type)} €`;
+  // Montant réellement payé pour un contentieux (149 € ou 159 € avec LRAR) :
+  // le remboursement annoncé doit correspondre au virement encaissé.
+  const montantContentieux = libelleMontantEncaisse(
+    dossier.payments?.[0]
+      ? Number(dossier.payments[0].amount)
+      : Number(dossier.prix ?? 149),
+  );
 
   let subject = "";
   let html = "";
@@ -374,7 +406,7 @@ export async function notifierStatut(dossierId: string): Promise<boolean> {
         <p>Motif : ${dossier.motifRejet ?? "non précisé"}</p>
         ${
           dossier.voieProcedure === "CONTENTIEUX_CONTRAVENTION"
-            ? "<p>Votre paiement de 149 € vous sera remboursé : l'équipe exécute le remboursement et vous préviendra.</p>"
+            ? `<p>Votre paiement de ${montantContentieux} vous sera remboursé : l'équipe exécute le remboursement et vous préviendra.</p>`
             : ""
         }
         ${ACCUEIL}`;
