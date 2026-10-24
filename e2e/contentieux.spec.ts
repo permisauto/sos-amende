@@ -1,5 +1,24 @@
+import { Client } from "pg";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { analyserDossier, createDossier, loginAs } from "./helpers";
+
+async function nettoyerPaiementJetableOrphelin(email: string): Promise<void> {
+  const client = new Client({
+    connectionString:
+      process.env.DATABASE_URL ??
+      "postgresql://johndoe:gTLwM3AhRdZmQk7nSiUpJE2q@localhost:5432/mydb?schema=public",
+  });
+  await client.connect();
+  try {
+    await client.query(
+      `DELETE FROM "Payment" WHERE "userId" IN (SELECT id FROM "User" WHERE email = $1) AND "dossierId" IS NULL AND status = 'PENDING_VIREMENT'`,
+      [email],
+    );
+  } finally {
+    await client.end();
+  }
+}
+
 
 /**
  * Compte jetable (même approche que `rgpd.spec.ts`) : la route publique de
@@ -113,6 +132,9 @@ test("contentieux : 149 € payés avant validation et envoi", async ({
   const email = `e2e-contentieux-${Date.now()}@test.local`;
   const whatsapp = `+3369${Date.now().toString().slice(-8)}`;
   await creerCompteJetable(page, email);
+  // P2 : nettoyage du payment orphelin (sans dossier) laisse par la creation
+  // du compte jetable via la route publique de virement.
+  await nettoyerPaiementJetableOrphelin(email);
 
   const dossierId = await createDossier(page, "contentieux.png");
   // 135 € → 4e classe : examen payant (149 €), redirection vers le paiement.
@@ -123,6 +145,17 @@ test("contentieux : 149 € payés avant validation et envoi", async ({
     page.getByText("Contentieux contraventionnel (4e/5e classe)"),
   ).toBeVisible();
   await expect(page.getByText(/consignation/i).first()).toBeVisible();
+
+  // Garde-fou : tant que le contentieux n'est pas paye (149 €), le dossier
+  // reste bloque pour validation/envoi cote juriste.
+  const ctxJuriste = await browser.newContext();
+  const pageJuriste = await ctxJuriste.newPage();
+  await loginAs(pageJuriste, "e2e-juriste@test.local");
+  await pageJuriste.goto(`/dashboard/juriste/${dossierId}`);
+  await expect(
+    pageJuriste.getByRole("button", { name: "Valider la lettre" }),
+  ).toHaveCount(0);
+  await ctxJuriste.close();
 
   // Virement de 149 € rattaché au dossier (jamais un crédit générique).
   await page.getByRole("textbox", { name: "Nom *", exact: true }).fill("DUPONT");
