@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import path from "node:path";
 
 const securityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
@@ -25,6 +26,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  outputFileTracingRoot: path.resolve(__dirname),
   serverExternalPackages: ["tesseract.js", "pdf-parse", "pdfjs-dist"],
   outputFileTracingIncludes: {
     "/*": [
