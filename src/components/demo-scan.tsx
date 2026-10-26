@@ -70,7 +70,7 @@ export function DemoScan() {
   const [reponse, setReponse] = useState<Reponse | null>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  // Données extraites de la réponse (garde-fou : toujours un objet)
+  // Données extraites de la réponse (garde-fou : toujours un objet) — fix v2
   const data = reponse?.data ?? {};
 
   const scanSteps =
