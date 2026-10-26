@@ -19,6 +19,7 @@ import { chargerQuestionsDynamiques } from "@/lib/questions-dyn";
 import { libellePreuve } from "@/lib/preuve-labels";
 import { DossierTimeline, type TimelineEvent } from "@/components/dossier-timeline";
 import { FilMessages, type MessageDto } from "@/components/messages";
+import { Avancement } from "@/components/avancement";
 import { marquerMessagesLus } from "../../messages/actions";
 
 const statusLabels: Record<string, string> = {
@@ -371,26 +372,6 @@ export default async function CaseDetailPage(
   const lettreVisible = item.statut === "ENVOYE" || item.statut === "RESOLU";
   const isDemo = item.id.startsWith("pv-") || item.id.startsWith("dec-") || item.pvUrl === "/uploads/demo-pv.jpg";
 
-  // Position des statuts (anciens inclus) sur les étapes affichées.
-  const STATUT_ETAPE: Record<string, number> = {
-    EN_ANALYSE: 1,
-    EN_ATTENTE_PAIEMENT: 1,
-    EN_ATTENTE_VALIDATION: 2,
-    A_VERIFIER: 2,
-    EN_ATTENTE_PRE_SIGNATURE: 3,
-    PRET: 3,
-    ENVOYE: 4,
-    RESOLU: 5,
-  };
-  const workflow = [
-    { statut: "BROUILLON", label: "Création" },
-    { statut: "EN_ANALYSE", label: "Analyse" },
-    { statut: "EN_ATTENTE_VALIDATION", label: "Validation juriste" },
-    { statut: "EN_ATTENTE_PRE_SIGNATURE", label: "Signature" },
-    { statut: "ENVOYE", label: "Envoi" },
-    { statut: "RESOLU", label: "Réponse" },
-  ];
-  const currentIndex = STATUT_ETAPE[item.statut] ?? -1;
   // En EN_ANALYSE, l'action attendue du client (saisir + analyser) est remontée
   // en tête : timeline, preuves et messages sont vides ou hors sujet à ce stade.
   const enAnalyse = item.statut === "EN_ANALYSE";
@@ -647,36 +628,7 @@ export default async function CaseDetailPage(
       )}
 
       {item.statut !== "ANNULE" && (
-        <ol className="mt-6 flex items-center gap-1 overflow-x-auto">
-          {workflow.map((step, i) => {
-            const reached =
-              item.statut === "ERREUR_TECHNIQUE" || item.statut === "REJETE"
-                ? i <= workflow.findIndex((s) => s.statut === "ENVOYE")
-                : currentIndex >= 0 && i <= currentIndex;
-            const isCurrent = i === currentIndex;
-            return (
-              <li key={step.statut} className="flex items-center gap-1">
-                <div
-                  className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium ${
-                    isCurrent
-                      ? "bg-emerald-600 text-white"
-                      : reached
-                        ? "bg-emerald-100 text-emerald-800"
-                        : "bg-zinc-100 text-zinc-400"
-                  }`}
-                >
-                  {reached && !isCurrent && (
-                    <span className="font-bold">✓</span>
-                  )}
-                  {step.label}
-                </div>
-                {i < workflow.length - 1 && (
-                  <span className="text-zinc-300">—</span>
-                )}
-              </li>
-            );
-          })}
-        </ol>
+        <Avancement statut={item.statut} variante="complet" withLabel={true} />
       )}
 
       <div className="mt-6 grid gap-6 md:grid-cols-2">

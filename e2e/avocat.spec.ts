@@ -1,5 +1,5 @@
 ﻿import { expect, test } from "@playwright/test";
-import { loginAs, PV_PNG } from "./helpers";
+import { loginAs, loginAsJuriste, PV_PNG, creerClientE2E } from "./helpers";
 
 test("mise en relation avocat : demande client → affectation juriste → contact client", async ({
   page,
@@ -7,8 +7,10 @@ test("mise en relation avocat : demande client → affectation juriste → conta
 }) => {
   test.slow();
 
-  // Le client crée un dossier et demande une mise en relation avocat
-  await loginAs(page, "e2e-client@test.local");
+  // Compte client unique pour ce test (avec crédits)
+  const email = await creerClientE2E("avocat");
+  await loginAs(page, email);
+
   await page.goto("/dashboard/cases/new");
   await page
     .locator('input[type="file"]')
@@ -31,7 +33,7 @@ test("mise en relation avocat : demande client → affectation juriste → conta
   // Le juriste affecte un avocat partenaire
   const ctx = await browser.newContext();
   const juriste = await ctx.newPage();
-  await loginAs(juriste, "e2e-juriste@test.local");
+  await loginAsJuriste(juriste);
   await juriste.goto(`/dashboard/juriste/${dossierId}`);
   await expect(
     juriste.getByRole("heading", { name: "Mise en relation avocat" }),

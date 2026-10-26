@@ -1,17 +1,19 @@
 import { defineConfig, devices } from "@playwright/test";
+import { config as dotenvConfig } from "dotenv";
+import path from "node:path";
+
+dotenvConfig({ path: path.resolve(__dirname, ".env.e2e") });
 
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
-  // Toutes les specs partagent UN serveur Next et un seul compte client : la
-  // concurrence produit des échecs "toBeVisible" aléatoires (les échecs
-  // changent d'un run à l'autre et les tests passent en isolation). Un retry
-  // absorbe cette contention sans masquer une vraie régression.
-  retries: 1,
+  // Plus de retries : les tests sont isolés (comptes uniques par test).
+  // Si un test flaky persiste, on l'investigue au lieu de le masquer.
+  retries: 0,
   reporter: "list",
   globalSetup: "./e2e/global-setup.cjs",
   use: {
-    baseURL: "http://localhost:3200",
+    baseURL: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3200",
     trace: "on-first-retry",
   },
   projects: [
@@ -22,35 +24,24 @@ export default defineConfig({
   ],
   webServer: {
     command: "npm run build && npm run start -- -p 3200",
-    url: "http://localhost:3200",
+    url: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3200",
     reuseExistingServer: false,
     timeout: 180_000,
     env: {
-      NEXT_PUBLIC_APP_URL: "http://localhost:3200",
-      OCR_PROVIDER: "mock",
-      // Vérification des failles : IA simulée (suggestions mock tracées) —
-      // le bouton « Analyse approfondie (IA) » reste visible sans clé Gemini.
-      VERIF_IA_PROVIDER: "mock",
-      // Vérification du SIRET (lot 4) : réponse déterministe sans appel API.
-      SIRET_PROVIDER: "mock",
-      ANTAI_MOCK: "1",
-      ANTAI_MOCK_TOKEN: "dev-antai-mock",
-      AUTH_DEV_FILE: "1",
-      // Suivi automatique des décisions (E2E) : seuil 0 j pour éligibilité
-      // immédiate + secret nécessaire au cron/recuperations-decisions.
-      DECISION_WAIT_JOURS: "0",
-      CRON_SECRET: "e2e-cron-secret",
-      NODE_TLS_REJECT_UNAUTHORIZED: "0",
-      // .env.local (généré par Vercel CLI) contient des placeholders
-      // "[SENSITIVE]" qui écrasent .env. On force les vraies valeurs locales
-      // ici pour que le webServer E2E utilise la base locale et le magic-link
-      // fichier (jamais un envoi Resend réel ni une base distante).
-      DATABASE_URL:
-        "postgresql://johndoe:gTLwM3AhRdZmQk7nSiUpJE2q@localhost:5432/mydb?schema=public",
-      AUTH_SECRET:
-        "c4c20937e922991530156f61e810e13aedd4e7f874299859",
-      AUTH_RESEND_KEY: "",
-      EMAIL_FROM: "SOS Amende <onboarding@resend.dev>",
+      NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3200",
+      OCR_PROVIDER: process.env.OCR_PROVIDER ?? "mock",
+      VERIF_IA_PROVIDER: process.env.VERIF_IA_PROVIDER ?? "mock",
+      SIRET_PROVIDER: process.env.SIRET_PROVIDER ?? "mock",
+      ANTAI_MOCK: process.env.ANTAI_MOCK ?? "1",
+      ANTAI_MOCK_TOKEN: process.env.ANTAI_MOCK_TOKEN ?? "dev-antai-mock",
+      AUTH_DEV_FILE: process.env.AUTH_DEV_FILE ?? "1",
+      DECISION_WAIT_JOURS: process.env.DECISION_WAIT_JOURS ?? "0",
+      CRON_SECRET: process.env.CRON_SECRET ?? "e2e-cron-secret",
+      NODE_TLS_REJECT_UNAUTHORIZED: process.env.NODE_TLS_REJECT_UNAUTHORIZED ?? "0",
+      DATABASE_URL: process.env.DATABASE_URL ?? "postgresql://johndoe:gTLwM3AhRdZmQk7nSiUpJE2q@localhost:5432/mydb?schema=public",
+      AUTH_SECRET: process.env.AUTH_SECRET ?? "68b5a2e6257945782e27191e1804ab8785867a6818484cfe88ad95c856c3c7e9",
+      AUTH_RESEND_KEY: process.env.AUTH_RESEND_KEY ?? "",
+      EMAIL_FROM: process.env.EMAIL_FROM ?? "SOS Amende <onboarding@resend.dev>",
     },
   },
 });

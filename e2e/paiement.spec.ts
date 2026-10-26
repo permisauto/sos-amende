@@ -1,10 +1,10 @@
 import { expect, test, type Browser } from "@playwright/test";
-import { loginAs } from "./helpers";
+import { loginAs, loginAsAdmin } from "./helpers";
 
 async function validerVirementAdmin(browser: Browser, email: string) {
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
-  await loginAs(page, "e2e-admin@test.local");
+  await loginAsAdmin(page);
 
   // Confirmer que la session est bien celle de l'admin
   await expect(page.getByRole("link", { name: "Bibliothèque juridique" })).toBeVisible();

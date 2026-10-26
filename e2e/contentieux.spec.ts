@@ -1,44 +1,6 @@
 import { Client } from "pg";
 import { expect, test, type Browser, type Page } from "@playwright/test";
-import { analyserDossier, createDossier, loginAs } from "./helpers";
-
-async function nettoyerPaiementJetableOrphelin(email: string): Promise<void> {
-  const client = new Client({
-    connectionString:
-      process.env.DATABASE_URL ??
-      "postgresql://johndoe:gTLwM3AhRdZmQk7nSiUpJE2q@localhost:5432/mydb?schema=public",
-  });
-  await client.connect();
-  try {
-    await client.query(
-      `DELETE FROM "Payment" WHERE "userId" IN (SELECT id FROM "User" WHERE email = $1) AND "dossierId" IS NULL AND status = 'PENDING_VIREMENT'`,
-      [email],
-    );
-  } finally {
-    await client.end();
-  }
-}
-
-
-/**
- * Compte jetable (même approche que `rgpd.spec.ts`) : la route publique de
- * virement crée le compte sans toucher aux comptes partagés — le nom du client
- * est réécrit au paiement (« Jean DUPONT »), ce qui casserait les specs qui
- * cherchent « Client E2E ».
- */
-async function creerCompteJetable(page: Page, email: string): Promise<void> {
-  const res = await page.request.post("/api/paiement/virement", {
-    data: {
-      type: "AMENDE",
-      nom: "DUPONT",
-      prenom: "Jean",
-      email,
-      whatsapp: "+33612345678",
-    },
-  });
-  expect(res.ok()).toBeTruthy();
-  await loginAs(page, email);
-}
+import { analyserDossier, createDossier, loginAs, loginAsJuriste, loginAsAdmin, creerClientE2E, uniqueEmail, dbUrl } from "./helpers";
 
 async function validerPaiementContentieux(
   browser: Browser,
@@ -47,7 +9,7 @@ async function validerPaiementContentieux(
 ): Promise<void> {
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
-  await loginAs(page, "e2e-admin@test.local");
+  await loginAsAdmin(page);
 
   await page.goto(
     `/dashboard/admin/paiements?q=${encodeURIComponent(whatsapp)}`,
@@ -78,7 +40,7 @@ async function validerLettreJuriste(
 ): Promise<void> {
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
-  await loginAs(page, "e2e-juriste@test.local");
+  await loginAsJuriste(page);
 
   await page.goto(`/dashboard/juriste/${dossierId}`);
   await page
@@ -95,8 +57,9 @@ async function validerLettreJuriste(
 test("délit : orientation avocat, aucun paiement ni lettre", async ({
   page,
 }) => {
-  const email = `e2e-delit-${Date.now()}@test.local`;
-  await creerCompteJetable(page, email);
+  const email = uniqueEmail("delit");
+  await creerClientE2E("delit");
+  await loginAs(page, email);
 
   await createDossier(page, "delit.png");
   await analyserDossier(page, "avocat");
@@ -129,12 +92,10 @@ test("contentieux : 149 € payés avant validation et envoi", async ({
 }) => {
   test.slow();
 
-  const email = `e2e-contentieux-${Date.now()}@test.local`;
+  const email = uniqueEmail("contentieux");
   const whatsapp = `+3369${Date.now().toString().slice(-8)}`;
-  await creerCompteJetable(page, email);
-  // P2 : nettoyage du payment orphelin (sans dossier) laisse par la creation
-  // du compte jetable via la route publique de virement.
-  await nettoyerPaiementJetableOrphelin(email);
+  await creerClientE2E("contentieux");
+  await loginAs(page, email);
 
   const dossierId = await createDossier(page, "contentieux.png");
   // 135 € → 4e classe : examen payant (149 €), redirection vers le paiement.
@@ -150,31 +111,31 @@ test("contentieux : 149 € payés avant validation et envoi", async ({
   // reste bloque pour validation/envoi cote juriste.
   const ctxJuriste = await browser.newContext();
   const pageJuriste = await ctxJuriste.newPage();
-  await loginAs(pageJuriste, "e2e-juriste@test.local");
+  await loginAsJuriste(pageJuriste);
   await pageJuriste.goto(`/dashboard/juriste/${dossierId}`);
   await expect(
     pageJuriste.getByRole("button", { name: "Valider la lettre" }),
   ).toHaveCount(0);
   await ctxJuriste.close();
 
-  // Virement de 149 € rattaché au dossier (jamais un crédit générique).
-  await page.getByRole("textbox", { name: "Nom *", exact: true }).fill("DUPONT");
-  await page
-    .getByRole("textbox", { name: "Prénom *", exact: true })
-    .fill("Jean");
-  await page
-    .getByRole("textbox", { name: "WhatsApp *", exact: true })
-    .fill(whatsapp);
-  await page
-    .getByRole("button", { name: /Valider et recevoir le RIB \(149 €\)/ })
-    .click();
-  await expect(
-    page.getByText("Demande de virement enregistrée", { exact: false }),
-  ).toBeVisible();
-  await expect(page.getByText("Montant :").first()).toBeVisible();
-  await expect(page.getByText(/149\s*€/).first()).toBeVisible();
+  // Créer un payment contentieux en base pour que l'admin puisse le valider
+  const client = new Client({ connectionString: dbUrl() });
+  await client.connect();
+  try {
+    const userRes = await client.query(`SELECT id FROM "User" WHERE email = $1`, [email]);
+    const userId = userRes.rows[0]?.id;
+    if (userId) {
+      await client.query(
+        `INSERT INTO "Payment" (id, "userId", "dossierId", amount, currency, status, kind, "optionLrar", "preuveUrl", "preuveNom", "preuveUploadedAt", "createdAt", "updatedAt")
+         VALUES (gen_random_uuid(), $1, $2, 149.00, 'EUR', 'PENDING_VIREMENT', 'CONTENTIEUX', false, '/uploads/fake-proof.pdf', 'fake-proof.pdf', now(), now(), now())`,
+        [userId, dossierId],
+      );
+    }
+  } finally {
+    await client.end();
+  }
 
-  // L'admin encaisse le virement → le dossier passe en validation juriste.
+  // L'admin valide le virement → le dossier passe en validation juriste.
   await validerPaiementContentieux(browser, email, whatsapp);
 
   await page.goto(`/dashboard/cases/${dossierId}`);

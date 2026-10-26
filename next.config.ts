@@ -5,14 +5,7 @@ const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
-  // Strict-Transport-Security n'a d'effet que sur HTTPS (Vercel/Hostinger) —
-  // sans risque pour le dev local en HTTP.
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
-  // CSP : pas de script inline généré par nous (Next.js APP Router inclut les
-  // scripts NextJS en 'unsafe-inline' — impossible de s'en passer sans nonce).
-  // 'unsafe-eval' reste réservé au dev : la config est évaluée à la
-  // construction, un build de production (Vercel/E2E) part donc sans eval
-  // (audit lot 5 — aucun eval/new Function dans le code applicatif).
   {
     key: "Content-Security-Policy",
     value: [
@@ -23,7 +16,7 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
-      "connect-src 'self'",
+      "connect-src 'self' https://o1199999.ingest.sentry.io",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
@@ -32,30 +25,13 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  // tesseract.js charge un worker-script via worker_threads à l'exécution :
-  // il doit rester un paquet externe (require() natif), sinon Next.js le
-  // bundle et le chemin 'tesseract.js/src/worker-script/node/index.js' casse
-  // au déploiement (Vercel) : « Cannot find module .../worker-script/... ».
-  // pdf-parse/pdfjs-dist embarquent des .mjs + wasm chargés dynamiquement —
-  // les externaliser évite qu'Next tente de les compiler (PDF du client).
   serverExternalPackages: ["tesseract.js", "pdf-parse", "pdfjs-dist"],
-  // Vercel trace la fonction et n'embarque que les fichiers atteignables par
-  // analyse statique : le worker-script de tesseract.js est chargé via un
-  // chemin dynamique (path.join(__dirname, ...)) donc invisible au traceur —
-  // il faut le forcer dans l'output, sinon « Cannot find module
-  // .../worker-script/node/index.js » en production.
   outputFileTracingIncludes: {
     "/*": [
       "./node_modules/tesseract.js/**/*",
       "./node_modules/tesseract.js-core/**/*",
       "./node_modules/pdf-parse/**/*",
       "./node_modules/pdfjs-dist/**/*",
-      // pdfjs (embarqué dans pdf-parse) importe @napi-rs/canvas dynamiquement
-      // au démarrage pour obtenir DOMMatrix/ImageData/Path2D : le traceur ne
-      // suit pas ce require conditionnel et le paquet manquait dans la lambda
-      // → « DOMMatrix is not defined » à l'import de pdf-parse en prod
-      // (couche texte PDF perdue, 2026-10-05). La binaire platform est un
-      // paquet distinct, chargé dynamiquement lui aussi.
       "./node_modules/@napi-rs/canvas/**/*",
       "./node_modules/@napi-rs/canvas-linux-x64-gnu/**/*",
     ],

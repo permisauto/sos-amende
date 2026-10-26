@@ -59,10 +59,6 @@ next-env.d.ts
 .env*
 
 # scripts/outils locaux non versionnés (jamais commités)
-/testSaaS.js
-/agentDetective.js
-/agentExtracteur.js
-/agentRedacteur.js
-/pipelineContestation.js
+/scripts/legacy/
 /scripts/veilleJuridique.js
 /images/

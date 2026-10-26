@@ -1,5 +1,5 @@
 import { expect, test, type Browser } from "@playwright/test";
-import { analyserDossier, createDossier, loginAs } from "./helpers";
+import { analyserDossier, createDossier, loginAs, loginAsJuriste, creerClientE2E } from "./helpers";
 
 async function signerLettre(page: import("@playwright/test").Page) {
   // Si une signature a déjà été réutilisée (P2 : case « Réutiliser ma
@@ -34,7 +34,7 @@ async function signerLettre(page: import("@playwright/test").Page) {
 async function approuverLettre(browser: Browser, dossierId: string) {
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
-  await loginAs(page, "e2e-juriste@test.local");
+  await loginAsJuriste(page);
   await page.goto(`/dashboard/juriste/${dossierId}`);
   await page
     .getByLabel("Canal d'envoi de la contestation")
@@ -62,11 +62,10 @@ test("suivi décision : le cron récupère la décision sans action du client", 
 }) => {
   test.slow();
 
-  // Compte dédié (e2e-client-suivi@test.local) : sa signature de profil est
-  // pré-posée par global-setup (Cas A déterministe — le dossier est PRET dès la
-  // validation juriste, pas de canvas) et isolé du client partagé par les
-  // autres specs.
-  await loginAs(page, "e2e-client-suivi@test.local");
+  // Compte client unique pour ce test (isolation complète, avec crédits)
+  const email = await creerClientE2E("suivi-decision");
+  await loginAs(page, email);
+
   const dossierId = await createDossier(page);
   await analyserDossier(page);
   await expect(

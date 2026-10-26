@@ -1,5 +1,5 @@
 import { expect, test, type Browser } from "@playwright/test";
-import { analyserDossier, createDossier, loginAs } from "./helpers";
+import { analyserDossier, createDossier, loginAs, loginAsJuriste, creerClientE2E } from "./helpers";
 
 async function signerLettre(page: import("@playwright/test").Page) {
   // Si une signature a déjà été réutilisée (P2 : case « Réutiliser ma
@@ -38,7 +38,7 @@ async function signerLettre(page: import("@playwright/test").Page) {
 async function approuverLettre(browser: Browser, dossierId: string) {
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
-  await loginAs(page, "e2e-juriste@test.local");
+  await loginAsJuriste(page);
 
   // Confirmer que la session est bien celle du juriste
   await expect(page.getByText("Juriste E2E", { exact: true })).toBeVisible();
@@ -63,7 +63,7 @@ async function approuverLettre(browser: Browser, dossierId: string) {
 async function decisionOmpJuriste(browser: Browser, dossierId: string) {
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
-  await loginAs(page, "e2e-juriste@test.local");
+  await loginAsJuriste(page);
 
   await page.goto(`/dashboard/juriste/${dossierId}`);
 
@@ -105,7 +105,9 @@ test("flux complet : dépôt → analyse → validation juriste → signature �
 }) => {
   test.slow();
 
-  await loginAs(page, "e2e-client@test.local");
+  // Compte client unique pour ce test (isolation complète, avec crédits)
+  const email = await creerClientE2E("flux-complet");
+  await loginAs(page, email);
 
   const dossierId = await createDossier(page);
   await analyserDossier(page);

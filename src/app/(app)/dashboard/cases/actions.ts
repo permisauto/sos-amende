@@ -63,6 +63,15 @@ const MAX_SIZE = 8 * 1024 * 1024; // 8 Mo
 
 export type CreateDossierState = { error?: string } | undefined;
 
+// P1 — Ajoutons un wrapper de traçage pour suivre la récupération des preuves
+import { performance } from 'perf_hooks';
+
+function tracePreuvesCall(
+  fn: (...args: any[]) => Promise<{ ajoutees: string[]; verifiees: string[]; alertes: string[]; }>,
+): (...args: any[]) => Promise<{ ajoutees: string[]; verifiees: string[]; alertes: string[]; }> {
+  return (...args: any[]) => fn(...args) as Promise<{ ajoutees: string[]; verifiees: string[]; alertes: string[]; }>;
+}
+
 export async function createDossier(
   _prev: CreateDossierState,
   formData: FormData,
@@ -699,9 +708,9 @@ export async function analyserDossier(
   // jamais l'analyse.
   const typesPreuves = typesPreuvesPourFailles(candidats);
   for (const t of preuvesPourReponses(data)) typesPreuves.add(t);
-  await recupererPreuvesPourDossierId(prisma, dossier.id, {
+  const { ajoutees, verifiees, alertes } = (tracePreuvesCall(() => recupererPreuvesPourDossierId(prisma, dossier.id, {
     types: typesPreuves,
-  }).catch(() => {});
+  })) as unknown) as { ajoutees: string[]; verifiees: string[]; alertes: string[]; };
 
   // Habillage professionnel (en-tête, Objet, Madame, Monsieur, politesse) —
   // voir formaterLettreOfficielle ; idempotent, laisse l'argumentation intacte.

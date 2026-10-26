@@ -6,6 +6,13 @@ export type SoumissionResult =
   | { ok: true; numeroDepot: string; preuveUrl: string }
   | { ok: false; error: string };
 
+// ANTAI_MOCK=1 est autorisé en dev/E2E (où AUTH_DEV_FILE=1 est aussi posé).
+// En vraie production (sans double-gate E2E), c'est interdit.
+const isE2EOptIn = process.env.AUTH_DEV_FILE === "1" && process.env.ANTAI_MOCK === "1";
+if (process.env.NODE_ENV === "production" && process.env.ANTAI_MOCK === "1" && !isE2EOptIn) {
+  throw new Error("ANTAI_MOCK=1 interdit en production — retirez la variable ou déployez sans");
+}
+
 const USE_REAL_ANTAI = process.env.ANTAI_REAL === "1";
 
 /**

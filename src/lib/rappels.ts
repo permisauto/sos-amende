@@ -122,6 +122,130 @@ export async function chercherRappels(): Promise<RappelResultat[]> {
       });
     }
   }
+return resultats;
+}
+
+// ── Relance paiement virement (J+3 / J+7) ──────────────────────────────────
+
+/** Type de rappel dédié : relance pour paiement virement en attente. */
+export const RAPPEL_TYPE_PAIEMENT = "PAIEMENT";
+
+/** Fenêtres de relance paiement (jours après création du payment PENDING_VIREMENT). */
+export const PAIEMENT_RELANCE_JOURS = [3, 7] as const;
+export type PaiementRelanceJour = (typeof PAIEMENT_RELANCE_JOURS)[number];
+
+/**
+ * Vérifie si une relance paiement est due pour un délai donné.
+ * Pure, testée.
+ */
+export function relancePaiementDue(
+  createdAt: Date,
+  jourRelance: PaiementRelanceJour,
+): boolean {
+  const diffMs = Date.now() - createdAt.getTime();
+  const diffJours = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  return diffJours >= jourRelance;
+}
+
+async function envoyerRappelPaiement(opts: {
+  email: string;
+  nom?: string | null;
+  montant: number;
+  paymentId: string;
+  jourRelance: PaiementRelanceJour;
+}): Promise<boolean> {
+  if (!resend) return false;
+
+  const titre = `Rappel J+${opts.jourRelance} : votre virement est en attente de validation`;
+  const montantStr = `${Number(opts.montant).toFixed(2).replace(".", ",")} €`;
+
+  await resend.emails.send({
+    from: EMAIL_FROM,
+    to: opts.email,
+    subject: titre,
+    html: `
+      <p>Bonjour${opts.nom ? ` ${opts.nom}` : ""},</p>
+      <p>Votre demande de virement de <strong>${montantStr}</strong> (réf. <code>${opts.paymentId.slice(0, 8)}</code>) est en attente de validation par notre équipe.</p>
+      <p>Merci d'avoir effectué le virement. Si vous n'avez pas encore envoyé la preuve de virement, merci de la déposer depuis votre espace client.</p>
+      <p><a href="${APP_URL}/dashboard/paiement/${opts.paymentId}">Voir mon paiement</a></p>
+      <p style="font-size: 12px; color: #666;">Ceci est un rappel automatique (J+${opts.jourRelance}). Si le virement a déjà été validé, ignorez ce message.</p>
+    `,
+  });
+  return true;
+}
+
+export type RappelPaiementResultat = {
+  paymentId: string;
+  jourRelance: PaiementRelanceJour;
+  envoye: boolean;
+  email: string;
+};
+
+/**
+ * Relance paiement virement : J+3 et J+7 après création du payment PENDING_VIREMENT.
+ * Dédupliquée via type `PAIEMENT_J3` / `PAIEMENT_J7` (colonne `Rappel.type`).
+ * Sans AUTH_RESEND_KEY : relance enregistrée, `envoye = false`.
+ */
+export async function chercherRappelsPaiement(): Promise<RappelPaiementResultat[]> {
+  // Récupérer les paiements en attente
+  const payments = await prisma.payment.findMany({
+    where: {
+      status: "PENDING_VIREMENT",
+    },
+    include: {
+      user: { select: { email: true, name: true } },
+      dossier: { select: { id: true } },
+    },
+  });
+
+  // Récupérer les rappels de paiement existants pour déduplication
+  const existingRappels = await prisma.rappel.findMany({
+    where: {
+      type: { startsWith: "PAIEMENT_J" },
+    },
+    select: { type: true, dossierId: true },
+  });
+  const existingByTypeAndDossier = new Map<string, Set<string>>();
+  for (const r of existingRappels) {
+    if (!existingByTypeAndDossier.has(r.type)) {
+      existingByTypeAndDossier.set(r.type, new Set());
+    }
+    existingByTypeAndDossier.get(r.type)!.add(r.dossierId);
+  }
+
+  const resultats: RappelPaiementResultat[] = [];
+
+  for (const payment of payments) {
+    const dossierId = payment.dossierId ?? "";
+    for (const jourRelance of PAIEMENT_RELANCE_JOURS) {
+      const typeRappel = `PAIEMENT_J${jourRelance}` as const;
+
+      // Vérifier si déjà envoyé (via Map pour perf)
+      const existingForType = existingByTypeAndDossier.get(typeRappel);
+      if (existingForType?.has(dossierId)) continue;
+
+      if (!relancePaiementDue(payment.createdAt, jourRelance)) continue;
+
+      const envoye = await envoyerRappelPaiement({
+        email: payment.user.email,
+        nom: payment.user.name,
+        montant: Number(payment.amount),
+        paymentId: payment.id,
+        jourRelance,
+      });
+
+      await prisma.rappel
+        .create({ data: { dossierId, type: typeRappel } })
+        .catch(() => {});
+
+      resultats.push({
+        paymentId: payment.id,
+        jourRelance,
+        envoye,
+        email: payment.user.email,
+      });
+    }
+  }
   return resultats;
 }
 

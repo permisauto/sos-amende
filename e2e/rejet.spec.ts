@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { analyserDossier, createDossier, loginAs } from "./helpers";
+import { analyserDossier, createDossier, loginAs, loginAsJuriste, creerClientE2E } from "./helpers";
 
 test("rejet juriste (statut REJETE) : motif affiché au client", async ({
   page,
@@ -7,15 +7,18 @@ test("rejet juriste (statut REJETE) : motif affiché au client", async ({
 }) => {
   test.slow();
 
+  // Compte client unique pour ce test (avec crédits)
+  const email = await creerClientE2E("rejet");
+  await loginAs(page, email);
+
   // Le client dépose et analyse son PV → dossier « À vérifier » (lettre générée)
-  await loginAs(page, "e2e-client@test.local");
   const dossierId = await createDossier(page);
   await analyserDossier(page);
 
   // Le juriste rejette le dossier (A_VERIFIER : actions de rejet uniquement)
   const ctx = await browser.newContext();
   const juriste = await ctx.newPage();
-  await loginAs(juriste, "e2e-juriste@test.local");
+  await loginAsJuriste(juriste);
   await juriste.goto(`/dashboard/juriste/${dossierId}`);
 
   await expect(

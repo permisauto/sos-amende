@@ -4,15 +4,15 @@ const path = require("node:path");
 const { Client } = require("pg");
 
 /**
- * Remise à zéro de l'état E2E avant la suite : recharge les crédits du client
- * de test (chaque run en consomme) sans réinitialiser la base (les dossiers
- * accumulés restent, ce que la file juriste tolère).
+ * Remise à zéro de l'état E2E avant la suite : assure l'existence des comptes
+ * juriste/admin avec leur passwordHash, et réinitialise les failles SUSPENSION
+ * à PROPOSEE (hors pack 3F/48SI injecté ACTIVE).
  * Fichier en .cjs : le client Prisma 7 généré est ESM-only (import.meta), ce
  * que le chargeur CJS de Playwright ne peut pas importer.
  */
-  // Supabase pour les E2E (prod) — le .env local pointe sur localhost vide
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-  module.exports = async function globalSetup() {
+// Supabase pour les E2E (prod) — le .env local pointe sur localhost vide
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+module.exports = async function globalSetup() {
   const envPath = path.join(process.cwd(), ".env");
   const raw = fs.existsSync(envPath) ? fs.readFileSync(envPath, "utf8") : "";
   const get = (key) => {
@@ -34,14 +34,33 @@ const { Client } = require("pg");
   await client.connect();
   try {
     // Garde-fou « mot de passe obligatoire » (création après le magic-link) :
-    // les comptes E2E reçoivent un hash par défaut pour que les specs qui se
-    // connectent par magic-link ne soient pas redirigées vers la page de
-    // création de mot de passe. (merci de le maintenir identique au seed)
+    // les comptes E2E juriste/admin reçoivent un hash par défaut pour que les
+    // specs qui se connectent par magic-link ne soient pas redirigées vers la
+    // page de création de mot de passe. (merci de le maintenir identique au seed)
     const e2ePwd =
       "scrypt$32768$8$1$f05734780417c278f0efd0dddd8cbcbd$2a6d4e183029e4b0cc51f69aa1810bb55ad06874af2055cbf1730f6e612a45bf9c1800d930a8a128d0edca11a2b26cf8ade73b4752390ceb7b88a0871c2f8212";
+
+    // Comptes juriste/admin (créés par seed, remis à zéro ici pour robustesse)
+    await client.query(
+      `INSERT INTO "User" (id, email, name, role, credits, "emailVerified", "passwordHash", "updatedAt")
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, now(), $5, now())
+       ON CONFLICT (email) DO UPDATE SET
+         "passwordHash" = EXCLUDED."passwordHash",
+         credits = EXCLUDED.credits`,
+      ["e2e-juriste@test.local", "Juriste E2E", "JURISTE", 0, e2ePwd],
+    );
+    await client.query(
+      `INSERT INTO "User" (id, email, name, role, credits, "emailVerified", "passwordHash", "updatedAt")
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, now(), $5, now())
+       ON CONFLICT (email) DO UPDATE SET
+         "passwordHash" = EXCLUDED."passwordHash",
+         credits = EXCLUDED.credits`,
+      ["e2e-admin@test.local", "Admin E2E", "ADMIN", 0, e2ePwd],
+    );
+
     // Compte dédié au suivi de décision (e2e/suivi-decision.spec.ts) : créé
-    // (sur les bases fraîches) puis rechargé — isolé du client principal pour
-    // que sa signature de profil (Cas A) n'interfère pas avec les autres specs.
+    // (sur les bases fraîches) puis rechargé — isolé pour que sa signature de
+    // profil (Cas A) n'interfère pas avec les autres specs.
     const sigPath = path.join(
       process.cwd(),
       "public",
@@ -60,38 +79,22 @@ const { Client } = require("pg");
       ),
     );
     await client.query(
-      `
-      INSERT INTO "User" (id, email, name, role, credits, "emailVerified", "passwordHash", "signatureUrl", "updatedAt")
-      VALUES (gen_random_uuid(), $1, 'Client Suivi E2E', 'CLIENT', $2, now(), $3, $4, now())
-      ON CONFLICT (email) DO UPDATE SET
-        "passwordHash" = EXCLUDED."passwordHash",
-        "signatureUrl" = EXCLUDED."signatureUrl",
-        credits = EXCLUDED.credits
-      `,
+      `INSERT INTO "User" (id, email, name, role, credits, "emailVerified", "passwordHash", "signatureUrl", "updatedAt")
+       VALUES (gen_random_uuid(), $1, 'Client Suivi E2E', 'CLIENT', $2, now(), $3, $4, now())
+       ON CONFLICT (email) DO UPDATE SET
+         "passwordHash" = EXCLUDED."passwordHash",
+         "signatureUrl" = EXCLUDED."signatureUrl",
+         credits = EXCLUDED.credits`,
       ["e2e-client-suivi@test.local", 50, e2ePwd, "/uploads/sigs/e2e-suivi-signature.png"],
     );
-    await client.query(
-      'UPDATE "User" SET credits = $1 WHERE email = $2',
-      [50, "e2e-client@test.local"],
-    );
-    await client.query(
-      'UPDATE "User" SET "passwordHash" = $1 WHERE email IN ($2,$3,$4)',
-      [e2ePwd, "e2e-client@test.local", "e2e-juriste@test.local", "e2e-admin@test.local"],
-    );
-    // Remise à zéro de la signature du client : une fois signé, P2 réutilise la
-    // signature enregistrée (le canvas disparaît au profit de la case
-    // « réutiliser ») — chaque suite doit repartir d'un état déterministe.
-    await client.query(
-      'UPDATE "User" SET "signatureUrl" = NULL WHERE email = $1',
-      ["e2e-client@test.local"],
-    );
+
     // Le test suspension.spec.ts vérifie le garde-fou « aucune faille
     // SUSPENSION validée → examen par un juriste ».
     //
-    // On réinitialise les failles SUSPENSION, sans liste d'ids en dur pour le
-    // reste du catalogue : le catalogue en compte 10 et continuera d'en gagner
-    // (auto-alimentation veille). Une seule faille suspension active (sans garde
-    // docType) faisait échouer suspension.spec.ts.
+    // On réinitialise les failles SUSPENSION en PROPOSEE, sans liste d'ids en
+    // dur pour le reste du catalogue : le catalogue en compte 10 et continuera
+    // d'en gagner (auto-alimentation veille). Une seule faille suspension active
+    // (sans garde docType) faisait échouer suspension.spec.ts.
     //
     // Les 4 failles du Pack 3F/48SI injectées en ACTIVE par la synchronisation
     // (`FAILLES_PACK_ACTIVES`) sont EXCLUES de la remise à zéro : leur garde
@@ -111,6 +114,7 @@ const { Client } = require("pg");
         ],
       ],
     );
+
     // Failles AMENDE exploitables (règle dégagée + règles de détection +
     // template rédigé) : le seed les laisse en PROPOSEE — c'est le comportement
     // de production (l'admin les valide via « Synchroniser et activer »). En
@@ -125,14 +129,14 @@ const { Client } = require("pg");
     // peuvent pas produire de lettre (garde-fou « lettre vide »).
     await client.query(
       `UPDATE "FailleJuridique"
-          SET statut = 'ACTIVE'
-        WHERE "typeInfraction" = 'AMENDE'
-          AND statut = 'PROPOSEE'
-          AND COALESCE(btrim("regle"), '') <> ''
-          AND COALESCE(btrim("templateLettre"), '') <> ''
-          AND "reglesDetection" IS NOT NULL
-          AND jsonb_typeof("reglesDetection") = 'array'
-          AND jsonb_array_length("reglesDetection") > 0`,
+           SET statut = 'ACTIVE'
+         WHERE "typeInfraction" = 'AMENDE'
+           AND statut = 'PROPOSEE'
+           AND COALESCE(btrim("regle"), '') <> ''
+           AND COALESCE(btrim("templateLettre"), '') <> ''
+           AND "reglesDetection" IS NOT NULL
+           AND jsonb_typeof("reglesDetection") = 'array'
+           AND jsonb_array_length("reglesDetection") > 0`,
     );
   } finally {
     await client.end();

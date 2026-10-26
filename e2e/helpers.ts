@@ -1,6 +1,7 @@
 ﻿import { readFile, unlink } from "node:fs/promises";
 import path from "node:path";
-import { expect, type Page } from "@playwright/test";
+import { expect, type Page, type Browser } from "@playwright/test";
+import { Client } from "pg";
 
 /** Fichier magic-link dev, dédié à l'email (voir src/auth.ts). */
 function magicFile(email: string): string {
@@ -13,10 +14,75 @@ function magicFile(email: string): string {
   );
 }
 
+/** URL de base de données pour les tests E2E. */
+export function dbUrl(): string {
+  return (
+    process.env.DATABASE_URL ??
+    "postgresql://johndoe:gTLwM3AhRdZmQk7nSiUpJE2q@localhost:5432/mydb?schema=public"
+  );
+}
+
 export const PV_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
   "base64",
 );
+
+/**
+ * Génère un email unique pour un test E2E.
+ * Format : e2e-{testName}-{timestamp}@test.local
+ */
+export function uniqueEmail(testName: string): string {
+  return `e2e-${testName}-${Date.now()}@test.local`;
+}
+
+/**
+ * Crée un client E2E directement en base avec crédits (pour tests isolés).
+ * Retourne l'email créé.
+ */
+export async function creerClientE2E(testName: string, credits = 50): Promise<string> {
+  const email = uniqueEmail(testName);
+  const client = new Client({ connectionString: dbUrl() });
+  await client.connect();
+  try {
+    const e2ePwd =
+      "scrypt$32768$8$1$f05734780417c278f0efd0dddd8cbcbd$2a6d4e183029e4b0cc51f69aa1810bb55ad06874af2055cbf1730f6e612a45bf9c1800d930a8a128d0edca11a2b26cf8ade73b4752390ceb7b88a0871c2f8212";
+    await client.query(
+      `INSERT INTO "User" (id, email, name, role, credits, "emailVerified", "passwordHash", "updatedAt")
+       VALUES (gen_random_uuid(), $1, 'Client E2E', 'CLIENT', $2, now(), $3, now())
+       ON CONFLICT (email) DO UPDATE SET
+         "passwordHash" = EXCLUDED."passwordHash",
+         credits = EXCLUDED.credits`,
+      [email, credits, e2ePwd],
+    );
+  } finally {
+    await client.end();
+  }
+  return email;
+}
+
+/**
+ * Crée un compte E2E jetable via l'API de virement (payment-first).
+ * Retourne l'email créé. Attention : pas de crédits tant que l'admin ne valide pas.
+ */
+export async function creerCompteE2E(
+  page: Page,
+  testName: string,
+  overrides: { type?: "AMENDE" | "SUSPENSION"; nom?: string; prenom?: string; whatsapp?: string } = {},
+): Promise<string> {
+  const email = uniqueEmail(testName);
+  const res = await page.request.post("/api/paiement/virement", {
+    data: {
+      type: overrides.type ?? "AMENDE",
+      nom: overrides.nom ?? "DUPONT",
+      prenom: overrides.prenom ?? "Jean",
+      email,
+      whatsapp: overrides.whatsapp ?? "+33612345678",
+    },
+  });
+  expect(res.ok()).toBeTruthy();
+  await loginAs(page, email);
+  return email;
+}
 
 /**
  * Dépôt d'un PV (suspension comprise) : crée un dossier EN_ANALYSE et renvoie
@@ -98,10 +164,9 @@ export async function analyserDossier(
  * écrit dans node_modules/.cache/dev-magic-link.txt (voir src/auth.ts) au lieu
  * d'être envoyé par e-mail.
  *
- * Plusieurs tests parallèles partagent le même compte (un fichier magic-link
- * par email) : le jeton est à usage unique, donc une tentative peut échouer
- * si un autre worker a consommé le lien. On réessaie la connexion (régénère
- * un jeton) jusqu'à réussite.
+ * Chaque email a son propre fichier magic-link (pas de course entre workers).
+ * Le jeton est à usage unique : on réessaie la connexion (régénère un jeton)
+ * jusqu'à réussite.
  */
 export async function loginAs(page: Page, email: string): Promise<void> {
   for (let attempt = 1; attempt <= 5; attempt++) {
@@ -138,6 +203,18 @@ export async function loginAs(page: Page, email: string): Promise<void> {
       await page.waitForTimeout(500 * attempt);
     }
   }
+}
+
+/**
+ * Connexion en tant que juriste/admin (comptes partagés, créés par seed/global-setup).
+ * Ces comptes ont déjà un passwordHash.
+ */
+export async function loginAsJuriste(page: Page): Promise<void> {
+  await loginAs(page, "e2e-juriste@test.local");
+}
+
+export async function loginAsAdmin(page: Page): Promise<void> {
+  await loginAs(page, "e2e-admin@test.local");
 }
 
 /**

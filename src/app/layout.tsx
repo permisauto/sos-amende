@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { NotificationProvider } from "@/components/NotificationToast";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,6 +29,8 @@ function getBaseUrl(): URL {
     return new URL("https://sos-amende.vercel.app");
   }
 }
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: {
@@ -58,6 +61,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           Aller au contenu principal
         </a>
         <main id="main">{children}</main>
+        <NotificationProvider />
       </body>
     </html>
   );

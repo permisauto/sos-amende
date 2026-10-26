@@ -1,5 +1,5 @@
 ﻿import { expect, test } from "@playwright/test";
-import { loginAs, PV_PNG } from "./helpers";
+import { loginAs, loginAsJuriste, PV_PNG, creerClientE2E } from "./helpers";
 
 test("flux SUSPENSION (infra) : dépôt → analyse type-aware → attente juriste → rejet", async ({
   page,
@@ -7,8 +7,11 @@ test("flux SUSPENSION (infra) : dépôt → analyse type-aware → attente juris
 }) => {
   test.slow();
 
+  // Compte client unique pour ce test (avec crédits)
+  const email = await creerClientE2E("suspension");
+  await loginAs(page, email);
+
   // Le client crée un dossier SUSPENSION (sélecteur de type)
-  await loginAs(page, "e2e-client@test.local");
   await page.goto("/dashboard/cases/new");
   await page.getByLabel("Type d'infraction").selectOption("SUSPENSION");
   await page
@@ -51,7 +54,7 @@ test("flux SUSPENSION (infra) : dépôt → analyse type-aware → attente juris
   // Le juriste voit le dossier avec le callout d'urgence et peut le rejeter
   const ctx = await browser.newContext();
   const juriste = await ctx.newPage();
-  await loginAs(juriste, "e2e-juriste@test.local");
+  await loginAsJuriste(juriste);
   await juriste.goto(`/dashboard/juriste/${dossierId}`);
   await expect(
     juriste.getByText("Suspension de permis : délais de recours très courts", {

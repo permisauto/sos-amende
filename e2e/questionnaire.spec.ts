@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createDossier, loginAs } from "./helpers";
+import { createDossier, loginAs, loginAsJuriste, creerClientE2E } from "./helpers";
 
 test("questionnaire ciblé AMENDE : groupes selon le document, réponses lues par le juriste", async ({
   page,
@@ -7,7 +7,8 @@ test("questionnaire ciblé AMENDE : groupes selon le document, réponses lues pa
 }) => {
   test.slow();
 
-  await loginAs(page, "e2e-client@test.local");
+  const email = await creerClientE2E("questionnaire");
+  await loginAs(page, email);
   const dossierId = await createDossier(page);
 
   // Scan courant (PV vitesse) : le groupe Stationnement n'a pas à s'afficher.
@@ -84,7 +85,7 @@ test("questionnaire ciblé AMENDE : groupes selon le document, réponses lues pa
   // Le juriste retrouve la réponse déclarée (libellés du registre partagé).
   const ctx = await browser.newContext();
   const juriste = await ctx.newPage();
-  await loginAs(juriste, "e2e-juriste@test.local");
+  await loginAsJuriste(juriste);
   await juriste.goto(`/dashboard/juriste/${dossierId}`);
   await expect(
     juriste.getByText("Contexte (questionnaire)", { exact: true }),

@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { verifierSecretCron } from "@/lib/cron-auth";
-import { chercherRappels, chercherRappelsPreuves } from "@/lib/rappels";
+import { chercherRappels, chercherRappelsPreuves, chercherRappelsPaiement } from "@/lib/rappels";
 import { purgerLiensDepotExpires } from "@/lib/lien-depot";
 import { purgerFenetresExpirees } from "@/lib/rate-limit";
 
 /**
- * Endpoint de rappels (deadline manager + relance des pièces manquantes).
+ * Endpoint de rappels (deadline manager + relance des pièces manquantes + relance paiement).
  * À appeler quotidiennement par un cron (ex. Vercel Cron / GitHub Actions).
  * Hors dev, CRON_SECRET est requis (header `Authorization: Bearer <secret>`).
  */
@@ -23,6 +23,7 @@ export async function GET(req: Request) {
 
   const rappels = await chercherRappels();
   const rappelsPreuves = await chercherRappelsPreuves();
+  const rappelsPaiement = await chercherRappelsPaiement();
   // RGPD : purge des liens de dépôt expirés depuis plus de 30 jours
   // (meilleur effort — une erreur de purge ne doit pas casser les rappels).
   const liensPurges = await purgerLiensDepotExpires().catch(() => 0);
@@ -34,6 +35,8 @@ export async function GET(req: Request) {
     details: rappels,
     rappelsPreuves: rappelsPreuves.length,
     detailsPreuves: rappelsPreuves,
+    rappelsPaiement: rappelsPaiement.length,
+    detailsPaiement: rappelsPaiement,
     liensDepotPurges: liensPurges,
     fenetresRateLimitPurgees: fenetresPurgees,
   });

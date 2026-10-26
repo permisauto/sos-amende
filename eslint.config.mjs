@@ -39,6 +39,8 @@ const eslintConfig = defineConfig([
     "scripts/veilleJuridique.js",
     "server.js",
     "scripts/test-recours.js",
+    // Scripts archivés (legacy)
+    "scripts/legacy/**",
   ]),
 ]);
 
