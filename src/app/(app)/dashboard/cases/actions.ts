@@ -63,19 +63,6 @@ const MAX_SIZE = 8 * 1024 * 1024; // 8 Mo
 
 export type CreateDossierState = { error?: string } | undefined;
 
-// P1 — Ajoutons un wrapper de traçage pour suivre la récupération des preuves
-import type { PrismaClient } from "@/generated/prisma/client";
-import type { TypePreuveExterne } from "@/lib/preuves-api";
-
-type PreuvesDep = Pick<PrismaClient, "dossier" | "preuve">;
-type PreuvesResult = { ajoutees: string[]; verifiees: string[]; alertes: string[] };
-
-function tracePreuvesCall(
-  fn: (dep: PreuvesDep, dossierId: string, opts?: { types?: Set<TypePreuveExterne> }) => Promise<PreuvesResult>,
-): (dep: PreuvesDep, dossierId: string, opts?: { types?: Set<TypePreuveExterne> }) => Promise<PreuvesResult> {
-  return (dep, dossierId, opts) => fn(dep, dossierId, opts);
-}
-
 export async function createDossier(
   _prev: CreateDossierState,
   formData: FormData,
@@ -712,9 +699,9 @@ export async function analyserDossier(
   // jamais l'analyse.
   const typesPreuves = typesPreuvesPourFailles(candidats);
   for (const t of preuvesPourReponses(data)) typesPreuves.add(t);
-  tracePreuvesCall(() => recupererPreuvesPourDossierId(prisma, dossier.id, {
+  after(() => recupererPreuvesPourDossierId(prisma, dossier.id, {
     types: typesPreuves,
-  }));
+  }).catch((e) => console.error("recupererPreuvesPourDossierId async error:", e)));
 
   // Habillage professionnel (en-tête, Objet, Madame, Monsieur, politesse) —
   // voir formaterLettreOfficielle ; idempotent, laisse l'argumentation intacte.
