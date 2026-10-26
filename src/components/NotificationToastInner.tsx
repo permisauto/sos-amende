@@ -32,14 +32,13 @@ interface NotificationToastProps {
 
 /** Composant interne - rendu uniquement côté client */
 export default function NotificationToastInner({ notification, onClose, onAction }: NotificationToastProps) {
-  // Ne pas afficher les types internes
-  if (INTERNAL_TYPES.includes(notification.type as InternalNotificationType)) return null;
-
   const [visible, setVisible] = useState(false);
   const styles = typeStyles[notification.type as NotificationType] || typeStyles.LETTER_VALIDATED;
+  const isInternal = INTERNAL_TYPES.includes(notification.type as InternalNotificationType);
 
   // Auto-close après 8s (sauf erreurs critiques)
   useEffect(() => {
+    if (isInternal) return;
     const isCritical = ["LETTER_REJECTED", "PAYMENT_REFUSED"].includes(notification.type);
     const timeout = isCritical ? 0 : 8_000;
 
@@ -50,12 +49,17 @@ export default function NotificationToastInner({ notification, onClose, onAction
       }, timeout);
       return () => clearTimeout(timer);
     }
-  }, [notification, onClose]);
+  }, [notification, onClose, isInternal]);
 
-  // Animation d'entrée
+// Animation d'entrée
   useEffect(() => {
-    setVisible(true);
-  }, []);
+    if (!isInternal) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setVisible(true);
+    }
+  }, [isInternal]);
+
+  if (isInternal) return null;
 
   return (
     <div

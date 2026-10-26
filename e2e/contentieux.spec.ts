@@ -1,5 +1,5 @@
 import { Client } from "pg";
-import { expect, test, type Browser, type Page } from "@playwright/test";
+import { expect, test, type Browser } from "@playwright/test";
 import { analyserDossier, createDossier, loginAs, loginAsJuriste, loginAsAdmin, creerClientE2E, uniqueEmail, dbUrl } from "./helpers";
 
 async function validerPaiementContentieux(

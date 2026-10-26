@@ -1,6 +1,6 @@
 ﻿import { readFile, unlink } from "node:fs/promises";
 import path from "node:path";
-import { expect, type Page, type Browser } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 import { Client } from "pg";
 
 /** Fichier magic-link dev, dédié à l'email (voir src/auth.ts). */

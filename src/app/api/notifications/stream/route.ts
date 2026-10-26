@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/dal";
-import { addSSEConnection, removeSSEConnection, sendNotification } from "@/lib/realtime";
+import { addSSEConnection, removeSSEConnection, sendNotification, createNotification, NotificationType } from "@/lib/realtime";
 
 /**
  * Endpoint SSE (Server-Sent Events) pour notifications temps réel.
@@ -65,14 +65,14 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { userId, type, ...context } = body as {
     userId: string;
-    type: string;
+    type: NotificationType;
     dossierId?: string;
     numPv?: string;
     montant?: number;
   };
 
   const { sendNotification, createNotification } = await import("@/lib/realtime");
-  const payload = createNotification(type as any, context);
+  const payload = createNotification(type, context);
   const sent = sendNotification(userId, payload);
 
   return new Response(JSON.stringify({ ok: true, sent }), {

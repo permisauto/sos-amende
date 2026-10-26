@@ -24,7 +24,7 @@ Sentry.init({
       team: "legaltech",
     },
   },
-  beforeSend(event, hint) {
+  beforeSend(event, _hint) {
     if (!process.env.SENTRY_DSN) return null;
 
     if (event.request) {

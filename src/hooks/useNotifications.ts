@@ -51,12 +51,13 @@ export function useNotifications(
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
+  const connectRef = useRef<() => void>(() => {});
 
   // Vérifier si on est côté client avec une session valide
   const isReady = typeof window !== "undefined" && status === "authenticated" && !!userId;
 
-  // Nettoyer à la déconnexion
-  const cleanup = useCallback(() => {
+  // Nettoyer à la déconnexion - sans setState pour éviter les warnings
+  const _cleanup = useCallback(() => {
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
       eventSourceRef.current = null;
@@ -65,12 +66,26 @@ export function useNotifications(
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
     }
-    setIsConnected(false);
+    // Ne pas appeler setIsConnected ici pour éviter le warning
   }, []);
 
-  // Traiter un message reçu
-  const handleMessage = useCallback(
-    (event: MessageEvent) => {
+  // Connexion SSE
+  const connect = useCallback(() => {
+    if (!isReady) return;
+    if (eventSourceRef.current) return; // Déjà connecté
+
+    const eventSource = new EventSource(
+      `/api/notifications/stream`,
+      { withCredentials: true }
+    );
+    eventSourceRef.current = eventSource;
+
+    eventSource.onopen = () => {
+      setError(null);
+      reconnectAttemptsRef.current = 0;
+    };
+
+    eventSource.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data) as NotificationPayload;
 
@@ -95,32 +110,19 @@ export function useNotifications(
       } catch {
         // Ignorer messages invalides
       }
-    },
-    [filterTypes, onNotification]
-  );
-
-  // Connexion SSE
-  const connect = useCallback(() => {
-    if (!isReady) return;
-    if (eventSourceRef.current) return; // Déjà connecté
-
-    const eventSource = new EventSource(
-      `/api/notifications/stream`,
-      { withCredentials: true }
-    );
-    eventSourceRef.current = eventSource;
-
-    eventSource.onopen = () => {
-      setError(null);
-      reconnectAttemptsRef.current = 0;
     };
 
-    eventSource.onmessage = handleMessage;
-
-    eventSource.onerror = (err) => {
+    eventSource.onerror = () => {
       setError(new Error("Connexion SSE perdue"));
       setIsConnected(false);
-      cleanup();
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
 
       if (autoReconnect && reconnectAttemptsRef.current < 10) {
         const delay = reconnectDelay * Math.pow(1.5, reconnectAttemptsRef.current);
@@ -130,14 +132,21 @@ export function useNotifications(
         }, delay);
       }
     };
-  }, [isReady, autoReconnect, reconnectDelay, handleMessage]);
+  }, [isReady, autoReconnect, reconnectDelay, filterTypes, onNotification]);
 
   // Reconnexion manuelle
   const reconnect = useCallback(() => {
-    cleanup();
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
     reconnectAttemptsRef.current = 0;
     connect();
-  }, [cleanup, connect]);
+  }, [connect]);
 
   // Marquer comme lu
   const markAsRead = useCallback((index: number) => {
@@ -157,22 +166,32 @@ export function useNotifications(
   useEffect(() => {
     if (isReady) {
       connect();
-    } else if (status === "unauthenticated") {
-      cleanup();
     }
-
-    return cleanup;
-  }, [isReady, status, connect, cleanup]);
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+    };
+  }, [isReady]);
 
   // Cleanup au démontage
   useEffect(() => {
     return () => {
-      cleanup();
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
       }
     };
-  }, [cleanup]);
+  }, []);
 
   return {
     lastNotification,

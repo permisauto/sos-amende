@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNotifications } from "@/hooks/useNotifications";
 import { NotificationPayload } from "@/lib/realtime";
 import dynamic from "next/dynamic";
@@ -14,23 +14,31 @@ const NotificationToast = dynamic(
 /** Composant interne qui gère la file de notifications (client-only) */
 export function NotificationProviderInner() {
   const [mounted, setMounted] = useState(false);
+  const mountedRef = useRef(mounted);
   const { unreadNotifications, markAsRead } = useNotifications();
   const [toasts, setToasts] = useState<NotificationPayload[]>([]);
+  const toastsRef = useRef(toasts);
 
   useEffect(() => {
+    toastsRef.current = toasts;
+  }, [toasts]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
+    mountedRef.current = true;
   }, []);
 
   // Synchroniser avec les notifications non lues
   useEffect(() => {
-    if (!mounted) return;
+    if (!mountedRef.current) return;
     // Ajouter les nouvelles notifications qui ne sont pas encore affichées
     for (const notif of unreadNotifications) {
-      if (!toasts.some((t) => t.type === notif.type && t.message === notif.message && t.dossierId === notif.dossierId)) {
+      if (!toastsRef.current.some((t) => t.type === notif.type && t.message === notif.message && t.dossierId === notif.dossierId)) {
         setToasts((prev) => [notif, ...prev].slice(0, 5)); // Max 5 toasts
       }
     }
-  }, [unreadNotifications, mounted]);
+  }, [unreadNotifications]);
 
   const handleClose = useCallback((notif: NotificationPayload) => {
     setToasts((prev) => prev.filter((t) => t !== notif));
