@@ -70,6 +70,9 @@ export function DemoScan() {
   const [reponse, setReponse] = useState<Reponse | null>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
+  // Données extraites de la réponse (garde-fou : toujours un objet)
+  const data = reponse?.data ?? {};
+
   const scanSteps =
     type === "SUSPENSION" ? SCAN_STEPS_SUSPENSION : SCAN_STEPS_AMENDE;
 
@@ -141,7 +144,7 @@ export function DemoScan() {
     );
   }
 
-  const donneesExtraites = (reponse?.data ?? {}) as Record<string, unknown>;
+  const donneesExtraites = data as Record<string, unknown>;
   const champsExtraits = [
     { cle: "plaque", label: "Plaque" },
     { cle: "num_pv", label: "N° PV" },
