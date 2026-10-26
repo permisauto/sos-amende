@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { SessionProvider } from "next-auth/react";
 import "./globals.css";
 import { NotificationProvider } from "@/components/NotificationToast";
 
@@ -60,8 +61,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 rounded bg-zinc-900 px-4 py-2 text-white">
           Aller au contenu principal
         </a>
-        <main id="main">{children}</main>
-        <NotificationProvider />
+        <SessionProvider>
+          <main id="main">{children}</main>
+          <NotificationProvider />
+        </SessionProvider>
       </body>
     </html>
   );
