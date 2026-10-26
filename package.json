@@ -15,6 +15,13 @@
     "creer-compte": "tsx scripts/creer-compte.ts",
     "postinstall": "prisma generate"
   },
+  "allowScripts": {
+    "@prisma/engines": true,
+    "esbuild": true,
+    "prisma": true,
+    "tesseract.js": true,
+    "unrs-resolver": true
+  },
   "dependencies": {
     "@auth/core": "^0.41.3",
     "@auth/prisma-adapter": "^2.11.3",
