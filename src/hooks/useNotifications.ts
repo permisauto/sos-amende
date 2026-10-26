@@ -128,11 +128,16 @@ export function useNotifications(
         const delay = reconnectDelay * Math.pow(1.5, reconnectAttemptsRef.current);
         reconnectTimeoutRef.current = setTimeout(() => {
           reconnectAttemptsRef.current++;
-          connect();
+          connectRef.current();
         }, delay);
       }
     };
   }, [isReady, autoReconnect, reconnectDelay, filterTypes, onNotification]);
+
+  // Mettre à jour la ref après la définition de connect
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   // Reconnexion manuelle
   const reconnect = useCallback(() => {
@@ -145,8 +150,8 @@ export function useNotifications(
       reconnectTimeoutRef.current = null;
     }
     reconnectAttemptsRef.current = 0;
-    connect();
-  }, [connect]);
+    connectRef.current();
+  }, []);
 
   // Marquer comme lu
   const markAsRead = useCallback((index: number) => {

@@ -67,6 +67,7 @@ import {
   partExtractionJournaliere,
   quotaGeminiRestant,
 } from "@/lib/gemini-quota";
+import { invalidateQuestionsDynamiquesCache } from "@/lib/questions-dyn";
 
 const TIMEOUT_LISTING_MS = 15_000;
 const TIMEOUT_ARCHIVE_MS = 60_000;
@@ -1083,6 +1084,7 @@ export async function proposerFaillesDepuisExtraction(): Promise<{
         detail: `creees=${creees} liees=${liees} sautees=${ecartees}`,
       });
     }
+    invalidateQuestionsDynamiquesCache();
     return { creees, liees, ecartees };
   } catch (e) {
     console.error("veille-extraction: auto-proposition de failles impossible", e);
@@ -1253,6 +1255,7 @@ export async function retroRemplirFaillesVeille2(): Promise<BilanRetroRemplissag
         },
       });
       bilan.misesAJour++;
+      invalidateQuestionsDynamiquesCache();
     }
   } catch (e) {
     console.error("veille-retroremplissage: rétro-remplissage impossible", e);

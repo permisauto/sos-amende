@@ -24,6 +24,7 @@
  */
 
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
+import { invalidateQuestionsDynamiquesCache } from "@/lib/questions-dyn";
 
 export type ChampsActivation = {
   regle: string | null;
@@ -138,6 +139,7 @@ export async function activerPropositionsCompletes(
       data: donneesActivation(f.jurisprudence),
     });
   }
+  invalidateQuestionsDynamiquesCache();
   return {
     activees: activables.map((f) => f.id),
     ignorees: proposees.length - activables.length,
@@ -186,5 +188,6 @@ export async function injecterFaillesPack(
       data: donneesActivation(f.jurisprudence),
     });
   }
+  invalidateQuestionsDynamiquesCache();
   return activables.map((f) => f.id);
 }

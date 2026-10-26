@@ -21,6 +21,7 @@ import {
   activerPropositionsCompletes,
 } from "@/lib/failles";
 import { synchroniserSourceLiee } from "@/lib/veille-ingestion";
+import { invalidateQuestionsDynamiquesCache } from "@/lib/questions-dyn";
 
 export type FailleState =
   | {
@@ -126,6 +127,7 @@ export async function creerFaille(
   });
 
   revalidatePath("/dashboard/juriste/failles");
+  invalidateQuestionsDynamiquesCache();
   return { ok: true };
 }
 
@@ -159,6 +161,7 @@ export async function modifierFaille(
   });
 
   revalidatePath("/dashboard/juriste/failles");
+  invalidateQuestionsDynamiquesCache();
   return { ok: true };
 }
 
@@ -193,6 +196,7 @@ export async function basculerFaille(
   await synchroniserSourceLiee(id, devientActive ? "PROMU" : "ECARTE", admin.id);
 
   revalidatePath("/dashboard/juriste/failles");
+  invalidateQuestionsDynamiquesCache();
   return { ok: true, statut: devientActive ? "ACTIVE" : "INACTIVE" };
 }
 
@@ -230,6 +234,7 @@ export async function importerFaillesDepuisSources(
   });
 
   revalidatePath("/dashboard/juriste/failles");
+  invalidateQuestionsDynamiquesCache();
   return {
     ok: true,
     count,
@@ -347,6 +352,7 @@ export async function appliquerMiseAJourCatalogue(
   });
 
   revalidatePath("/dashboard/juriste/failles");
+  invalidateQuestionsDynamiquesCache();
   return { ok: true };
 }
 
@@ -399,6 +405,7 @@ export async function validerPropositionFaille(
   await synchroniserSourceLiee(id, action === "ACTIVE" ? "PROMU" : "ECARTE", admin.id);
 
   revalidatePath("/dashboard/juriste/failles");
+  invalidateQuestionsDynamiquesCache();
   return { ok: true, statut: action };
 }
 
@@ -441,6 +448,7 @@ export async function activerFailleProposee(
   await synchroniserSourceLiee(id, "PROMU", admin.id);
 
   revalidatePath("/dashboard/juriste/failles");
+  invalidateQuestionsDynamiquesCache();
   return { ok: true, statut: "ACTIVE" };
 }
 
@@ -517,6 +525,7 @@ export async function importerFailles(
   }
 
   revalidatePath("/dashboard/juriste/failles");
+  invalidateQuestionsDynamiquesCache();
   return { ok: true, count: checked.data.length };
 }
 
@@ -838,5 +847,6 @@ export async function activerToutesPropositions(
   }
 
   revalidatePath("/dashboard/juriste/failles");
+  invalidateQuestionsDynamiquesCache();
   return { ok: true };
 }

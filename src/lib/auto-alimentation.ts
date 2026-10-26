@@ -27,6 +27,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { CATALOGUE_SOURCES } from "@/lib/catalogue-sources";
 import { injecterFaillesPack } from "@/lib/failles";
 import { synchroniserVeilleJorf } from "@/lib/veille-juridique";
+import { invalidateQuestionsDynamiquesCache } from "@/lib/questions-dyn";
 
 /**
  * Synchronise la base juridique avec le catalogue sourcé. Toutes les entrées
@@ -94,6 +95,7 @@ export async function synchroniserCatalogue(): Promise<number> {
     // Exception Pack 3F/48SI : injection des 4 failles validées produit
     // (PROPOSEE → ACTIVE, idempotente — voir `FAILLES_PACK_ACTIVES`).
     await injecterFaillesPack(prisma);
+    invalidateQuestionsDynamiquesCache();
   } catch (e) {
     console.error("synchroniserCatalogue: DB indisponible, mock utilisé", e);
     // En mode dégradé, le mock affiche déjà les 28 failles du catalogue
