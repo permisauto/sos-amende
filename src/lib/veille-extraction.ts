@@ -993,11 +993,26 @@ export function extractionLocale(pub: PublicationVeille): string {
 export type ExtractionDispo = "mock" | "gemini" | "off" | "absent";
 
 /** Provider effectivement actif pour l'extraction (V1 : mêmes variables IA). */
+let _extractionDispoCache: ExtractionDispo | null = null;
+
+/** Reset du cache — utile pour les tests (invalidation forcée). */
+export function resetExtractionDispoCache(): void {
+  _extractionDispoCache = null;
+}
+
 export function extractionDispo(): ExtractionDispo {
+  // Pas de cache en mode test (vitest) pour permettre les changements d'env vars entre tests
+  if (process.env.NODE_ENV === "test") {
+    const provider = (process.env.VERIF_IA_PROVIDER ?? "").toLowerCase();
+    if (provider === "off") return "off";
+    if (provider === "mock") return "mock";
+    return process.env.GEMINI_API_KEY ? "gemini" : "absent";
+  }
+  if (_extractionDispoCache !== null) return _extractionDispoCache;
   const provider = (process.env.VERIF_IA_PROVIDER ?? "").toLowerCase();
-  if (provider === "off") return "off";
-  if (provider === "mock") return "mock";
-  return process.env.GEMINI_API_KEY ? "gemini" : "absent";
+  if (provider === "off") return _extractionDispoCache = "off";
+  if (provider === "mock") return _extractionDispoCache = "mock";
+  return _extractionDispoCache = process.env.GEMINI_API_KEY ? "gemini" : "absent";
 }
 
 export type ResultatExtraction =
