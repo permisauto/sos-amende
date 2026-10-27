@@ -7,7 +7,7 @@
  * récupérée (garde-fou anti-hallucination).
  */
 
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@/prisma/generated-client";
 import type { InfractionType } from "./envoi";
 import { meteoDefavorable } from "./moteur";
 

@@ -1,4 +1,4 @@
-import type { Dossier } from "@prisma/client";
+import type { Dossier } from "@/prisma/generated-client";
 import { baseUrlApp } from "./base-url";
 import { organismeEnvoi } from "./envoi";
 

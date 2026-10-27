@@ -1,7 +1,8 @@
 // SOS Amende — schéma conforme à la section 4 du cahier des charges
 
 generator client {
-  provider = "prisma-client"
+  provider = "prisma-client-js"
+  output   = "./generated-client"
 }
 
 datasource db {

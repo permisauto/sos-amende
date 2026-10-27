@@ -23,7 +23,7 @@
  * PROPOSEE jusqu'à rédaction.
  */
 
-import type { Prisma, PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@/prisma/generated-client";
 import { invalidateQuestionsDynamiquesCache } from "@/lib/questions-dyn";
 
 export type ChampsActivation = {
