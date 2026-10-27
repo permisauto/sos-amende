@@ -2,9 +2,18 @@
 const nextConfig = {
   typescript: { ignoreBuildErrors: true },
   eslint: { ignoreDuringBuilds: true },
-  serverExternalPackages: ['@prisma/client', 'pg', '@/prisma/generated-client', '@/generated/prisma/client'],
+
+  serverExternalPackages: ['@prisma/client', '@prisma/adapter-pg', 'pg'],
+
   experimental: {
-    turbopack: {},
-  },
+    turbopack: {
+      // Force Turbopack à résoudre cet alias par un module vide côté client
+      resolveAlias: {
+        '@/prisma/generated-client': false,
+        'util/types': false
+      }
+    }
+  }
 };
+
 module.exports = nextConfig;
