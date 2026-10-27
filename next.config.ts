@@ -46,10 +46,18 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  webpack: (config: any, { isServer }: any) => {
+    if (!isServer) {
+      config.resolve.fallback = { ...config.resolve.fallback, dns: false, net: false, tls: false, fs: false };
+      config.resolve.alias = { ...config.resolve.alias, "@prisma/client": false, "@/generated/prisma": false, "prisma": false, "pg": false };
+    }
+    return config;
+  },
   experimental: {
     serverActions: {
       bodySizeLimit: "10mb",
     },
+    serverComponentsExternalPackages: ["pg", "pg-pass", "pg-connection-string"],
   },
 };
 

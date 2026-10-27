@@ -16,6 +16,8 @@ import { lireDocType, type DocTypeAnalyse } from "./envoi";
 import type { InfractionType } from "./envoi";
 import type { ExtractedData, RegleDetection } from "./moteur";
 import type { TypePreuveExterne } from "./preuves-api";
+export { trouverFaillesParReponseVrai } from "@/lib/questions-dyn";
+import { trouverFaillesParReponseVrai } from "@/lib/questions-dyn";
 
 /** Preuves externes que la réponse peut rendre pertinentes (N2). */
 export type PreuveCible = TypePreuveExterne;
@@ -598,18 +600,20 @@ export const FAILLES_PAR_REPONSE: Partial<
  * Ids de failles à proposer comme candidats pour un dossier, d'après les
  * seules cases cochées et les failles réellement chargées (`disponibles` :
  * `ACTIVE` du type du dossier). Ordre stable, sans doublon.
+ * 
+ * Recherche en base les failles ACTIVE ayant une règle `reponseVrai` sur le
+ * champ de la question cochée — remplace le mapping statique `FAILLES_PAR_REPONSE`.
  */
-export function faillesDepuisReponses(
+export async function faillesDepuisReponses(
   reponses: Record<string, unknown> | Partial<ExtractedData>,
   disponibles: readonly string[],
-): string[] {
+  typeInfraction: InfractionType,
+): Promise<string[]> {
   const connues = new Set(disponibles);
   const out: string[] = [];
-  for (const [champ, ids] of Object.entries(FAILLES_PAR_REPONSE) as [
-    ChampReponse,
-    readonly string[],
-  ][]) {
-    if ((reponses as Record<string, unknown>)[champ] !== true) continue;
+  for (const [champ, valeur] of Object.entries(reponses)) {
+    if (valeur !== true) continue;
+    const ids = await trouverFaillesParReponseVrai(typeInfraction, champ);
     for (const id of ids) {
       if (!connues.has(id) || out.includes(id)) continue;
       out.push(id);

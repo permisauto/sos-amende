@@ -17,7 +17,9 @@ import {
   typePreuvePourIntitule,
   versQuestionsCiblees,
   type QuestionDynamique,
+  trouverFaillesParReponseVrai,
 } from "./questions";
+import { trouverFaillesParReponseVrai as trouverFaillesParReponseVraiFn } from "@/lib/questions-dyn";
 
 describe("naturesPv — nature du document détectée dans le texte scanné", () => {
   it("détecte stationnement, travaux, radar, visibilité et alcool", () => {
@@ -839,20 +841,20 @@ describe("faillesDepuisReponses — N3 (capteur de fait → candidature)", () =>
 
   it("propose la faille ACTIVE correspondant à une case cochée", () => {
     expect(
-      faillesDepuisReponses({ vehiculeCede: true }, DISPO),
+      faillesDepuisReponses({ vehiculeCede: true }, DISPO, "AMENDE"),
     ).toEqual(["faille-exoneration-vol-usurpation"]);
     expect(
-      faillesDepuisReponses({ suspPrecedentsNonRecapitules: true }, DISPO),
+      faillesDepuisReponses({ suspPrecedentsNonRecapitules: true }, DISPO, "SUSPENSION"),
     ).toEqual(["faille-48si-defaut-info"]);
   });
 
   it("ne propose rien sans case cochée ou hors failles disponibles", () => {
-    expect(faillesDepuisReponses({ vehiculeCede: false }, DISPO)).toEqual([]);
-    expect(faillesDepuisReponses({ caractereLibre: true }, DISPO)).toEqual([]);
+    expect(faillesDepuisReponses({ vehiculeCede: false }, DISPO, "AMENDE")).toEqual([]);
+    expect(faillesDepuisReponses({ caractereLibre: true }, DISPO, "AMENDE")).toEqual([]);
     expect(
       faillesDepuisReponses({ suspPointsCumulesJour: true }, [
         "faille-48si-defaut-info",
-      ]),
+      ], "SUSPENSION"),
     ).toEqual([]);
   });
 
@@ -861,6 +863,7 @@ describe("faillesDepuisReponses — N3 (capteur de fait → candidature)", () =>
       faillesDepuisReponses(
         { stationnementPanneau: true, marquageEfface: true },
         DISPO,
+        "AMENDE",
       ),
     ).toEqual(["faille-stationnement-panneau"]);
   });

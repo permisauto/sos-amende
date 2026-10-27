@@ -268,12 +268,21 @@ export async function ingererSource(code: CodeSource): Promise<BilanSource> {
   for (const nom of aTraiter) {
     const gz = await telechargerArchive(code, nom);
     if (!gz) {
-      // Échec de téléchargement (transitoire la plupart du temps) : on arrête
-      // le lot SANS avancer le marqueur — le point de reprise reste au dernier
-      // lot réussi et l'archive ratée sera reprise au prochain passage. Une
-      // archive sautée au milieu serait perdue définitivement.
-      bilan.erreur = `archive ${nom} illisible ou trop grosse`;
-      break;
+        // Échec de téléchargement (transitoire la plupart du temps) : on arrête
+        // le lot SANS avancer le marqueur — le point de reprise reste au dernier
+        // lot réussi et l'archive ratée sera reprise au prochain passage. Une
+        // archive sautée au milieu serait perdue définitivement.
+        bilan.erreur = `archive ${nom} illisible ou trop grosse`;
+        console.error({
+          error: `archive ${nom} illisible ou trop grosse`,
+          contexte: "veille-dila:ingestionSource",
+          code,
+          nom,
+          derniere,
+          date: new Date().toISOString(),
+          stack: new Error().stack,
+        });
+        break;
     }
     let publications: SourceDila[] = [];
     try {
@@ -282,6 +291,15 @@ export async function ingererSource(code: CodeSource): Promise<BilanSource> {
       // Archive corrompue : on la marque traitée (inutile de la revoir) et on
       // continue — se bloquer dessus arrêterait toute ingestion future.
       bilan.erreur = `analyse ${nom} impossible — archive sautée`;
+      console.error({
+        error: e instanceof Error ? e.message : String(e),
+        contexte: "veille-dila:parseArchive",
+        code,
+        nom,
+        derniere,
+        date: new Date().toISOString(),
+        stack: e instanceof Error ? e.stack : undefined,
+      });
       console.error("veille-dila: archive illisible", nom, e);
     }
     bilan.publiees += publications.length;
@@ -506,9 +524,11 @@ function propositionEnregistree(
  *    unitaire ou la correction dans le drawer).
  */
 export function estCandidatExtraction(
-  p: { etat?: string; tentatives?: number } | null,
+  p: { etat?: string; tentatives?: number; statutAnalyse?: string } | null,
 ): boolean {
   if (!p) return true;
+  // Filtre GAGNANT : écarter toute extraction PERDANT (jamais reprise automatique)
+  if (p.statutAnalyse === "PERDANT" || (p.statutAnalyse ?? "").toUpperCase().includes("PERDANT")) return false;
   if (p.etat === "echec") return true;
   if (p.etat === "incomplet" && (p.tentatives ?? 0) < 1) return true;
   return false;
@@ -701,6 +721,13 @@ export async function extrairePropositionsEnAttente(
   try {
     rows = await lireCandidatesExtraction(minScore);
   } catch (e) {
+    console.error({
+      error: e instanceof Error ? e.message : String(e),
+      contexte: "veille-extraction:lireCandidatesExtraction",
+      minScore,
+      date: new Date().toISOString(),
+      stack: e instanceof Error ? e.stack : undefined,
+    });
     console.error("veille-extraction: lecture des candidats impossible", e);
     return { ...BILAN_VIDE };
   }
@@ -814,9 +841,13 @@ export function estSchemaVeille2(
  *    pour la transparence ;
  *  - n'écrit jamais sur une faille ni ne change le statut d'une source.
  */
+/** Taille de lot progressive pour la régénération (pagination). */
+export const BATCH_SIZE_PAGINATION = 50;
+
 export async function regenererAnalysesAnciennes(
   limite = BUDGET_EXTRACTION,
-): Promise<BilanExtraction> {
+  options?: { page?: number; batchSize?: number },
+): Promise<BilanExtraction & { progress?: { total: number; traitees: number; page: number; reste: number } }> {
   // IA coupée ou sans clé : inutile d'entamer le lot — chaque ligne retomberait
   // sur le secours local (sans marqueur v2), se ferait re-sélectionner au clic
   // suivant et bouclerait sans jamais progresser. On sort avant toute écriture.
@@ -835,12 +866,17 @@ export async function regenererAnalysesAnciennes(
     budget = Math.min(limite, restant);
   }
 
+  const batchSize = options?.batchSize ?? BATCH_SIZE_PAGINATION;
+  const page = Math.max(1, options?.page ?? 1);
+  const skip = (page - 1) * batchSize;
+
   let rows: SourceJuridique[];
   try {
     rows = await prisma.sourceJuridique.findMany({
       where: { proposition: { not: Prisma.DbNull } },
       orderBy: [{ score: "desc" }, { createdAt: "desc" }],
-      take: 200,
+      skip,
+      take: batchSize,
     });
   } catch (e) {
     console.error("veille-regeneration: lecture des analyses impossible", e);
@@ -900,16 +936,113 @@ export async function regenererAnalysesAnciennes(
   }
 
   const traitees = bilan.extraites + bilan.incompletes + bilan.echecs;
+  const totalCandidats = reprises.length + heritees.length;
   if (traitees > 0 || bilan.locales > 0) {
     await enregistrerTraceAutoAlimentation({
       campagne: "regeneration-veille-2",
       statut: bilan.echecs === 0 ? "OK" : "ECHEC",
       traitees,
       nouvelles: bilan.extraites,
-      detail: `extraites=${bilan.extraites} incompletes=${bilan.incompletes} echecs=${bilan.echecs} replis=${bilan.locales}`,
+      detail: `extraites=${bilan.extraites} incompletes=${bilan.incompletes} echecs=${bilan.echecs} replis=${bilan.locales} | page=${page}, lot=${batchSize}, candidats=${totalCandidats}`,
     });
   }
-  return bilan;
+  return {
+    ...bilan,
+    progress: {
+      total: totalCandidats,
+      traitees,
+      page,
+      reste: Math.max(0, totalCandidats - traitees),
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Monitoring production (Option C) — métriques de veille
+// ---------------------------------------------------------------------------
+
+export interface MetriquesVeille {
+  date: string;
+  extractionsReussies: number;
+  extractionsEchouees: number;
+  propositionsProposees: number;
+  propositionsValidees: number;
+  tauxValidation: number; // % de PROPOSEE validées
+  tempsMoyenExtractionMs: number;
+  quotaGeminiUtilise: boolean;
+  source: "JADE" | "CASS" | "JORF" | "TA" | "GLOBAL";
+}
+
+/** Génère un rapport de métriques pour la veille (utilisable par un endpoint /monitoring). */
+export async function genererMetriques(
+  source?: "JADE" | "CASS" | "JORF" | "TA" | "GLOBAL",
+): Promise<MetriquesVeille> {
+  const aujourdHui = new Date().toISOString().slice(0, 10);
+
+  try {
+    const [extraites, proposees, promues] = await Promise.all([
+      // Extractions du jour (campagne extraction-veille OK)
+      prisma.autoAlimentationTrace.count({
+        where: {
+          campagne: { startsWith: "extraction-veille" },
+          statut: "OK",
+          createdAt: { gte: new Date(aujourdHui + "T00:00:00Z") },
+        },
+      }),
+      // Propositions PROPOSEE créées
+      prisma.failleJuridique.count({
+        where: {
+          statut: "PROPOSEE",
+          createdAt: { gte: new Date(aujourdHui + "T00:00:00Z") },
+        },
+      }),
+      // Propositions passées en ACTIVE (validées)
+      prisma.failleJuridique.count({
+        where: {
+          statut: "ACTIVE",
+          updatedAt: { gte: new Date(aujourdHui + "T00:00:00Z") },
+        },
+      }),
+    ]);
+
+    const extractionsReussies = extraites;
+    const propositionsProposees = proposees;
+    const propositionsValidees = promues;
+    const tauxValidation = propositionsProposees > 0
+      ? Math.round((propositionsValidees / propositionsProposees) * 100)
+      : 0;
+
+    return {
+      date: aujourdHui,
+      extractionsReussies,
+      extractionsEchouees: 0, // À calculer depuis le bilan d'extraction si nécessaire
+      propositionsProposees,
+      propositionsValidees,
+      tauxValidation,
+      tempsMoyenExtractionMs: 0, // À calculer avec chronomètre si nécessaire
+      quotaGeminiUtilise: await quotaGeminiRestant() > 0,
+      source: source ?? "GLOBAL",
+    };
+  } catch (e) {
+    console.error({
+      error: e instanceof Error ? e.message : String(e),
+      contexte: "veille:monitoring",
+      date: new Date().toISOString(),
+      source: source ?? "GLOBAL",
+      stack: e instanceof Error ? e.stack : undefined,
+    });
+    return {
+      date: aujourdHui,
+      extractionsReussies: 0,
+      extractionsEchouees: 0,
+      propositionsProposees: 0,
+      propositionsValidees: 0,
+      tauxValidation: 0,
+      tempsMoyenExtractionMs: 0,
+      quotaGeminiUtilise: false,
+      source: source ?? "GLOBAL",
+    };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -951,7 +1084,11 @@ export function estPropositionPromouvable(
   p: PropositionVeille | null,
 ): boolean {
   if (!p || p.etat !== "extrait") return false;
-  if (p.statutAnalyse === "REJETE_AUTOMOBILISTE_PERDANT") return false;
+  // Filtre GAGNANT uniquement : écarter tout PERDANT / rejet (valeurs du type)
+  if (p.statutAnalyse === "REJETE_AUTOMOBILISTE_PERDANT" || p.statutAnalyse === "SUCCES_AUTOMOBILISTE_GAGNANT") {
+    // Seulement GAGNANT est promouvable ; tout autre statut (y compris null/indéfini) = écarté par défaut
+    if (p.statutAnalyse !== "SUCCES_AUTOMOBILISTE_GAGNANT") return false;
+  }
   return !estPropositionLocale(p);
 }
 
@@ -1110,6 +1247,15 @@ export async function synchroniserSourceLiee(
       data: { statut: decision, reviewedAt: new Date(), reviewedBy: userId },
     });
   } catch (e) {
+    console.error({
+      error: e instanceof Error ? e.message : String(e),
+      contexte: "veille:synchronisationSourceLiee",
+      failleId,
+      decision,
+      userId,
+      date: new Date().toISOString(),
+      stack: e instanceof Error ? e.stack : undefined,
+    });
     console.error("veille: synchronisation de la source liée impossible", e);
   }
 }
@@ -1128,6 +1274,12 @@ async function extraireApresIngestion(): Promise<void> {
       detail: `extraites=${bilan.extraites} incompletes=${bilan.incompletes} echecs=${bilan.echecs}`,
     });
   } catch (e) {
+    console.error({
+      error: e instanceof Error ? e.message : String(e),
+      contexte: "veille-extraction:extractionApresIngestion",
+      date: new Date().toISOString(),
+      stack: e instanceof Error ? e.stack : undefined,
+    });
     console.error("veille-extraction: extraction automatique impossible", e);
   }
 }
@@ -1258,6 +1410,12 @@ export async function retroRemplirFaillesVeille2(): Promise<BilanRetroRemplissag
       invalidateQuestionsDynamiquesCache();
     }
   } catch (e) {
+    console.error({
+      error: e instanceof Error ? e.message : String(e),
+      contexte: "veille-retroremplissage",
+      date: new Date().toISOString(),
+      stack: e instanceof Error ? e.stack : undefined,
+    });
     console.error("veille-retroremplissage: rétro-remplissage impossible", e);
     return { misesAJour: 0, sansDonnees: 0 };
   }

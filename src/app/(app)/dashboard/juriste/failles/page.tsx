@@ -8,6 +8,7 @@ import { getMockFailles, getMockStats, getSuspensionActiveCount } from "@/lib/mo
 import { rechercherFailles } from "@/lib/failles-recherche";
 import { chargerHistoriqueFailles } from "@/lib/failles-historique";
 import { FaillesAdmin, type FailleDto } from "../../admin/failles/failles-admin";
+import { ProgressionRegeneration } from "../../admin/failles/failles-admin";
 import { MisesAJourCatalogue } from "../../admin/failles/mises-a-jour-catalogue";
 import { FaillesList } from "./FaillesList";
 
@@ -34,9 +35,13 @@ export default async function BibliothequeFaillesPage(
   props: PageProps<"/dashboard/juriste/failles">,
 ) {
   const user = await requireJuriste();
-  await synchroniserCatalogue().catch((e) => {
+  let syncFailed = false;
+  try {
+    await synchroniserCatalogue();
+  } catch (e) {
+    syncFailed = true;
     console.error("bibliothèque: synchroniserCatalogue fail (DB down)", e);
-  });
+  }
   const { f, q } = await props.searchParams;
   const raw = typeof f === "string" ? f.toUpperCase() : "ALL";
   const filter = ["ACTIVE", "INACTIVE", "PROPOSEE", "ALL"].includes(raw)
@@ -184,6 +189,8 @@ export default async function BibliothequeFaillesPage(
         </div>
       )}
 
+      <ProgressionRegeneration campagnes={campagnes} />
+
       {campagnes.length > 0 && (
         <section
           data-testid="campagnes-veille"
@@ -311,6 +318,14 @@ export default async function BibliothequeFaillesPage(
             </div>
           )}
           <MisesAJourCatalogue ecarts={ecartsCatalogue} />
+          {syncFailed && (
+            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              <strong>Avertissement :</strong> La synchronisation du catalogue
+              juridique a échoué (base de données indisponible). La bibliothèque
+              affichée peut ne pas refléter le catalogue le plus récent.
+              Consultez le journal d&apos;erreurs du serveur pour le détail.
+            </div>
+          )}
           <div className="mt-6">
             <FaillesAdmin
               failles={dto}

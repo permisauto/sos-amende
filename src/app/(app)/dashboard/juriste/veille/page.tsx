@@ -167,8 +167,17 @@ export default async function VeillePage({
         les articles retenus par la juridiction et une règle dégagée,{" "}
         <strong>bornées aux verbatims du texte</strong> : un administrateur
         valide (→ proposition de faille) ou écarte. Jamais de faille active sans
-        rédaction du template et activation humaines.
+        rédaction du template et activation humaines. Pour examiner chaque
+        publication en détail, cliquez sur <strong>« Lire la décision »</strong>{" "}
+        (bouton sur chaque carte).
       </p>
+
+      <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800">
+        <strong>Accès restreint :</strong> Cette page n'est accessible qu'aux
+        juristes (rôle <code className="font-semibold">JURISTE</code> ou
+        <code className="font-semibold">ADMIN</code>). Si vous voyez ceci et
+        n'êtes pas juriste, veuillez contacter l'administrateur du système.
+      </div>
 
       <nav className="mt-4 flex flex-wrap gap-2 text-xs">
         {[

@@ -676,9 +676,24 @@ export async function analyserDossier(
       // que le texte du PV ne révèle pas. On ajoute la faille ACTIVE
       // correspondante en **candidate** (jamais dans la lettre, jamais
       // principale) : le juriste la voit et reste seul décideur.
-      const parReponses = faillesDepuisReponses(
+      const documentType = (() => {
+        const d = data as { type?: string; docType?: string };
+        return d?.type ?? d?.docType ?? "AMENDE";
+      })();
+      const parsedType = z.enum(["AMENDE", "SUSPENSION"]).safeParse(documentType);
+      // A+B — protection divergence client / OCR (si le client se trompe de type)
+      if (parsedType.success && dossier.extractedData) {
+        const ocrDocType = (dossier.extractedData as any)?.docType ?? (dossier.extractedData as any)?.doc_v2?.categorie ?? null;
+        if (ocrDocType && ocrDocType !== parsedType.data && (ocrDocType === "AMENDE" || ocrDocType === "3F" || ocrDocType === "48SI" || ocrDocType === "SUSPENSION")) {
+          // Divergence détectée : avertissement sans bloquer l'analyse (le juriste valide)
+          // Peut être tracé dans une variable ou un événement ; ici simple log défensif
+          console.warn(`[Divergence OCR/Client] Dossier ${dossier.id} : formulaire=${parsedType.data} vs OCR=${ocrDocType}`);
+        }
+      }
+      const parReponses = await faillesDepuisReponses(
         data,
         failles.map((f) => f.id),
+        parsedType.success ? parsedType.data as "AMENDE" | "SUSPENSION" : "AMENDE",
       );
       for (const failleId of parReponses) {
         if (candidats.includes(failleId)) continue;

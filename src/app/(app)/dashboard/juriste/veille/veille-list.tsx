@@ -176,6 +176,15 @@ function BlocProposition({
                   p.methode === "locale" ? "locale — sans IA" : "IA"
                 })`}
         </span>
+        {p.methode === "locale" && (
+          <span
+            className="rounded-full bg-orange-100 px-2.5 py-1 text-[11px] font-semibold text-orange-800"
+            data-testid="badge-locale"
+            title="Extraction locale (sans IA) — aucune règle dégagée automatiquement"
+          >
+            locale — sans IA
+          </span>
+        )}
         <span className="rounded-full border border-zinc-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-zinc-700">
           {p.typeInfraction === "SUSPENSION" ? "Suspension" : "Amende"}
         </span>

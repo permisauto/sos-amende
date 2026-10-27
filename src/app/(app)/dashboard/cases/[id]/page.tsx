@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/dal";
 import { joursRestants } from "@/lib/moteur";
 import { controlerForclusion48si } from "@/lib/delais";
 import { titreAnalyse } from "@/lib/envoi";
+import { getOcrProvider } from "@/lib/ocr";
 import { libelleMontantDossier } from "@/lib/tarifs";
 import { storageRead, storageUrl } from "@/lib/storage";
 import { AnalyseForm, type AnalysePrefill } from "./analyse-form";
@@ -425,6 +426,11 @@ export default async function CaseDetailPage(
           <p className="mt-1 text-amber-800">
             Son fichier est bien enregistré. Complétez le formulaire ci-dessous à
             la main — un juriste vérifiera chaque information avant l&apos;envoi.
+            <span className="mt-2 block text-xs text-amber-700/80">
+              Diagnostic : provider OCR = <code className="font-mono font-semibold">{getOcrProvider()}</code>
+              {getOcrProvider() === "aucun" && " — aucune clé API configurée (voir .env : OCR_PROVIDER / GEMINI_API_KEY / GOOGLE_VISION_KEY / MISTRAL_API_KEY)"}
+              {getOcrProvider() === "mock" && process.env.NODE_ENV === "production" && " — simulation (mock) en production (texte fictif)"}
+            </span>
           </p>
         </div>
       )}

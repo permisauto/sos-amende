@@ -66,6 +66,29 @@ const statusMeta: Record<string, { label: string; cls: string }> = {
   },
 };
 
+export function ProgressionRegeneration({ campagnes }: { campagnes?: Array<{ campagne: string; statut: string; traitees: number; nouvelles: number; detail?: string | null }> }) {
+  const regen = campagnes?.find((c) => c.campagne === "regeneration-veille-2");
+  if (!regen) return null;
+  const total = regen.traitees + (regen.detail?.match(/echecs=\d+/)?.[0]?.split("=")[1] ? Number(regen.detail?.match(/echecs=(\d+)/)?.[1] ?? 0) : 0);
+  const percent = total > 0 ? Math.round((regen.traitees / total) * 100) : 0;
+  return (
+    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-sm font-semibold text-amber-900">
+          Regeneration Veille 2.0 — en cours
+        </span>
+        <span className="rounded-full bg-amber-100 px-3 py-0.5 text-xs font-medium text-amber-800">
+          {regen.traitees} traitée(s) — {percent}%
+        </span>
+      </div>
+      <p className="mt-1 text-xs text-amber-700">
+        Les analyses héritées (avant Veille 2.0) sont progressivement mises au format actuel.
+        Vous pouvez relancer depuis le bouton « Lancer l'auto-alimentation » de la veille.
+      </p>
+    </div>
+  );
+}
+
 export function FaillesAdmin({
   failles,
   filter,
@@ -511,9 +534,10 @@ function FailleRow({
             </span>
             {effectiveStatut === "ACTIVE" && !faille.templateLettre.trim() && (
               <span
-                className="rounded-full bg-red-100 px-2.5 py-0.5 font-medium text-red-700"
-                data-testid="chip-template-manquant"
-              >
+                  className="rounded-full bg-red-100 px-2.5 py-0.5 font-medium text-red-700"
+                  data-testid="chip-template-manquant"
+                  title="Le modèle de lettre doit être rédigé avant activation (garde-fou anti-hallucination)"
+                >
                 Template à rédiger
               </span>
             )}
