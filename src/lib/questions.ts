@@ -32,6 +32,7 @@ export const PREUVE_CLIENT_TYPES = [
   "ATTESTATION_VOL",
   "COPIE_DECISION",
   "RELEVE_POINTS",
+  "RELEVE_PERMIS_INTEGRAL",
   "ATTESTATION_STAGE",
   "KBIS",
   // Lot R2 — pièces d'urgence par situation (radio « Votre urgence »).

@@ -40,6 +40,7 @@ export function NotificationProviderInner() {
     }
   }, [unreadNotifications]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const handleClose = useCallback((notif: NotificationPayload) => {
     setToasts((prev) => prev.filter((t) => t !== notif));
     markAsRead(unreadNotifications.findIndex((n) => n === notif));

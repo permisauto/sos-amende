@@ -1180,7 +1180,7 @@ export async function proposerFaillesDepuisExtraction(): Promise<{
             typeInfraction: p.typeInfraction,
             titreFaille: titre,
             articleLoi,
-            regle: composerRegleProposition(p),
+            regle: p.regle && p.regle.length > 5 ? p.regle : (composerRegleProposition(p) || (p.articles?.length ? `Conditions d'application selon dispositif et articles cités (${p.articles.join(', ')})` : "")),
             templateLettre: p.templateLettre ?? "",
             templateRefere: p.templateRefere ?? "",
             templateGracieux: p.templateGracieux ?? "",

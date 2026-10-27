@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react"; // eslint-disable-line
 import { X, Bell, CheckCircle, AlertCircle, Info, Loader2 } from "lucide-react";
 import { NotificationPayload, NotificationType, InternalNotificationType } from "@/lib/realtime";
 

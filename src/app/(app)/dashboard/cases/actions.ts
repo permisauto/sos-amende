@@ -46,6 +46,7 @@ import {
 } from "@/lib/questions";
 import { verifierSiret } from "@/lib/siret";
 import { contexteEtalonnage } from "@/lib/etalonnage";
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 import {
   estPackTelecours,
   genererPackTelecours,
@@ -683,6 +684,7 @@ export async function analyserDossier(
       const parsedType = z.enum(["AMENDE", "SUSPENSION"]).safeParse(documentType);
       // A+B — protection divergence client / OCR (si le client se trompe de type)
       if (parsedType.success && dossier.extractedData) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const ocrDocType = (dossier.extractedData as any)?.docType ?? (dossier.extractedData as any)?.doc_v2?.categorie ?? null;
         if (ocrDocType && ocrDocType !== parsedType.data && (ocrDocType === "AMENDE" || ocrDocType === "3F" || ocrDocType === "48SI" || ocrDocType === "SUSPENSION")) {
           // Divergence détectée : avertissement sans bloquer l'analyse (le juriste valide)

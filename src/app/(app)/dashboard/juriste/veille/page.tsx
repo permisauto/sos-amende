@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireJuriste } from "@/lib/dal";
+import { requireAdmin } from "@/lib/dal";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
 import { estPropositionLocale } from "@/lib/veille-ingestion";
@@ -27,7 +27,7 @@ export default async function VeillePage({
 }: {
   searchParams: Promise<{ s?: string | string[]; page?: string | string[] }>;
 }) {
-  const user = await requireJuriste();
+  const user = await requireAdmin();
   const { s, page: pageBrute } = await searchParams;
   const filtre = typeof s === "string" ? s.toUpperCase() : "NOUVEAU";
   const page = Math.max(

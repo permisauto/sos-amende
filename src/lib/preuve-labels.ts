@@ -12,6 +12,7 @@ export const TYPE_LABELS: Record<string, string> = {
   ATTESTATION_VOL: "Attestation de vol",
   COPIE_DECISION: "Copie de la décision notifiée",
   RELEVE_POINTS: "Relevé de points (permis)",
+  RELEVE_PERMIS_INTEGRAL: "Relevé d'information intégral du permis de conduire (piece maitresse)",
   ATTESTATION_STAGE: "Attestation de stage de sensibilisation",
   KBIS: "Extrait Kbis de l'entreprise",
   // Lot R2 — pièces d'urgence par situation (radio « Votre urgence »).

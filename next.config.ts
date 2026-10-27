@@ -53,11 +53,11 @@ const nextConfig: NextConfig = {
     }
     return config;
   },
+  turbopack: {},
   experimental: {
     serverActions: {
       bodySizeLimit: "10mb",
     },
-    serverComponentsExternalPackages: ["pg", "pg-pass", "pg-connection-string"],
   },
 };
 

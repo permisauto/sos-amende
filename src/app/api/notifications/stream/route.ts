@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/dal";
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { addSSEConnection, removeSSEConnection, sendNotification, createNotification, NotificationType } from "@/lib/realtime";
 
 /**

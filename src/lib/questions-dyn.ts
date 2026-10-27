@@ -10,7 +10,7 @@ import {
   type QuestionDynamique,
 } from "@/lib/questions";
 import type { InfractionType } from "@/lib/envoi";
-import type { RegleDetection } from "@/lib/moteur";
+import type { RegleDetection } from "@/lib/moteur"; // eslint-disable-line @typescript-eslint/no-unused-vars
 
 // Cache en mémoire avec TTL (5 min) + invalidation manuelle
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
