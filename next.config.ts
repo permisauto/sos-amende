@@ -37,19 +37,6 @@ const nextConfig: NextConfig = {
       "./node_modules/@napi-rs/canvas-linux-x64-gnu/**/*",
     ],
   },
-  turbopack: {
-    resolveAlias: {
-      "dns": false,
-      "net": false,
-      "tls": false,
-      "fs": false,
-      "util/types": false,
-      "pg": false,
-      "prisma": false,
-      "@prisma/client": false,
-      "@/generated/prisma": false,
-    },
-  },
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {
