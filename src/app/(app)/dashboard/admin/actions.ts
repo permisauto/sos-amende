@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/dal";
-import { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@prisma/client";
 import type { RegleDetection } from "@/lib/moteur";
 import type { JurisprudenceRef } from "@/lib/catalogue-sources";
 import { CATALOGUE_SOURCES } from "@/lib/catalogue-sources";

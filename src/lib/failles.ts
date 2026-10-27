@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Règles d'activation d'une faille — logique testée.
  *
  * Une `FailleJuridique` `ACTIVE` alimente deux choses sensibles :
@@ -23,7 +23,7 @@
  * PROPOSEE jusqu'à rédaction.
  */
 
-import type { Prisma, PrismaClient } from "@/generated/prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { invalidateQuestionsDynamiquesCache } from "@/lib/questions-dyn";
 
 export type ChampsActivation = {

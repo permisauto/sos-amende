@@ -23,8 +23,8 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { Prisma } from "@/generated/prisma/client";
-import type { SourceJuridique } from "@/generated/prisma/client";
+import { Prisma } from "@prisma/client";
+import type { SourceJuridique } from "@prisma/client";
 import {
   analyserArchiveGz,
   archiveAcceptable,

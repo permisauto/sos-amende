@@ -1,5 +1,5 @@
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "@/generated/prisma/client";
+import { PrismaClient } from "@prisma/client";
 import { SUPABASE_POOLER_CA } from "@/lib/supabase-pooler-ca";
 
 const globalForPrisma = globalThis as unknown as {

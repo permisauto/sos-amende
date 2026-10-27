@@ -23,7 +23,7 @@
 // ACTIVE conserve son statut).
 
 import { prisma } from "@/lib/prisma";
-import { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@prisma/client";
 import { CATALOGUE_SOURCES } from "@/lib/catalogue-sources";
 import { injecterFaillesPack } from "@/lib/failles";
 import { synchroniserVeilleJorf } from "@/lib/veille-juridique";
