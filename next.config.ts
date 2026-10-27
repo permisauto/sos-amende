@@ -55,6 +55,7 @@ const nextConfig: NextConfig = {
   },
   turbopack: {},
   experimental: {
+    turbopack: {},
     serverActions: {
       bodySizeLimit: "10mb",
     },
