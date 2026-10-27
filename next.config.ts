@@ -1,5 +1,5 @@
 import type { NextConfig } from "next";
-import path from "node:path";
+import path from "path";
 
 const securityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
@@ -53,9 +53,7 @@ const nextConfig: NextConfig = {
     }
     return config;
   },
-  turbopack: {},
   experimental: {
-    turbopack: {},
     serverActions: {
       bodySizeLimit: "10mb",
     },
