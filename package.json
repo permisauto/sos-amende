@@ -5,15 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "vercel-build": "CI=false next build --webpack",
     "start": "next start",
-    "lint": "eslint",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:e2e": "playwright test",
-    "seed:mock": "tsx scripts/seed-test-dossiers.ts",
-    "creer-compte": "tsx scripts/creer-compte.ts",
-    "postinstall": "prisma generate"
+    "lint": "next lint",
+    "vercel-build": "next build"
   },
   "allowScripts": {
     "@prisma/engines": true,
