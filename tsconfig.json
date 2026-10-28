@@ -19,6 +19,7 @@
       }
     ],
     "paths": {
+      "@/prisma/*": ["./prisma/*"],
       "@/*": ["./src/*"]
     },
     "types": ["vitest/globals"]
