@@ -1,0 +1,9 @@
+[33mcommit 049d3a259b0c0df8ae4efd295c3e908c041dd042[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mfix-build[m[33m, [m[1;31morigin/fix-build[m[33m)[m
+Author: permisauto <permisauto19@gmail.com>
+Date:   Wed Oct 28 01:41:16 2026 +0100
+
+    Fix build: alias Prisma et config Turbopack
+
+ next.config.js | 28 [32m++[m[31m--------------------------[m
+ tsconfig.json  |  1 [32m+[m
+ 2 files changed, 3 insertions(+), 26 deletions(-)

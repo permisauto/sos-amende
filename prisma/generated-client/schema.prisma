@@ -1,0 +1,585 @@
+// SOS Amende — schéma conforme à la section 4 du cahier des charges
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "./generated-client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// next-auth v5 (@auth/prisma-adapter) : modèles obligatoires — NE PAS RENOMMER
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String? // inscription inversée : mot de passe temporaire (sect. 3)
+  role          Role      @default(CLIENT) // CLIENT | JURISTE | ADMIN
+  credits       Int       @default(0)
+  // Signature du client capturée au dépôt (cases/new) et réutilisée lors de la
+  // signature de chaque dossier — le client n'a pas à retracer sa signature à
+  // chaque contestation (stockage local/S3, comme les autres pièces).
+  signatureUrl  String?
+  // Contact recueilli dès le paiement (formulaire virement) — source unique
+  // affichée au tableau de bord admin des paiements (identité complète client).
+  telephone     String?
+
+  accounts                Account[]
+  sessions                Session[]
+  authenticators          Authenticator[]
+  dossiers                Dossier[]
+  lawyerMatches           LawyerMatch[]
+  payments                Payment[]
+  messages                Message[]
+  messagesInternesEnvoyes MessageInterne[] @relation("MessageInterneEnvoye")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Authenticator {
+  credentialID         String  @unique
+  userId               String
+  providerAccountId    String
+  credentialPublicKey  String
+  counter              Int
+  credentialDeviceType String
+  credentialBackedUp   Boolean
+  transports           String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, credentialID])
+}
+
+// ---------------------------------------------------------------------------
+// Tables métier — section 4 du cahier des charges
+// ---------------------------------------------------------------------------
+
+model Dossier {
+  id                  String           @id @default(cuid())
+  userId              String
+  type                DossierType      @default(AMENDE) // AMENDE | SUSPENSION
+  statut              DossierStatut    @default(BROUILLON)
+  // Voie de procédure détectée à l'analyse (module src/lib/procedure.ts) :
+  // AMENDE_FORFAITAIRE (classes 1-3, offre 39 €) | CONTENTIEUX_CONTRAVENTION
+  // (classes 4-5, offre 149 € + consignation) | DELIT (avocat, aucun débit) |
+  // INCONNU (choix du client). Null sur les dossiers antérieurs / suspension.
+  voieProcedure       String?
+  classeContravention Int? // 1 à 5 (amende uniquement, null si délit/inconnu)
+  // Contentieux contraventionnel : montant à consigner avant le dépôt et date
+  // de la preuve de consignation téléversée par le client (jamais bloquant).
+  consignationMontant Decimal?         @db.Decimal(10, 2)
+  consignationPayeeLe DateTime?
+  pvUrl               String? // avis de contravention uploadé
+  pvTexte             String?          @db.Text // texte brut extrait par l'OCR (détection par scan)
+  extractedData       Json? // OCR : {nom, plaque, num_pv, date, heure, typeRadar, numTelePaiement, cle}
+  conditions_meteo    String? // résumé météo au jour de l'infraction (pluie, brouillard etc.)
+  lettreGeneree       String?          @db.Text // lettre remplie à partir du templateLettre (sect. 5)
+  refereGenere        String?          @db.Text // référé-suspension (L. 521-2 CJA) relu/modifié par le juriste avant validation — texte exact du pack Télérecours
+  motifRejet          String?          @db.Text // raison du rejet juriste (statut REJETE)
+  decisionOmp         String? // décision OMP après envoi : ACCEPTE | REJETE
+  decisionDetail      String?          @db.Text // note du juriste sur la décision OMP
+  // Suivi automatique des décisions (cron /api/cron/recuperations-decisions) :
+  // le numéro de dépôt portail, la mise en attente de décision, l'horodatage de
+  // la décision récupérée automatiquement et le statut brut lu sur le portail.
+  numeroDepot         String? // n° de dépôt portail (ANTAI/TELER) ou LRAR
+  decisionAttendueLe  DateTime? // posé au passage ENVOYE (début de la fenêtre de suivi)
+  decisionRecupereeLe DateTime? // décision lue sur le portail par le robot (récupération auto)
+  reponsePortail      String?          @db.Text // statut brut tel que lu sur le portail (traçabilité RGPD)
+  valideLe            DateTime? // validation de la lettre par le juriste (kit envoi)
+  canalEnvoi          String? // canal d'envoi choisi par le juriste : ANTAI | TELERECOURS | LRAR
+  remarquesJuriste    String?          @db.Text // remarques de la vérification poussée (relance du moteur)
+  dateLimite          DateTime? // délai de contestation : 45 j (amende) / 2 mois (suspension)
+  travaux_présents   Boolean? //TRUE si travaux connus sur la route au jour de l'infraction
+  prix                Decimal          @db.Decimal(10, 2)
+  // Marquage financier : `true` dès qu'un crédit a réellement été débité pour
+  // ce dossier (à l'analyse, à la validation d'un « déjà payé », ou à la
+  // validation du virement rattaché). Sert de source de vérité au remboursement
+  // (`rejeterDossier`) : on ne rend que ce qui a été débité. Laisser à `false`
+  // quand aucun débit n'a eu lieu (dossier sans faille, en attente de paiement).
+  creditDebite        Boolean          @default(false)
+  failleJuridiqueId   String? // faille retenue (principale) par le moteur (sect. 5)
+  failleJuridique     FailleJuridique? @relation(fields: [failleJuridiqueId], references: [id])
+  faillesRetenues     DossierFaille[] // toutes les failles candidates (détection par scan)
+  courriers           Courrier[]
+  preuves             Preuve[]
+  rappels             Rappel[]
+  evenements          DossierEvent[]
+  lawyerMatch         LawyerMatch?
+  payments            Payment[]
+  messages            Message[]
+  messageInternes     MessageInterne[]
+  lienDepot           LienDepot? // lien de dépôt assisté envoyé au client (canal ANTAI/Télérecours)
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([numeroDepot])
+}
+
+model FailleJuridique {
+  id                  String       @id @default(cuid())
+  typeInfraction      String // AMENDE | SUSPENSION
+  titreFaille         String
+  articleLoi          String
+  regle               String?      @db.Text // règle dégagée : ce que la jurisprudence + l'article imposent
+  templateLettre      String       @db.Text // variables {nom}, {plaque}, {num_pv}…
+  templateRefere      String?      @db.Text // 2ᵉ template validé admin : référé-suspension (CJA L. 521-2) du pack 3F/48SI — null ailleurs
+  templateGracieux    String?      @db.Text // 3ᵉ template (veille 2.0) : recours gracieux amiable préfet/ministre — null si non applicable
+  // Parcours UX pré-rédigé par l'extraction veille (veille 2.0) : questions
+  // ciblées + checklists de pièces générées à la validation admin. Forme :
+  // [{ id, libelle, type: "BOOLEAN"|"TEXT", declencheur: true|false|"TEXT_PRESENT",
+  //    preuves: [{ intitule, argument }] }]. Ne contient AUCUN fondement — le
+  // moteur ne lit que `reglesDetection` (types additifs reponseVrai/reponseTexte).
+  questionsDynamiques Json?
+  source              String?
+  reglesDetection     Json? // règles de détection automatique (scan PV/lettre) — voir src/lib/moteur.ts
+  jurisprudence       Json? // références sourcées : [{reference, juridiction, date, url, verifiee}] (base auto-alimentée)
+  statut              FailleStatut @default(ACTIVE)
+
+  dossiers        Dossier[]
+  faillesRetenues DossierFaille[]
+  sources         SourceJuridique[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Veille juridique automatique (auto-alimentation §H) — sources DILA
+// ---------------------------------------------------------------------------
+
+/// Une publication officielle ingérée par le cron de veille.
+///
+/// Invariant central : ce modèle ne contient que de la **matière sourcée**
+/// (ECLI, numéro, date, URL Légifrance, citations littérales) et un brouillon
+/// de règle *assemblé* dont le champ d'articulation reste vide. La promotion
+/// en `FailleJuridique` est toujours une décision humaine.
+model SourceJuridique {
+  id             String                @id @default(cuid())
+  /// Clé de dédup : ECLI de la décision, sinon identifiant DILA du texte.
+  cle            String                @unique
+  /// Identifiant DILA (JURITEXT…, CETATEXT…, JORFTEXT…).
+  idDila         String
+  /// JADE | CASS | JORF
+  source         String
+  /// ARRET, LOI, DECRET, ARRETE… tel que publié.
+  nature         String
+  titre          String
+  juridiction    String?
+  /// yyyy-mm-dd (date de la décision ou du texte).
+  dateSource     DateTime?             @db.Date
+  /// n° d'affaire, ou NOR pour un texte.
+  reference      String?
+  ecli           String?
+  /// URL pérenne Légifrance (ELI pour un texte, /juri/id/ pour une décision).
+  url            String?
+  /// Texte intégral normalisé, conservé pour la lecture en base.
+  contenu        String                @db.Text
+  /// Passages retenus, **verbatim**, porteurs d'un terme métier.
+  citations      Json?
+  /// Termes qui qualifient le domaine (MOTS_CLES_CORE).
+  matchsCore     Json?
+  /// Termes de procédure d'appui (MOTS_CLES_APPUI).
+  matchsAppui    Json?
+  score          Int                   @default(0)
+  /// Brouillon assemblé : métadonnées + citations, articulation à rédiger.
+  brouillonRegle String?               @db.Text
+  /// Proposition structurée extraite par IA (lot L) : articles retenus par la
+  /// juridiction + règle dégagée + conditions d'application (lot M), bornés
+  /// aux verbatims du texte.
+  /// {etat: "extrait"|"incomplet"|"echec", titre, typeInfraction, articles[],
+  ///  regle, conditions[], resume, extraits[], motif?, extraitLe}. Jamais une
+  /// faille : la validation de lecture (admin, lot M) crée l'ACTIVE sans
+  /// template ; `promouvoirSource` (manuel) reste en PROPOSEE.
+  proposition    Json?
+  statut         SourceJuridiqueStatut @default(NOUVEAU)
+  /// Faille créée à partir de cette source, le cas échéant.
+  failleId       String?
+  /// Archive DILA d'origine (CASS_20260914-210916.tar.gz).
+  archive        String?
+
+  faille FailleJuridique? @relation(fields: [failleId], references: [id])
+
+  createdAt  DateTime  @default(now())
+  reviewedAt DateTime?
+  reviewedBy String?
+
+  @@index([statut, score])
+  @@index([source, dateSource])
+  @@index([createdAt])
+}
+
+// Failles identifiées automatiquement pour un dossier (détection par scan du
+// PV ou de la lettre). Le juriste confirme ou rejette chaque candidat : ces
+// validations alimentent la base juridique (s'auto-alimente par mises à jour).
+model DossierFaille {
+  id              String              @id @default(cuid())
+  dossierId       String
+  failleId        String
+  statut          DossierFailleStatut @default(CANDIDATE)
+  // Suggestion IA de la dernière « Vérification des failles » (audit
+  // verification 2.0) : {source, pertinence, justification, controle,
+  // signalement} — affichée au juriste, jamais utilisée pour générer une
+  // lettre (templates ACTIVE uniquement).
+  suggestionIa    Json?
+  // Motif d'écartement saisi par le juriste (Lot 2.3) : alimente l'apprentissage
+  // du filtre de veille (une faille souvent écartée pour un même motif est un
+  // signal). Optionnel — historique sans motif conservé (null).
+  motifEcartement String?             @db.Text
+
+  dossier Dossier         @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+  faille  FailleJuridique @relation(fields: [failleId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([dossierId, failleId])
+}
+
+model Courrier {
+  id             String  @id @default(cuid())
+  dossierId      String
+  pdfUrl         String?
+  signatureUrl   String?
+  preuveDepotUrl String?
+  packUrls       Json? // pack Télérecours (3F/48SI) : {requete, refere, bordereau} — /uploads/... en local
+
+  dossier Dossier @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+// Pièces justificatives jointes à la contestation (preuves) : téléversées par
+// le client et/ou le juriste pour étayer la lettre (carte grise, récépissé de
+// plainte, photos…). RGPD : supprimées avec le dossier/le compte.
+model Preuve {
+  id        String   @id @default(cuid())
+  dossierId String
+  dossier   Dossier  @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+  userId    String? // auteur : client ou juriste
+  url       String // /uploads/... (storage)
+  nom       String   @default("piece")
+  type      String   @default("OTHER") // CARTE_GRISE | PLAINTE | PHOTO | CERTIFICAT | AUTRE
+  createdAt DateTime @default(now())
+
+  @@index([dossierId])
+}
+
+model Rappel {
+  id        String   @id @default(cuid())
+  dossierId String
+  type      String // J10 | J3 | J0
+  sentAt    DateTime @default(now())
+
+  dossier Dossier @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+
+  @@unique([dossierId, type])
+}
+
+model DossierEvent {
+  id        String           @id @default(cuid())
+  dossierId String
+  type      DossierEventType
+  detail    String? // ex. URL de l'accusé, motif de rejet
+  createdAt DateTime         @default(now())
+
+  dossier Dossier @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+
+  @@index([dossierId, createdAt])
+}
+
+// Message échangé entre le juriste et le client sur un dossier (demande de
+// complément d'information ou de preuve, réponse du client...). Le statut du
+// dossier reste inchangé. `lu` = le message a été consulté par son
+// destinataire (notification in-app). RGPD : supprimé avec le dossier.
+model Message {
+  id        String   @id @default(cuid())
+  dossierId String
+  dossier   Dossier  @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+  auteurId  String
+  auteur    User     @relation(fields: [auteurId], references: [id], onDelete: Cascade)
+  contenu   String   @db.Text
+  lu        Boolean  @default(false) // lu par le destinataire (client si auteur juriste, juriste si auteur client)
+  createdAt DateTime @default(now())
+
+  @@index([dossierId, createdAt])
+}
+
+// Fil d'équipe admin ↔ juristes, ancré sur un dossier (« fil par dossier »).
+// Pas de destinataire précis : chaque message est visible et répondable par
+// tout membre de l'équipe (JURISTE ou ADMIN). « lu » = le fil a été ouvert
+// par un membre (lu global, pas par utilisateur). Le client ne voit jamais ces
+// échanges. Ne pas confondre avec Message (juriste ↔ client, par dossier).
+model MessageInterne {
+  id           String   @id @default(cuid())
+  dossierId    String
+  dossier      Dossier  @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+  expediteurId String
+  expediteur   User     @relation("MessageInterneEnvoye", fields: [expediteurId], references: [id], onDelete: Cascade)
+  contenu      String   @db.Text
+  lu           Boolean  @default(false) // lu par un membre de l'équipe
+  createdAt    DateTime @default(now())
+
+  @@index([dossierId, lu])
+  @@index([dossierId, createdAt])
+}
+
+model RadarCalibration {
+  id                          String    @id @default(cuid())
+  radarId                     String    @unique
+  dateExpiration              DateTime
+  date_dernier_renouvellement DateTime? // dernière année de vérification certifiée
+  etat_certificat             String? // valide / expiré / défaut_de_calibrage
+  preuveUrl                   String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Mise en relation avocat (PLAN §2 — orientation vers un avocat partenaire,
+// pas de consultation juridique interne)
+// ---------------------------------------------------------------------------
+
+model LawyerMatch {
+  id             String            @id @default(cuid())
+  dossierId      String            @unique
+  dossier        Dossier           @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  statut         LawyerMatchStatut @default(DEMANDE)
+  motif          String?           @db.Text // contexte du besoin (client)
+  partnerName    String?
+  partnerBarreau String?
+  partnerEmail   String?
+  note           String?           @db.Text // note juriste (affectation ou refus)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Trace de l'auto-alimentation (cron quotidien) : journal de chaque passage —
+// catalogue synchronisé et veille juridique externe (JORF). Permet de voir la
+// dernière exécution, son statut et le nombre de nouveautés détectées.
+// ---------------------------------------------------------------------------
+
+model AutoAlimentationTrace {
+  id        String   @id @default(cuid())
+  campagne  String // "catalogue" | "veille-jorf"
+  statut    String // "OK" | "ECHEC"
+  traitees  Int      @default(0)
+  nouvelles Int      @default(0)
+  detail    String?  @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([campagne, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Quota IA (Gemini) — compteur d'appels par jour
+// ---------------------------------------------------------------------------
+
+// Le palier gratuit de l'API Gemini impose un nombre de requêtes par jour.
+// Les traitements de masse de la veille (extraction des propositions,
+// régénération Veille 2.0) partagent ce compteur pour ne jamais dépasser le
+// quota : on lit le restant avant un lot, et chaque appel l'incrémente.
+model GeminiUsage {
+  jour      String   @id // date UTC "YYYY-MM-DD"
+  appels    Int      @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Rate-limit distribué (lot 4, P0-05) — fenêtres glissantes par clé
+// ---------------------------------------------------------------------------
+
+// Les compteurs en mémoire (`src/lib/rate-limit.ts`) ne valent qu'une instance :
+// en serverless, chaque lambda garde son propre Map. En production,
+// `RATE_LIMIT_STORE=postgres` place les fenêtres dans cette table (une ligne
+// par clé : email, IP…) — lecture-modification-écriture atomique (UPSERT
+// `ON CONFLICT … RETURNING` qui prend le verrou de ligne), toutes instances
+// confondues. `expireLe` porte la fin de la fenêtre glissante : le cron
+// `/api/cron/rappels` purge les lignes expirées (meilleur effort).
+model RateLimitBucket {
+  key       String   @id // ex. « virement-email:a@b.fr », « login:ip:1.2.3.4 »
+  essais    Json // horodatages (epoch ms) encore dans la fenêtre
+  expireLe  DateTime // purgé dès qu'il est passé (fenêtre complète écoulée)
+  updatedAt DateTime @updatedAt
+
+  @@index([expireLe])
+}
+
+// ---------------------------------------------------------------------------
+// Paiements par virement bancaire (inscription inversée, remboursements sect. 9)
+// ---------------------------------------------------------------------------
+
+model Payment {
+  id               String    @id @default(cuid())
+  userId           String
+  dossierId        String? // dossier concerné quand le paiement est effectué depuis le paywall du dossier
+  amount           Decimal   @db.Decimal(10, 2)
+  currency         String    @default("EUR")
+  status           String
+  kind             String    @default("AMENDE") // AMENDE | SUSPENSION
+  optionLrar       Boolean   @default(false) // +10 € lettre recommandée avec accusé de réception
+  preuveUrl        String? // /uploads/... — preuve du virement téléversée par le client
+  preuveNom        String? // nom du fichier d'origine
+  preuveUploadedAt DateTime?
+  // Décision de l'admin : horodatage + motif de refus (motif obligatoire au
+  // refus — affiché au client par e-mail et par le bandeau de son espace).
+  valideLe         DateTime?
+  refuseLe         DateTime?
+  refusMotif       String?
+  // Remboursement manuel tracé (contentieux contraventionnel 149 €) : posé par
+  // l'admin via « Marquer remboursé ». Le statut REFUND_DUE signale un
+  // remboursement dû (dossier rejeté après paiement), jamais un crédit générique.
+  rembourseLe      DateTime?
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dossier Dossier? @relation(fields: [dossierId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Lien de dépôt assisté envoyé au client quand le juriste valide la lettre
+// avec un canal en ligne (ANTAI ou Télérecours) : le client accède à la page
+// /recours/finaliser?token=... (Option 2, zéro iframe) qui l'aide à déposer sa
+// contestation sur le portail officiel, puis marque son dossier ENVOYE.
+// Le token est stocké HACHÉ (sha256) — jamais en clair. Expire après
+// LienDepot.dureeValiditeJours (7 j). RGPD : supprimé avec le dossier.
+model LienDepot {
+  id         String    @id @default(cuid())
+  dossierId  String    @unique
+  tokenHash  String    @unique // sha256 du token envoyé par e-mail
+  canal      String // ANTAI | TELERECOURS
+  expireLe   DateTime
+  consommeLe DateTime?
+  createdAt  DateTime  @default(now())
+
+  dossier Dossier @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+
+  @@index([expireLe])
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  CLIENT
+  JURISTE
+  ADMIN
+}
+
+enum DossierType {
+  AMENDE
+  SUSPENSION
+}
+
+enum DossierStatut {
+  BROUILLON
+  EN_ANALYSE
+  A_VERIFIER
+  EN_ATTENTE_PAIEMENT // faille détectée mais crédit manquant — le client finalise son virement
+  EN_ATTENTE_VALIDATION // lettre générée, soumise à la validation du juriste
+  EN_ATTENTE_PRE_SIGNATURE // lettre validée par le juriste, en attente de la signature du client (cas B)
+  AVOCAT_REQUIS // délit détecté : aucun traitement SOS Amende, le client doit consulter un avocat (aucun débit)
+  PRET
+  ENVOYE
+  REJETE
+  ERREUR_TECHNIQUE // sect. 11D
+  RESOLU // libellé client : « Réponse de l'administration »
+  ANNULE
+}
+
+enum FailleStatut {
+  ACTIVE
+  INACTIVE
+  PROPOSEE // proposition issue de l'auto-alimentation (source publique) — jamais utilisée par le moteur tant que l'admin ne l'a pas validée
+}
+
+// Publications officielles DILA (JADE, CASS, JORF) remontées par la veille
+// automatique. Ce sont des **sources**, pas des failles : le juriste les lit,
+// les écarte, ou promeut l'une d'elles en proposition de faille. Aucun contenu
+// juridique n'est fabriqué ici — on ne conserve que des métadonnées sourcées et
+// des citations littérales du texte publié.
+enum SourceJuridiqueStatut {
+  NOUVEAU // détectée par le cron, pas encore lue
+  PROMU // le juriste en a fait une proposition de faille (failleId renseigné)
+  ECARTE // hors sujet, écartée définitivement
+}
+
+enum DossierFailleStatut {
+  CANDIDATE
+  CONFIRMEE
+  REJETEE
+}
+
+enum LawyerMatchStatut {
+  DEMANDE
+  AFFECTE
+  REFUSE
+}
+
+enum DossierEventType {
+  CREATION
+  ANALYSE
+  LETTRE_GENEREE
+  EN_ATTENTE
+  SIGNATURE
+  VALIDATION
+  ENVOI
+  DECISION
+  REJET
+  RETOUR
+  PREUVE // pièce justificative ajoutée (client ou juriste)
+  MESSAGE // message échangé entre le juriste et le client (fil de discussion)
+  VERIFICATION_POUSSEE // relance du moteur par le juriste (remarques → nouvelle détection/lettre)
+}
