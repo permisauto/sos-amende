@@ -2,7 +2,6 @@
 const nextConfig = {
   typescript: { ignoreBuildErrors: true },
   serverExternalPackages: ['pg', '@prisma/adapter-pg', '@prisma/client'],
-  turbopack: {},
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {
