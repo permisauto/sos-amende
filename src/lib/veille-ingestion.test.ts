@@ -36,24 +36,27 @@ describe("estPropositionPromouvable — pas de faille depuis le secours local", 
     extraitLe: "2026-10-01T00:00:00.000Z",
   };
 
-  it("accepte une extraction IA complète (méthode absente = ia)", () => {
-    expect(estPropositionPromouvable(base)).toBe(true);
-    expect(estPropositionPromouvable({ ...base, methode: "ia" })).toBe(true);
+  const favorable = { ...base, statutAnalyse: "SUCCES_AUTOMOBILISTE_GAGNANT" as const };
+
+  it("accepte une extraction IA complète et favorable (méthode absente = ia)", () => {
+    expect(estPropositionPromouvable(favorable)).toBe(true);
+    expect(estPropositionPromouvable({ ...favorable, methode: "ia" })).toBe(true);
   });
 
   it("refuse le secours local : aucune règle dégagée (incident 2026-10-18)", () => {
-    expect(estPropositionPromouvable({ ...base, methode: "locale" })).toBe(false);
+    expect(estPropositionPromouvable({ ...favorable, methode: "locale" })).toBe(false);
   });
 
-  it("refuse une décision perdante, une extraction incomplète et l'absence", () => {
+  it("retient uniquement la décision favorable : PERDANT, incomplet ou absence sont écartés", () => {
     expect(
       estPropositionPromouvable({
-        ...base,
+        ...favorable,
         statutAnalyse: "REJETE_AUTOMOBILISTE_PERDANT",
       }),
     ).toBe(false);
-    expect(estPropositionPromouvable({ ...base, etat: "incomplet" })).toBe(false);
+    expect(estPropositionPromouvable({ ...favorable, etat: "incomplet" })).toBe(false);
     expect(estPropositionPromouvable(null)).toBe(false);
+    expect(estPropositionPromouvable(favorable)).toBe(true);
   });
 });
 

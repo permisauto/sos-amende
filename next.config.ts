@@ -17,7 +17,10 @@ const nextConfig = {
   },
 
   // 3. Fallbacks de secours si Webpack est appelé en parallèle
-  webpack: (config, { isServer }) => {
+  webpack: (
+    config: { resolve: { fallback?: Record<string, unknown>; alias: Record<string, unknown> } },
+    { isServer }: { isServer?: boolean },
+  ) => {
     if (!isServer) {
       config.resolve.fallback = {
         fs: false, dns: false, net: false, tls: false, child_process: false, util: false,

@@ -6,6 +6,7 @@ import { requireAdmin, requireJuriste } from "@/lib/dal";
 import { Prisma } from "@/prisma/generated-client";
 import { estActivable } from "@/lib/failles";
 import {
+  estPropositionPromouvable,
   executerVeilleDila,
   extrairePropositionsEnAttente,
   regenererAnalysesAnciennes,
@@ -287,6 +288,19 @@ export async function validerPropositionSource(
       error: `Proposition incomplète : ${
         proposition.motif ?? "à compléter"
       }. Corrigez-la avant validation.`,
+    };
+  }
+
+  if (!estPropositionPromouvable(proposition)) {
+    if (proposition.statutAnalyse === "REJETE_AUTOMOBILISTE_PERDANT") {
+      return {
+        error:
+          "Décision perdante pour les automobilistes : seule une décision favorable peut être validée.",
+      };
+    }
+    return {
+      error:
+        "Proposition non promotable : seule une décision favorable peut être validée.",
     };
   }
 

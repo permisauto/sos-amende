@@ -1084,11 +1084,7 @@ export function estPropositionPromouvable(
   p: PropositionVeille | null,
 ): boolean {
   if (!p || p.etat !== "extrait") return false;
-  // Filtre GAGNANT uniquement : écarter tout PERDANT / rejet (valeurs du type)
-  if (p.statutAnalyse === "REJETE_AUTOMOBILISTE_PERDANT" || p.statutAnalyse === "SUCCES_AUTOMOBILISTE_GAGNANT") {
-    // Seulement GAGNANT est promouvable ; tout autre statut (y compris null/indéfini) = écarté par défaut
-    if (p.statutAnalyse !== "SUCCES_AUTOMOBILISTE_GAGNANT") return false;
-  }
+  if (p.statutAnalyse !== "SUCCES_AUTOMOBILISTE_GAGNANT") return false;
   return !estPropositionLocale(p);
 }
 

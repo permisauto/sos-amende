@@ -30,6 +30,7 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "prisma/generated-client/**",
     // Scripts/outils locaux non versionnés (jamais commités) — voir .gitignore.
     "testSaaS.js",
     "agentDetective.js",
