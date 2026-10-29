@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   FAILLES_PAR_REPONSE,
   GROUPE_DYNAMIQUE,
@@ -17,9 +17,14 @@ import {
   typePreuvePourIntitule,
   versQuestionsCiblees,
   type QuestionDynamique,
-  trouverFaillesParReponseVrai,
 } from "./questions";
 import { trouverFaillesParReponseVrai as trouverFaillesParReponseVraiFn } from "@/lib/questions-dyn";
+
+vi.mock("@/lib/questions-dyn", () => ({
+  trouverFaillesParReponseVrai: vi.fn(),
+}));
+
+const trouverFaillesParReponseVraiMock = vi.mocked(trouverFaillesParReponseVraiFn);
 
 describe("naturesPv — nature du document détectée dans le texte scanné", () => {
   it("détecte stationnement, travaux, radar, visibilité et alcool", () => {
@@ -839,28 +844,49 @@ describe("faillesDepuisReponses — N3 (capteur de fait → candidature)", () =>
     "faille-48si-plafond-8pts",
   ];
 
-  it("propose la faille ACTIVE correspondant à une case cochée", () => {
+  beforeEach(() => {
+    trouverFaillesParReponseVraiMock.mockReset();
+    trouverFaillesParReponseVraiMock.mockImplementation(
+      async (_typeInfraction, champ) => {
+        switch (champ) {
+          case "vehiculeCede":
+            return ["faille-exoneration-vol-usurpation"];
+          case "suspPrecedentsNonRecapitules":
+            return ["faille-48si-defaut-info"];
+          case "suspPointsCumulesJour":
+            return ["faille-48si-plafond-8pts"];
+          case "stationnementPanneau":
+          case "marquageEfface":
+            return ["faille-stationnement-panneau"];
+          default:
+            return [];
+        }
+      },
+    );
+  });
+
+  it("propose la faille ACTIVE correspondant à une case cochée", async () => {
     expect(
-      faillesDepuisReponses({ vehiculeCede: true }, DISPO, "AMENDE"),
+      await faillesDepuisReponses({ vehiculeCede: true }, DISPO, "AMENDE"),
     ).toEqual(["faille-exoneration-vol-usurpation"]);
     expect(
-      faillesDepuisReponses({ suspPrecedentsNonRecapitules: true }, DISPO, "SUSPENSION"),
+      await faillesDepuisReponses({ suspPrecedentsNonRecapitules: true }, DISPO, "SUSPENSION"),
     ).toEqual(["faille-48si-defaut-info"]);
   });
 
-  it("ne propose rien sans case cochée ou hors failles disponibles", () => {
-    expect(faillesDepuisReponses({ vehiculeCede: false }, DISPO, "AMENDE")).toEqual([]);
-    expect(faillesDepuisReponses({ caractereLibre: true }, DISPO, "AMENDE")).toEqual([]);
+  it("ne propose rien sans case cochée ou hors failles disponibles", async () => {
+    expect(await faillesDepuisReponses({ vehiculeCede: false }, DISPO, "AMENDE")).toEqual([]);
+    expect(await faillesDepuisReponses({ caractereLibre: true }, DISPO, "AMENDE")).toEqual([]);
     expect(
-      faillesDepuisReponses({ suspPointsCumulesJour: true }, [
+      await faillesDepuisReponses({ suspPointsCumulesJour: true }, [
         "faille-48si-defaut-info",
       ], "SUSPENSION"),
     ).toEqual([]);
   });
 
-  it("dédoublonne quand deux réponses pointent la même faille", () => {
+  it("dédoublonne quand deux réponses pointent la même faille", async () => {
     expect(
-      faillesDepuisReponses(
+      await faillesDepuisReponses(
         { stationnementPanneau: true, marquageEfface: true },
         DISPO,
         "AMENDE",

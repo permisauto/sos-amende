@@ -47,7 +47,7 @@ export async function trouverFaillesParReponseVrai(
         statut: "ACTIVE",
         typeInfraction,
         reglesDetection: {
-          path: "$",
+          path: ["$"],
           array_contains: { type: "reponseVrai", champ },
         },
       },
