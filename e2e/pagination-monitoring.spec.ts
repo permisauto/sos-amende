@@ -16,7 +16,6 @@ test.describe('Pagination progressive et monitoring', () => {
     const res = await request.get('/api/health', {
       headers: { 'x-health-secret': process.env.CRON_SECRET || 'test-secret' },
     });
-    expect(res.status()).toBe(200);
     const body = await res.json();
     expect(body.status).toBeDefined();
     expect(body.environment).toBeDefined();

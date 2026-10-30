@@ -251,10 +251,7 @@ export function UploadForm({
               <SignatureCanvas
                 ref={padRef}
                 onEnd={() =>
-                  setSignature(
-                    padRef.current?.getTrimmedCanvas().toDataURL("image/png") ??
-                      null,
-                  )
+                  setSignature(padRef.current?.toDataURL("image/png") ?? null)
                 }
                 canvasProps={{
                   className: "h-32 w-full rounded-lg cursor-crosshair",

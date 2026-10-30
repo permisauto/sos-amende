@@ -65,10 +65,7 @@ export function SignaturePad({
               <SignatureCanvas
                 ref={padRef}
                 onEnd={() =>
-                  setSignature(
-                    padRef.current?.getTrimmedCanvas().toDataURL("image/png") ??
-                      null,
-                  )
+                  setSignature(padRef.current?.toDataURL("image/png") ?? null)
                 }
                 canvasProps={{
                   className: "h-40 w-full rounded-lg cursor-crosshair",
@@ -89,12 +86,9 @@ export function SignaturePad({
           <div className="rounded-xl border border-zinc-300 bg-white p-2">
             <SignatureCanvas
               ref={padRef}
-              onEnd={() =>
-                setSignature(
-                  padRef.current?.getTrimmedCanvas().toDataURL("image/png") ??
-                    null,
-                )
-              }
+              onEnd={() => {
+                setSignature(padRef.current?.toDataURL("image/png") ?? null);
+              }}
               canvasProps={{
                 className: "h-40 w-full rounded-lg cursor-crosshair",
                 height: 160,

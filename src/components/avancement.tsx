@@ -164,14 +164,14 @@ export function AvancementPaiement({
         </div>
       );
     }
-    return (
-      <div className="flex flex-col gap-1">
-        <Barre courant={0} total={2} />
-        <span className="text-[11px] font-medium text-zinc-500">
-          Étape 1 / 2 — {LIBELLES_PAIEMENT.PENDING_VIEMENT}
-        </span>
-      </div>
-    );
+  return (
+    <div className="flex flex-col gap-1">
+      <Barre courant={0} total={2} />
+      <span className="text-[11px] font-medium text-zinc-500">
+        Étape 1 / 2 — {LIBELLES_PAIEMENT.PENDING_VIREMENT}
+      </span>
+    </div>
+  );
   }
 
   if (status === "PAID") {
@@ -196,14 +196,14 @@ export function AvancementPaiement({
         </div>
       );
     }
-    return (
-      <div className="flex flex-col gap-1">
-        <Barre courant={2} total={2} />
-        <span className="text-[11px] font-medium text-zinc-500">
-          Étape 2 / 2 — {LIBELLES_PAIEMENT.PAID}
-        </span>
-      </div>
-    );
+  return (
+    <div className="flex flex-col gap-1">
+      <Barre courant={2} total={2} />
+      <span className="text-[11px] font-medium text-zinc-500">
+        Étape 2 / 2 — {LIBELLES_PAIEMENT.PAID}
+      </span>
+    </div>
+  );
   }
 
   // REFUSED, REFUND_DUE, REFUNDED = voies terminales

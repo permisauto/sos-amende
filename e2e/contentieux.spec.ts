@@ -124,6 +124,8 @@ test("contentieux : 149 € payés avant validation et envoi", async ({
   try {
     const userRes = await client.query(`SELECT id FROM "User" WHERE email = $1`, [email]);
     const userId = userRes.rows[0]?.id;
+    // L'admin retrouve le paiement via le telephone du client (filtre ?q=).
+    await client.query(`UPDATE "User" SET "telephone" = $1 WHERE email = $2`, [whatsapp, email]);
     if (userId) {
       await client.query(
         `INSERT INTO "Payment" (id, "userId", "dossierId", amount, currency, status, kind, "optionLrar", "preuveUrl", "preuveNom", "preuveUploadedAt", "createdAt", "updatedAt")
