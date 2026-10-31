@@ -9,6 +9,10 @@ import { consommerCreneau } from "@/lib/rate-limit";
 import { secretsEgaux } from "@/lib/cron-auth";
 import { getOcrProvider } from "@/lib/ocr";
 import { basesTravaux } from "@/lib/preuves-api";
+import { queryCache, CacheTags } from "@/lib/cache";
+import { ExternalCircuits, CircuitState } from "@/lib/circuit-breaker";
+import { logger } from "@/lib/structured-logging";
+import { recordHttpRequest, recordError } from "@/lib/metrics";
 
 export type HealthStatus = "healthy" | "degraded" | "unhealthy";
 
@@ -448,6 +452,68 @@ function checkOcr(): HealthCheckResult {
 }
 
 /**
+ * Vérifie l'état du cache local
+ */
+function checkCache(): HealthCheckResult {
+  const start = Date.now();
+  const stats = queryCache.getStats();
+  const latencyMs = Date.now() - start;
+
+  return {
+    name: "cache",
+    status: stats.size >= 0 ? "healthy" : "unhealthy",
+    latencyMs,
+    details: {
+      entries: stats.size,
+      tags: stats.tags,
+      message: `Cache local: ${stats.size} entrées, ${stats.tags} tags`,
+    },
+  };
+}
+
+/**
+ * Vérifie l'état des circuit breakers
+ */
+function checkCircuitBreakers(): HealthCheckResult {
+  const start = Date.now();
+  const circuits: Record<string, { state: string; failures: number }> = {};
+  let hasOpen = false;
+  let hasDegraded = false;
+
+  for (const [name, factory] of Object.entries(ExternalCircuits)) {
+    try {
+      const cb = factory();
+      const state = cb.getState();
+      const metrics = cb.getMetrics();
+      
+      circuits[name] = { state, failures: metrics.failures };
+      
+      if (state === CircuitState.OPEN) hasOpen = true;
+      else if (state === CircuitState.HALF_OPEN) hasDegraded = true;
+    } catch {
+      circuits[name] = { state: 'ERROR', failures: -1 };
+      hasOpen = true;
+    }
+  }
+
+  let status: 'healthy' | 'degraded' | 'unhealthy' = 'healthy';
+  if (hasOpen) status = 'unhealthy';
+  else if (hasDegraded) status = 'degraded';
+
+  const latencyMs = Date.now() - start;
+
+  return {
+    name: "circuit_breakers",
+    status,
+    latencyMs,
+    details: {
+      circuits,
+      message: `${Object.keys(circuits).length} circuits surveillés`,
+    },
+  };
+}
+
+/**
  * `full` (défaut) = toutes les vérifications, y compris les externes coûteuses
  * (radars.csv data.gouv, Open-Meteo, BAN, OpendataSoft travaux, Groq, écriture
  * storage). `lite` = checks sans effet de bord (base + config e-mail) — c'est
@@ -455,10 +521,22 @@ function checkOcr(): HealthCheckResult {
  * de relais de spam vers les API tierces (audit lot 3).
  */
 export async function runHealthChecks(full = true): Promise<HealthCheckResponse> {
-  const checksEnVue = full
-    ? [checkSupabase(), checkPrisma(), checkGroq(), checkResend(), checkDataGouv(), checkOpenMeteo(), checkBan(), checkTravaux(), checkStorage(), Promise.resolve(checkOcr())]
-    : [checkSupabase(), checkPrisma(), checkResend()];
-  const results = await Promise.allSettled(checksEnVue);
+  // Checks de base (toujours exécutés)
+  const baseChecks = [
+    checkSupabase(),
+    checkPrisma(),
+    checkResend(),
+    Promise.resolve(checkCache()),
+    Promise.resolve(checkCircuitBreakers()),
+  ];
+
+  // Checks externes (uniquement en mode full)
+  const externalChecks = full
+    ? [checkGroq(), checkDataGouv(), checkOpenMeteo(), checkBan(), checkTravaux(), checkStorage(), Promise.resolve(checkOcr())]
+    : [];
+
+  const allChecks = [...baseChecks, ...externalChecks];
+  const results = await Promise.allSettled(allChecks);
 
   const checks: HealthCheckResult[] = results.map((r) =>
     r.status === "fulfilled" ? r.value : {
@@ -474,6 +552,15 @@ export async function runHealthChecks(full = true): Promise<HealthCheckResponse>
   let overallStatus: HealthStatus = "healthy";
   if (unhealthy > 0) overallStatus = "unhealthy";
   else if (degraded > 0) overallStatus = "degraded";
+
+  // Log santé globale
+  logger.info('Health check completed', {
+    overallStatus,
+    checksCount: checks.length,
+    unhealthy,
+    degraded,
+    mode: full ? 'full' : 'lite',
+  });
 
   return {
     status: overallStatus,
@@ -505,12 +592,19 @@ function secretHealthValide(req: Request): boolean {
 }
 
 export async function GET(req: Request) {
+  const startTime = Date.now();
+  const correlationId = `health-${Date.now()}`;
+  
+  logger.setDefaultContext({ correlationId });
+  
   // Rate-limit par IP : l'endpoint est public, il ne doit pas devenir un
   // relais de spam (même en mode lite, chaque appel ouvre une connexion base).
   const ip =
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "inconnue";
   const essais = await consommerCreneau(`health:${ip}`, 20, 15 * 60 * 1000);
   if (essais <= 0) {
+    recordHttpRequest('GET', '/api/health', 429, Date.now() - startTime);
+    recordError('health_rate_limit', 'warning');
     return new Response(JSON.stringify({ error: "Trop de requêtes." }), {
       status: 429,
       headers: {
@@ -524,7 +618,21 @@ export async function GET(req: Request) {
   const full = secretHealthValide(req);
   const health = await runHealthChecks(full);
 
+  const durationMs = Date.now() - startTime;
   const statusCode = health.status === "healthy" ? 200 : health.status === "degraded" ? 200 : 503;
+
+  // Log et métriques
+  logger.httpAccess({
+    method: 'GET',
+    url: '/api/health',
+    statusCode,
+    durationMs,
+    correlationId,
+  });
+  
+  recordHttpRequest('GET', '/api/health', statusCode, durationMs);
+  
+  logger.clearDefaultContext();
 
   return new Response(JSON.stringify(health, null, 2), {
     status: statusCode,

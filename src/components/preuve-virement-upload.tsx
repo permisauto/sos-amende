@@ -13,9 +13,25 @@ export function PreuveVirementUpload({ paymentId }: { paymentId: string }) {
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const isValidFile = (file: File) => {
+    if (!file) return false;
+    if (!["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(file.type)) {
+      return false;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      return false;
+    }
+    return true;
+  };
+
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!isValidFile(file)) {
+      setError("Le fichier doit être JPEG, PNG, WebP ou PDF et ne pas dépasser 8 Mo.");
+      setUploading(false);
+      return;
+    }
     setUploading(true);
     setError(null);
     try {
@@ -23,7 +39,7 @@ export function PreuveVirementUpload({ paymentId }: { paymentId: string }) {
       form.append("paymentId", paymentId);
       form.append("fichier", file);
       const res = await fetch("/api/paiement/virement/preuve", { method: "POST", body: form });
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      const data = (await res.json().catch(() => ({})) as { error?: string });
       if (!res.ok) throw new Error(data.error ?? "Erreur lors de l'envoi");
       setDone(true);
     } catch (err) {

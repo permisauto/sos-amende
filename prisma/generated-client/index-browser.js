@@ -395,6 +395,18 @@ exports.Prisma.LienDepotScalarFieldEnum = {
   createdAt: 'createdAt'
 };
 
+exports.Prisma.AuditLogScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  action: 'action',
+  resource: 'resource',
+  resourceId: 'resourceId',
+  metadata: 'metadata',
+  ipAddress: 'ipAddress',
+  userAgent: 'userAgent',
+  timestamp: 'timestamp'
+};
+
 exports.Prisma.SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -513,7 +525,8 @@ exports.Prisma.ModelName = {
   GeminiUsage: 'GeminiUsage',
   RateLimitBucket: 'RateLimitBucket',
   Payment: 'Payment',
-  LienDepot: 'LienDepot'
+  LienDepot: 'LienDepot',
+  AuditLog: 'AuditLog'
 };
 
 /**

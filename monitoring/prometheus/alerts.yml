@@ -1,0 +1,214 @@
+groups:
+  - name: sos-amende-alerts
+    interval: 30s
+    rules:
+      # ============================================
+      # HIGH PRIORITY - Immediate paging (24/7)
+      # ============================================
+      
+      - alert: ServiceDown
+        expr: up{job="sos-amende"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "SOS Amende service is down"
+          description: "The application has been down for more than 1 minute."
+          runbook_url: "https://github.com/SOS-AMENDE/runbooks/blob/main/service-down.md"
+
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status_code=~"5.."}[5m])) 
+          / sum(rate(http_requests_total[5m])) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is above 5% for the last 2 minutes ({{ $value | humanizePercentage }})."
+          runbook_url: "https://github.com/SOS-AMENDE/runbooks/blob/main/high-error-rate.md"
+
+      - alert: DatabaseUnhealthy
+        expr: |
+          health_check_status{name="prisma", status="unhealthy"} == 1
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Database connection unhealthy"
+          description: "Prisma health check reports unhealthy for more than 1 minute."
+          runbook_url: "https://github.com/SOS-AMENDE/runbooks/blob/main/database-unhealthy.md"
+
+      - alert: RedisUnhealthy
+        expr: |
+          health_check_status{name="redis", status="unhealthy"} == 1
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Redis cache unhealthy"
+          description: "Redis health check reports unhealthy for more than 1 minute."
+          runbook_url: "https://github.com/SOS-AMENDE/runbooks/blob/main/redis-unhealthy.md"
+
+      - alert: CircuitBreakerOpen
+        expr: |
+          circuit_breaker_state > 0
+        for: 0m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Circuit breaker OPEN: {{ $labels.circuit }}"
+          description: "Circuit breaker for {{ $labels.circuit }} is OPEN. External service calls will fail fast."
+          runbook_url: "https://github.com/SOS-AMENDE/runbooks/blob/main/circuit-breaker-open.md"
+
+      # ============================================
+      # HIGH PRIORITY - Business impact (business hours)
+      # ============================================
+      
+      - alert: HighPaymentFailureRate
+        expr: |
+          sum(rate(payments_refused_total[5m])) 
+          / sum(rate(payments_created_total[5m])) > 0.2
+        for: 5m
+        labels:
+          severity: high
+          team: payments
+        annotations:
+          summary: "High payment refusal rate"
+          description: "More than 20% of payments are being refused in the last 5 minutes."
+          runbook_url: "https://github.com/SOS-AMENDE/runbooks/blob/main/payment-failure-rate.md"
+
+      - alert: OCRFailureRate
+        expr: |
+          sum(rate(ocr_requests_total{result="failure"}[5m])) 
+          / sum(rate(ocr_requests_total[5m])) > 0.3
+        for: 5m
+        labels:
+          severity: high
+          team: ocr
+        annotations:
+          summary: "High OCR failure rate"
+          description: "OCR failure rate is above 30% for the last 5 minutes."
+          runbook_url: "https://github.com/SOS-AMENDE/runbooks/blob/main/ocr-failure-rate.md"
+
+      - alert: PaymentValidationDelay
+        expr: |
+          histogram_quantile(0.95, rate(payment_validation_duration_seconds_bucket[5m])) > 300
+        for: 5m
+        labels:
+          severity: high
+          team: payments
+        annotations:
+          summary: "Payment validation taking too long"
+          description: "P95 payment validation time exceeds 5 minutes."
+          runbook_url: "https://github.com/SOS-AMENDE/runbooks/blob/main/payment-validation-delay.md"
+
+      # ============================================
+      # WARNING - Performance degradation
+      # ============================================
+      
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High P95 latency"
+          description: "P95 HTTP request latency exceeds 2 seconds."
+          runbook_url: "https://github.com/SOS-AMENDE/runbooks/blob/main/high-latency.md"
+
+      - alert: LowCacheHitRate
+        expr: |
+          sum(rate(cache_misses_total[5m])) / (sum(rate(cache_hits_total[5m])) + sum(rate(cache_misses_total[5m]))) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Low cache hit rate"
+          description: "Cache hit rate dropped below 50% for the last 10 minutes."
+          runbook_url: "https://github.com/SOS-AMENDE/runbooks/blob/main/low-cache-hit-rate.md"
+
+      - alert: HighMemoryUsage
+        expr: |
+          (nodejs_heap_used_bytes / nodejs_heap_total_bytes) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High memory usage"
+          description: "Heap memory usage exceeds 85% of total heap."
+          runbook_url: "https://github.com/SOS-AMENDE/runbooks/blob/main/high-memory-usage.md"
+
+      - alert: HighCPUUsage
+        expr: |
+          rate(nodejs_cpu_seconds_total[5m]) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage exceeds 80% for the last 10 minutes."
+          runbook_url: "https://github.com/SOS-AMENDE/runbooks/blob/main/high-cpu-usage.md"
+
+      - alert: ExternalAPIDegraded
+        expr: |
+          sum(rate(external_api_calls_total{result="failure"}[5m])) 
+          / sum(rate(external_api_calls_total[5m])) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "External API degraded"
+          description: "External API failure rate exceeds 20%."
+          runbook_url: "https://github.com/SOS-AMENDE/runbooks/blob/main/external-api-degraded.md"
+
+      - alert: PendingDossiersBacklog
+        expr: |
+          pending_dossiers > 100
+        for: 30m
+        labels:
+          severity: warning
+          team: operations
+        annotations:
+          summary: "Pending dossiers backlog"
+          description: "More than 100 dossiers pending processing for over 30 minutes."
+          runbook_url: "https://github.com/SOS-AMENDE/runbooks/blob/main/dossier-backlog.md"
+
+      # ============================================
+      # INFO - Capacity planning
+      # ============================================
+      
+      - alert: DiskSpaceLow
+        expr: |
+          (node_filesystem_avail_bytes / node_filesystem_size_bytes) < 0.1
+        for: 1h
+        labels:
+          severity: info
+          team: platform
+        annotations:
+          summary: "Disk space low"
+          description: "Less than 10% disk space remaining."
+          runbook_url: "https://github.com/SOS-AMENDE/runbooks/blob/main/disk-space-low.md"
+
+      - alert: HighActiveUsers
+        expr: |
+          active_users > 1000
+        for: 30m
+        labels:
+          severity: info
+          team: product
+        annotations:
+          summary: "High concurrent users"
+          description: "More than 1000 concurrent active users."
+          runbook_url: "https://github.com/SOS-AMENDE/runbooks/blob/main/high-active-users.md"

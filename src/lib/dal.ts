@@ -77,11 +77,29 @@ export async function requireJuriste() {
  * rejet, décision OMP, confirmation d'une faille, édition de lettre).
  * Réservé aux JURISTE : l'ADMIN dispose de l'accès lecture seule à l'espace
  * juriste mais ne peut pas écrire dans le flux de traitement.
+ * Optionnel: si dossierId est fourni, vérifier l'accès au dossier spécifique.
  */
-export async function requireJuristeRedacteur() {
+export async function requireJuristeRedacteur(dossierId?: string) {
   const user = await requireUser();
-  if (user.role !== "JURISTE") {
+  if (user.role !== "JURISTE" && user.role !== "ADMIN") {
     redirect("/dashboard/juriste");
   }
+  
+  // Si dossierId fourni, vérifier l'accès au dossier
+  if (dossierId) {
+    const isAdmin = user.role === "ADMIN";
+    const whereClause = {
+      id: dossierId,
+      ...(isAdmin ? {} : { userId: user.id as string })
+    };
+    const dossier = await prisma.dossier.findFirst({
+      where: whereClause
+    });
+    
+    if (!dossier) {
+      throw new Error("Access denied");
+    }
+  }
+  
   return user;
 }

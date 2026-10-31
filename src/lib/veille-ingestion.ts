@@ -506,12 +506,14 @@ function propositionEnregistree(
   tentatives?: number;
   regenTentatives?: number;
   schemaVeille?: number;
+  statutAnalyse?: string;
 } | null {
   return row.proposition as {
     etat?: string;
     tentatives?: number;
     regenTentatives?: number;
     schemaVeille?: number;
+    statutAnalyse?: string;
   } | null;
 }
 
@@ -692,6 +694,12 @@ export function sourcePreparable(row: SourceJuridique): SourcePreparable {
     dateSource: row.dateSource ? row.dateSource.toISOString().slice(0, 10) : null,
     etatProposition: prop?.etat ?? null,
     tentatives: prop?.tentatives ?? null,
+    // NOUVEAU : Statut de l'analyse IA pour le score de puissance
+    statutAnalyse: prop?.statutAnalyse ?? null,
+    // Historique d'extraction pour pénaliser les échecs répétés
+    historiqueExtraction: prop?.etat
+      ? { etat: prop.etat, tentatives: prop.tentatives ?? 0 }
+      : null,
   };
 }
 

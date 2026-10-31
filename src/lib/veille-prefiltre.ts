@@ -109,7 +109,9 @@ const RE_ARTICLE = /\b([LRCD](?:\.\s?|\s)?\d{1,4}(?:-\d{1,4})?)\b/g;
  */
 const RE_ARTICLE_SANS_CODE = /\bart(?:icle)?\.?\s*(\d{1,4}(?:-\d{1,4})?)\b/gi;
 
-/** Publication telle que consommée par le pré-filtre. */
+/**
+ * Publication telle que consommée par le pré-filtre.
+ */
 export type SourcePreparable = {
   id: string;
   titre: string;
@@ -123,6 +125,10 @@ export type SourcePreparable = {
   etatProposition?: string | null;
   /** Nombre de passages automatiques déjà subis. */
   tentatives?: number | null;
+  /** NOUVEAU : Statut de l'analyse IA (Veille 2.0) */
+  statutAnalyse?: string | null;
+  /** Historique d'extraction pour pénaliser les échecs répétés */
+  historiqueExtraction?: { etat: string; tentatives: number } | null;
 };
 
 export type PrioritePrefiltre = {
@@ -190,10 +196,148 @@ function estRecent(dateSource: string | null | undefined, maintenant: Date): boo
 }
 
 /**
- * Priorité déterministe d'une publication.
- *
- * @param articlesCouverts références déjà couvertes par une faille ACTIVE
- *        (normalisées) — sert à détecter les doublons.
+ * Priorité déterministe d'une publication (version legacy).
+ */
+
+/**
+ * Score de puissance composite : combine statutAnalyse (signal principal)
+ * avec les signaux déterministes existants.
+ */
+export type ScorePuissance = {
+  /** Score final pour tri (peut être négatif). */
+  scoreFinal: number;
+  /** Composants détaillés pour debug/traçabilité. */
+  composants: {
+    /** Signal principal : statutAnalyse de l'IA (GAGNANT=+50, PERDANT=-50, LOCALE=0, INCONNU=0) */
+    statutAnalyse: number;
+    /** Score classique pondéré (termes domaine, articles, etc.) - max ~40 */
+    pertinenceClassique: number;
+    /** Pré-filtre déterministe existant (termes, articles, dispositif, familles, fraîcheur, pénalités) */
+    prioriteDeterministe: number;
+    /** Fraîcheur (0-10) */
+    fraicheur: number;
+    /** Pénalités (doublons, échecs répétés) */
+    penalites: number;
+  };
+  /** Explication lisible pour le juriste/admin. */
+  explication: string;
+};
+
+/**
+ * Calcule le score de puissance composite pour une publication.
+ * Le statutAnalyse (GAGNANT/PERDANT/LOCALE/INCONNU) est le signal principal (±50).
+ * Les signaux déterministes existants sont pondérés moins fort.
+ */
+export function calculerScorePuissance(
+  source: SourcePreparable,
+  articlesCouverts: ReadonlySet<string> = new Set<string>(),
+  maintenant: Date = new Date(),
+): ScorePuissance {
+  const maintenantMs = maintenant.getTime();
+
+  // 1. SCORE STATUT ANALYSE (SIGNAL PRINCIPAL : -50 à +50)
+  let scoreStatut = 0;
+  let explicationStatut = "";
+
+  const statutAnalyse = source.statutAnalyse;
+  if (statutAnalyse === "SUCCES_AUTOMOBILISTE_GAGNANT") {
+    scoreStatut = 50;
+    explicationStatut = "Décision GAGNANTE pour l'automobiliste (IA)";
+  } else if (statutAnalyse === "REJETE_AUTOMOBILISTE_PERDANT") {
+    scoreStatut = -50;
+    explicationStatut = "Décision PERDANTE pour l'automobiliste (IA)";
+  } else if (statutAnalyse === "LOCALE" || (source.historiqueExtraction?.etat === "extrait" && !statutAnalyse)) {
+    // Extraction locale (sans IA) ou ancien format sans statutAnalyse
+    scoreStatut = 0;
+    explicationStatut = "Extraction locale (sans IA)";
+  } else {
+    // Pas encore analysé (NOUVEAU sans proposition, ou extraction échouée/incomplète)
+    scoreStatut = 0;
+    explicationStatut = "Non encore analysé par l'IA";
+  }
+
+  // 2. SCORE CLASSIQUE (0-40) - Pondéré moins fort
+  const coreDistincts = new Set(
+    (source.matchsCore ?? []).map((t) => normaliser(t)).filter(Boolean),
+  ).size;
+  const pertinenceClassique = Math.min(40, source.score * 0.4);
+
+  // 3. PRÉ-FILTRE DÉTERMINISTE (0-30) - Réutilise la logique existante
+  const priorite = prioritePrefiltre(source, articlesCouverts, maintenant);
+  const prioriteDeterministe = Math.min(30, Math.max(0, priorite.score));
+
+  // 4. FRAÎCHEUR (0-10)
+  let fraicheur = 0;
+  if (source.dateSource) {
+    const d = new Date(`${source.dateSource}T00:00:00Z`);
+    if (!Number.isNaN(d.getTime())) {
+      const diffJours = (maintenantMs - d.getTime()) / 86_400_000;
+      if (diffJours <= 30) fraicheur = 10;
+      else if (diffJours <= 90) fraicheur = 7;
+      else if (diffJours <= 180) fraicheur = 5;
+      else if (diffJours <= 365) fraicheur = 2;
+    }
+  }
+
+  // 5. PÉNALITÉS
+  let penalites = 0;
+  const partsExplication: string[] = [];
+
+  // Doublon article déjà couvert
+  const articles = extraireArticles(`${source.titre ?? ""} ${source.contenu ?? ""}`);
+  const nouveaux = articles.filter((a) => !articlesCouverts.has(a));
+  const dejaCouvert = articles.length > 0 && nouveaux.length === 0;
+  if (dejaCouvert) {
+    penalites += 15;
+  }
+
+  // Échecs extraction répétés
+  const echecs = source.etatProposition === "echec" ? Math.max(1, source.tentatives ?? 1) : 0;
+  if (echecs > 0) {
+    penalites += Math.min(echecs, 3) * 4;
+  }
+
+  // Tentatives répétées incomplet
+  if (source.etatProposition === "incomplet" && (source.tentatives ?? 0) >= 1) {
+    penalites += 10;
+  }
+
+  const scoreFinal = Math.max(
+    -100,
+    Math.min(
+      100,
+      scoreStatut + pertinenceClassique + prioriteDeterministe + fraicheur - penalites
+    ),
+  );
+
+  const partiesExplication: string[] = [];
+  if (explicationStatut) partiesExplication.push(explicationStatut);
+  if (penalites > 0) partiesExplication.push(`pénalités: -${penalites}`);
+
+  return {
+    scoreFinal: Math.round(scoreFinal),
+    composants: {
+      statutAnalyse: scoreStatut,
+      pertinenceClassique: Math.round(pertinenceClassique),
+      prioriteDeterministe: Math.round(prioriteDeterministe),
+      fraicheur,
+      penalites,
+    },
+    explication:
+      partiesExplication.length > 0
+        ? partsExplication.join(" · ")
+        : "aucun signal",
+  };
+}
+
+export type SourcePriorisee = {
+  source: SourcePreparable;
+  priorite: ScorePuissance;
+};
+
+/**
+ * Priorité déterministe d'une publication (version legacy).
+ * @deprecated Utiliser `calculerScorePuissance` pour le nouveau système de score.
  */
 export function prioritePrefiltre(
   source: SourcePreparable,
@@ -261,16 +405,6 @@ export function prioritePrefiltre(
   };
 }
 
-export type SourcePriorisee = {
-  source: SourcePreparable;
-  priorite: PrioritePrefiltre;
-};
-
-/**
- * Classe les publications par priorité décroissante. L'ordre est **déterministe**
- * : priorité, puis score de pertinence, puis identifiant — deux exécutions
- * sur la même file donnent le même ordre.
- */
 export function classerParPriorite(
   sources: readonly SourcePreparable[],
   articlesCouverts: ReadonlySet<string> = new Set<string>(),
@@ -279,17 +413,19 @@ export function classerParPriorite(
   return sources
     .map((source) => ({
       source,
-      priorite: prioritePrefiltre(source, articlesCouverts, maintenant),
+      priorite: calculerScorePuissance(source, articlesCouverts, maintenant),
     }))
     .sort(
       (a, b) =>
-        b.priorite.score - a.priorite.score ||
+        b.priorite.scoreFinal - a.priorite.scoreFinal ||
         b.source.score - a.source.score ||
         a.source.id.localeCompare(b.source.id),
     );
 }
 
 /** Résumé court pour l'interface (« Priorité 18 · cite L234-1 »). */
-export function resumePriorite(p: PrioritePrefiltre): string {
-  return `Priorité ${p.score} · ${p.explication}`;
+export function resumePriorite(p: PrioritePrefiltre | ScorePuissance): string {
+  const score = "scoreFinal" in p ? p.scoreFinal : p.score;
+  const explication = "explication" in p ? p.explication : "nouveau système de score";
+  return `Priorité ${score} · ${explication}`;
 }

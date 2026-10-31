@@ -8,15 +8,19 @@ const nextConfig = {
     '@prisma/client',
     '@prisma/adapter-pg',
     'pg',
+    'ioredis',
     '@/prisma/generated-client'
   ],
 
+  // 2. Output standalone pour Docker
+  output: 'standalone',
+
+  // 3. REND L'ERREUR DE CONFLIT SILENCIEUSE POUR TURBOPACK
   experimental: {
-    // 2. REND L'ERREUR DE CONFLIT SILENCIEUSE POUR TURBOPACK
     turbopack: {},
   },
 
-  // 3. Fallbacks de secours si Webpack est appelé en parallèle
+  // 4. Fallbacks de secours si Webpack est appelé en parallèle
   webpack: (
     config: { resolve: { fallback?: Record<string, unknown>; alias: Record<string, unknown> } },
     { isServer }: { isServer?: boolean },

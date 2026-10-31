@@ -38,6 +38,7 @@ model User {
   payments       Payment[]
   messages       Message[]
   messagesInternesEnvoyes MessageInterne[] @relation("MessageInterneEnvoye")
+  auditLogs      AuditLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -506,6 +507,25 @@ model LienDepot {
   dossier Dossier @relation(fields: [dossierId], references: [id], onDelete: Cascade)
 
   @@index([expireLe])
+}
+
+// Audit Log - Journalisation centralisée pour traçabilité et conformité RGPD
+// Tous les accès aux données sensibles sont tracés
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    String   // CREATE, READ, UPDATE, DELETE, VALIDATE, REJECT, etc.
+  resource  String   // Dossier, Payment, User, FailleJuridique, etc.
+  resourceId String?
+  metadata  Json?
+  ipAddress String?
+  userAgent String?
+  timestamp DateTime @default(now())
+
+  @@index([userId, timestamp])
+  @@index([resource, resourceId])
+  @@index([timestamp])
 }
 
 // ---------------------------------------------------------------------------
