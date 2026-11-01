@@ -112,7 +112,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return;
         }
 
-        const verificationUrl = `${process.env.NEXT_PUBLIC_APP_URL}/verify-email?token=${token}&email=${encodeURIComponent(email)}`;
+        const verificationUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/callback/resend?token=${token}&email=${encodeURIComponent(email)}`;
         await resend.emails.send({
           from: EMAIL_FROM,
           to: identifier,
@@ -130,25 +130,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   callbacks: {
     async jwt({ token, user, account, profile }) {
-      if (account?.provider === "magic-link") {
-        // Vérifier le jeton de vérification d'email pour les connections magic-link
-        const url = new URL(account.callbackUrl);
-        const tokenParam = url.searchParams.get("token");
-        if (tokenParam) {
-          const identifier = token.email;
-          const isVerified = await verifyEmailToken(identifier, tokenParam);
-          if (!isVerified) {
-            throw new Error("Jeton de vérification d'email invalide ou expiré");
-          }
-        }
-      }
       if (user) {
         token.role = user.role;
       }
       return token;
     },
     async session({ session, token }) {
-      return { ...session, user: { ...session.user, role: token.role } };
+      return {
+        ...session,
+        user: {
+          ...session.user,
+          id: token.sub,
+          role: token.role,
+          email: token.email,
+          name: token.name,
+        },
+      };
     },
   },
 });
