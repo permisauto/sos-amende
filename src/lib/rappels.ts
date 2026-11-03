@@ -25,7 +25,7 @@ export const STATUTS_HORS_RELANCE_PREUVES = [
   "ERREUR_TECHNIQUE",
   "RESOLU",
   "ANNULE",
-] as const;
+] as const satisfies readonly string[];
 
 /**
  * Fenêtres de rappel (par date limite de contestation) :
