@@ -62,3 +62,5 @@ next-env.d.ts
 /scripts/legacy/
 /scripts/veilleJuridique.js
 /images/
+
+/prisma/generated-client
