@@ -273,7 +273,7 @@ export async function validerDossier(
     return { error: MESSAGE_CONTENTIEUX_NON_REGLE };
   }
 
-  // Forclusion 48SI (60 jours francs de la notification) : bloquant côté
+  // Forclusion 48SI (2 mois francs de la notification) : bloquant côté
   // juriste — jamais fabriqué si la date de notification est absente.
   if (dossier.type === "SUSPENSION") {
     const ed = (dossier.extractedData ?? {}) as Record<string, unknown>;
