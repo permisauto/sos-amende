@@ -21,6 +21,7 @@
 
 export type VoieProcedure =
   | "AMENDE_FORFAITAIRE"
+  | "AMENDE_MAJOREE"
   | "CONTENTIEUX_CONTRAVENTION"
   | "DELIT"
   | "FPS";
@@ -185,6 +186,16 @@ export function detecterProcedure(entree: {
     };
   }
 
+  if (/amende forfaitaire majoree|majoree|majoration/.test(texteNormalise)) {
+    return {
+      voie: "AMENDE_MAJOREE",
+      classe: classeBarème,
+      consignationMontant: null,
+      motif:
+        "Amende forfaitaire majorée : le délai de 45 jours est dépassé, une réclamation spécifique est nécessaire.",
+    };
+  }
+
   if (montant !== null && MONTANTS_DELIT.has(montant)) {
     return {
       voie: "DELIT",
@@ -233,6 +244,7 @@ export function detecterProcedure(entree: {
 
 export const VOIES_PROCEDURE: readonly VoieProcedure[] = [
   "AMENDE_FORFAITAIRE",
+  "AMENDE_MAJOREE",
   "CONTENTIEUX_CONTRAVENTION",
   "DELIT",
   "FPS",
@@ -263,6 +275,10 @@ export function libelleVoieProcedure(
       return classe
         ? `Amende simple (${classe}e classe)`
         : "Amende simple";
+    case "AMENDE_MAJOREE":
+      return classe
+        ? `Amende forfaitaire majorée (${classe}e classe)`
+        : "Amende forfaitaire majorée";
     case "CONTENTIEUX_CONTRAVENTION":
       return classe
         ? `Contentieux contraventionnel (${classe}e classe)`

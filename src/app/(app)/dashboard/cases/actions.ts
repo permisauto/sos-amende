@@ -224,6 +224,7 @@ const analyseSchema = z.object({
   voieProcedure: z
     .enum([
       "AMENDE_FORFAITAIRE",
+      "AMENDE_MAJOREE",
       "CONTENTIEUX_CONTRAVENTION",
       "DELIT",
       "FPS",

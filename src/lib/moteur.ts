@@ -93,7 +93,7 @@ export type ExtractedData = {
   // obligatoire) ou délit (avocat nécessaire, aucun débit). Stockée dans
   // `extractedData` pour que la fiche dossier, le paiement et le juriste la
   // lisent sans recalcul. `INCONNU` = choix du client.
-  voieProcedure?: "AMENDE_FORFAITAIRE" | "CONTENTIEUX_CONTRAVENTION" | "DELIT" | "FPS" | "INCONNU";
+  voieProcedure?: "AMENDE_FORFAITAIRE" | "AMENDE_MAJOREE" | "CONTENTIEUX_CONTRAVENTION" | "DELIT" | "FPS" | "INCONNU";
   classeContravention?: number;
   consignationMontant?: number;
   typeRadar?: string;
