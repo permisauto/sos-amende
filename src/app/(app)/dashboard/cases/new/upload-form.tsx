@@ -28,7 +28,7 @@ export function UploadForm({
   // Une signature existe déjà sur le compte : on ne montre le pad qu'à la demande.
   const [reSigner, setReSigner] = useState(!signatureExistante);
   const inputRef = useRef<HTMLInputElement>(null);
-  const padRef = useRef<SignatureCanvas>(null);
+  const padRef = useRef<InstanceType<typeof SignatureCanvas>>(null);
 
   function acceptFile(candidate: File | undefined | null) {
     if (!candidate) return;
