@@ -226,6 +226,7 @@ const analyseSchema = z.object({
       "AMENDE_FORFAITAIRE",
       "CONTENTIEUX_CONTRAVENTION",
       "DELIT",
+      "FPS",
       "",
     ])
     .optional()

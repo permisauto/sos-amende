@@ -22,7 +22,8 @@
 export type VoieProcedure =
   | "AMENDE_FORFAITAIRE"
   | "CONTENTIEUX_CONTRAVENTION"
-  | "DELIT";
+  | "DELIT"
+  | "FPS";
 
 /** Résultat de la détection automatique (`INCONNU` = à confirmer par le client). */
 export type VoieProcedureDetectee = VoieProcedure | "INCONNU";
@@ -163,6 +164,16 @@ export function detecterProcedure(entree: {
 }): ProcedureDetection {
   const montant = lireMontant(entree.montant) ?? montantDepuisTexte(entree.texte);
   const classeBarème = montant !== null ? MONTANTS[montant] ?? null : null;
+  const texteNormalise = entree.texte ? normaliser(entree.texte) : "";
+  if (/forfait post[- ]?stationnement|\bfps\b|\brapo\b/.test(texteNormalise)) {
+    return {
+      voie: "FPS",
+      classe: null,
+      consignationMontant: null,
+      motif:
+        "Forfait post-stationnement : recours administratif préalable obligatoire (RAPO) devant l'ANTAI ou la commune.",
+    };
+  }
   const marqueur = marqueurDelit(entree.texte, classeBarème !== null);
 
   if (marqueur) {
@@ -224,6 +235,7 @@ export const VOIES_PROCEDURE: readonly VoieProcedure[] = [
   "AMENDE_FORFAITAIRE",
   "CONTENTIEUX_CONTRAVENTION",
   "DELIT",
+  "FPS",
 ];
 
 /** Valide une valeur de formulaire (jamais une voie hors liste). */
@@ -257,6 +269,8 @@ export function libelleVoieProcedure(
         : "Contentieux contraventionnel";
     case "DELIT":
       return "Délit — avocat nécessaire";
+    case "FPS":
+      return "Forfait post-stationnement (RAPO)";
     default:
       return "Procédure à préciser";
   }
