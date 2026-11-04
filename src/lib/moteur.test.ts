@@ -48,6 +48,16 @@ describe("dateLimitePv", () => {
     expect(limite?.toISOString().slice(0, 10)).toBe("2026-10-01");
   });
 
+  it("applique 30 jours pour une amende majorée", () => {
+    const limite = dateLimitePv("2026-08-01", "AMENDE_MAJOREE");
+    expect(limite?.toISOString().slice(0, 10)).toBe("2026-08-31");
+  });
+
+  it("applique 1 mois pour un FPS (RAPO)", () => {
+    const limite = dateLimitePv("2026-08-01", "FPS");
+    expect(limite?.toISOString().slice(0, 10)).toBe("2026-09-01");
+  });
+
   it("retourne null sans date", () => {
     expect(dateLimitePv(undefined, "AMENDE")).toBeNull();
   });

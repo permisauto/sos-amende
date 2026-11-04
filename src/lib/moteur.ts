@@ -245,6 +245,14 @@ export function dateLimitePv(
   if (type === "SUSPENSION") {
     return reporterJourOuvrable(ajouterMoisFrancs(d, 2));
   }
+  if (type === "AMENDE_MAJOREE") {
+    // RÈGLE À CONFIRMER PAR LE JURISTE : 30 jours pour contester une majoration.
+    return reporterJourOuvrable(ajouterJoursFrances(d, 30));
+  }
+  if (type === "FPS") {
+    // RÈGLE À CONFIRMER PAR LE JURISTE : 1 mois pour le RAPO d'un FPS.
+    return reporterJourOuvrable(ajouterMoisFrancs(d, 1));
+  }
   return reporterJourOuvrable(ajouterJoursFrances(d, 45));
 }
 
