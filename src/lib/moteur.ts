@@ -249,8 +249,8 @@ export function dateLimitePv(
 }
 
 export function joursRestants(dateLimite?: Date | null): number {
-  if (!dateLimite) return Number.POSITIVE_INFINITY;
-  const restant = Math.ceil(
+  if (!dateLimite) return 0;
+  const restant = Math.floor(
     (dateLimite.getTime() - Date.now()) / (24 * 3600 * 1000),
   );
   return restant + 0; // normalise -0 → 0

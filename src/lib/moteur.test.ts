@@ -55,12 +55,17 @@ describe("dateLimitePv", () => {
 
 describe("joursRestants", () => {
   it("donne 0 restant à la date limite", () => {
-    const limite = new Date();
+    const limite = new Date(Date.now() + 1000);
     expect(joursRestants(limite)).toBe(0);
   });
 
   it("gère l'absence de date", () => {
-    expect(joursRestants(null)).toBe(Number.POSITIVE_INFINITY);
+    expect(joursRestants(null)).toBe(0);
+  });
+
+  it("renvoie -1 une fois la date limite dépassée", () => {
+    const limite = new Date(Date.now() - 1000);
+    expect(joursRestants(limite)).toBe(-1);
   });
 });
 
