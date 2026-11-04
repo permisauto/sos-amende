@@ -22,7 +22,7 @@ Sentry.init({
       team: "legaltech",
     },
   },
-  beforeSend(event, _hint) {
+  beforeSend(event: Sentry.Event, _hint: Sentry.EventHint) {
     if (!process.env.SENTRY_DSN) return null;
 
     if (event.request) {
