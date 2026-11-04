@@ -1,5 +1,9 @@
 import { formaterDateFr } from "./envoi";
-import { ajouterJoursFrances, reporterJourOuvrable } from "./delais";
+import {
+  ajouterJoursFrances,
+  ajouterMoisFrancs,
+  reporterJourOuvrable,
+} from "./delais";
 
 /**
  * Catégories documentaires (OCR v2, lots N1+N2) : classement sémantique du
@@ -238,8 +242,10 @@ export function dateLimitePv(
   if (!datePv) return null;
   const d = new Date(`${datePv}T00:00:00Z`);
   if (Number.isNaN(d.getTime())) return null;
-  const jours = type === "SUSPENSION" ? 60 : 45;
-  return reporterJourOuvrable(ajouterJoursFrances(d, jours));
+  if (type === "SUSPENSION") {
+    return reporterJourOuvrable(ajouterMoisFrancs(d, 2));
+  }
+  return reporterJourOuvrable(ajouterJoursFrances(d, 45));
 }
 
 export function joursRestants(dateLimite?: Date | null): number {

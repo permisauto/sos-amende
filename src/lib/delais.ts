@@ -93,6 +93,40 @@ export function ajouterJoursFrances(
 }
 
 /**
+ * Ajoute `mois` mois calendaires francs à une date (le jour de départ n'est pas
+ * compté) en ramenant le jour au dernier jour du mois cible quand il n'existe
+ * pas (ex. 31 décembre + 2 mois → 28/29 février, jamais le 2/3 mars).
+ */
+export function ajouterMoisFrancs(
+  dateDepart: Date | string,
+  mois: number,
+): Date {
+  const d =
+    typeof dateDepart === "string"
+      ? new Date(`${dateDepart.slice(0, 10)}T00:00:00Z`)
+      : new Date(
+          Date.UTC(
+            dateDepart.getUTCFullYear(),
+            dateDepart.getUTCMonth(),
+            dateDepart.getUTCDate(),
+          ),
+        );
+  if (Number.isNaN(d.getTime())) return d;
+  const annee = d.getUTCFullYear();
+  const moisIndex = d.getUTCMonth();
+  const jour = d.getUTCDate();
+  const cible = moisIndex + mois;
+  const anneeCible = annee + Math.floor(cible / 12);
+  const moisCible = ((cible % 12) + 12) % 12;
+  const dernierJour = new Date(
+    Date.UTC(anneeCible, moisCible + 1, 0),
+  ).getUTCDate();
+  return new Date(
+    Date.UTC(anneeCible, moisCible, Math.min(jour, dernierJour)),
+  );
+}
+
+/**
  * Reporte une date d'échéance qui tombe un samedi, un dimanche ou un jour
  * férié jusqu'au premier jour ouvrable suivant. Une date déjà ouvrable est
  * retournée telle quelle.

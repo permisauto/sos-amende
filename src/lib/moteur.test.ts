@@ -45,7 +45,7 @@ describe("dateLimitePv", () => {
 
   it("applique 2 mois pour une suspension", () => {
     const limite = dateLimitePv("2026-08-01", "SUSPENSION");
-    expect(limite?.toISOString().slice(0, 10)).toBe("2026-09-30");
+    expect(limite?.toISOString().slice(0, 10)).toBe("2026-10-01");
   });
 
   it("retourne null sans date", () => {
