@@ -617,6 +617,15 @@ export async function analyserDossier(
         next = "EN_ATTENTE_VALIDATION";
       }
 
+      const typeDelai =
+        dossier.type === "SUSPENSION"
+          ? "SUSPENSION"
+          : voie === "FPS"
+            ? "FPS"
+            : voie === "AMENDE_MAJOREE"
+              ? "AMENDE_MAJOREE"
+              : "AMENDE";
+
       // Verrou anti double-soumission (double-clic / deux onglets) : l'écriture
       // du dossier n'est acceptée que depuis EN_ANALYSE — sinon on annule la
       // transaction entière, rollback du débit compris.
@@ -627,7 +636,7 @@ export async function analyserDossier(
           failleJuridiqueId: faille?.id ?? null,
           lettreGeneree: lettre,
           refereGenere,
-          dateLimite: dateLimitePv(data.date, dossier.type),
+          dateLimite: dateLimitePv(data.date, typeDelai),
           statut: next,
           // Prix de base de l'offre (l'option LRAR est ajoutée au paiement).
           prix: prixDossier(dossier.type, voie),
