@@ -7,7 +7,7 @@
  *   férié, il est reporté au premier jour ouvrable suivant
  *   (`reporterJourOuvrable` — art. R. 123-1 du code de justice administrative).
  * - **Forclusion 48SI** : l'invalidation du permis pour solde de points nul se
- *   conteste dans les 2 mois (60 jours francs) à compter de la notification
+ *   conteste dans les 2 mois francs à compter de la notification
  *   (`controlerForclusion48si`) — signal renvoyé tel quel à l'UI, jamais
  *   bloquant côté client, bandeau bloquant côté juriste.
  *
@@ -153,7 +153,7 @@ export type Forclusion48si = {
 };
 
 /**
- * Contrôle de forclusion du recours contre une invalidation 48SI : 60 jours
+ * Contrôle de forclusion du recours contre une invalidation 48SI : 2 mois
  * francs à compter de la notification. Renvoie `null` si la date de
  * notification est absente ou invalide (jamais de signal fabriqué).
  */
@@ -164,7 +164,7 @@ export function controlerForclusion48si(
   if (!dateNotification) return null;
   const notif = ajouterJoursFrances(dateNotification, 0);
   if (Number.isNaN(notif.getTime())) return null;
-  const forclusion = reporterJourOuvrable(ajouterJoursFrances(notif, 60));
+  const forclusion = reporterJourOuvrable(ajouterMoisFrancs(notif, 2));
   const action = dateAction ?? new Date();
   const jourAction = Math.floor(
     Date.UTC(action.getUTCFullYear(), action.getUTCMonth(), action.getUTCDate()) /
