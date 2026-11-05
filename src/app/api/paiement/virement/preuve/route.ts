@@ -48,12 +48,16 @@ export async function POST(req: Request) {
   if (payment.status !== "PENDING_VIREMENT") {
     return NextResponse.json({ error: "Ce paiement n'est plus en attente de virement." }, { status: 409 });
   }
-  // Si une session existe, elle doit appartenir au paiement (anti-écriture
-  // sur le paiement d'autrui). Sans session (parcours /paiement public), le
-  // paymentId cuid non devinable fait office de capacité, avec le rate-limit
-  // IP ci-dessus.
+  // La preuve de virement n'est acceptée que pour le compte propriétaire du
+  // paiement : session obligatoire, puis contrôle d'appartenance.
   const session = await auth();
-  if (session?.user?.id && payment.userId !== session.user.id) {
+  if (!session?.user?.id) {
+    return NextResponse.json(
+      { error: "Connexion requise pour envoyer une preuve de virement." },
+      { status: 401 },
+    );
+  }
+  if (payment.userId !== session.user.id) {
     return NextResponse.json({ error: "Paiement non appartenant à votre compte." }, { status: 403 });
   }
 
