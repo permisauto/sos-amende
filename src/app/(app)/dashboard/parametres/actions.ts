@@ -71,6 +71,18 @@ export async function supprimerCompte(
     return { error: "Veuillez cocher la confirmation de suppression." };
   }
 
+  // Preuve d'identité : le mot de passe actuel est exigé avant un effacement
+  // irréversible. Un cookie de session volé ne suffit donc pas à supprimer
+  // le compte.
+  const motDePasseActuel = String(formData.get("motDePasse") ?? "");
+  const compte = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { passwordHash: true },
+  });
+  if (!compte?.passwordHash || !verifyPassword(motDePasseActuel, compte.passwordHash)) {
+    return { error: "Mot de passe actuel incorrect. La suppression est annulée." };
+  }
+
   const [dossiers, paiements] = await Promise.all([
     prisma.dossier.findMany({
       where: { userId: user.id },

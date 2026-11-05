@@ -6,9 +6,22 @@ import { supprimerCompte } from "./actions";
 export function SuppressionCompte() {
   const [state, formAction, pending] = useActionState(supprimerCompte, undefined);
   const [confirm, setConfirm] = useState(false);
+  const [motDePasse, setMotDePasse] = useState("");
 
   return (
     <form action={formAction} className="mt-3 flex flex-col gap-3">
+      <label className="flex flex-col gap-2 text-sm text-zinc-700">
+        <span>Mot de passe actuel (preuve d&apos;identité)</span>
+        <input
+          type="password"
+          name="motDePasse"
+          value={motDePasse}
+          onChange={(e) => setMotDePasse(e.target.value)}
+          autoComplete="current-password"
+          required
+          className="w-full rounded border border-zinc-300 p-2 text-sm text-zinc-900"
+        />
+      </label>
       <label className="flex items-start gap-2 text-sm text-zinc-700">
         <input
           type="checkbox"
@@ -22,7 +35,7 @@ export function SuppressionCompte() {
       </label>
       <div className="flex items-center gap-3">
         <button
-          disabled={pending || !confirm}
+          disabled={pending || !confirm || !motDePasse}
           className="rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-50"
         >
           Supprimer définitivement mon compte
