@@ -350,7 +350,7 @@ export async function validerDossier(
           piecesJointes,
         );
         const pdfUrl = await storageWrite(
-          `pdfs/lettre-${dossier.id}-${Date.now()}.pdf`,
+          `pdfs/lettre-${dossier.id}.pdf`,
           pdfBuffer,
         );
         pdfSigne = { pdfUrl, signatureUrl: signatureProfil };
@@ -1076,7 +1076,7 @@ export async function modifierLettre(
     try {
       const pdfBuffer = await generateLettrePdf(lettre, sigDataUrl, piecesJointes);
       pdfUrl = await storageWrite(
-        `pdfs/lettre-${dossier.id}-${Date.now()}.pdf`,
+        `pdfs/lettre-${dossier.id}.pdf`,
         pdfBuffer,
       );
     } catch (e) {
@@ -1088,7 +1088,7 @@ export async function modifierLettre(
     try {
       const pdfBuffer = await generateLettrePdf(lettre, null, piecesJointes);
       pdfUrl = await storageWrite(
-        `pdfs/lettre-${dossier.id}-${Date.now()}.pdf`,
+        `pdfs/lettre-${dossier.id}.pdf`,
         pdfBuffer,
       );
     } catch (e) {
@@ -1307,14 +1307,14 @@ export async function genererVarianteLettre(
     const sigDataUrl = sig ? `data:image/png;base64,${sig.toString("base64")}` : null;
     try {
       const pdfBuffer = await generateLettrePdf(lettreOfficielle, sigDataUrl, piecesJointes);
-      pdfUrl = await storageWrite(`pdfs/lettre-${dossier.id}-${Date.now()}.pdf`, pdfBuffer);
+      pdfUrl = await storageWrite(`pdfs/lettre-${dossier.id}.pdf`, pdfBuffer);
     } catch (e) {
       console.error("genererVarianteLettre: génération PDF échouée", e);
     }
   } else if (courrier) {
     try {
       const pdfBuffer = await generateLettrePdf(lettreOfficielle, null, piecesJointes);
-      pdfUrl = await storageWrite(`pdfs/lettre-${dossier.id}-${Date.now()}.pdf`, pdfBuffer);
+      pdfUrl = await storageWrite(`pdfs/lettre-${dossier.id}.pdf`, pdfBuffer);
     } catch (e) {
       console.error("genererVarianteLettre: génération PDF sans signature échouée", e);
     }
