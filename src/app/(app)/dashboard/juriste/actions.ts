@@ -135,7 +135,7 @@ export async function soumettreEtMarquerEnvoye(dossierId: string) {
     // `envoyerContestation`.
     await prisma.dossier.update({
       where: { id: dossier.id },
-      data: { statut: "PRET" },
+      data: { statut: "PRET", decisionAttendueLe: null },
     });
     return result;
   }
