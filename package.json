@@ -8,6 +8,9 @@
     "build": "prisma generate && next build --webpack",
     "start": "next start",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
     "vercel-build": "prisma generate && next build --webpack"
   },
   "allowScripts": {
