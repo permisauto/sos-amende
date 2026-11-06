@@ -106,6 +106,7 @@ jobs:
       CRON_SECRET: "e2e-cron-secret"
       DECISION_WAIT_JOURS: "0"
       NODE_TLS_REJECT_UNAUTHORIZED: "0"
+      E2E_DISABLE_RATE_LIMIT: "1"
     steps:
       - uses: actions/checkout@v4
 

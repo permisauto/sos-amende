@@ -97,6 +97,16 @@ export async function consommerCreneau(
   max: number,
   windowMs: number,
 ): Promise<number> {
+  // Bypass réservé aux suites E2E : toutes les requêtes viennent de la même IP
+  // (localhost du runner) et les tests parallèles dépassent les quotas auth.
+  // Double garde : ne peut être actif qu'avec ANTAI_MOCK=1 (opt-in E2E, jamais
+  // en production).
+  if (
+    process.env.E2E_DISABLE_RATE_LIMIT === "1" &&
+    process.env.ANTAI_MOCK === "1"
+  ) {
+    return max;
+  }
   if (rateLimitStore() === "postgres") {
     const depuis = await consommerPostgres(key, max, windowMs);
     if (depuis !== null) return depuis;
