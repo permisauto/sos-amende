@@ -267,7 +267,7 @@ jobs:
             });
             const botComment = comments.find(c => c.user.type === 'Bot' && c.body.includes('Preview deployment'));
             const previewUrl = 'https://pr-${{ github.event.number }}.sos-amende.vercel.app';
-            const body = `✅ **Preview deployment ready**\n\n🔗 [${previewUrl}](${previewUrl})\n\n*Deployed from commit ${{ github.sha.slice(0,7)}*`;
+            const body = `✅ **Preview deployment ready**\n\n🔗 [${previewUrl}](${previewUrl})\n\n*Deployed from commit ${{ github.sha }}*`;
             
             if (botComment) {
               await github.rest.issues.updateComment({
