@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Services optimisés avec cache, circuit breakers et DataLoaders
  */
 
@@ -374,7 +374,7 @@ export class OptimizedOcrService {
   /**
    * Vérifie la santé du circuit OCR
    */
-  static getOcrHealth(): { state: string; metrics: any } {
+  static getOcrHealth(): { state: string; metrics: unknown } {
     const circuit = ExternalCircuits.ocr();
     return {
       state: circuit.getState(),
@@ -387,25 +387,7 @@ export class OptimizedOcrService {
  * Service Veille avec Circuit Breakers
  */
 export class OptimizedVeilleService {
-  static async fetchGroq(prompt: string): Promise<string | null> {
-    const circuit = ExternalCircuits.groq();
-
-    return circuit.execute(async () => {
-      const { Groq } = await import("groq-sdk");
-      const client = new Groq({ apiKey: process.env.GROQ_API_KEY });
-      
-      const completion = await client.chat.completions.create({
-        messages: [{ role: "user", content: prompt }],
-        model: "llama-3.1-70b-versatile",
-        temperature: 0.1,
-        max_tokens: 2000,
-      });
-      
-      return completion.choices[0]?.message?.content ?? null;
-    });
-  }
-
-  static async fetchOpenMeteo(lat: number, lon: number, date: string): Promise<any> {
+  static async fetchOpenMeteo(lat: number, lon: number, date: string): Promise<unknown> {
     const circuit = ExternalCircuits.openMeteo();
 
     return circuit.execute(async () => {
@@ -419,7 +401,7 @@ export class OptimizedVeilleService {
     });
   }
 
-  static async fetchBan(address: string): Promise<any> {
+  static async fetchBan(address: string): Promise<unknown> {
     const circuit = ExternalCircuits.ban();
 
     return circuit.execute(async () => {
@@ -433,7 +415,7 @@ export class OptimizedVeilleService {
     });
   }
 
-  static async fetchTravaux(lat: number, lon: number): Promise<any> {
+  static async fetchTravaux(lat: number, lon: number): Promise<unknown> {
     const circuit = ExternalCircuits.travaux();
 
     return circuit.execute(async () => {
@@ -451,7 +433,7 @@ export class OptimizedVeilleService {
     });
   }
 
-  static async fetchDataGouvRadars(): Promise<any> {
+  static async fetchDataGouvRadars(): Promise<unknown> {
     const circuit = ExternalCircuits.dataGouv();
 
     return circuit.execute(async () => {

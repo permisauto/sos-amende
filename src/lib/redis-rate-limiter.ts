@@ -23,7 +23,7 @@ interface RateLimitResult {
  */
 export class RedisRateLimiter {
   private cache = getHybridCache();
-  private defaultConfig: RateLimitConfig = {
+  defaultConfig: RateLimitConfig = {
     max: 100,
     windowMs: 15 * 60 * 1000, // 15 minutes
     keyPrefix: 'ratelimit:',

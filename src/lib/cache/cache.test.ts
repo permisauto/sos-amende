@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+﻿import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { queryCache, CacheKeys, CacheTags } from '@/lib/cache';
 import { CircuitBreaker, CircuitState, ExternalCircuits } from '@/lib/circuit-breaker';
 import { 
@@ -12,7 +12,7 @@ import { resetAllMocks, mockPrisma, createTestDossier, createTestUser } from '@/
 
 describe('Cache', () => {
   beforeEach(() => {
-    queryCache.cleanup();
+    queryCache.clear();
   });
 
   it('should set and get values', () => {
@@ -59,7 +59,7 @@ describe('Cache', () => {
 
   it('should return cache stats', () => {
     // Ensure clean state
-    queryCache.cleanup();
+    queryCache.clear();
     queryCache.set('stat-1', { id: 1 }, 10000, ['tag:a']);
     queryCache.set('stat-2', { id: 2 }, 10000, ['tag:b']);
     
@@ -359,9 +359,9 @@ describe('OptimizedDossierService Integration', () => {
   beforeEach(() => {
     clearAllLoaders();
     resetAllMocks();
-    queryCache.cleanup();
+    queryCache.clear();
     // Ensure DataLoader uses mocked prisma
-    vi.mock('@/lib/prisma', () => ({ prisma: mockPrisma }), { virtual: true });
+    vi.mock('@/lib/prisma', () => ({ prisma: mockPrisma }));
   });
 
   it('should use cache for dossier retrieval', async () => {
@@ -370,16 +370,16 @@ describe('OptimizedDossierService Integration', () => {
     const testUser = createTestUser({ id: 'user-1' });
     const dossier = createTestDossier(testUser.id, { id: 'dossier-1' });
     
-    mockPrisma.dossier.findUnique.mockResolvedValue(dossier);
+    mockPrisma.dossier.findMany.mockResolvedValue([dossier]);
     mockPrisma.auditLog.create.mockResolvedValue({});
     
     // Premier appel - va en base
     await OptimizedDossierService.getDossier('dossier-1', testUser.id, 'CLIENT');
-    expect(mockPrisma.dossier.findUnique).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.dossier.findMany).toHaveBeenCalledTimes(1);
     
     // Deuxième appel - devrait venir du cache
     await OptimizedDossierService.getDossier('dossier-1', testUser.id, 'CLIENT');
-    expect(mockPrisma.dossier.findUnique).toHaveBeenCalledTimes(1); // Pas d'appel supplémentaire
+    expect(mockPrisma.dossier.findMany).toHaveBeenCalledTimes(1); // Pas d'appel supplémentaire
   });
 
   it('should invalidate cache on update', async () => {
@@ -389,6 +389,7 @@ describe('OptimizedDossierService Integration', () => {
     const dossier = createTestDossier(testUser.id, { id: 'dossier-1', statut: 'EN_ANALYSE' });
     const updatedDossier = { ...dossier, statut: 'PRET' };
     
+    mockPrisma.dossier.findMany.mockResolvedValue([dossier]);
     mockPrisma.dossier.findUnique.mockResolvedValue(dossier);
     mockPrisma.dossier.update.mockResolvedValue(updatedDossier);
     mockPrisma.auditLog.create.mockResolvedValue({});
@@ -399,10 +400,11 @@ describe('OptimizedDossierService Integration', () => {
     // Mise à jour
     await OptimizedDossierService.updateDossier('dossier-1', { statut: 'PRET' }, testUser.id, 'CLIENT');
     
-    // Le cache devrait être invalidé - prochain appel va en base
-    mockPrisma.dossier.findUnique.mockResolvedValue(updatedDossier);
-    await OptimizedDossierService.getDossier('dossier-1', testUser.id, 'CLIENT');
+    // Le DataLoader est réamorcé avec le dossier mis à jour : pas de nouvelle requête.
+    mockPrisma.dossier.findMany.mockResolvedValue([updatedDossier]);
+    const relu = await OptimizedDossierService.getDossier('dossier-1', testUser.id, 'CLIENT');
     
-    expect(mockPrisma.dossier.findUnique).toHaveBeenCalledTimes(2);
+    expect(mockPrisma.dossier.findMany).toHaveBeenCalledTimes(1);
+    expect(relu?.statut).toBe('PRET');
   });
 });

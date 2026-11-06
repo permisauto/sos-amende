@@ -49,7 +49,7 @@ export class RedisCache {
           retryStrategy: config.retryStrategy ?? ((times) => Math.min(times * 100, 3000)),
           enableOfflineQueue: config.enableOfflineQueue ?? false,
           lazyConnect: config.lazyConnect ?? true,
-          connectionTimeout: config.connectionTimeout ?? 10000,
+          connectTimeout: config.connectionTimeout ?? 10000,
         })
       : new Redis({
           host: config.host ?? process.env.REDIS_HOST ?? 'localhost',
@@ -61,7 +61,7 @@ export class RedisCache {
           retryStrategy: config.retryStrategy ?? ((times) => Math.min(times * 100, 3000)),
           enableOfflineQueue: config.enableOfflineQueue ?? false,
           lazyConnect: config.lazyConnect ?? true,
-          connectionTimeout: config.connectionTimeout ?? 10000,
+          connectTimeout: config.connectionTimeout ?? 10000,
         });
 
     this.setupEventHandlers();
@@ -437,7 +437,7 @@ export class HybridCache {
   }
 
   isUsingRedis(): boolean {
-    return this.useRedis && this.redisCache?.isConnected() ?? false;
+    return (this.useRedis && this.redisCache?.isConnected()) ?? false;
   }
 }
 

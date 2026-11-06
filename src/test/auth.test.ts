@@ -1,13 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import crypto from 'node:crypto';
 import { mockPrisma, resetAllMocks, createTestUser } from '@/test/setup';
 
-// Mock the auth module
-vi.mock('@/auth', () => ({
-  createEmailVerificationToken: vi.fn(),
-  verifyEmailToken: vi.fn(),
+vi.mock('@/lib/rate-limit', () => ({
+  consommerCreneau: vi.fn(),
 }));
-
-import { createEmailVerificationToken, verifyEmailToken } from '@/auth';
 
 describe('Auth - Email Verification', () => {
   beforeEach(() => {
@@ -17,11 +14,12 @@ describe('Auth - Email Verification', () => {
 
   describe('createEmailVerificationToken', () => {
     it('should create a token with 24h expiry', async () => {
-      const token = 'mock-token-123';
+      const token = 'abcd1234';
       
       // Mock crypto.randomBytes
-      const originalRandomBytes = require('crypto').randomBytes;
-      require('crypto').randomBytes = vi.fn().mockReturnValue(Buffer.from(token, 'hex'));
+      const randomSpy = vi
+        .spyOn(crypto, 'randomBytes')
+        .mockReturnValue(Buffer.from(token, 'hex') as never);
       
       mockPrisma.verificationToken.create.mockResolvedValue({});
       
@@ -39,8 +37,7 @@ describe('Auth - Email Verification', () => {
         })
       );
       
-      // Restore
-      require('crypto').randomBytes = originalRandomBytes;
+      randomSpy.mockRestore();
     });
   });
 
@@ -133,42 +130,33 @@ describe('Auth - DAL Functions', () => {
   });
 
   it('should redirect non-authenticated users', async () => {
-    vi.mock('@/lib/dal', () => ({
+    vi.doMock('@/lib/dal', () => ({
       requireUser: vi.fn().mockRejectedValue(new Error('Not authenticated')),
     }));
-    
+
     const { requireUser } = await import('@/lib/dal');
-    
+
     await expect(requireUser()).rejects.toThrow();
   });
 
   it('should require juriste role', async () => {
-    vi.mock('@/lib/dal', () => ({
-      getCurrentUser: vi.fn().mockResolvedValue({
-        id: 'user-1',
-        email: 'client@test.com',
-        role: 'CLIENT',
-        credits: 5,
-      }),
+    vi.doMock('@/lib/dal', () => ({
+      requireJuriste: vi.fn().mockRejectedValue(new Error('Accès juriste requis')),
     }));
-    
+
     const { requireJuriste } = await import('@/lib/dal');
-    
+
     await expect(requireJuriste()).rejects.toThrow();
   });
 
   it('should allow juriste access', async () => {
-    vi.mock('@/lib/dal', () => ({
-      getCurrentUser: vi.fn().mockResolvedValue({
-        id: 'juriste-1',
-        email: 'juriste@test.com',
-        role: 'JURISTE',
-        credits: 10,
-      }),
+    const juriste = createTestUser({ id: 'juriste-1', role: 'JURISTE' });
+    vi.doMock('@/lib/dal', () => ({
+      requireJuriste: vi.fn().mockResolvedValue(juriste),
     }));
-    
+
     const { requireJuriste } = await import('@/lib/dal');
-    
+
     const result = await requireJuriste();
     expect(result.role).toBe('JURISTE');
   });

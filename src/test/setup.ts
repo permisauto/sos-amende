@@ -392,28 +392,28 @@ export function setupRepositoryMocks() {
   mockPrisma.failleJuridique.findUnique.mockResolvedValue(null);
   
   // Mock par défaut pour create
-  mockPrisma.user.create.mockImplementation(async (data: any) => ({
+  mockPrisma.user.create.mockImplementation(async (data: { data: Record<string, unknown> }) => ({
     ...data.data,
     id: `user-${Date.now()}`,
     createdAt: new Date(),
     updatedAt: new Date(),
   }));
   
-  mockPrisma.dossier.create.mockImplementation(async (data: any) => ({
+  mockPrisma.dossier.create.mockImplementation(async (data: { data: Record<string, unknown> }) => ({
     ...data.data,
     id: `dossier-${Date.now()}`,
     createdAt: new Date(),
     updatedAt: new Date(),
   }));
   
-  mockPrisma.payment.create.mockImplementation(async (data: any) => ({
+  mockPrisma.payment.create.mockImplementation(async (data: { data: Record<string, unknown> }) => ({
     ...data.data,
     id: `payment-${Date.now()}`,
     createdAt: new Date(),
     updatedAt: new Date(),
   }));
   
-  mockPrisma.failleJuridique.create.mockImplementation(async (data: any) => ({
+  mockPrisma.failleJuridique.create.mockImplementation(async (data: { data: Record<string, unknown> }) => ({
     ...data.data,
     id: `faille-${Date.now()}`,
     createdAt: new Date(),
@@ -429,7 +429,7 @@ export function expectToHaveBeenCalledWithMatch<T>(
   expected: Partial<T>
 ) {
   expect(mockFn).toHaveBeenCalledWith(
-    expect.objectContaining(expected)
+    expect.objectContaining(expected as Record<string, unknown>)
   );
 }
 

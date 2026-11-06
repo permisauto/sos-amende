@@ -100,7 +100,7 @@ describe('Services', () => {
     it('should send dossier and set decision deadline', async () => {
       const juriste = createTestUser({ id: 'juriste-1', role: 'JURISTE' });
       const dossier = createTestDossier('user-1', { id: 'dossier-1', statut: 'PRET' });
-      const sentDossier = { ...dossier, statut: 'ENVOYE', numeroDepot: 'DEP-123' };
+      const sentDossier = { ...dossier, statut: 'ENVOYE', numeroDepot: 'DEP-123', decisionAttendueLe: new Date() };
       
       mockPrisma.dossier.findUnique.mockResolvedValue(dossier);
       mockPrisma.dossier.update.mockResolvedValue(sentDossier);

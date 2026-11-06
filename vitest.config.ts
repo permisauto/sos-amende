@@ -33,14 +33,8 @@ export default defineConfig({
       },
     },
     pool: 'threads',
-    poolOptions: {
-      threads: {
-        singleThread: false,
-        minThreads: 1,
-        maxThreads: 4,
-      },
-    },
     alias: {
+      '@/prisma': path.resolve(__dirname, './prisma'),
       '@': path.resolve(__dirname, './src'),
       '@/lib': path.resolve(__dirname, './src/lib'),
       '@/components': path.resolve(__dirname, './src/components'),
@@ -49,6 +43,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      '@/prisma': path.resolve(__dirname, './prisma'),
       '@': path.resolve(__dirname, './src'),
       '@/lib': path.resolve(__dirname, './src/lib'),
       '@/components': path.resolve(__dirname, './src/components'),

@@ -20,7 +20,7 @@ export class DossierRepository implements IRepository<Dossier, Dossier, DossierC
       include: this.getDefaultIncludes(),
     });
     
-    if (dossier && userId && userRole !== "ADMIN" && dossier.userId !== userId) {
+    if (dossier && userId && userRole !== "ADMIN" && userRole !== "JURISTE" && dossier.userId !== userId) {
       return null; // Accès refusé
     }
     
@@ -31,7 +31,7 @@ export class DossierRepository implements IRepository<Dossier, Dossier, DossierC
    * Trouve le premier dossier correspondant aux critères
    */
   async findFirst(where: DossierWhereInput, userId?: string, userRole?: string): Promise<Dossier | null> {
-    if (userId && userRole !== "ADMIN") {
+    if (userId && userRole !== "ADMIN" && userRole !== "JURISTE") {
       where.userId = userId;
     }
     
@@ -45,7 +45,7 @@ export class DossierRepository implements IRepository<Dossier, Dossier, DossierC
    * Trouve plusieurs dossiers avec pagination et tri
    */
   async findMany(where: DossierWhereInput, options?: FindManyOptions, userId?: string, userRole?: string): Promise<Dossier[]> {
-    if (userId && userRole !== "ADMIN") {
+    if (userId && userRole !== "ADMIN" && userRole !== "JURISTE") {
       where.userId = userId;
     }
     
@@ -79,7 +79,7 @@ export class DossierRepository implements IRepository<Dossier, Dossier, DossierC
     const where: Prisma.DossierWhereUniqueInput = { id };
     
     // Vérifier l'accès avant mise à jour
-    if (userId && userRole !== "ADMIN") {
+    if (userId && userRole !== "ADMIN" && userRole !== "JURISTE") {
       const existing = await prisma.dossier.findUnique({ where: { id }, select: { userId: true } });
       if (!existing || existing.userId !== userId) {
         throw new Error("Accès refusé");
@@ -102,7 +102,7 @@ export class DossierRepository implements IRepository<Dossier, Dossier, DossierC
   async delete(id: string, userId?: string, userRole?: string): Promise<Dossier> {
     const where: Prisma.DossierWhereUniqueInput = { id };
     
-    if (userId && userRole !== "ADMIN") {
+    if (userId && userRole !== "ADMIN" && userRole !== "JURISTE") {
       const existing = await prisma.dossier.findUnique({ where: { id }, select: { userId: true } });
       if (!existing || existing.userId !== userId) {
         throw new Error("Accès refusé");
@@ -124,7 +124,7 @@ export class DossierRepository implements IRepository<Dossier, Dossier, DossierC
    * Compte les dossiers correspondants
    */
   async count(where: DossierWhereInput, userId?: string, userRole?: string): Promise<number> {
-    if (userId && userRole !== "ADMIN") {
+    if (userId && userRole !== "ADMIN" && userRole !== "JURISTE") {
       where.userId = userId;
     }
     
@@ -167,7 +167,7 @@ export class DossierRepository implements IRepository<Dossier, Dossier, DossierC
    * Trouve les dossiers avec leurs failles candidates
    */
   async findWithFailles(where: DossierWhereInput, userId?: string, userRole?: string): Promise<Dossier[]> {
-    if (userId && userRole !== "ADMIN") {
+    if (userId && userRole !== "ADMIN" && userRole !== "JURISTE") {
       where.userId = userId;
     }
     
@@ -200,7 +200,7 @@ export class DossierRepository implements IRepository<Dossier, Dossier, DossierC
     return prisma.$transaction(async (tx) => {
       const where: Prisma.DossierWhereUniqueInput = { id };
       
-      if (userId && userRole !== "ADMIN") {
+      if (userId && userRole !== "ADMIN" && userRole !== "JURISTE") {
         const existing = await tx.dossier.findUnique({ where: { id }, select: { userId: true } });
         if (!existing || existing.userId !== userId) {
           throw new Error("Accès refusé");
@@ -233,7 +233,7 @@ export class DossierRepository implements IRepository<Dossier, Dossier, DossierC
    */
   async getStatsByStatut(userId?: string, userRole?: string): Promise<Record<string, number>> {
     const where: Prisma.DossierWhereInput = {};
-    if (userId && userRole !== "ADMIN") {
+    if (userId && userRole !== "ADMIN" && userRole !== "JURISTE") {
       where.userId = userId;
     }
     

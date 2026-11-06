@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { consommerCreneau } from "@/lib/rate-limit";
 
 /**
@@ -50,8 +50,10 @@ export async function authRateLimit(req: Request): Promise<NextResponse | null> 
 /**
  * Middleware wrapper pour NextAuth qui ajoute le rate limiting
  */
-export function withAuthRateLimit(handler: (req: Request) => Promise<NextResponse>) {
-  return async (req: Request) => {
+export function withAuthRateLimit(
+  handler: (req: NextRequest) => Promise<Response>,
+) {
+  return async (req: NextRequest) => {
     const rateLimitResponse = await authRateLimit(req);
     if (rateLimitResponse) return rateLimitResponse;
     return handler(req);
