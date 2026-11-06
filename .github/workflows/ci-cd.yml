@@ -106,7 +106,7 @@ jobs:
 
       - name: Start preview server
         run: |
-          npm run start &
+          npm run start -- -p 3200 &
           sleep 10
           curl -f http://localhost:3200/api/health || exit 1
 

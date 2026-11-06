@@ -25,7 +25,7 @@ export default defineConfig({
   webServer: {
     command: "npm run build && npm run start -- -p 3200",
     url: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3200",
-    reuseExistingServer: false,
+    reuseExistingServer: !process.env.CI,
     timeout: 180_000,
     env: {
       NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3200",
