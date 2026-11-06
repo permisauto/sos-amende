@@ -22,7 +22,10 @@ module.exports = async function globalSetup() {
   };
 
   let url = get("DATABASE_URL");
-  if (!url || url.includes("localhost") || url.includes("johndoe")) {
+  // En CI, on utilise la base Postgres fournie par le workflow (localhost inclus).
+  // En local uniquement, on retombe sur la base de dev johndoe/mydb si l'URL
+  // pointe sur un localhost vide.
+  if (!url || url.includes("johndoe") || (!process.env.CI && url.includes("localhost"))) {
     url =
       "postgresql://johndoe:gTLwM3AhRdZmQk7nSiUpJE2q@localhost:5432/mydb?schema=public";
   }
