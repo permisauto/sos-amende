@@ -1,7 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   typescript: { ignoreBuildErrors: true },
-  eslint: { ignoreDuringBuilds: true },
 
   // 1. Exclut Prisma et l'adaptateur DB de la compilation client
   serverExternalPackages: [
@@ -12,13 +11,9 @@ const nextConfig = {
     '@/prisma/generated-client'
   ],
 
-  // 2. Output standalone pour Docker
-  output: 'standalone',
-
-  // 3. REND L'ERREUR DE CONFLIT SILENCIEUSE POUR TURBOPACK
-  experimental: {
-    turbopack: {},
-  },
+  // 2. Output standalone uniquement pour Docker (le Dockerfile pose
+  //    NEXT_OUTPUT=standalone). `next start` local/E2E refuse ce mode.
+  output: process.env.NEXT_OUTPUT === 'standalone' ? 'standalone' : undefined,
 
   // 4. Fallbacks de secours si Webpack est appelé en parallèle
   webpack: (

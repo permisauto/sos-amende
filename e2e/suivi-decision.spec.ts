@@ -77,7 +77,12 @@ test("suivi décision : le cron récupère la décision sans action du client", 
   await page.goto(`/dashboard/cases/${dossierId}`);
 
   // Le client signe (Cas B) puis dépose sa contestation sur le portail officiel.
-  if (await page.locator("canvas").first().isVisible().catch(() => false)) {
+  if (
+    await page
+      .getByRole("button", { name: "Signer et générer le PDF" })
+      .isVisible()
+      .catch(() => false)
+  ) {
     await signerLettre(page);
   }
   await page

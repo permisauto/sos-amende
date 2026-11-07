@@ -1,13 +1,14 @@
 import { Document, Font, Image, Page, StyleSheet, Svg, Text, View } from "@react-pdf/renderer";
 import { QRCodeSVG as QRCode } from "qrcode.react";
 
-// Police Times New Roman (serif officiel administration française)
+// Police serif officielle (Tinos, métriquement compatible Times New Roman :
+// le paquet @fontsource/times-new-roman n'existe pas, d'où les 404 en CI).
 Font.register({
   family: "TimesNewRoman",
   fonts: [
-    { src: "https://cdn.jsdelivr.net/npm/@fontsource/times-new-roman@5.0.12/files/times-new-roman-latin-400-normal.woff", fontWeight: 400 },
-    { src: "https://cdn.jsdelivr.net/npm/@fontsource/times-new-roman@5.0.12/files/times-new-roman-latin-700-normal.woff", fontWeight: 700 },
-    { src: "https://cdn.jsdelivr.net/npm/@fontsource/times-new-roman@5.0.12/files/times-new-roman-latin-400-italic.woff", fontStyle: "italic", fontWeight: 400 },
+    { src: "https://cdn.jsdelivr.net/npm/@fontsource/tinos@5.0.12/files/tinos-latin-400-normal.woff", fontWeight: 400 },
+    { src: "https://cdn.jsdelivr.net/npm/@fontsource/tinos@5.0.12/files/tinos-latin-700-normal.woff", fontWeight: 700 },
+    { src: "https://cdn.jsdelivr.net/npm/@fontsource/tinos@5.0.12/files/tinos-latin-400-italic.woff", fontStyle: "italic", fontWeight: 400 },
   ],
 });
 

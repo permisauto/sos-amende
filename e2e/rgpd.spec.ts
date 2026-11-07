@@ -54,9 +54,13 @@ test("RGPD : export des données (portabilité) puis effacement du compte", asyn
   const btn = page.getByRole("button", {
     name: "Supprimer définitivement mon compte",
   });
-  // Le bouton est désactivé tant que la confirmation n'est pas cochée.
+  // Le bouton est désactivé tant que la confirmation n'est pas cochée et le
+  // mot de passe (preuve d'identité) renseigné.
   await expect(btn).toBeDisabled();
 
+  await page
+    .getByLabel("Mot de passe actuel (preuve d'identité)")
+    .fill("MdpE2e2026!");
   await page.getByRole("checkbox").check();
   await expect(btn).toBeEnabled();
   await btn.click();

@@ -29,7 +29,7 @@ export default defineConfig({
     command: "npm run build && npm run start -- -p 3200",
     url: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3200",
     reuseExistingServer: !process.env.CI,
-    timeout: 180_000,
+    timeout: 300_000,
     env: {
       NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3200",
       OCR_PROVIDER: process.env.OCR_PROVIDER ?? "mock",

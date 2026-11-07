@@ -42,8 +42,9 @@ COPY . .
 # Generate Prisma client
 RUN npx prisma generate
 
-# Build application
+# Build application (output standalone requis par le runner Docker)
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_OUTPUT=standalone
 RUN npm run build
 
 # ============================================

@@ -182,8 +182,12 @@ test("pack Télérecours 3F : activation catalogue → dépôt arrêté → vali
   // 5) Client : signe si la lettre n'est pas déjà signée (Cas A), puis voit
   //    le pack de dépôt (requête + référé L. 521-2 + bordereau).
   await page.goto(`/dashboard/cases/${dossierId}`);
-  const canvas = page.locator("canvas").first();
-  if (await canvas.isVisible().catch(() => false)) {
+  if (
+    await page
+      .getByRole("button", { name: "Signer et générer le PDF" })
+      .isVisible()
+      .catch(() => false)
+  ) {
     await signerLettre(page);
   }
   await expect(
