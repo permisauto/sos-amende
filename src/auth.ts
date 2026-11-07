@@ -140,10 +140,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         ...session,
         user: {
           ...session.user,
-          id: token.sub,
-          role: token.role,
-          email: token.email,
-          name: token.name,
+          id: token.sub ?? "",
+          role: typeof token.role === "string" ? token.role : undefined,
+          email: typeof token.email === "string" ? token.email : null,
+          name: typeof token.name === "string" ? token.name : null,
         },
       };
     },

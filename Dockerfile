@@ -24,6 +24,10 @@ FROM base AS deps
 # Copy package files
 COPY package.json package-lock.json* ./
 
+# Copy Prisma schema/config before install so the "postinstall: prisma generate" hook can run
+COPY prisma ./prisma
+COPY prisma.config.ts ./
+
 # Install dependencies
 RUN npm ci --prefer-offline --no-audit --no-fund
 
@@ -38,8 +42,9 @@ COPY . .
 # Generate Prisma client
 RUN npx prisma generate
 
-# Build application
+# Build application (output standalone requis par le runner Docker)
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_OUTPUT=standalone
 RUN npm run build
 
 # ============================================

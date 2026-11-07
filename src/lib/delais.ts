@@ -7,7 +7,7 @@
  *   férié, il est reporté au premier jour ouvrable suivant
  *   (`reporterJourOuvrable` — art. R. 123-1 du code de justice administrative).
  * - **Forclusion 48SI** : l'invalidation du permis pour solde de points nul se
- *   conteste dans les 2 mois (60 jours francs) à compter de la notification
+ *   conteste dans les 2 mois francs à compter de la notification
  *   (`controlerForclusion48si`) — signal renvoyé tel quel à l'UI, jamais
  *   bloquant côté client, bandeau bloquant côté juriste.
  *
@@ -93,6 +93,40 @@ export function ajouterJoursFrances(
 }
 
 /**
+ * Ajoute `mois` mois calendaires francs à une date (le jour de départ n'est pas
+ * compté) en ramenant le jour au dernier jour du mois cible quand il n'existe
+ * pas (ex. 31 décembre + 2 mois → 28/29 février, jamais le 2/3 mars).
+ */
+export function ajouterMoisFrancs(
+  dateDepart: Date | string,
+  mois: number,
+): Date {
+  const d =
+    typeof dateDepart === "string"
+      ? new Date(`${dateDepart.slice(0, 10)}T00:00:00Z`)
+      : new Date(
+          Date.UTC(
+            dateDepart.getUTCFullYear(),
+            dateDepart.getUTCMonth(),
+            dateDepart.getUTCDate(),
+          ),
+        );
+  if (Number.isNaN(d.getTime())) return d;
+  const annee = d.getUTCFullYear();
+  const moisIndex = d.getUTCMonth();
+  const jour = d.getUTCDate();
+  const cible = moisIndex + mois;
+  const anneeCible = annee + Math.floor(cible / 12);
+  const moisCible = ((cible % 12) + 12) % 12;
+  const dernierJour = new Date(
+    Date.UTC(anneeCible, moisCible + 1, 0),
+  ).getUTCDate();
+  return new Date(
+    Date.UTC(anneeCible, moisCible, Math.min(jour, dernierJour)),
+  );
+}
+
+/**
  * Reporte une date d'échéance qui tombe un samedi, un dimanche ou un jour
  * férié jusqu'au premier jour ouvrable suivant. Une date déjà ouvrable est
  * retournée telle quelle.
@@ -119,7 +153,7 @@ export type Forclusion48si = {
 };
 
 /**
- * Contrôle de forclusion du recours contre une invalidation 48SI : 60 jours
+ * Contrôle de forclusion du recours contre une invalidation 48SI : 2 mois
  * francs à compter de la notification. Renvoie `null` si la date de
  * notification est absente ou invalide (jamais de signal fabriqué).
  */
@@ -130,7 +164,7 @@ export function controlerForclusion48si(
   if (!dateNotification) return null;
   const notif = ajouterJoursFrances(dateNotification, 0);
   if (Number.isNaN(notif.getTime())) return null;
-  const forclusion = reporterJourOuvrable(ajouterJoursFrances(notif, 60));
+  const forclusion = reporterJourOuvrable(ajouterMoisFrancs(notif, 2));
   const action = dateAction ?? new Date();
   const jourAction = Math.floor(
     Date.UTC(action.getUTCFullYear(), action.getUTCMonth(), action.getUTCDate()) /

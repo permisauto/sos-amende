@@ -21,8 +21,10 @@
 
 export type VoieProcedure =
   | "AMENDE_FORFAITAIRE"
+  | "AMENDE_MAJOREE"
   | "CONTENTIEUX_CONTRAVENTION"
-  | "DELIT";
+  | "DELIT"
+  | "FPS";
 
 /** Résultat de la détection automatique (`INCONNU` = à confirmer par le client). */
 export type VoieProcedureDetectee = VoieProcedure | "INCONNU";
@@ -163,6 +165,16 @@ export function detecterProcedure(entree: {
 }): ProcedureDetection {
   const montant = lireMontant(entree.montant) ?? montantDepuisTexte(entree.texte);
   const classeBarème = montant !== null ? MONTANTS[montant] ?? null : null;
+  const texteNormalise = entree.texte ? normaliser(entree.texte) : "";
+  if (/forfait post[- ]?stationnement|\bfps\b|\brapo\b/.test(texteNormalise)) {
+    return {
+      voie: "FPS",
+      classe: null,
+      consignationMontant: null,
+      motif:
+        "Forfait post-stationnement : recours administratif préalable obligatoire (RAPO) devant l'ANTAI ou la commune.",
+    };
+  }
   const marqueur = marqueurDelit(entree.texte, classeBarème !== null);
 
   if (marqueur) {
@@ -171,6 +183,16 @@ export function detecterProcedure(entree: {
       classe: null,
       consignationMontant: null,
       motif: `Le document mentionne un délit (« ${marqueur} ») : SOS Amende ne traite pas les délits, un avocat est nécessaire.`,
+    };
+  }
+
+  if (/amende forfaitaire majoree|majoree|majoration/.test(texteNormalise)) {
+    return {
+      voie: "AMENDE_MAJOREE",
+      classe: classeBarème,
+      consignationMontant: null,
+      motif:
+        "Amende forfaitaire majorée : le délai de 45 jours est dépassé, une réclamation spécifique est nécessaire.",
     };
   }
 
@@ -222,8 +244,10 @@ export function detecterProcedure(entree: {
 
 export const VOIES_PROCEDURE: readonly VoieProcedure[] = [
   "AMENDE_FORFAITAIRE",
+  "AMENDE_MAJOREE",
   "CONTENTIEUX_CONTRAVENTION",
   "DELIT",
+  "FPS",
 ];
 
 /** Valide une valeur de formulaire (jamais une voie hors liste). */
@@ -251,12 +275,18 @@ export function libelleVoieProcedure(
       return classe
         ? `Amende simple (${classe}e classe)`
         : "Amende simple";
+    case "AMENDE_MAJOREE":
+      return classe
+        ? `Amende forfaitaire majorée (${classe}e classe)`
+        : "Amende forfaitaire majorée";
     case "CONTENTIEUX_CONTRAVENTION":
       return classe
         ? `Contentieux contraventionnel (${classe}e classe)`
         : "Contentieux contraventionnel";
     case "DELIT":
       return "Délit — avocat nécessaire";
+    case "FPS":
+      return "Forfait post-stationnement (RAPO)";
     default:
       return "Procédure à préciser";
   }

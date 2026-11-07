@@ -119,6 +119,46 @@ describe("detecterProcedure — délits", () => {
   });
 });
 
+describe("detecterProcedure — amende forfaitaire majorée", () => {
+  it("détecte une amende forfaitaire majorée avant le barème simple", () => {
+    const d = detecterProcedure({ texte: "amende forfaitaire majorée 75 euros" });
+    expect(d.voie).toBe("AMENDE_MAJOREE");
+    expect(d.classe).toBe(2);
+    expect(d.consignationMontant).toBeNull();
+  });
+
+  it("détecte le mot majoration seul", () => {
+    expect(detecterProcedure({ texte: "Avis de majoration" }).voie).toBe("AMENDE_MAJOREE");
+  });
+
+  it("ne confond pas une amende simple avec une majorée", () => {
+    expect(detecterProcedure({ montant: 75, texte: "Avis de contravention" }).voie).toBe("AMENDE_FORFAITAIRE");
+  });
+});
+
+describe("detecterProcedure — forfait post-stationnement (FPS/RAPO)", () => {
+  it("détecte un forfait post-stationnement avant le barème des amendes", () => {
+    const d = detecterProcedure({ texte: "forfait post-stationnement 35 euros" });
+    expect(d.voie).toBe("FPS");
+    expect(d.classe).toBeNull();
+    expect(d.consignationMontant).toBeNull();
+    expect(d.motif).toContain("RAPO");
+  });
+
+  it("détecte la mention FPS seule", () => {
+    expect(detecterProcedure({ texte: "Avis FPS stationnement" }).voie).toBe("FPS");
+  });
+
+  it("détecte la mention RAPO seule", () => {
+    expect(detecterProcedure({ texte: "RAPO stationnement" }).voie).toBe("FPS");
+  });
+
+  it("ne confond pas une amende de stationnement classique avec un FPS", () => {
+    const d = detecterProcedure({ montant: 35, texte: "Avis de contravention stationnement" });
+    expect(d.voie).toBe("AMENDE_FORFAITAIRE");
+  });
+});
+
 describe("detecterProcedure — incertitude", () => {
   it("montant 1 500 € : inconnu (le client choisit)", () => {
     const d = detecterProcedure({ montant: 1500 });
@@ -148,6 +188,8 @@ describe("helpers", () => {
     expect(lireVoieProcedure("CONTENTIEUX_CONTRAVENTION")).toBe(
       "CONTENTIEUX_CONTRAVENTION",
     );
+    expect(lireVoieProcedure("AMENDE_MAJOREE")).toBe("AMENDE_MAJOREE");
+    expect(lireVoieProcedure("FPS")).toBe("FPS");
     expect(lireVoieProcedure("AUTRE")).toBeNull();
     expect(lireVoieProcedure(null)).toBeNull();
   });
@@ -167,6 +209,10 @@ describe("helpers", () => {
       "Contentieux contraventionnel (4e classe)",
     );
     expect(libelleVoieProcedure("DELIT")).toBe("Délit — avocat nécessaire");
+    expect(libelleVoieProcedure("AMENDE_MAJOREE", 2)).toBe(
+      "Amende forfaitaire majorée (2e classe)",
+    );
+    expect(libelleVoieProcedure("FPS")).toBe("Forfait post-stationnement (RAPO)");
     expect(libelleVoieProcedure(null)).toBe("Procédure à préciser");
   });
 });

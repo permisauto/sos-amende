@@ -74,6 +74,39 @@ jobs:
     name: E2E Tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sos_amende_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sos_amende_test?schema=public
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/sos_amende_test?schema=public
+      AUTH_SECRET: ci-e2e-secret-not-used-in-production
+      AUTH_RESEND_KEY: ""
+      EMAIL_FROM: "SOS Amende <onboarding@resend.dev>"
+      NEXT_PUBLIC_APP_URL: http://localhost:3200
+      ANTAI_MOCK: "1"
+      ANTAI_MOCK_TOKEN: "test-token"
+      AUTH_DEV_FILE: "1"
+      ENABLE_DEV_LOGIN: "1"
+      OCR_PROVIDER: "mock"
+      VERIF_IA_PROVIDER: "mock"
+      SIRET_PROVIDER: "mock"
+      STORAGE_DRIVER: "local"
+      CRON_SECRET: "e2e-cron-secret"
+      DECISION_WAIT_JOURS: "0"
+      NODE_TLS_REJECT_UNAUTHORIZED: "0"
+      E2E_DISABLE_RATE_LIMIT: "1"
     steps:
       - uses: actions/checkout@v4
 
@@ -88,43 +121,13 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Build application
-        run: npm run build
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
-          AUTH_RESEND_KEY: ${{ secrets.AUTH_RESEND_KEY }}
-          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
-          NEXT_PUBLIC_APP_URL: http://localhost:3200
-          ANTAI_MOCK: "1"
-          ANTAI_MOCK_TOKEN: "test-token"
-          AUTH_DEV_FILE: "1"
-          ENABLE_DEV_LOGIN: "1"
-          OCR_PROVIDER: "mock"
-          VERIF_IA_PROVIDER: "mock"
-          STORAGE_DRIVER: "local"
-
-      - name: Start preview server
+      - name: Prepare database
         run: |
-          npm run start &
-          sleep 10
-          curl -f http://localhost:3200/api/health || exit 1
+          npx prisma migrate deploy
+          npx prisma db seed
 
       - name: Run E2E tests (Playwright)
         run: npm run test:e2e -- --reporter=junit --output=test-results.xml
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
-          AUTH_RESEND_KEY: ${{ secrets.AUTH_RESEND_KEY }}
-          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
-          NEXT_PUBLIC_APP_URL: http://localhost:3200
-          ANTAI_MOCK: "1"
-          ANTAI_MOCK_TOKEN: "test-token"
-          AUTH_DEV_FILE: "1"
-          ENABLE_DEV_LOGIN: "1"
-          OCR_PROVIDER: "mock"
-          VERIF_IA_PROVIDER: "mock"
-          STORAGE_DRIVER: "local"
 
       - name: Upload E2E test results
         if: always()
@@ -267,7 +270,7 @@ jobs:
             });
             const botComment = comments.find(c => c.user.type === 'Bot' && c.body.includes('Preview deployment'));
             const previewUrl = 'https://pr-${{ github.event.number }}.sos-amende.vercel.app';
-            const body = `✅ **Preview deployment ready**\n\n🔗 [${previewUrl}](${previewUrl})\n\n*Deployed from commit ${{ github.sha.slice(0,7)}*`;
+            const body = `✅ **Preview deployment ready**\n\n🔗 [${previewUrl}](${previewUrl})\n\n*Deployed from commit ${{ github.sha }}*`;
             
             if (botComment) {
               await github.rest.issues.updateComment({

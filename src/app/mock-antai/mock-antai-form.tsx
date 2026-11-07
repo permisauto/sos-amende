@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-export function MockAntaiForm() {
+export function MockAntaiForm({ token }: { token: string }) {
   const [result, setResult] = useState<{
     numeroDepot?: string;
     preuveUrl?: string;
@@ -16,7 +16,7 @@ export function MockAntaiForm() {
     setResult(null);
     const fd = new FormData(e.currentTarget);
     const body = Object.fromEntries(fd);
-    body.token = "dev-antai-mock";
+    body.token = token;
     try {
       const res = await fetch("/api/antai/mock", {
         method: "POST",

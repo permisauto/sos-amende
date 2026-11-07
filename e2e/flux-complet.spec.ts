@@ -125,7 +125,12 @@ test("flux complet : dépôt → analyse → validation juriste → signature �
   // Le client signe (si le canvas est affiché). Si la lettre a déjà été
   // signée via la signature du profil (Cas A), le bloc dépôt assisté est déjà
   // affiché.
-  if (await page.locator("canvas").first().isVisible().catch(() => false)) {
+  if (
+    await page
+      .getByRole("button", { name: "Signer et générer le PDF" })
+      .isVisible()
+      .catch(() => false)
+  ) {
     await signerLettre(page);
   }
 

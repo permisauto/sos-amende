@@ -49,8 +49,9 @@ export async function POST(req: Request) {
 
   const montant = montantAvecOption(type, optionLrar);
 
-  let paymentId = `mock-${Date.now().toString(36)}`;
-  let ref = paymentId.slice(0, 8).toUpperCase();
+  let paymentId = "";
+  let ref = "";
+  let paiementReutilise = false;
   try {
     const user = await prisma.user.upsert({
       where: { email },
@@ -74,20 +75,40 @@ export async function POST(req: Request) {
         });
       }
     }
-    const payment = await prisma.payment.create({
+    const fenetreIdempotence = new Date(Date.now() - 10 * 60 * 1000);
+    const paiementExistant = await prisma.payment.findFirst({
+      where: {
+        userId: user.id,
+        status: "PENDING_VIREMENT",
+        kind: type,
+        amount: montant,
+        optionLrar,
+        dossierId: dossierLieId,
+        createdAt: { gte: fenetreIdempotence },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    const payment = paiementExistant ?? await prisma.payment.create({
       data: { userId: user.id, amount: montant, currency: "EUR", status: "PENDING_VIREMENT", kind: type, optionLrar, dossierId: dossierLieId },
     });
     paymentId = payment.id;
     ref = payment.id.slice(0, 8).toUpperCase();
+    paiementReutilise = Boolean(paiementExistant);
   } catch (e) {
-    console.error("virement DB fail, fallback mock", e);
-    // Fallback mock si DB down — on continue pour envoyer l'email quand même
-    // Avertissement opérationnel : ce chemin ne doit pas rester silencieux en
-    // production (paiement créé fictivement) — l'alerting (Sentry/Git) pourra
-    // repérer ce log. Ne pas lever d'exception pour ne pas bloquer l'e-mail.
+    console.error("virement DB fail", e);
+    return NextResponse.json(
+      { error: "Service temporairement indisponible. Réessayez dans quelques minutes." },
+      { status: 503 },
+    );
   }
 
-  // Email de confirmation d'inscription (défensif : sans clé, on log seulement) — même si DB down
+  // Paiement en attente réutilisé (double soumission) : même référence, pas de
+  // nouvel e-mail — le client a déjà reçu les instructions de virement.
+  if (paiementReutilise) {
+    return NextResponse.json({ ok: true, ref, paymentId, montant, reutilise: true });
+  }
+
+  // Email de confirmation d'inscription (défensif : sans clé, on log seulement).
   try {
     const key = process.env.AUTH_RESEND_KEY?.replace(/^\uFEFF/, "").trim();
     if (key) {

@@ -91,7 +91,7 @@ export class DossierService {
       motifsRejet?: string;
     }
   ): Promise<Dossier> {
-    const dossier = await dossierRepository.updateStatutWithEvent(
+    await dossierRepository.updateStatutWithEvent(
       dossierId,
       "PRET",
       "VALIDATION",
@@ -101,7 +101,7 @@ export class DossierService {
     );
 
     // Mise à jour des champs spécifiques
-    await dossierRepository.update(dossierId, {
+    const dossierMisAJour = await dossierRepository.update(dossierId, {
       lettreGeneree: data.lettreGeneree,
       refereGenere: data.refereGenere,
       canalEnvoi: data.canalEnvoi,
@@ -116,7 +116,7 @@ export class DossierService {
       metadata: { canal: data.canalEnvoi },
     });
 
-    return dossier;
+    return dossierMisAJour;
   }
 
   /**
@@ -127,7 +127,7 @@ export class DossierService {
     juristeId: string,
     motifRejet: string
   ): Promise<Dossier> {
-    const dossier = await dossierRepository.updateStatutWithEvent(
+    await dossierRepository.updateStatutWithEvent(
       dossierId,
       "REJETE",
       "REJET",
@@ -136,7 +136,7 @@ export class DossierService {
       "JURISTE"
     );
 
-    await dossierRepository.update(dossierId, {
+    const dossierMisAJour = await dossierRepository.update(dossierId, {
       motifRejet,
       statut: "REJETE",
     }, juristeId, "JURISTE");
@@ -149,7 +149,7 @@ export class DossierService {
       metadata: { motif: motifRejet },
     });
 
-    return dossier;
+    return dossierMisAJour;
   }
 
   /**
@@ -164,7 +164,7 @@ export class DossierService {
       preuveDepotUrl?: string;
     }
   ): Promise<Dossier> {
-    const dossier = await dossierRepository.updateStatutWithEvent(
+    await dossierRepository.updateStatutWithEvent(
       dossierId,
       "ENVOYE",
       "ENVOI",
@@ -173,7 +173,7 @@ export class DossierService {
       "JURISTE"
     );
 
-    await dossierRepository.update(dossierId, {
+    const dossierMisAJour = await dossierRepository.update(dossierId, {
       numeroDepot: data.numeroDepot,
       canalEnvoi: data.canalEnvoi,
       decisionAttendueLe: new Date(Date.now() + 21 * 24 * 60 * 60 * 1000), // 21 jours
@@ -187,7 +187,7 @@ export class DossierService {
       metadata: { canal: data.canalEnvoi, numeroDepot: data.numeroDepot },
     });
 
-    return dossier;
+    return dossierMisAJour;
   }
 
   /**

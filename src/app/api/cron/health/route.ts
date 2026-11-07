@@ -1,20 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { verifierSecretCron } from "@/lib/cron-auth";
 
 /**
  * Health check des cron jobs : vérifie la dernière exécution réussie de chaque cron.
  * Utilisable par monitoring externe (UptimeRobot, Better Uptime, Datadog, etc.)
- * via `GET /api/cron/health?secret=<CRON_SECRET>`.
+ * via `GET /api/cron/health` avec `Authorization: Bearer <CRON_SECRET>`.
  *
  * Retourne 200 si tous les crons critiques ont tourné < 48h, 503 sinon.
  */
 export async function GET(req: NextRequest) {
-  const secret = req.nextUrl.searchParams.get("secret");
-  const expected = process.env.CRON_SECRET;
-  if (!expected || secret !== expected) {
+  const auth = verifierSecretCron(req);
+  if (auth === "secret-absent") {
+    return NextResponse.json(
+      { error: "CRON_SECRET manquante : health check non autorisé." },
+      { status: 500 },
+    );
+  }
+  if (auth !== "ok") {
     return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
   }
 

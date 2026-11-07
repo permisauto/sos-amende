@@ -1,6 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 import { config as dotenvConfig } from "dotenv";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 dotenvConfig({ path: path.resolve(__dirname, ".env.e2e") });
 
@@ -25,8 +28,8 @@ export default defineConfig({
   webServer: {
     command: "npm run build && npm run start -- -p 3200",
     url: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3200",
-    reuseExistingServer: false,
-    timeout: 180_000,
+    reuseExistingServer: !process.env.CI,
+    timeout: 300_000,
     env: {
       NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3200",
       OCR_PROVIDER: process.env.OCR_PROVIDER ?? "mock",

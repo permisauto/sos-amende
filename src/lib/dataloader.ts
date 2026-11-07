@@ -3,7 +3,17 @@
  * Évite les problèmes N+1 en regroupant les requêtes identiques
  */
 
-import { Prisma, Dossier, User, Payment, FailleJuridique } from "@/prisma/generated-client";
+import { Dossier, Payment, FailleJuridique } from "@/prisma/generated-client";
+
+type LoadedUser = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  role: string;
+  credits: number;
+  signatureUrl: string | null;
+  telephone: string | null;
+};
 
 interface LoadOptions<K, V> {
   batchKey: (key: K) => string;
@@ -157,9 +167,9 @@ export const dossierLoader = new DataLoader<string, Dossier | null>({
 });
 
 // User loader
-export const userLoader = new DataLoader<string, any>({
+export const userLoader = new DataLoader<string, LoadedUser | null>({
   batchKey: (id) => id,
-  batchLoadFn: async (ids): Promise<any[]> => {
+  batchLoadFn: async (ids): Promise<(LoadedUser | null)[]> => {
     const { prisma } = await import("@/lib/prisma");
     const users = await prisma.user.findMany({
       where: { id: { in: ids } },

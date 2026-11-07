@@ -95,8 +95,12 @@ test("synchronisation : pipeline juriste, lettres proposées, signature visible 
   //    (Cas A), le client signe lui-même → PRET validé. Le client n'envoie
   //    plus rien : il voit le suivi informatif « transmission par SOS Amende ».
   await page.goto(`/dashboard/cases/${dossierId}`);
-  const canvas = page.locator("canvas").first();
-  if (await canvas.isVisible().catch(() => false)) {
+  if (
+    await page
+      .getByRole("button", { name: "Signer et générer le PDF" })
+      .isVisible()
+      .catch(() => false)
+  ) {
     await signerLettre(page);
   }
   await expect(

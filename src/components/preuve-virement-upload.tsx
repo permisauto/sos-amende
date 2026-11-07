@@ -8,21 +8,20 @@ import { useState } from "react";
  * `payerParVirement` en espace client). Une fois la preuve envoyée, on
  * affiche l'état « preuve reçue » et le message de validation sous 24 h.
  */
+export const TYPES_PREUVE_ACCEPTES = ["image/jpeg", "image/png", "image/webp", "application/pdf"] as const;
+export const TAILLE_MAX_PREUVE = 8 * 1024 * 1024;
+
+export function isValidFile(file: { type: string; size: number } | null | undefined): boolean {
+  if (!file) return false;
+  if (!(TYPES_PREUVE_ACCEPTES as readonly string[]).includes(file.type)) return false;
+  if (file.size > TAILLE_MAX_PREUVE) return false;
+  return true;
+}
+
 export function PreuveVirementUpload({ paymentId }: { paymentId: string }) {
   const [uploading, setUploading] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const isValidFile = (file: File) => {
-    if (!file) return false;
-    if (!["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(file.type)) {
-      return false;
-    }
-    if (file.size > 8 * 1024 * 1024) {
-      return false;
-    }
-    return true;
-  };
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];

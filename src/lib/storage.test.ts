@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * Tests du driver "local" de src/lib/storage.ts (dev/E2E) : le format stocké
@@ -10,17 +10,17 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
  */
 describe("storage (driver local)", () => {
   let racine: string;
-  let cwdInitial: string;
 
   beforeAll(async () => {
-    cwdInitial = process.cwd();
     racine = await mkdtemp(path.join(tmpdir(), "sos-amende-storage-"));
     await mkdir(path.join(racine, "public", "uploads"), { recursive: true });
-    process.chdir(racine);
+  });
+
+  beforeEach(() => {
+    vi.spyOn(process, "cwd").mockReturnValue(racine);
   });
 
   afterAll(async () => {
-    process.chdir(cwdInitial);
     await rm(racine, { recursive: true, force: true });
   });
 

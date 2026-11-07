@@ -18,7 +18,7 @@ export function SignaturePad({
   signatureInitiale?: string | null;
 }) {
   const [state, formAction, pending] = useActionState(signerDossier, undefined);
-  const padRef = useRef<SignatureCanvas>(null);
+  const padRef = useRef<InstanceType<typeof SignatureCanvas>>(null);
   const detecteSignature = Boolean(signatureInitiale);
   const [reutiliser, setReutiliser] = useState<boolean>(detecteSignature);
   const [signature, setSignature] = useState<string | null>(null);

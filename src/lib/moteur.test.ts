@@ -45,7 +45,17 @@ describe("dateLimitePv", () => {
 
   it("applique 2 mois pour une suspension", () => {
     const limite = dateLimitePv("2026-08-01", "SUSPENSION");
-    expect(limite?.toISOString().slice(0, 10)).toBe("2026-09-30");
+    expect(limite?.toISOString().slice(0, 10)).toBe("2026-10-01");
+  });
+
+  it("applique 30 jours pour une amende majorée", () => {
+    const limite = dateLimitePv("2026-08-01", "AMENDE_MAJOREE");
+    expect(limite?.toISOString().slice(0, 10)).toBe("2026-08-31");
+  });
+
+  it("applique 1 mois pour un FPS (RAPO)", () => {
+    const limite = dateLimitePv("2026-08-01", "FPS");
+    expect(limite?.toISOString().slice(0, 10)).toBe("2026-09-01");
   });
 
   it("retourne null sans date", () => {
@@ -55,12 +65,17 @@ describe("dateLimitePv", () => {
 
 describe("joursRestants", () => {
   it("donne 0 restant à la date limite", () => {
-    const limite = new Date();
+    const limite = new Date(Date.now() + 1000);
     expect(joursRestants(limite)).toBe(0);
   });
 
   it("gère l'absence de date", () => {
-    expect(joursRestants(null)).toBe(Number.POSITIVE_INFINITY);
+    expect(joursRestants(null)).toBe(0);
+  });
+
+  it("renvoie -1 une fois la date limite dépassée", () => {
+    const limite = new Date(Date.now() - 1000);
+    expect(joursRestants(limite)).toBe(-1);
   });
 });
 

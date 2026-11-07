@@ -90,7 +90,7 @@ describe("reporterJourOuvrable", () => {
   });
 });
 
-describe("controlerForclusion48si (60 jours francs + report ouvrable)", () => {
+describe("controlerForclusion48si (2 mois francs + report ouvrable)", () => {
   it("sans date de notification, aucun signal (jamais de forclusion fabriquée)", () => {
     expect(controlerForclusion48si(null)).toBeNull();
     expect(controlerForclusion48si(undefined)).toBeNull();
@@ -98,10 +98,10 @@ describe("controlerForclusion48si (60 jours francs + report ouvrable)", () => {
     expect(controlerForclusion48si("n'importe quoi")).toBeNull();
   });
 
-  it("forclusion = notification + 60 jours francs", () => {
+  it("forclusion = notification + 2 mois francs", () => {
     const r = controlerForclusion48si("2026-08-01", d("2026-09-30"));
     expect(r).not.toBeNull();
-    expect(r?.dateForclusion.toISOString()).toBe("2026-09-30T00:00:00.000Z");
+    expect(r?.dateForclusion.toISOString()).toBe("2026-10-01T00:00:00.000Z");
     expect(r?.depasse).toBe(false);
     expect(r?.joursDepasse).toBe(0);
   });
@@ -109,11 +109,11 @@ describe("controlerForclusion48si (60 jours francs + report ouvrable)", () => {
   it("détecte le dépassement (forclusion dépassée → signal juriste)", () => {
     const r = controlerForclusion48si("2026-08-01", d("2026-10-02"));
     expect(r?.depasse).toBe(true);
-    expect(r?.joursDepasse).toBe(2);
+    expect(r?.joursDepasse).toBe(1);
   });
 
   it("reporte une forclusion tombant le week-end", () => {
-    // Notification 2026-06-10 + 60 j = 2026-08-09 (dimanche) → lundi 10 août.
+    // Notification 2026-06-10 + 2 mois = 2026-08-10 (lundi ouvrable).
     const r = controlerForclusion48si("2026-06-10", d("2026-08-10"));
     expect(r?.dateForclusion.toISOString()).toBe("2026-08-10T00:00:00.000Z");
     expect(r?.depasse).toBe(false);
@@ -121,8 +121,8 @@ describe("controlerForclusion48si (60 jours francs + report ouvrable)", () => {
 
   it("le jour même de la forclusion reste dans les délais, le lendemain non", () => {
     const jourJour = controlerForclusion48si("2026-08-01", d("2026-10-03"));
-    // Forclusion 09/30 (mercredi ouvrable) → 03/10 (samedi) la dépasse déjà de 3 j.
+    // Forclusion 10/01 (jeudi ouvrable) → 03/10 (samedi) la dépasse de 2 j.
     expect(jourJour?.depasse).toBe(true);
-    expect(jourJour?.joursDepasse).toBe(3);
+    expect(jourJour?.joursDepasse).toBe(2);
   });
 });

@@ -96,6 +96,14 @@ export class QueryCache {
   }
 
   /**
+   * Vide entièrement le cache et l'index de tags
+   */
+  clear(): void {
+    this.cache.clear();
+    this.tagIndex.clear();
+  }
+
+  /**
    * Nettoie les entrées expirées
    */
   cleanup(): number {

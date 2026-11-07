@@ -3,6 +3,7 @@ import { dossierRepository } from '@/lib/repositories/dossier';
 import { userRepository } from '@/lib/repositories/user';
 import { paymentRepository } from '@/lib/repositories/payment';
 import { failleJuridiqueRepository } from '@/lib/repositories/faille-juridique';
+import type { Prisma } from '@/prisma/generated-client';
 import { mockPrisma, createTestUser, createTestDossier, createTestFaille, resetAllMocks } from '@/test/setup';
 
 describe('Repositories', () => {
@@ -256,7 +257,9 @@ describe('Repositories', () => {
       mockPrisma.failleJuridique.findUnique.mockResolvedValue(existingFaille);
       mockPrisma.failleJuridique.update.mockResolvedValue({ ...existingFaille, regle: 'Existing rule' });
       
-      const result = await failleJuridiqueRepository.syncCatalogue([newFailleData]);
+      const result = await failleJuridiqueRepository.syncCatalogue([
+        newFailleData as unknown as Prisma.FailleJuridiqueCreateInput,
+      ]);
       
       expect(result.updated).toBe(1);
       expect(result.created).toBe(0);

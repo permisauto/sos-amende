@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient, Role, Prisma } from "../src/generated/prisma/client";
+import { PrismaClient, Role, Prisma } from "./generated-client";
 import { CATALOGUE_SOURCES } from "../src/lib/catalogue-sources";
 import { hashPassword } from "../src/lib/password";
 
