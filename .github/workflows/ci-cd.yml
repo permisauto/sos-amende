@@ -330,6 +330,9 @@ jobs:
           STORAGE_SECRET_KEY: ${{ secrets.STORAGE_SECRET_KEY }}
 
       - name: Deploy to Vercel Production
+        # Vercel déploie déjà automatiquement via son intégration GitHub ;
+        # ce step manuel n'est utile que si VERCEL_TOKEN est configuré.
+        if: env.VERCEL_TOKEN != ''
         uses: amondnet/vercel-action@v25
         with:
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
