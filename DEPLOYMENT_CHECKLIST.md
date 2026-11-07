@@ -25,13 +25,9 @@
 | **STORAGE_ENDPOINT** | `https://s3.fr-par.scw.cloud` | Production | Endpoint S3-compatible |
 | **STORAGE_ACCESS_KEY** | `SCW...` | Production | Access key S3 |
 | **STORAGE_SECRET_KEY** | `...` | Production | Secret key S3 |
-| **RIB_IBAN** | `FR76...` | Production | IBAN réel (pas démo) |
-| **RIB_BIC** | `BANKFRPP` | Production | BIC réel |
-| **RIB_TITULAIRE** | `SOS AMENDE SAS` | Production | Titulaire compte |
-| **RIB_BANQUE** | `Banque Populaire` | Production | Nom banque |
-| **NEXT_PUBLIC_RIB_IBAN** | `FR76...` | Production | Pour affichage client |
-| **NEXT_PUBLIC_RIB_BIC** | `BANKFRPP` | Production | Pour affichage client |
-| **NEXT_PUBLIC_RIB_TITULAIRE** | `SOS AMENDE SAS` | Production | Pour affichage client |
+| **NEXT_PUBLIC_RIB_IBAN** | `FR76...` | Production | IBAN réel (pas démo) — lu par `src/lib/rib.ts` |
+| **NEXT_PUBLIC_RIB_BIC** | `BANKFRPP` | Production | BIC réel — lu par `src/lib/rib.ts` |
+| **NEXT_PUBLIC_RIB_TITULAIRE** | `SOS AMENDE SAS` | Production | Titulaire compte — lu par `src/lib/rib.ts` |
 | **OCR_PROVIDER** | `mistral-ocr` ou `gemini-flash` | Production | Jamais `mock` en prod |
 | **MISTRAL_API_KEY** | `...` | Production | Si `mistral-ocr` |
 | **GOOGLE_VISION_KEY** | `...` | Production | Si `google-vision` |
@@ -218,7 +214,7 @@ vercel promote <previous-deployment-url> --token=$VERCEL_TOKEN
 - [ ] `DATABASE_URL` = URL runtime (pooler 6543 recommandé) + `DIRECT_URL` = directe 5432
 - [ ] `AUTH_RESEND_KEY` = clé valide domaine vérifié
 - [ ] `STORAGE_DRIVER=s3` + credentials S3 valides
-- [ ] `RIB_*` = vrais RIB (pas démo)
+- [ ] `NEXT_PUBLIC_RIB_*` = vrais RIB (pas démo)
 - [ ] `OCR_PROVIDER` = `mistral-ocr` ou `gemini-flash` avec clé
 - [ ] `RATE_LIMIT_STORE=postgres`
 - [ ] `CRON_SECRET` généré
