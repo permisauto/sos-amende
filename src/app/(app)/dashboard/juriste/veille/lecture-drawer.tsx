@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { ActionEtat, SourceDto } from "./veille-list";
+import { STATUT_PERDANT } from "@/lib/veille-extraction";
 
 type TexteData = { contenu: string; dispositif: string | null };
 
@@ -424,7 +425,7 @@ export function LectureDrawer({
                       {p.statutAnalyse && (
                         <div
                           className={`rounded-xl border p-3 ${
-                            p.statutAnalyse === "REJETE_AUTOMOBILISTE_PERDANT"
+                            p.statutAnalyse === STATUT_PERDANT
                               ? "border-red-300 bg-red-50"
                               : "border-emerald-300 bg-emerald-50"
                           }`}
@@ -432,23 +433,23 @@ export function LectureDrawer({
                         >
                           <p
                             className={`text-xs font-semibold ${
-                              p.statutAnalyse === "REJETE_AUTOMOBILISTE_PERDANT"
+                              p.statutAnalyse === STATUT_PERDANT
                                 ? "text-red-900"
                                 : "text-emerald-900"
                             }`}
                           >
-                            {p.statutAnalyse === "REJETE_AUTOMOBILISTE_PERDANT"
+                            {p.statutAnalyse === STATUT_PERDANT
                               ? "Décision perdante pour les automobilistes"
                               : "Décision gagnante pour les automobilistes"}
                           </p>
                           <p
                             className={`mt-1 text-[11px] ${
-                              p.statutAnalyse === "REJETE_AUTOMOBILISTE_PERDANT"
+                              p.statutAnalyse === STATUT_PERDANT
                                 ? "text-red-700"
                                 : "text-emerald-700"
                             }`}
                           >
-                            {p.statutAnalyse === "REJETE_AUTOMOBILISTE_PERDANT"
+                            {p.statutAnalyse === STATUT_PERDANT
                               ? "L'extraction n'a pas proposé de lettre (parcours vides) — la décision rejette la contestation. Cliquez « Écarter » si vous partagez cette lecture : l'IA n'écartera jamais seule."
                               : "L'extraction a pré-rédigé les parcours de courrier à partir des motifs de la décision."}
                           </p>

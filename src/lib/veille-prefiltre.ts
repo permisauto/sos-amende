@@ -35,6 +35,7 @@
 
 import { normaliser } from "@/lib/veille-perteinence";
 import { extraireDispositif } from "@/lib/veille-texte";
+import { STATUT_GAGNANT, STATUT_PERDANT } from "@/lib/veille-extraction";
 
 /**
  * Familles du produit, repérées par leurs marqueurs textuels. Volontairement
@@ -240,14 +241,14 @@ export function calculerScorePuissance(
   let explicationStatut = "";
 
   const statutAnalyse = source.statutAnalyse;
-  if (statutAnalyse === "SUCCES_AUTOMOBILISTE_GAGNANT") {
+  if (statutAnalyse === STATUT_GAGNANT) {
     scoreStatut = 50;
     explicationStatut = "Décision GAGNANTE pour l'automobiliste (IA)";
-  } else if (statutAnalyse === "REJETE_AUTOMOBILISTE_PERDANT") {
+  } else if (statutAnalyse === STATUT_PERDANT) {
     scoreStatut = -50;
     explicationStatut = "Décision PERDANTE pour l'automobiliste (IA)";
-  } else if (statutAnalyse === "LOCALE" || (source.historiqueExtraction?.etat === "extrait" && !statutAnalyse)) {
-    // Extraction locale (sans IA) ou ancien format sans statutAnalyse
+  } else if (source.historiqueExtraction?.etat === "extrait" && !statutAnalyse) {
+    // Ancien format sans statutAnalyse (extrait hérité) : aucun signal IA.
     scoreStatut = 0;
     explicationStatut = "Extraction locale (sans IA)";
   } else {
@@ -256,10 +257,11 @@ export function calculerScorePuissance(
     explicationStatut = "Non encore analysé par l'IA";
   }
 
-  // 2. SCORE CLASSIQUE (0-40) - Pondéré moins fort
-  const coreDistincts = new Set(
-    (source.matchsCore ?? []).map((t) => normaliser(t)).filter(Boolean),
-  ).size;
+  // 2. SCORE CLASSIQUE (anti-corrélé) — NEUTRALISÉ : le score par mots-clés
+  // (`source.score`) est anti-corrélé à l'exploitabilité réelle (relevé prod
+  // 2026-11 : NOUVEAU moy. ~16 vs ÉCARTÉE moy. ~29). Conservé dans `composants`
+  // à titre informatif, il n'entre plus dans le score final — sinon ce bruit
+  // neutraliserait le pré-filtre déterministe (le correctif « lot 1 »).
   const pertinenceClassique = Math.min(40, source.score * 0.4);
 
   // 3. PRÉ-FILTRE DÉTERMINISTE (0-30) - Réutilise la logique existante
@@ -281,7 +283,6 @@ export function calculerScorePuissance(
 
   // 5. PÉNALITÉS
   let penalites = 0;
-  const partsExplication: string[] = [];
 
   // Doublon article déjà couvert
   const articles = extraireArticles(`${source.titre ?? ""} ${source.contenu ?? ""}`);
@@ -306,7 +307,7 @@ export function calculerScorePuissance(
     -100,
     Math.min(
       100,
-      scoreStatut + pertinenceClassique + prioriteDeterministe + fraicheur - penalites
+      scoreStatut + prioriteDeterministe + fraicheur - penalites
     ),
   );
 
@@ -325,7 +326,7 @@ export function calculerScorePuissance(
     },
     explication:
       partiesExplication.length > 0
-        ? partsExplication.join(" · ")
+        ? partiesExplication.join(" · ")
         : "aucun signal",
   };
 }
@@ -418,7 +419,6 @@ export function classerParPriorite(
     .sort(
       (a, b) =>
         b.priorite.scoreFinal - a.priorite.scoreFinal ||
-        b.source.score - a.source.score ||
         a.source.id.localeCompare(b.source.id),
     );
 }

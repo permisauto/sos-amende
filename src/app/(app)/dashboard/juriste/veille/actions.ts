@@ -16,6 +16,7 @@ import {
   composerRegleProposition,
   propositionDepuisFormulaire,
   refPropositionDepuisSource,
+  STATUT_PERDANT,
   type ValeursProposition,
 } from "@/lib/veille-extraction";
 import type { PropositionVeille } from "@/lib/veille-extraction";
@@ -292,7 +293,7 @@ export async function validerPropositionSource(
   }
 
   if (!estPropositionPromouvable(proposition)) {
-    if (proposition.statutAnalyse === "REJETE_AUTOMOBILISTE_PERDANT") {
+    if (proposition.statutAnalyse === STATUT_PERDANT) {
       return {
         error:
           "Décision perdante pour les automobilistes : seule une décision favorable peut être validée.",

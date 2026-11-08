@@ -43,6 +43,8 @@ import {
   BUDGET_EXTRACTION,
   BUDGET_TEMPS_EXTRACTION_MS,
   SCORE_SEUIL_EXTRACTION,
+  STATUT_GAGNANT,
+  STATUT_PERDANT,
   composerRegleProposition,
   extraireProposition,
   extractionDispo,
@@ -530,7 +532,7 @@ export function estCandidatExtraction(
 ): boolean {
   if (!p) return true;
   // Filtre GAGNANT : écarter toute extraction PERDANT (jamais reprise automatique)
-  if (p.statutAnalyse === "PERDANT" || (p.statutAnalyse ?? "").toUpperCase().includes("PERDANT")) return false;
+  if (p.statutAnalyse === STATUT_PERDANT) return false;
   if (p.etat === "echec") return true;
   if (p.etat === "incomplet" && (p.tentatives ?? 0) < 1) return true;
   return false;
@@ -1092,7 +1094,7 @@ export function estPropositionPromouvable(
   p: PropositionVeille | null,
 ): boolean {
   if (!p || p.etat !== "extrait") return false;
-  if (p.statutAnalyse !== "SUCCES_AUTOMOBILISTE_GAGNANT") return false;
+  if (p.statutAnalyse !== STATUT_GAGNANT) return false;
   return !estPropositionLocale(p);
 }
 

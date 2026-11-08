@@ -170,7 +170,25 @@ describe("classerParPriorite", () => {
     expect(classes.map((c) => c.source.id)).toEqual(["frais", "echec"]);
   });
 
-  it("détient un ordre déterministe à égalité (score, puis identifiant)", () => {
+  it("ne laisse pas le score par mots-clés renverser le pré-filtre (C1)", () => {
+    const bruyant = source({
+      id: "bruyant",
+      score: 68,
+      matchsCore: [],
+      contenu: "Le requérant conteste une décision. Sans autre précision.",
+      dateSource: null,
+    });
+    const exploit = source({
+      id: "exploit",
+      score: 12,
+      contenu:
+        "Excès de vitesse relevé, stationnement relevé. ORDONNE : l'annulation est prononcée. Article L. 234-1.",
+    });
+    const classes = classerParPriorite([bruyant, exploit], new Set<string>(), MAINTENANT);
+    expect(classes.map((c) => c.source.id)).toEqual(["exploit", "bruyant"]);
+  });
+
+  it("détient un ordre déterministe à égalité (identifiant)", () => {
     const a = source({ id: "aaa" });
     const b = source({ id: "bbb" });
     const un = classerParPriorite([a, b], new Set<string>(), MAINTENANT);

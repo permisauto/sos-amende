@@ -7,7 +7,7 @@ import {
   articlesCouvertsParFaillesActives,
   sourcePreparable,
 } from "@/lib/veille-ingestion";
-import { prioritePrefiltre } from "@/lib/veille-prefiltre";
+import { classerParPriorite } from "@/lib/veille-prefiltre";
 import { VeilleList, type SourceDto } from "./veille-list";
 
 /**
@@ -84,14 +84,11 @@ export default async function VeillePage({
           })
         : Promise.resolve(0);
 
-    const [rows, totalFiltre, groupes, aValider, locales] = await Promise.all([
+    const [rows, groupes, aValider, locales] = await Promise.all([
       prisma.sourceJuridique.findMany({
         where,
-        orderBy: [{ score: "desc" }, { createdAt: "desc" }],
-        skip: (page - 1) * TAILLE_PAGE,
-        take: TAILLE_PAGE,
+        orderBy: [{ createdAt: "desc" }],
       }),
-      prisma.sourceJuridique.count({ where }),
       prisma.sourceJuridique.groupBy({ by: ["statut"], _count: true }),
       prisma.sourceJuridique.count({
         where: { statut: "NOUVEAU", proposition: propositionExtraite },
@@ -108,38 +105,53 @@ export default async function VeillePage({
       filtre === "A_VALIDER"
         ? rows.filter((r) => !estPropositionLocale(r.proposition as SourceDto["proposition"]))
         : rows;
-    total = filtre === "A_VALIDER" ? totalFiltre - locales : totalFiltre;
-    // Pré-filtre déterministe (Lot 1) : chaque publication affichée reçoit un
-    // score de triage **mécanique** (termes du domaine, article de code cité,
-    // doublon, dispositif extractible, familles, fraîcheur) — jamais une
-    // conclusion juridique. C'est ce tri qui détermine l'ordre d'extraction
-    // par IA (budget quotidien strict) : le juriste voit donc d'où viennent
-    // les publications qui passent en premier.
+    total = lignes.length;
+    // Pré-filtre déterministe (Lot 1) : les publications sont classées par
+    // leur score de triage **mécanique** (`calculerScorePuissance` : statut IA,
+    // termes du domaine, article de code cité, doublon, dispositif extractible,
+    // familles, fraîcheur, échecs antérieurs) — jamais par le score de
+    // pertinence par mots-clés, qui est anti-corrélé à l'exploitabilité réelle.
+    // C'est ce classement qui détermine l'ordre de lecture **et** l'ordre
+    // d'extraction IA (budget strict) : le juriste voit d'abord les
+    // publications les plus exploitables.
     const articlesCouverts = await articlesCouvertsParFaillesActives();
-    sources = lignes.map((r) => {
-      const p = prioritePrefiltre(sourcePreparable(r), articlesCouverts);
-      return {
-        id: r.id,
-        statut: r.statut,
-        source: r.source,
-        nature: r.nature,
-        titre: r.titre,
-        juridiction: r.juridiction,
-        dateSource: r.dateSource ? r.dateSource.toISOString().slice(0, 10) : null,
-        reference: r.reference,
-        ecli: r.ecli,
-        url: r.url,
-        citations: Array.isArray(r.citations) ? (r.citations as string[]) : [],
-        matchsCore: Array.isArray(r.matchsCore) ? (r.matchsCore as string[]) : [],
-        matchsAppui: Array.isArray(r.matchsAppui) ? (r.matchsAppui as string[]) : [],
-        score: r.score,
-        brouillonRegle: r.brouillonRegle,
-        proposition: (r.proposition as SourceDto["proposition"]) ?? null,
-        archive: r.archive,
-        failleId: r.failleId,
-        priorite: { score: p.score, explication: p.explication },
-      };
-    });
+    const classes = classerParPriorite(
+      lignes.map(sourcePreparable),
+      articlesCouverts,
+    );
+    const parId = new Map(rows.map((r) => [r.id, r]));
+    const debut = (page - 1) * TAILLE_PAGE;
+    sources = classes
+      .slice(debut, debut + TAILLE_PAGE)
+      .map((c) => {
+        const r = parId.get(c.source.id);
+        if (!r) return null;
+        return {
+          id: r.id,
+          statut: r.statut,
+          source: r.source,
+          nature: r.nature,
+          titre: r.titre,
+          juridiction: r.juridiction,
+          dateSource: r.dateSource ? r.dateSource.toISOString().slice(0, 10) : null,
+          reference: r.reference,
+          ecli: r.ecli,
+          url: r.url,
+          citations: Array.isArray(r.citations) ? (r.citations as string[]) : [],
+          matchsCore: Array.isArray(r.matchsCore) ? (r.matchsCore as string[]) : [],
+          matchsAppui: Array.isArray(r.matchsAppui) ? (r.matchsAppui as string[]) : [],
+          score: r.score,
+          brouillonRegle: r.brouillonRegle,
+          proposition: (r.proposition as SourceDto["proposition"]) ?? null,
+          archive: r.archive,
+          failleId: r.failleId,
+          priorite: {
+            score: c.priorite.scoreFinal,
+            explication: c.priorite.explication,
+          },
+        };
+      })
+      .filter((s): s is NonNullable<typeof s> => s !== null);
   } catch (e) {
     console.error("veille: lecture des sources impossible", e);
     dbOk = false;

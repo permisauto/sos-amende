@@ -26,6 +26,13 @@ import {
  * stockage (`SourceJuridique.proposition`) appartient à `veille-ingestion`.
  */
 
+/** Statuts d'analyse de la veille 2.0 — valeurs uniques, source de vérité
+ * partagée (moteur, pré-filtre, ingestion, UI). Ne plus écrire ces littéraux
+ * ailleurs : toute comparaison passe par ces constantes. */
+export const STATUT_GAGNANT = "SUCCES_AUTOMOBILISTE_GAGNANT" as const;
+export const STATUT_PERDANT = "REJETE_AUTOMOBILISTE_PERDANT" as const;
+export type StatutAnalyse = typeof STATUT_GAGNANT | typeof STATUT_PERDANT;
+
 export type EtatProposition = "extrait" | "incomplet" | "echec";
 
 export type PropositionVeille = {
@@ -83,9 +90,7 @@ export type PropositionVeille = {
    * `extrait` peut porter un statut PERDANT, affiché en badge rouge — le clic
    * admin reste la seule voie d'écarter.
    */
-  statutAnalyse?:
-    | "SUCCES_AUTOMOBILISTE_GAGNANT"
-    | "REJETE_AUTOMOBILISTE_PERDANT";
+  statutAnalyse?: StatutAnalyse;
   /**
    * Métadonnées d'analyse (juridiction, ECLI, date, validité 2026) — pure
    * transparence pour l'admin, jamais un changement de statut.
@@ -503,7 +508,7 @@ function proposerDepuisV2(
 ): PropositionVeille {
   const s = d.generation_templates_recours;
   const typeInfraction = typeInfractionDepuisParcours(d, contenu, titreSource);
-  const perdant = d.statut_analyse === "REJETE_AUTOMOBILISTE_PERDANT";
+  const perdant = d.statut_analyse === STATUT_PERDANT;
 
   // Articles : verbatim exigé (référence légale), max 3, dédup **par
   // référence** — « L. 223-3 » et « C. route, art. L. 223-3 » désignent le
@@ -730,7 +735,7 @@ function proposerDepuisLegacy(
   // (champ vidé). Ne touche jamais à l'état de la proposition. Sur une
   // décision PERDANTE, aucun template n'est conservé (même discipline que le
   // parser v2 : rien de rédigable sur un fondement écarté par la juridiction).
-  const perdant = d.statut_analyse === "REJETE_AUTOMOBILISTE_PERDANT";
+  const perdant = d.statut_analyse === STATUT_PERDANT;
   const templateLettre = perdant
     ? undefined
     : assainirTemplate(d.templateLettre, articles);
@@ -885,11 +890,11 @@ export function extractionMock(pub: PublicationVeille): string {
   const obsolete = Number.isFinite(annee) && annee < 2020;
   // Statut d'analyse : marqueur `PERDANT` dans le titre ou l'ECLI →
   // décision rejetée (badge rouge, templates/questions jamais proposés).
-  const statutAnalyse: "SUCCES_AUTOMOBILISTE_GAGNANT" | "REJETE_AUTOMOBILISTE_PERDANT" =
+  const statutAnalyse: StatutAnalyse =
     /PERDANT/i.test(`${pub.titre} ${pub.ecli ?? ""}`)
-      ? "REJETE_AUTOMOBILISTE_PERDANT"
-      : "SUCCES_AUTOMOBILISTE_GAGNANT";
-  const perdant = statutAnalyse === "REJETE_AUTOMOBILISTE_PERDANT";
+      ? STATUT_PERDANT
+      : STATUT_GAGNANT;
+  const perdant = statutAnalyse === STATUT_PERDANT;
   const templates = templatesMechaniques(articles, typeInfraction);
   const regle = `Simulation (mock) : la juridiction retient que ${citation}`;
   const s = {
