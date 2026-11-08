@@ -63,6 +63,8 @@ import {
   detecterCaducite,
   extraitCaducite,
 } from "@/lib/veille-caducite";
+import { chargerHistoriqueFailles } from "@/lib/failles-historique";
+import { historiqueParArticle } from "@/lib/veille-resultat";
 import {
   classerParPriorite,
   extraireArticles,
@@ -755,6 +757,32 @@ export async function articlesCouvertsParFaillesActives(): Promise<Set<string>> 
   }
 }
 
+/**
+ * Carte article normalisé → historique de réussite, alimentée par les failles
+ * ACTIVE et leurs résultats observés (`decisionOmp`). Best-effort : une base en
+ * rade renvoie une map vide (aucun bonus appliqué).
+ */
+export async function historiqueVeille(): Promise<
+  ReturnType<typeof historiqueParArticle>
+> {
+  try {
+    const [historique, failles] = await Promise.all([
+      chargerHistoriqueFailles(),
+      prisma.failleJuridique.findMany({
+        where: { statut: "ACTIVE" },
+        select: { id: true, articleLoi: true },
+      }),
+    ]);
+    return historiqueParArticle(
+      historique,
+      failles.map((f) => ({ failleId: f.id, articleLoi: f.articleLoi })),
+    );
+  } catch (e) {
+    console.error("veille-resultat: historique de veille impossible", e);
+    return new Map();
+  }
+}
+
 export function sourcePreparable(row: SourceJuridique): SourcePreparable {
   const prop = propositionEnregistree(row);
   return {
@@ -829,9 +857,14 @@ export async function extrairePropositionsEnAttente(
     estCandidatExtraction(propositionEnregistree(r)),
   );
   const articlesCouverts = await articlesCouvertsParFaillesActives();
+  // Boucle de retour (Pilier 4) : l'historique de réussite des failles pondère
+  // la priorité — une publication citant un fondement éprouvé passe en premier.
+  const historique = await historiqueVeille();
   const classes = classerParPriorite(
     eligibles.map(sourcePreparable),
     articlesCouverts,
+    undefined,
+    historique,
   );
   const parId = new Map(rows.map((r) => [r.id, r]));
   const candidats = classes

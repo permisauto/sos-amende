@@ -5,6 +5,7 @@ import { Prisma } from "@/prisma/generated-client";
 import { estPropositionLocale } from "@/lib/veille-ingestion";
 import {
   articlesCouvertsParFaillesActives,
+  historiqueVeille,
   sourcePreparable,
 } from "@/lib/veille-ingestion";
 import { classerParPriorite } from "@/lib/veille-prefiltre";
@@ -114,10 +115,15 @@ export default async function VeillePage({
     // C'est ce classement qui détermine l'ordre de lecture **et** l'ordre
     // d'extraction IA (budget strict) : le juriste voit d'abord les
     // publications les plus exploitables.
-    const articlesCouverts = await articlesCouvertsParFaillesActives();
+    const [articlesCouverts, historique] = await Promise.all([
+      articlesCouvertsParFaillesActives(),
+      historiqueVeille(),
+    ]);
     const classes = classerParPriorite(
       lignes.map(sourcePreparable),
       articlesCouverts,
+      undefined,
+      historique,
     );
     const parId = new Map(rows.map((r) => [r.id, r]));
     const debut = (page - 1) * TAILLE_PAGE;

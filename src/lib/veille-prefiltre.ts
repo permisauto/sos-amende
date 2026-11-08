@@ -36,6 +36,10 @@
 import { normaliser } from "@/lib/veille-perteinence";
 import { extraireDispositif } from "@/lib/veille-texte";
 import { STATUT_GAGNANT, STATUT_PERDANT } from "@/lib/veille-extraction";
+import {
+  bonusResultatVeille,
+  type HistoriqueParArticle,
+} from "@/lib/veille-resultat";
 
 /**
  * Familles du produit, repérées par leurs marqueurs textuels. Volontairement
@@ -233,8 +237,13 @@ export function calculerScorePuissance(
   source: SourcePreparable,
   articlesCouverts: ReadonlySet<string> = new Set<string>(),
   maintenant: Date = new Date(),
+  historique?: HistoriqueParArticle,
 ): ScorePuissance {
   const maintenantMs = maintenant.getTime();
+  // Bonus de résultat (Pilier 4) : une publication citant un article à fort
+  // taux de réussite (dossiers gagnés observés) est priorisée — signal borné,
+  // jamais un jugement juridique.
+  const bonusResultat = historique ? bonusResultatVeille(source, historique) : 0;
 
   // 1. SCORE STATUT ANALYSE (SIGNAL PRINCIPAL : -50 à +50)
   let scoreStatut = 0;
@@ -307,12 +316,13 @@ export function calculerScorePuissance(
     -100,
     Math.min(
       100,
-      scoreStatut + prioriteDeterministe + fraicheur - penalites
+      scoreStatut + prioriteDeterministe + fraicheur + bonusResultat - penalites
     ),
   );
 
   const partiesExplication: string[] = [];
   if (explicationStatut) partiesExplication.push(explicationStatut);
+  if (bonusResultat > 0) partiesExplication.push(`fondement éprouvé: +${bonusResultat}`);
   if (penalites > 0) partiesExplication.push(`pénalités: -${penalites}`);
 
   return {
@@ -410,11 +420,17 @@ export function classerParPriorite(
   sources: readonly SourcePreparable[],
   articlesCouverts: ReadonlySet<string> = new Set<string>(),
   maintenant: Date = new Date(),
+  historique?: HistoriqueParArticle,
 ): SourcePriorisee[] {
   return sources
     .map((source) => ({
       source,
-      priorite: calculerScorePuissance(source, articlesCouverts, maintenant),
+      priorite: calculerScorePuissance(
+        source,
+        articlesCouverts,
+        maintenant,
+        historique,
+      ),
     }))
     .sort(
       (a, b) =>
