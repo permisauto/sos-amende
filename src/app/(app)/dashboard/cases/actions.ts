@@ -18,6 +18,7 @@ import {
 } from "@/lib/moteur";
 import { generateLettrePdf } from "@/lib/lettre-pdf";
 import { extrairePv, getOcrProvider, fusionnerPrefill } from "@/lib/ocr";
+import { provenanceChamps } from "@/lib/confiance-ocr";
 import { alignerDocType, lireCategorie } from "@/lib/doc-v2";
 import { notifierStatut } from "@/lib/notifications";
 import {
@@ -179,6 +180,14 @@ export async function createDossier(
       const mesure = ocr.extrait?.mesure;
       if (mesure && typeof mesure === "object") prefill.mesure = mesure;
       alignerDocType(prefill, ocr.texte);
+      // Confiance OCR par champ : provenance dérivée (Gemini / regex / absent),
+      // stockée sous la clé réservée `_provenanceOcr` — jamais lue par le
+      // moteur, uniquement destinée à éclairer le juriste sur les champs dont
+      // la lecture est incertaine.
+      (prefill as Record<string, unknown>)._provenanceOcr = provenanceChamps(
+        ocr.extrait,
+        ocr.texte,
+      );
       await prisma.dossier.update({
         where: { id: dossier.id },
         data: { pvTexte: ocr.texte, extractedData: prefill as object },

@@ -25,6 +25,12 @@ import type {
 import type { JurisprudenceRef } from "@/lib/catalogue-sources";
 import { controlerForclusion48si } from "@/lib/delais";
 import {
+  champsIncertains,
+  libelleChamp,
+  provenanceChamps,
+  type ChampDetection,
+} from "@/lib/confiance-ocr";
+import {
   remplirLettreMulti,
   remplirTemplate,
   type ExtractedData,
@@ -511,6 +517,19 @@ export default async function JuristeCasePage(
     process.env.VERIF_IA_PROVIDER === "mock";
 
   const data = item.extractedData as Record<string, unknown> | null;
+
+  // Confiance OCR par champ : provenance stockée au dépôt (clé `_provenanceOcr`),
+  // recalculée à la volée sur les anciens dossiers qui ne l'ont pas. Les champs
+  // « absent » (= incertains) conditionnant une faille sont signalés au juriste.
+  const provenanceStockee = (data?._provenanceOcr ?? null) as
+    | Partial<Record<ChampDetection, "structure" | "regex" | "absent">>
+    | null;
+  const provenanceEffective =
+    provenanceStockee && Object.keys(provenanceStockee).length > 0
+      ? provenanceStockee
+      : provenanceChamps(data as Partial<ExtractedData> | undefined, item.pvTexte);
+  const champsIncertainsListe = champsIncertains(provenanceEffective);
+  const libellesIncertains = champsIncertainsListe.map(libelleChamp);
 
   // Classification OCR v2 (catégorie) prioritaire sur le simple `docType`
   // pack : elle couvre aussi la 48N, la rétention et l'annulation judiciaire.
@@ -1098,6 +1117,21 @@ export default async function JuristeCasePage(
                   Lecture automatique — à vérifier
                 </span>
               </div>
+              {libellesIncertains.length > 0 && (
+                <div
+                  data-testid="alerte-lecture-incertaine"
+                  className="border-b border-amber-200 bg-amber-50 px-4 py-3"
+                >
+                  <p className="text-xs font-semibold text-amber-900">
+                    Lecture incertaine : {libellesIncertains.join(", ")}.
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-amber-700">
+                    Ces champs sont absents ou illisibles dans le document —
+                    vérifiez le PV avant de vous appuyer sur une faille qui en
+                    dépend.
+                  </p>
+                </div>
+              )}
               <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
                 {item.pvTexte ? (
                   <pre className="whitespace-pre-wrap break-words text-sm leading-relaxed text-zinc-800">
