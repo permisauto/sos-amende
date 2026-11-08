@@ -27,4 +27,4 @@ function lancer(commande) {
 }
 
 if (estProduction) lancer("prisma migrate deploy");
-lancer("next build");
+lancer("next build --webpack");
