@@ -59,6 +59,11 @@ import {
   scorerPertinence,
 } from "@/lib/veille-perteinence";
 import {
+  articlesCitesFaille,
+  detecterCaducite,
+  extraitCaducite,
+} from "@/lib/veille-caducite";
+import {
   classerParPriorite,
   extraireArticles,
   type SourcePreparable,
@@ -447,6 +452,10 @@ export async function executerVeilleDila(
     sources.push(await ingererSource(code));
   }
   if (!filtre || filtre.has("TA")) sources.push(await ingererSourceTa());
+  // Détection de caducité : un texte ingéré qui abroge/modifie un article cité
+  // par une faille ACTIVE est signalé au juriste (trace, jamais d'écartement
+  // automatique). Best-effort — n'interrompt jamais l'ingestion.
+  await pointerCaducite();
   // Extraction des propositions (règle + articles) sur les publications
   // retenues : best-effort, bornée en nombre et en temps, jamais bloquante
   // — les appels restent stockés au fil de l'eau.
@@ -455,6 +464,67 @@ export async function executerVeilleDila(
     sources,
     totalRetenues: sources.reduce((n, s) => n + s.retenues, 0),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Veille de caducité (Pilier 3) — signal d'abrogation/modification d'articles
+// ---------------------------------------------------------------------------
+
+/**
+ * Signale les publications **récemment ingérées** qui abrogent ou modifient un
+ * article cité par une faille `ACTIVE`. Ne change jamais l'état d'une faille :
+ * la trace `AutoAlimentationTrace` (campagne `caducite`) porte les articles
+ * concernés, que le juriste lit dans la console de relecture avant de trancher.
+ */
+export async function pointerCaducite(): Promise<void> {
+  try {
+    const actives = await prisma.failleJuridique.findMany({
+      where: { statut: "ACTIVE" },
+      select: { id: true, titreFaille: true, articleLoi: true },
+    });
+    if (actives.length === 0) return;
+
+    // Ensemble normalisé des articles surveillés (référence → faille).
+    const surveilles = new Set<string>();
+    for (const f of actives) {
+      for (const a of articlesCitesFaille(f.articleLoi)) surveilles.add(a);
+    }
+    if (surveilles.size === 0) return;
+
+    // On ne compare qu'aux publications encore non relues (NOUVEAU) : les
+    // textes déjà lus/écartés ne doivent pas re-signaler en boucle.
+    const publications = await prisma.sourceJuridique.findMany({
+      where: { statut: "NOUVEAU" },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+      select: { id: true, titre: true, contenu: true },
+    });
+
+    const alertes: string[] = [];
+    for (const pub of publications) {
+      const concernes = detecterCaducite(pub.contenu, surveilles);
+      for (const article of concernes) {
+        alertes.push(
+          `${article} (${pub.titre.slice(0, 80)}) — « ${extraitCaducite(
+            pub.contenu,
+            article,
+          ).slice(0, 140)} »`,
+        );
+      }
+    }
+
+    if (alertes.length > 0) {
+      await enregistrerTraceAutoAlimentation({
+        campagne: "caducite",
+        statut: "OK",
+        traitees: publications.length,
+        nouvelles: alertes.length,
+        detail: alertes.slice(0, 10).join(" | "),
+      });
+    }
+  } catch (e) {
+    console.error("veille: détection de caducité impossible", e);
+  }
 }
 
 // ---------------------------------------------------------------------------
