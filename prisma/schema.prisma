@@ -181,6 +181,11 @@ model FailleJuridique {
   reglesDetection Json? // règles de détection automatique (scan PV/lettre) — voir src/lib/moteur.ts
   jurisprudence  Json? // références sourcées : [{reference, juridiction, date, url, verifiee}] (base auto-alimentée)
   statut         FailleStatut @default(ACTIVE)
+  // Traçabilité de la relecture juridique (console unifiée, onglet « Contenu ») :
+  // `reluLe` renseigné = le juriste a revalidé le contenu de la faille ACTIVE
+  // (article + règle + template). `null` = à relire. `reluPar` = qui a relu.
+  reluLe         DateTime?
+  reluPar        String?
 
   dossiers       Dossier[]
   faillesRetenues DossierFaille[]

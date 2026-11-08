@@ -250,6 +250,12 @@ export default async function JuristePage(
         </div>
         <div className="flex flex-wrap gap-2">
           <Link
+            href="/dashboard/juriste/relecture"
+            className="rounded-full bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-700"
+          >
+            Contenu à relire
+          </Link>
+          <Link
             href="/dashboard/juriste/failles"
             className="rounded-full border border-zinc-300 px-5 py-2.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
           >
