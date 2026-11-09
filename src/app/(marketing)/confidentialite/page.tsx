@@ -7,10 +7,10 @@ export const metadata: Metadata = {
 
 export default function ConfidentialitePage() {
   return (
-    <LegalPage title="Politique de confidentialité" updatedAt="5 octobre 2026">
+    <LegalPage title="Politique de confidentialité" updatedAt="9 novembre 2026">
       <h2 className="text-lg font-semibold text-zinc-900">1. Responsable du traitement</h2>
       <p>
-        SOS Amende est un service édité par DIXIT LLC (30 N Gould St, Ste R,
+        SOS Amende est un service édité par DIXIT LLC (30 N Gould St, Ste N,
         Sheridan, WY 82801, États-Unis), qui agit en qualité de responsable de
         traitement des données personnelles collectées dans le cadre du Service,
         conformément au Règlement (UE) 2016/679 (« RGPD ») et à la loi
@@ -48,8 +48,8 @@ export default function ConfidentialitePage() {
       <h2 className="text-lg font-semibold text-zinc-900">4. Conservation des données</h2>
       <p className="font-medium">Vos données sont conservées pendant les durées suivantes :</p>
       <ul className="list-disc space-y-1 pl-5">
-        <li>Données d'identification : 3 ans à compter de la dernière connexion ;</li>
-        <li>Dossiers : pendant la durée de la procédure, puis 3 ans à titre d'archivage après la clôture ;</li>
+        <li>Données d&apos;identification : 3 ans à compter de la dernière connexion ;</li>
+        <li>Dossiers : pendant la durée de la procédure, puis 12 mois après la clôture, avant suppression ou anonymisation ; l&apos;effacement peut être demandé à tout moment (droit d&apos;effacement) ;</li>
         <li>Preuves de paiement et pièces comptables : 10 ans (obligations comptables et fiscales) ;</li>
         <li>Journaux de connexion (logs) : 1 an ;</li>
         <li>Cookies : 13 mois maximum.</li>
@@ -82,13 +82,14 @@ export default function ConfidentialitePage() {
         <li>Fichiers des pièces (PV, signatures, PDF, preuves de virement) :
           stockage S3-compatible hébergé dans l'Union européenne ;</li>
         <li>Lecture automatique du document transmis (OCR, uniquement si
-          activée) : Google Vision API ou Mistral AI — ces prestataires
-          reçoivent l'image du document pour l'analyser ;</li>
-        <li>Géolocalisation de l'adresse d'infraction (pièces externes) :
-          API Adresse de l'État français (BAN) ;</li>
+          activée) : prestataire de lecture automatique de document, qui
+          reçoit l&apos;image du document pour l&apos;analyser ;</li>
+        <li>Géolocalisation de l&apos;adresse d&apos;infraction (pièces externes) :
+          API Adresse de l&apos;État français (BAN) ;</li>
         <li>Relevés météo des pièces (coordonnées du lieu) : Open-Meteo ;</li>
         <li>Veille juridique (Journal officiel uniquement, données publiques,
-          aucune donnée personnelle) : Groq.</li>
+          aucune donnée personnelle) : service d&apos;analyse de texte sur données
+          publiques.</li>
       </ul>
       <p>
         Conformément au RGPD, ces sous-traitants font l'objet d'accords encadrant

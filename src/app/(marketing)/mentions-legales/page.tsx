@@ -7,41 +7,46 @@ export const metadata: Metadata = {
 
 export default function MentionsLegalesPage() {
   return (
-    <LegalPage title="Mentions légales" updatedAt="11 septembre 2026">
-      <h2 className="text-lg font-semibold text-zinc-900">Éditeur du service</h2>
+    <LegalPage title="Mentions légales" updatedAt="9 novembre 2026">
+      <h2 className="text-lg font-semibold text-zinc-900">1. Éditeur du site</h2>
       <p>
-        SOS Amende est un service édité par la société DIXIT LLC, société à
-        responsabilité limitée immatriculée dans l'État du Wyoming (États-Unis),
-        dont le siège social est situé 30 N Gould St, Ste R, Sheridan,
-        WY 82801, États-Unis.
+        Le site internet https://recours-permis-pv.com est édité par la société
+        DIXIT LLC, société constituée et régie selon les lois de l&apos;État du
+        Wyoming (États-Unis), immatriculée sous le numéro 2026-002016662, dont
+        le siège social est situé au 30 N Gould St, Ste N, Sheridan, WY 82801,
+        États-Unis.
       </p>
+      <p>Contact électronique : contact@recours-permis-pv.com</p>
+      <p>Délégué à la protection des données : dpo@recours-permis-pv.com</p>
+
+      <h2 className="text-lg font-semibold text-zinc-900">2. Directeur de la publication</h2>
       <p>
-        Contact : contact@recours-permis-pv.com
-      </p>
-      <p>
-        Délégué à la protection des données : dpo@recours-permis-pv.com
+        Le directeur de la publication du site est Mr ALLOU SI, en sa qualité de
+        représentant légal de la société DIXIT LLC.
       </p>
 
-      <h2 className="text-lg font-semibold text-zinc-900">Hébergement</h2>
+      <h2 className="text-lg font-semibold text-zinc-900">3. Hébergement du site</h2>
       <p>
-        Le Service est hébergé par Hostinger, UAB, société de droit lituanien
-        dont le siège est situé Švitrigailos g. 34, LT-03230 Vilnius, Lituanie.
+        Le site internet est hébergé par la société Vercel Inc., dont le siège
+        social est situé au 340 S Lemon Ave #4133, Walnut, CA 91789, États-Unis
+        (site internet : https://vercel.com).
       </p>
 
-      <h2 className="text-lg font-semibold text-zinc-900">Propriété intellectuelle</h2>
+      <h2 className="text-lg font-semibold text-zinc-900">4. Propriété intellectuelle</h2>
       <p>
-        L'ensemble des contenus, marques et données du Service est protégé par
-        le droit de la propriété intellectuelle. Toute reproduction sans
-        autorisation est interdite.
+        L&apos;ensemble des contenus (textes, graphismes, interfaces, logiciels,
+        logos) présents sur le site https://recours-permis-pv.com est la
+        propriété exclusive de DIXIT LLC ou de ses partenaires techniques. Toute
+        reproduction, distribution ou exploitation non autorisée de ces éléments
+        est strictement interdite.
       </p>
 
-      <h2 className="text-lg font-semibold text-zinc-900">Statut juridique du service</h2>
+      <h2 className="text-lg font-semibold text-zinc-900">5. Statut juridique du service</h2>
       <p>
-        SOS Amende est un éditeur de logiciels et de contenus d'aide. Il ne
+        SOS Amende est un éditeur de logiciels et de contenus d&apos;aide. Il ne
         fournit ni ne revendique la fourniture de prestations de conseil
-        juridique. Les contenus générés sont fondés sur des règles
-        procédurales de droit commun, vérifiées à la date de leur mise en
-        ligne.
+        juridique. Les contenus générés sont fondés sur des règles procédurales
+        de droit commun, vérifiées à la date de leur mise en ligne.
       </p>
     </LegalPage>
   );
