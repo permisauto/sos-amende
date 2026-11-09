@@ -1,10 +1,13 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("@/lib/dal", () => ({ requireJuristeRedacteur: vi.fn() }));
+vi.mock("@/lib/dal", () => ({
+  requireJuristeRedacteur: vi.fn(),
+  requireJuriste: vi.fn(),
+}));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    dossier: { findUnique: vi.fn() },
+    dossier: { findUnique: vi.fn(), updateMany: vi.fn() },
     dossierFaille: {
       findFirst: vi.fn(),
       findMany: vi.fn(),
@@ -16,11 +19,14 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 import { prisma } from "@/lib/prisma";
-import { requireJuristeRedacteur } from "@/lib/dal";
-import { ecarterCandidats, rejeterFaille } from "./actions";
+import { requireJuriste, requireJuristeRedacteur } from "@/lib/dal";
+import { ecarterCandidats, prendreEnChargeDossier, rejeterFaille } from "./actions";
 
 const mockPrisma = prisma as unknown as {
-  dossier: { findUnique: ReturnType<typeof vi.fn> };
+  dossier: {
+    findUnique: ReturnType<typeof vi.fn>;
+    updateMany: ReturnType<typeof vi.fn>;
+  };
   dossierFaille: {
     findFirst: ReturnType<typeof vi.fn>;
     findMany: ReturnType<typeof vi.fn>;
@@ -42,6 +48,10 @@ function form(donnees: Record<string, string | string[]>) {
 beforeEach(() => {
   vi.clearAllMocks();
   (requireJuristeRedacteur as ReturnType<typeof vi.fn>).mockResolvedValue({
+    id: "juriste-1",
+    role: "JURISTE",
+  });
+  (requireJuriste as ReturnType<typeof vi.fn>).mockResolvedValue({
     id: "juriste-1",
     role: "JURISTE",
   });
@@ -95,6 +105,33 @@ describe("rejeterFaille (écartement individuel)", () => {
     });
     const evenement = mockPrisma.dossierEvent.create.mock.calls[0][0];
     expect(evenement.data.detail).toContain("Faits non transposables au dossier");
+  });
+});
+
+describe("prendreEnChargeDossier (PAYE → EN_ATTENTE_VALIDATION)", () => {
+  it("refuse un dossier qui n'est pas PAYE", async () => {
+    mockPrisma.dossier.updateMany.mockResolvedValue({ count: 0 });
+    const res = await prendreEnChargeDossier(
+      undefined,
+      form({ id: "dossier-1" }),
+    );
+    expect(res?.error).toContain("statut PAYE attendu");
+    expect(mockPrisma.dossierEvent.create).not.toHaveBeenCalled();
+  });
+
+  it("bascule le dossier PAYE et trace l'événement", async () => {
+    mockPrisma.dossier.updateMany.mockResolvedValue({ count: 1 });
+    const res = await prendreEnChargeDossier(
+      undefined,
+      form({ id: "dossier-1" }),
+    );
+    expect(res).toEqual({ ok: true });
+    const maj = mockPrisma.dossier.updateMany.mock.calls[0][0];
+    expect(maj).toMatchObject({
+      where: { id: "dossier-1", statut: "PAYE" },
+      data: { statut: "EN_ATTENTE_VALIDATION" },
+    });
+    expect(mockPrisma.dossierEvent.create).toHaveBeenCalled();
   });
 });
 
