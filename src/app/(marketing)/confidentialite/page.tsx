@@ -64,7 +64,7 @@ export default function ConfidentialitePage() {
         Vous disposez d'un droit d'accès, de rectification, d'effacement, de
         limitation, d'opposition et de portabilité de vos données, ainsi que du
         droit de définir des directives post-mortem. Vous pouvez les exercer à
-        tout moment à l'adresse <span className="font-medium">dpo@recours-permis-pv.com</span>{" "}
+        tout moment à l'adresse <span className="font-medium">contact@recours-permis-pv.com</span>{" "}
         en joignant toute pièce justifiant votre identité. Vous disposez
         également d'un droit de réclamation auprès de la CNIL.
       </p>
@@ -103,7 +103,7 @@ export default function ConfidentialitePage() {
       <p>
         Pour toute information complémentaire relative à l'utilisation de vos
         données, vous pouvez contacter notre délégué à la protection des données
-        (DPO) à l'adresse <span className="font-medium">dpo@recours-permis-pv.com</span>.
+        (DPO) à l'adresse <span className="font-medium">contact@recours-permis-pv.com</span>.
         En cas de difficulté non résolue, vous pouvez saisir la CNIL.
       </p>
 

@@ -274,7 +274,7 @@ export default function CgvPage() {
         Règlement (UE) 2016/679 (RGPD) et à la loi Informatique et Libertés.
         Le Client dispose d&apos;un droit d&apos;accès, de rectification, d&apos;effacement,
         de limitation, d&apos;opposition et de portabilité, exerçable à l&apos;adresse
-        <span className="font-medium"> dpo@recours-permis-pv.com</span>, ainsi
+        <span className="font-medium"> contact@recours-permis-pv.com</span>, ainsi
         que d&apos;un droit de réclamation auprès de la CNIL. Les détails du
         traitement figurent dans la politique de confidentialité du Site.
       </p>
@@ -282,7 +282,7 @@ export default function CgvPage() {
       <h2 className="text-lg font-semibold text-zinc-900">Article 12. Réclamations et règlement amiable</h2>
       <p>
         Le Client peut à tout moment adresser une réclamation par courrier
-        électronique à <strong>mediation@recours-permis-pv.com</strong>, en
+        électronique à <strong>contact@recours-permis-pv.com</strong>, en
         indiquant ses coordonnées, le numéro de son Dossier et l&apos;objet de sa
         réclamation.
       </p>
