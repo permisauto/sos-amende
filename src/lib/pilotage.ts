@@ -21,6 +21,7 @@ export type FunnelDossier = {
   aValider: number;
   enAttenteSignature: number;
   enAttentePaiement: number;
+  payes: number;
   envoyes: number;
   resolus: number;
   rejetes: number;
@@ -34,6 +35,7 @@ export async function chargerFunnel(): Promise<FunnelDossier> {
     aValider: 0,
     enAttenteSignature: 0,
     enAttentePaiement: 0,
+    payes: 0,
     envoyes: 0,
     resolus: 0,
     rejetes: 0,
@@ -51,6 +53,7 @@ export async function chargerFunnel(): Promise<FunnelDossier> {
       aValider: n("EN_ATTENTE_VALIDATION") + n("A_VERIFIER") + n("PRET"),
       enAttenteSignature: n("EN_ATTENTE_PRE_SIGNATURE"),
       enAttentePaiement: n("EN_ATTENTE_PAIEMENT") + n("BROUILLON"),
+      payes: n("PAYE"),
       envoyes: n("ENVOYE"),
       resolus: n("RESOLU"),
       rejetes: n("REJETE"),

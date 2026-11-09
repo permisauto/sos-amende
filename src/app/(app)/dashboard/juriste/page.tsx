@@ -12,6 +12,7 @@ const statusLabels: Record<string, string> = {
   BROUILLON: "Brouillon",
   EN_ANALYSE: "En analyse",
   EN_ATTENTE_PAIEMENT: "En attente de paiement",
+  PAYE: "Payé — à prendre en charge",
   EN_ATTENTE_VALIDATION: "À valider par le juriste",
   EN_ATTENTE_PRE_SIGNATURE: "En attente de signature client",
   A_VERIFIER: "À vérifier",
@@ -28,6 +29,7 @@ const statusValues = [
   "BROUILLON",
   "EN_ANALYSE",
   "EN_ATTENTE_PAIEMENT",
+  "PAYE",
   "EN_ATTENTE_VALIDATION",
   "EN_ATTENTE_PRE_SIGNATURE",
   "A_VERIFIER",
@@ -42,6 +44,7 @@ const statusValues = [
 type Statut = (typeof statusValues)[number];
 
 const filters = [
+  { value: "PAYE", label: "Payés — à prendre en charge" },
   { value: "EN_ATTENTE_VALIDATION", label: "À valider / à approuver" },
   { value: "EN_ATTENTE_PRE_SIGNATURE", label: "En attente de signature" },
   { value: "EN_ATTENTE_PAIEMENT", label: "En attente de paiement" },
@@ -54,6 +57,7 @@ const filterStatuts: Record<string, Statut[] | "ALL"> = {
   EN_ATTENTE_VALIDATION: ["EN_ATTENTE_VALIDATION", "A_VERIFIER", "PRET"],
   EN_ATTENTE_PRE_SIGNATURE: ["EN_ATTENTE_PRE_SIGNATURE"],
   EN_ATTENTE_PAIEMENT: ["EN_ATTENTE_PAIEMENT", "BROUILLON"],
+  PAYE: ["PAYE"],
   EN_ANALYSE: ["EN_ANALYSE"],
   ENVOYE: ["ENVOYE"],
   ALL: "ALL",
@@ -64,6 +68,11 @@ const stagesJuriste: Array<{
   label: string;
   statuts: string[];
 }> = [
+  {
+    key: "paye",
+    label: "Payés — à prendre en charge",
+    statuts: ["PAYE"],
+  },
   {
     key: "paiement",
     label: "En attente de paiement",
@@ -97,6 +106,7 @@ const statutBadge: Record<string, string> = {
   EN_ATTENTE_VALIDATION: "bg-amber-100 text-amber-800",
   EN_ATTENTE_PRE_SIGNATURE: "bg-indigo-100 text-indigo-800",
   EN_ATTENTE_PAIEMENT: "bg-zinc-100 text-zinc-600",
+  PAYE: "bg-emerald-100 text-emerald-800",
   PRET: "bg-amber-100 text-amber-800",
   A_VERIFIER: "bg-indigo-100 text-indigo-800",
   ENVOYE: "bg-emerald-100 text-emerald-800",

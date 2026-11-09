@@ -5,6 +5,7 @@ import { useActionState } from "react";
 import {
   enregistrerDecisionOmp,
   envoyerContestation,
+  prendreEnChargeDossier,
   rejeterDossier,
   retournerDossier,
   validerDossier,
@@ -252,6 +253,31 @@ export function EnvoyerContestationForm({
           Le client reçoit par e-mail un lien de dépôt assisté : il dépose
           lui-même sa contestation sur le portail officiel {organisme} (jamais
           de soumission automatique).
+        </p>
+      )}
+    </form>
+  );
+}
+
+export function PrendreEnChargeForm({ dossierId }: { dossierId: string }) {
+  const [state, formAction, pending] = useActionState(
+    prendreEnChargeDossier,
+    undefined,
+  );
+  return (
+    <form action={formAction} className="flex flex-col gap-2">
+      <input type="hidden" name="id" value={dossierId} />
+      <button
+        type="submit"
+        disabled={pending}
+        data-testid="prendre-en-charge"
+        className="rounded-full bg-emerald-600 px-6 py-3 font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {pending ? "Prise en charge…" : "Prendre en charge le dossier"}
+      </button>
+      {state?.error && (
+        <p className="rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700">
+          {state.error}
         </p>
       )}
     </form>

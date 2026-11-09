@@ -26,6 +26,7 @@ export default async function PilotagePage() {
 
   const etapes = [
     { label: "En analyse", valeur: funnel.enAnalyse },
+    { label: "Payés", valeur: funnel.payes },
     { label: "À valider", valeur: funnel.aValider },
     { label: "En attente signature", valeur: funnel.enAttenteSignature },
     { label: "Envoyés", valeur: funnel.envoyes },

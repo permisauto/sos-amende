@@ -1,9 +1,9 @@
-"use server";
+﻿"use server";
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { requireJuristeRedacteur } from "@/lib/dal";
+import { requireJuriste, requireJuristeRedacteur } from "@/lib/dal";
 import {
   FAILLE_IDS,
   detecterFailles,
@@ -1925,4 +1925,44 @@ export async function recupererPreuvesApi(
   revalidatePath(`/dashboard/juriste/${dossierId}`);
   revalidatePath(`/dashboard/cases/${dossierId}`);
   return { ok: true, ajoutees, verifiees, alertes };
+}
+
+
+export type PriseEnChargeState = { error?: string; ok?: boolean } | undefined;
+
+/**
+ * « Prendre en charge » un dossier payé (statut PAYE) : bascule le dossier en
+ * EN_ATTENTE_VALIDATION pour que le juriste commence le traitement. Verrou
+ * conditionnel PAYE → EN_ATTENTE_VALIDATION (idempotent).
+ */
+export async function prendreEnChargeDossier(
+  _prev: PriseEnChargeState,
+  formData: FormData,
+): Promise<PriseEnChargeState> {
+  await requireJuriste();
+
+  const dossierId = String(formData.get("id") ?? "");
+  if (!dossierId) return { error: "Dossier manquant." };
+
+  if (isDemoId(dossierId)) return { ok: true };
+
+  const maj = await prisma.dossier.updateMany({
+    where: { id: dossierId, statut: "PAYE" },
+    data: { statut: "EN_ATTENTE_VALIDATION" },
+  });
+  if (maj.count === 0) {
+    return { error: "Le dossier n'est pas en attente de prise en charge (statut PAYE attendu)." };
+  }
+
+  await prisma.dossierEvent.create({
+    data: {
+      dossierId,
+      type: "EN_ATTENTE",
+      detail: "Dossier payé pris en charge par le juriste",
+    },
+  });
+
+  revalidatePath("/dashboard/juriste");
+  revalidatePath("/dashboard/juriste/" + dossierId);
+  return { ok: true };
 }

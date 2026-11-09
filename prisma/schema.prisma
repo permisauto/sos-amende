@@ -553,6 +553,7 @@ enum DossierStatut {
   EN_ANALYSE
   A_VERIFIER
   EN_ATTENTE_PAIEMENT // faille détectée mais crédit manquant — le client finalise son virement
+  PAYE // virement validé par l'admin — dossier payé, en attente de prise en charge par le juriste
   EN_ATTENTE_VALIDATION // lettre générée, soumise à la validation du juriste
   EN_ATTENTE_PRE_SIGNATURE // lettre validée par le juriste, en attente de la signature du client (cas B)
   AVOCAT_REQUIS // délit détecté : aucun traitement SOS Amende, le client doit consulter un avocat (aucun débit)

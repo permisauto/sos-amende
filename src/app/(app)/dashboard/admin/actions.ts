@@ -620,7 +620,7 @@ export async function validerVirement(
           // Un contentieux est payé 149 € : aucun crédit n'est débité — le
           // remboursement éventuel est manuel et tracé (`REFUND_DUE`).
           data: {
-            statut: "EN_ATTENTE_VALIDATION",
+            statut: "PAYE",
             ...(estContentieux ? {} : { creditDebite: true }),
           },
         });
@@ -629,8 +629,8 @@ export async function validerVirement(
             dossierId: dossierLie.id,
             type: "EN_ATTENTE",
             detail: estContentieux
-              ? "Paiement contentieux validé (149 €) — dossier transmis au juriste"
-              : "Paiement validé — dossier transmis au juriste",
+              ? "Paiement contentieux validé (149 €) — dossier payé, en attente de prise en charge"
+              : "Paiement validé — dossier payé, en attente de prise en charge par le juriste",
           },
         });
         return false;

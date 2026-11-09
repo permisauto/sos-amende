@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireJuriste } from "@/lib/dal";
 import { storageUrl } from "@/lib/storage";
-import { JuristeActions, DecisionOmpForm } from "./juriste-actions";
+import { JuristeActions, DecisionOmpForm, PrendreEnChargeForm } from "./juriste-actions";
 import { VerificationFailles } from "./verification-failles";
 import { LettreEdition } from "./lettre-edition";
 import { RefereEdition } from "./refere-edition";
@@ -77,6 +77,7 @@ const statusLabels: Record<string, string> = {
   BROUILLON: "Brouillon",
   EN_ANALYSE: "En analyse",
   EN_ATTENTE_PAIEMENT: "En attente de paiement",
+  PAYE: "Payé — à prendre en charge",
   EN_ATTENTE_VALIDATION: "À valider",
   EN_ATTENTE_PRE_SIGNATURE: "En attente de signature client",
   A_VERIFIER: "À vérifier",
@@ -90,6 +91,10 @@ const statusLabels: Record<string, string> = {
 };
 
 const statutChip: Record<string, { label: string; cls: string }> = {
+  PAYE: {
+    label: "Payé — à prendre en charge",
+    cls: "bg-emerald-100 text-emerald-800",
+  },
   EN_ATTENTE_PAIEMENT: {
     label: "En attente de paiement",
     cls: "bg-zinc-100 text-zinc-600",
@@ -827,6 +832,24 @@ export default async function JuristeCasePage(
           {forclusion48si.joursDepasse > 1 ? "s" : ""} de dépassement). Ne
           transmettez pas la contestation sans avoir vérifié le délai avec le
           client.
+        </div>
+      )}
+
+      {item.statut === "PAYE" && (
+        <div
+          data-testid="banniere-prise-en-charge"
+          className="mt-4 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3"
+        >
+          <p className="text-sm font-semibold text-emerald-900">
+            Dossier payé — en attente de prise en charge
+          </p>
+          <p className="mt-0.5 text-xs text-emerald-700">
+            Le virement a été validé. Prenez le dossier en charge pour
+            commencer la validation de la lettre.
+          </p>
+          <div className="mt-3">
+            <PrendreEnChargeForm dossierId={item.id} />
+          </div>
         </div>
       )}
 

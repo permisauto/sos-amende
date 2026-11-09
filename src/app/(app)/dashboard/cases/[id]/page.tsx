@@ -27,6 +27,7 @@ const statusLabels: Record<string, string> = {
   BROUILLON: "Brouillon",
   EN_ANALYSE: "En analyse",
   EN_ATTENTE_PAIEMENT: "Paiement en attente",
+  PAYE: "Payé",
   EN_ATTENTE_VALIDATION: "Validation du juriste",
   EN_ATTENTE_PRE_SIGNATURE: "À signer",
   A_VERIFIER: "À vérifier",
