@@ -89,12 +89,6 @@ export default async function DashboardLayout({
                   >
                     Lettres vérifiées
                   </Link>
-                  <Link
-                    href="/dashboard/admin/radars"
-                    className="hover:text-zinc-900"
-                  >
-                    Radars
-                  </Link>
                   <Link href="/dashboard/admin/paiements" className="hover:text-zinc-900">
                     Paiements
                   </Link>
