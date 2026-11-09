@@ -167,7 +167,7 @@ test("synchronisation : pipeline juriste, lettres proposées, signature visible 
   await loginAs(pa, "e2e-admin@test.local");
   await pa.goto("/dashboard/admin/dossiers");
   await expect(
-    pa.getByText("Étape 7 / 7 — Envoyé", { exact: true }).first(),
+    pa.getByText("Étape 8 / 8 — Envoyé", { exact: true }).first(),
   ).toBeVisible();
   await ctxAdmin.close();
 });
