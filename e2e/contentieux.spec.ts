@@ -43,6 +43,11 @@ async function validerLettreJuriste(
   await loginAsJuriste(page);
 
   await page.goto(`/dashboard/juriste/${dossierId}`);
+  // Dossier payé (statut PAYE après validation du virement) : prise en charge
+  // avant de pouvoir valider la lettre.
+  await page
+    .getByRole("button", { name: "Prendre en charge le dossier" })
+    .click();
   await page
     .getByLabel("Canal d'envoi de la contestation")
     .selectOption("ANTAI");
@@ -142,7 +147,7 @@ test("contentieux : 149 € payés avant validation et envoi", async ({
 
   await page.goto(`/dashboard/cases/${dossierId}`);
   await expect(
-    page.getByText("Validation du juriste").first(),
+    page.getByText("Payé", { exact: true }).first(),
   ).toBeVisible();
 
   // Le juriste peut alors valider la lettre (plus de blocage de facturation).
