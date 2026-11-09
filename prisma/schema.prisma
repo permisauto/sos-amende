@@ -474,6 +474,10 @@ model Payment {
   status           String
   kind             String    @default("AMENDE") // AMENDE | SUSPENSION
   optionLrar       Boolean   @default(false) // +10 € lettre recommandée avec accusé de réception
+  // Renonciation au droit de rétractation (CGV Art. 4) — consentement recueilli
+  // avant l'exécution immédiate du service. Trace : horodatage + texte exact accepté.
+  renonciationRetractationLe    DateTime?
+  renonciationRetractationTexte String? @db.Text
   preuveUrl        String? // /uploads/... — preuve du virement téléversée par le client
   preuveNom        String? // nom du fichier d'origine
   preuveUploadedAt DateTime?

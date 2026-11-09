@@ -8,6 +8,7 @@ import {
   PRIX_OPTION_LRAR,
 } from "@/lib/tarifs";
 import { RIB } from "@/lib/rib";
+import { TEXTE_RENONCIATION_RETRACTATION } from "@/lib/consentements";
 
 export function PaiementPublicClient({
   initialType,
@@ -29,6 +30,7 @@ export function PaiementPublicClient({
   const [email, setEmail] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [optionLrar, setOptionLrar] = useState(false);
+  const [renonciation, setRenonciation] = useState(false);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [paymentId, setPaymentId] = useState<string | null>(null);
@@ -40,13 +42,14 @@ export function PaiementPublicClient({
 
   async function handleVirement() {
     if (!nom || !prenom || !email || !whatsapp) return setMessage("Nom, prénom, email et WhatsApp requis.");
+    if (!renonciation) return setMessage("Vous devez accepter la renonciation au droit de rétractation pour continuer.");
     setPending(true);
     setMessage(null);
     try {
       const res = await fetch("/api/paiement/virement", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type, nom, prenom, email, whatsapp, optionLrar }),
+        body: JSON.stringify({ type, nom, prenom, email, whatsapp, optionLrar, renonciationRetractation: true }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Erreur");
@@ -122,6 +125,13 @@ export function PaiementPublicClient({
           </span>
         </label>
         <p className="mt-3 text-2xl font-bold">{libelleMontant(type, optionLrar)}</p>
+        <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-amber-300 bg-amber-50/60 p-3">
+          <input type="checkbox" checked={renonciation} onChange={(e) => setRenonciation(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-amber-600" />
+          <span className="text-sm text-amber-900">
+            <span className="font-semibold">Renonciation au droit de rétractation (obligatoire)</span>
+            <span className="mt-0.5 block text-xs text-amber-800">{TEXTE_RENONCIATION_RETRACTATION}</span>
+          </span>
+        </label>
         <button onClick={handleVirement} disabled={pending} className="mt-4 w-full rounded-full bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
           {pending ? "Enregistrement…" : `Valider et recevoir le RIB (${libelleMontant(type, optionLrar)})`}
         </button>

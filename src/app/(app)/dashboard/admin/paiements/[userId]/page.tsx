@@ -224,6 +224,15 @@ export default async function FicheClientPaiementPage(props: {
                               LRAR +{PRIX_OPTION_LRAR}&nbsp;€
                             </span>
                           )}
+                          {p.renonciationRetractationLe && (
+                            <span
+                              className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800"
+                              title="Renonciation au droit de rétractation recueillie"
+                            >
+                              Rétractation renoncée le{" "}
+                              {new Date(p.renonciationRetractationLe).toLocaleDateString("fr-FR")}
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="px-4 py-3 align-top">

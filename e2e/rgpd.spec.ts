@@ -19,6 +19,7 @@ test("RGPD : export des données (portabilité) puis effacement du compte", asyn
       prenom: "Jean",
       email,
       whatsapp: "+33612345678",
+      renonciationRetractation: true,
     },
   });
   expect(res.ok()).toBeTruthy();

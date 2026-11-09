@@ -65,6 +65,9 @@ test("paiement virement (inscription inversée) : payer → compte créé → cr
     .getByRole("textbox", { name: "WhatsApp *", exact: true })
     .fill("+33612345678");
   await page
+    .getByText("Renonciation au droit de rétractation (obligatoire)")
+    .click();
+  await page
     .getByRole("button", { name: "Valider et recevoir le RIB" })
     .click();
 

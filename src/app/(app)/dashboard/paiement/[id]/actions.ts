@@ -11,6 +11,7 @@ import {
   PRIX_OPTION_LRAR,
 } from "@/lib/tarifs";
 import { RIB } from "@/lib/rib";
+import { TEXTE_RENONCIATION_RETRACTATION } from "@/lib/consentements";
 
 export type VirementState = { ok?: boolean; error?: string; paymentId?: string } | undefined;
 
@@ -22,9 +23,13 @@ export async function payerParVirement(_prev: VirementState, formData: FormData)
   const email = String(formData.get("email") ?? "").trim();
   const whatsapp = String(formData.get("whatsapp") ?? "").trim();
   const optionLrar = formData.get("optionLrar") === "1";
+  const renonciationRetractation = formData.get("renonciationRetractation") === "1";
 
   if (!nom || !prenom || !email) return { error: "Nom, prénom et email requis." };
   if (!whatsapp) return { error: "Numéro WhatsApp requis." };
+  if (!renonciationRetractation) {
+    return { error: "Vous devez accepter la renonciation au droit de rétractation pour continuer." };
+  }
 
   const dossier = await prisma.dossier.findFirst({ where: { id: dossierId, userId: user.id } });
   if (!dossier) return { error: "Dossier introuvable." };
@@ -50,6 +55,8 @@ export async function payerParVirement(_prev: VirementState, formData: FormData)
         status: "PENDING_VIREMENT",
         kind,
         optionLrar,
+        renonciationRetractationLe: new Date(),
+        renonciationRetractationTexte: TEXTE_RENONCIATION_RETRACTATION,
       },
     }),
     prisma.dossier.update({

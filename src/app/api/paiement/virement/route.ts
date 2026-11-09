@@ -5,6 +5,7 @@ import { Resend } from "resend";
 import { consommerCreneau } from "@/lib/rate-limit";
 import { montantAvecOption, libelleMontant, PRIX_OPTION_LRAR } from "@/lib/tarifs";
 import { RIB } from "@/lib/rib";
+import { TEXTE_RENONCIATION_RETRACTATION } from "@/lib/consentements";
 
 /** Échappement HTML minimal : les valeurs d'un formulaire public sont
  *  réinjectées dans un e-mail — jamais de HTML brut (anti-injection). */
@@ -24,12 +25,22 @@ const schema = z.object({
   whatsapp: z.string().min(6),
   dossierId: z.string().optional(),
   optionLrar: z.boolean().optional().default(false),
+  renonciationRetractation: z.boolean(),
 });
 
 export async function POST(req: Request) {
   const parsed = schema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: "Champs requis manquants." }, { status: 400 });
-  const { type, nom, prenom, email, whatsapp, dossierId, optionLrar } = parsed.data;
+  const { type, nom, prenom, email, whatsapp, dossierId, optionLrar, renonciationRetractation } = parsed.data;
+
+  // Garde-fou CGV Art. 7 : sans renonciation expresse au droit de rétractation
+  // (exécution immédiate), la commande ne peut pas être validée.
+  if (renonciationRetractation !== true) {
+    return NextResponse.json(
+      { error: "La renonciation au droit de rétractation doit être acceptée pour valider la commande." },
+      { status: 400 },
+    );
+  }
 
   // Anti-abus : la route fait un upsert utilisateur + paiement NON authentifié
   // (création d'un compte par email). Rate-limit par email ET par IP.
@@ -89,7 +100,17 @@ export async function POST(req: Request) {
       orderBy: { createdAt: "desc" },
     });
     const payment = paiementExistant ?? await prisma.payment.create({
-      data: { userId: user.id, amount: montant, currency: "EUR", status: "PENDING_VIREMENT", kind: type, optionLrar, dossierId: dossierLieId },
+      data: {
+        userId: user.id,
+        amount: montant,
+        currency: "EUR",
+        status: "PENDING_VIREMENT",
+        kind: type,
+        optionLrar,
+        dossierId: dossierLieId,
+        renonciationRetractationLe: new Date(),
+        renonciationRetractationTexte: TEXTE_RENONCIATION_RETRACTATION,
+      },
     });
     paymentId = payment.id;
     ref = payment.id.slice(0, 8).toUpperCase();

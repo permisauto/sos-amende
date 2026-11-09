@@ -5,6 +5,7 @@ import { payerParVirement } from "./actions";
 import { PreuveVirementUpload } from "@/components/preuve-virement-upload";
 import { libelleMontantDossier, libelleMontantCentimesDossier, PRIX_OPTION_LRAR } from "@/lib/tarifs";
 import { RIB } from "@/lib/rib";
+import { TEXTE_RENONCIATION_RETRACTATION } from "@/lib/consentements";
 
 export function PaiementForm({
   dossierId,
@@ -26,6 +27,7 @@ export function PaiementForm({
   const [email, setEmail] = useState(defaultEmail);
   const [whatsapp, setWhatsapp] = useState("");
   const [optionLrar, setOptionLrar] = useState(false);
+  const [renonciation, setRenonciation] = useState(false);
 
   const [virementConfirme, setVirementConfirme] = useState(false);
   const RIB_IBAN = RIB.iban;
@@ -119,6 +121,13 @@ export function PaiementForm({
           </span>
         </label>
         <p className="mt-3 text-2xl font-bold">{libelleMontantDossier(type, voie, optionLrar)}</p>
+        <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-amber-300 bg-amber-50/60 p-3">
+          <input type="checkbox" checked={renonciation} onChange={(e) => setRenonciation(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-amber-600" />
+          <span className="text-sm text-amber-900">
+            <span className="font-semibold">Renonciation au droit de rétractation (obligatoire)</span>
+            <span className="mt-0.5 block text-xs text-amber-800">{TEXTE_RENONCIATION_RETRACTATION}</span>
+          </span>
+        </label>
         <form action={virementAction} className="mt-4">
           <input type="hidden" name="dossierId" value={dossierId} />
           <input type="hidden" name="nom" value={nom} />
@@ -126,7 +135,8 @@ export function PaiementForm({
           <input type="hidden" name="email" value={email} />
           <input type="hidden" name="whatsapp" value={whatsapp} />
           <input type="hidden" name="optionLrar" value={optionLrar ? "1" : "0"} />
-          <button disabled={virementPending} className="w-full rounded-full bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+          <input type="hidden" name="renonciationRetractation" value={renonciation ? "1" : "0"} />
+          <button disabled={virementPending || !renonciation} className="w-full rounded-full bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
             {virementPending ? "Enregistrement…" : `Valider et recevoir le RIB (${libelleMontantDossier(type, voie, optionLrar)})`}
           </button>
           {virementState?.error && <p className="mt-2 text-xs text-red-600">{virementState.error}</p>}

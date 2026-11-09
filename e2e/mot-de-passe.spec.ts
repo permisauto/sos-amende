@@ -16,7 +16,7 @@ test("première connexion : création obligatoire du mot de passe puis reconnexi
   // Compte jetable sans mot de passe (créé via la route de paiement).
   const email = `e2e-mdp-${Date.now()}@test.local`;
   const res = await page.request.post("/api/paiement/virement", {
-    data: { type: "AMENDE", nom: "DUPONT", prenom: "Jean", email, whatsapp: "+33612345678" },
+    data: { type: "AMENDE", nom: "DUPONT", prenom: "Jean", email, whatsapp: "+33612345678", renonciationRetractation: true },
   });
   expect(res.ok()).toBeTruthy();
 

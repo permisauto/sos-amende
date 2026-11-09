@@ -25,6 +25,9 @@ test("refus de virement : motif obligatoire, décision tracée côté admin, ban
     .getByRole("textbox", { name: "WhatsApp *", exact: true })
     .fill("+33699887766");
   await page
+    .getByText("Renonciation au droit de rétractation (obligatoire)")
+    .click();
+  await page
     .getByRole("button", { name: "Valider et recevoir le RIB" })
     .click();
   await expect(page.getByText(/Virement enregistré/)).toBeVisible();

@@ -77,6 +77,7 @@ export async function creerCompteE2E(
       prenom: overrides.prenom ?? "Jean",
       email,
       whatsapp: overrides.whatsapp ?? "+33612345678",
+      renonciationRetractation: true,
     },
   });
   expect(res.ok()).toBeTruthy();
