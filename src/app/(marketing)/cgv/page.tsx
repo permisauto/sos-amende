@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 export default function CgvPage() {
   return (
-    <LegalPage title="Conditions générales de vente" updatedAt="9 novembre 2026">
+    <LegalPage title="Conditions générales de vente" updatedAt="10 novembre 2026">
       <h2 className="text-lg font-semibold text-zinc-900">Article 1. Champ d&apos;application et identification du vendeur</h2>
       <p>
         Les présentes conditions générales de vente (« CGV ») régissent toutes
@@ -109,13 +109,17 @@ export default function CgvPage() {
       <p>
         Le crédit acheté est porté au compte du Client et consommé à l&apos;ouverture
         d&apos;un Dossier. En cas de rejet du Dossier par le juriste partenaire, le
-        crédit est rendu au Client et peut être réutilisé. Pour un Dossier
+        Client peut, à son choix, conserver le crédit, qui peut être réutilisé,
+        ou en demander le remboursement par virement. Pour un Dossier
         relevant du contentieux contraventionnel, le paiement est rattaché au
         Dossier (aucun crédit générique) et remboursé en cas de rejet.
       </p>
       <p>
         Tout remboursement dû au Client est effectué par virement dans un délai
         maximal de quatorze (14) jours à compter de la décision qui l&apos;ouvre.
+      </p>
+      <p>
+        La Politique de remboursement, accessible sur le Site, complète le présent article.
       </p>
 
       <h2 className="text-lg font-semibold text-zinc-900">Article 4 bis. Délits</h2>
@@ -304,19 +308,6 @@ export default function CgvPage() {
         compétentes.
       </p>
 
-      <h2 className="text-lg font-semibold text-zinc-900">Article 12 bis. Médiation de la consommation</h2>
-      <p>
-        Conformément aux articles L. 612-1 et suivants du Code de la
-        consommation, le Client Consommateur peut recourir gratuitement à un
-        médiateur de la consommation en vue de la résolution amiable de tout
-        litige l&apos;opposant à SOS Amende. L&apos;adhésion de SOS Amende auprès d&apos;un
-        organisme de médiation de la consommation agréé est en cours de
-        finalisation ; ses coordonnées seront communiquées dans les présentes
-        CGV et sur le Site dès l&apos;adhésion effective. Cette médiation est
-        gratuite pour le consommateur, indépendante, et ne prive le Client
-        d&apos;aucun recours : il reste libre de saisir les juridictions compétentes.
-      </p>
-
       <h2 className="text-lg font-semibold text-zinc-900">Article 13. Force majeure</h2>
       <p>
         SOS Amende ne saurait être tenue responsable en cas d&apos;inexécution de ses
@@ -333,17 +324,13 @@ export default function CgvPage() {
         celles en vigueur à la date de la Commande.
       </p>
       <p>
-        Les présentes CGV sont régies par les lois de l&apos;État du Wyoming
-        (États-Unis). Toutefois, si le Client réside dans l&apos;Union européenne, il
-        bénéficie en toute hypothèse des dispositions impératives et
-        protectrices de la loi de son pays de résidence habituelle (Règlement
-        européen Rome I), lesquelles prévalent sur le droit américain.
-      </p>
-      <p>
-        En cas de litige, le Client Consommateur peut saisir, à son choix, la
-        juridiction du lieu où il demeure ou les tribunaux compétents en
-        application du droit applicable. À défaut de résolution amiable, tout
-        litige avec un Client professionnel relève des tribunaux compétents.
+        Les présentes CGV sont soumises au droit français. Le Client
+        Consommateur bénéficie en toute hypothèse des dispositions impératives
+        de protection du consommateur du pays où il réside. En cas de litige, le
+        Client Consommateur peut saisir, à son choix, la juridiction du lieu où
+        il demeure ou les tribunaux compétents en application du droit
+        applicable. À défaut de résolution amiable, tout litige avec un Client
+        professionnel relève des tribunaux compétents.
       </p>
     </LegalPage>
   );
