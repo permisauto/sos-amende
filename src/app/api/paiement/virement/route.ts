@@ -142,7 +142,7 @@ export async function POST(req: Request) {
         from,
         to: email,
         subject: "SOS Amende — votre compte est créé, virement en attente",
-        html: `<p>Bonjour ${echapper(prenom)},</p><p>Votre compte SOS Amende (${echapper(email)}) est créé. Votre dossier ${type} est en attente de virement ${libelle}.</p>${optionLinee}${offreLinee}<p><strong>RIB :</strong> ${echapper(RIB.iban)} / BIC ${echapper(RIB.bic)} / Titulaire ${echapper(RIB.titulaire)}</p><p><strong>Référence obligatoire :</strong> ${ref} — ${echapper(prenom)} ${echapper(nom)}</p><p>Dès que le virement est effectué, envoyez la référence + capture par email à contact@recours-permis-pv.com ou WhatsApp ${echapper(whatsapp)}. Un juriste validera sous 24h et débloquera votre lettre. Accédez à votre espace : ${(process.env.NEXT_PUBLIC_APP_URL ?? "https://recours-permis-pv.com")}/dashboard</p>`,
+        html: `<p>Bonjour ${echapper(prenom)},</p><p>Votre compte SOS Amende (${echapper(email)}) est créé. Votre dossier ${type} est en attente de virement ${libelle}.</p>${optionLinee}${offreLinee}<p><strong>RIB :</strong> ${echapper(RIB.iban)} / BIC ${echapper(RIB.bic)} / Titulaire ${echapper(RIB.titulaire)}</p><p><strong>Référence obligatoire :</strong> ${ref} — ${echapper(prenom)} ${echapper(nom)}</p><p>Dès que le virement est effectué, envoyez la référence + capture par email à contact@recours-permis-pv.com. Un juriste validera sous 24h et débloquera votre lettre. Accédez à votre espace : ${(process.env.NEXT_PUBLIC_APP_URL ?? "https://recours-permis-pv.com")}/dashboard</p>`,
       });
     } else {
       console.log(`[DEV] Email confirmation pour ${email} (sans clé Resend) — ref ${ref}`);

@@ -85,7 +85,7 @@ export async function payerParVirement(_prev: VirementState, formData: FormData)
         from,
         to: email,
         subject: "SOS Amende — votre compte est créé, virement en attente",
-        html: `<p>Bonjour ${prenom},</p><p>Votre dossier ${dossier.type} est en attente de virement ${libelle}.</p>${optionLinee}<p><strong>RIB :</strong> ${RIB.iban} / BIC ${RIB.bic} / Titulaire ${RIB.titulaire}</p><p><strong>Référence :</strong> ${dossier.id.slice(0, 8).toUpperCase()} — ${prenom} ${nom}</p><p>Dès que le virement est effectué, envoyez la référence + capture par email à contact@recours-permis-pv.com ou WhatsApp ${whatsapp}. Un juriste validera sous 24h.</p>`,
+        html: `<p>Bonjour ${prenom},</p><p>Votre dossier ${dossier.type} est en attente de virement ${libelle}.</p>${optionLinee}<p><strong>RIB :</strong> ${RIB.iban} / BIC ${RIB.bic} / Titulaire ${RIB.titulaire}</p><p><strong>Référence :</strong> ${dossier.id.slice(0, 8).toUpperCase()} — ${prenom} ${nom}</p><p>Dès que le virement est effectué, envoyez la référence + capture par email à contact@recours-permis-pv.com. Un juriste validera sous 24h.</p>`,
       });
     }
   } catch (e) {

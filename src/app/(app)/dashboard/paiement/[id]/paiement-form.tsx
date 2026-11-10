@@ -111,7 +111,7 @@ export function PaiementForm({
           <p className="mt-1 flex items-center gap-2"><span className="font-semibold">BIC</span> {RIB_BIC} <button type="button" onClick={() => navigator.clipboard.writeText(RIB_BIC)} className="text-xs text-emerald-700 hover:underline">Copier</button></p>
           <p className="mt-1"><span className="font-semibold">Titulaire :</span> {RIB_TITULAIRE}</p>
           <p className="mt-1 font-mono bg-amber-50 px-1 rounded">Référence obligatoire : {dossierId.slice(0, 8).toUpperCase()} — {prenom || "Prénom"} {nom || "Nom"}</p>
-          <p className="mt-2 text-xs text-zinc-500">Dès que le virement est effectué, envoyez la référence par email <span className="font-semibold">contact@recours-permis-pv.com</span> ou WhatsApp <span className="font-semibold">+33 6 12 34 56 78</span> avec capture d'écran.</p>
+          <p className="mt-2 text-xs text-zinc-500">Dès que le virement est effectué, envoyez la référence par email <span className="font-semibold">contact@recours-permis-pv.com</span> avec capture d'écran.</p>
         </div>
         <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
           <input type="checkbox" checked={optionLrar} onChange={(e) => setOptionLrar(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-emerald-600" />
