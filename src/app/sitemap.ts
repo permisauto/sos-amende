@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://recours-permis-pv.com";
-  const routes = ["", "/pricing", "/login", "/cgv", "/confidentialite", "/mentions-legales"] as const;
+  const routes = ["", "/pricing", "/faq", "/login", "/cgv", "/confidentialite", "/mentions-legales"] as const;
   const now = new Date();
   return routes.map((route) => ({
     url: `${base}${route}`,

@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 const legal = [
+  { href: "/faq", label: "FAQ" },
   { href: "/cgv", label: "CGV" },
   { href: "/mentions-legales", label: "Mentions légales" },
   { href: "/confidentialite", label: "Confidentialité (RGPD)" },
