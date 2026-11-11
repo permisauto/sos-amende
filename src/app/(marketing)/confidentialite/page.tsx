@@ -52,6 +52,7 @@ export default function ConfidentialitePage() {
         <li>Dossiers : pendant la durée de la procédure, puis 12 mois après la clôture, avant suppression ou anonymisation ; l&apos;effacement peut être demandé à tout moment (droit d&apos;effacement) ;</li>
         <li>Preuves de paiement et pièces comptables : 10 ans (obligations comptables et fiscales) ;</li>
         <li>Journaux de connexion (logs) : 1 an ;</li>
+        <li>Formulaire de contact : les informations saisies sont utilisées pour répondre à votre demande et conservées 12 mois ;</li>
         <li>Cookies : 13 mois maximum.</li>
       </ul>
       <p>
