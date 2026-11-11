@@ -16,12 +16,12 @@ const SECTIONS: { titre: string; faqs: Faq[] }[] = [
       {
         question: "Qu'est-ce que SOS Amende ?",
         reponse:
-          "SOS Amende est un outil en ligne d'aide à la préparation de la contestation d'une amende forfaitaire (requête en exonération) ou d'une décision de rétention, de suspension ou d'invalidation du permis de conduire. Il vous guide de l'analyse de votre document jusqu'à l'envoi de votre contestation.",
+          "SOS Amende est un logiciel en ligne d'aide administrative à la préparation de la contestation d'une amende forfaitaire (requête en exonération) ou d'une décision de rétention, de suspension ou d'invalidation du permis de conduire. Il vous guide de l'analyse de votre document jusqu'à l'envoi de votre contestation.",
       },
       {
         question: "SOS Amende est-il un cabinet d'avocats ?",
         reponse:
-          "Non. SOS Amende est un éditeur de logiciels et de contenus d'aide. Il ne fournit pas de conseil juridique, n'assure aucune représentation en justice et ne garantit pas le résultat d'une contestation. Si votre situation relève d'un délit, nous vous orientons vers un avocat.",
+          "Non. SOS Amende est un logiciel d'aide administrative. Il ne fournit pas de conseil juridique, n'assure aucune représentation en justice et ne garantit pas le résultat d'une contestation. Si votre situation relève d'un délit, nous vous orientons vers un avocat.",
       },
       {
         question: "Comment se déroule la contestation, étape par étape ?",

@@ -68,7 +68,7 @@ export default function RemboursementPage() {
 
       <h2 className="text-lg font-semibold text-zinc-900">6. Résultat de la contestation</h2>
       <p>
-        SOS Amende fournit une aide à la contestation avec validation par un
+        SOS Amende fournit un logiciel d'aide administrative avec validation par un
         juriste, sans garantie du résultat. Le rejet de votre contestation par
         l'autorité compétente (officier du ministère public, préfet,
         juridiction) n'ouvre pas droit à remboursement, sauf manquement de

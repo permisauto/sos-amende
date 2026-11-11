@@ -43,7 +43,7 @@ export default function MentionsLegalesPage() {
 
       <h2 className="text-lg font-semibold text-zinc-900">5. Statut juridique du service</h2>
       <p>
-        SOS Amende est un éditeur de logiciels et de contenus d&apos;aide. Il ne
+        SOS Amende est un logiciel d&apos;aide administrative. Il ne
         fournit ni ne revendique la fourniture de prestations de conseil
         juridique. Les contenus générés sont fondés sur des règles procédurales
         de droit commun, vérifiées à la date de leur mise en ligne.

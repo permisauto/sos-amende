@@ -47,13 +47,14 @@ export default function CgvPage() {
         lettre générée, pièces justificatives).
       </p>
       <p>
-        <strong>Service</strong> : outil d&apos;aide à la contestation décrit à
+        <strong>Service</strong> : logiciel d&apos;aide administrative décrit à
         l&apos;article 3.
       </p>
 
       <h2 className="text-lg font-semibold text-zinc-900">Article 3. Description du Service</h2>
       <p>
-        SOS Amende met à la disposition du Client un outil en ligne d&apos;aide à la
+        SOS Amende met à la disposition du Client un logiciel en ligne d&apos;aide
+        administrative à la
         préparation de la contestation d&apos;une amende forfaitaire (requête en
         exonération) ou d&apos;une décision de rétention, de suspension ou
         d&apos;invalidation du permis de conduire. Le Service se déroule comme suit :
