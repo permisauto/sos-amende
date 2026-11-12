@@ -26,7 +26,7 @@ const SECTIONS: { titre: string; faqs: Faq[] }[] = [
       {
         question: "Comment se déroule la contestation, étape par étape ?",
         reponse:
-          "1) Vous réglez le service et téléversez votre document (avis de contravention ou décision). 2) Le document est lu automatiquement puis vous relisez et corrigez les informations. 3) Le moteur détecte les fondements juridiques applicables. 4) Une lettre est générée, que vous validez et signez. 5) Un juriste partenaire relit la lettre. 6) La contestation est transmise (dépôt assisté en ligne ou lettre recommandée en option) et vous suivez la décision.",
+          "1) Vous réglez le service et téléversez votre document (avis de contravention ou décision). 2) Le document est lu automatiquement puis vous relisez et corrigez les informations. 3) Le moteur détecte les fondements juridiques applicables. 4) Une lettre est générée, que vous validez et signez. 5) Nos juristes spécialistes en droit routier relisent et valident la lettre. 6) La contestation est transmise (dépôt assisté en ligne ou lettre recommandée en option) et vous suivez la décision.",
       },
       {
         question: "Quels documents puis-je contester ?",
@@ -80,7 +80,7 @@ const SECTIONS: { titre: string; faqs: Faq[] }[] = [
       {
         question: "Et si c'est un délit ?",
         reponse:
-          "Les délits (convocation devant le tribunal correctionnel, amende forfaitaire délictuelle, conduite sans permis ou sans assurance…) ne relèvent pas du service. Nous vous orientons vers un avocat partenaire, et aucun paiement n'est débité.",
+          "Les délits (convocation devant le tribunal correctionnel, amende forfaitaire délictuelle, conduite sans permis ou sans assurance…) ne relèvent pas du service. Nous vous orientons vers un avocat extérieur, et aucun paiement n'est débité.",
       },
     ],
   },

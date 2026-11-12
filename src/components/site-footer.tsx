@@ -13,7 +13,18 @@ export function SiteFooter() {
   return (
     <footer className="border-t border-zinc-200 bg-zinc-50">
       <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 py-8 text-sm text-zinc-500 md:flex-row">
-        <p>© {new Date().getFullYear()} SOS Amende. Tous droits réservés.</p>
+        <div className="flex flex-col items-center gap-1 md:items-start">
+          <p>© {new Date().getFullYear()} SOS Amende. Tous droits réservés.</p>
+          <p className="text-xs">
+            <a href="mailto:contact@recours-permis-pv.com" className="hover:text-zinc-900">
+              contact@recours-permis-pv.com
+            </a>{" "}
+            · WhatsApp{" "}
+            <a href="https://wa.me/34613885573" className="hover:text-zinc-900">
+              +34 613 88 55 73
+            </a>
+          </p>
+        </div>
         <nav className="flex flex-wrap items-center justify-center gap-6">
           {legal.map((item) => (
             <Link key={item.href} href={item.href} className="hover:text-zinc-900">

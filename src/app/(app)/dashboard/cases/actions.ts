@@ -804,7 +804,7 @@ export async function signerDossier(
     return { error: "Dossier introuvable." };
   }
   if (dossier.statut !== "A_VERIFIER" && dossier.statut !== "EN_ATTENTE_PRE_SIGNATURE") {
-    return { error: "La signature n'est disponible qu'une fois la lettre validée par un juriste." };
+    return { error: "La signature n'est disponible qu'une fois la lettre validée par nos juristes spécialistes en droit routier." };
   }
   if (!dossier.lettreGeneree) {
     return { error: "Aucune lettre à signer." };

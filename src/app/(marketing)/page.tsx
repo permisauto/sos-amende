@@ -8,7 +8,7 @@ export default function HomePage() {
       <section className="grid items-center gap-12 py-24 lg:grid-cols-2">
         <div className="text-center lg:text-left">
           <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-            Contestation automatisée, légale et encadrée
+            Contestation d'amende assistée par logiciel
           </p>
           <h1 className="max-w-3xl text-4xl font-bold leading-tight tracking-tight md:text-5xl">
             Contester vos amendes et votre suspension de permis, simplement.
@@ -26,6 +26,10 @@ export default function HomePage() {
               Lancer mon analyse
             </Link>
           </div>
+          <p className="mt-3 text-xs text-zinc-500">
+            Service privé, indépendant de toute administration publique (ANTAI,
+            préfectures, tribunaux).
+          </p>
         </div>
         <div className="mx-auto w-full max-w-md">
           <DemoScan />
@@ -97,35 +101,21 @@ export default function HomePage() {
       </section>
 
       <section id="permis" className="py-20">
-        <div className="grid items-center gap-12 md:grid-cols-2">
-          <div className="order-2 rounded-2xl border border-zinc-200 bg-zinc-50 p-6 md:order-1">
-            <p className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-              Procédure d'urgence
-            </p>
-            <p className="mt-2 text-4xl font-bold text-emerald-600">
-              48 à 72 h
-            </p>
-            <p className="mt-2 text-sm text-zinc-600">
-              pour agir en référé-suspension devant le tribunal administratif
-              avant l'exécution de la suspension.
-            </p>
-          </div>
-          <div className="order-1 md:order-2">
-            <h2 className="text-3xl font-bold">
-              Défense de votre permis de conduire
-            </h2>
-            <p className="mt-4 text-zinc-600">
-              Rétention administrative, invalidation, commission médicale :
-              recours gracieux devant le préfet, chronologie d'urgence et, si
-              nécessaire, mise en relation avec un avocat partenaire.
-            </p>
-            <Link
-              href="/deposer?type=SUSPENSION"
-              className="mt-6 inline-block rounded-full bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700"
-            >
-              Défendre mon permis
-            </Link>
-          </div>
+        <div className="mx-auto max-w-3xl">
+          <h2 className="text-3xl font-bold">
+            Défense de votre permis de conduire
+          </h2>
+          <p className="mt-4 text-zinc-600">
+            Recours gracieux ou hiérarchique, ou recours pour excès de pouvoir,
+            selon votre situation — avec, si nécessaire, un référé-suspension
+            devant le tribunal administratif.
+          </p>
+          <Link
+            href="/deposer?type=SUSPENSION"
+            className="mt-6 inline-block rounded-full bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700"
+          >
+            Défendre mon permis
+          </Link>
         </div>
       </section>
 
@@ -136,7 +126,7 @@ export default function HomePage() {
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-zinc-400">
             La démo ci-dessus est <span className="font-semibold text-white">gratuite et sans stockage</span> — aucun fichier requis.
-            Pour déposer votre vrai dossier (PV réel, lettre validée par un juriste), un crédit est requis : {PRIX_AMENDE}&nbsp;€ par amende, {PRIX_SUSPENSION}&nbsp;€ par suspension (option envoi en lettre recommandée&nbsp;: +{PRIX_OPTION_LRAR}&nbsp;€). Paiement à l&apos;acte, sans abonnement.
+            Pour déposer votre vrai dossier (PV réel, lettre relue, corrigée et validée par nos juristes spécialistes en droit routier), le prix par dossier est de : {PRIX_AMENDE}&nbsp;€ par amende, {PRIX_SUSPENSION}&nbsp;€ par suspension (option envoi en lettre recommandée&nbsp;: +{PRIX_OPTION_LRAR}&nbsp;€). Paiement à l&apos;acte, sans abonnement.
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link

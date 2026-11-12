@@ -201,7 +201,7 @@ export function createNotification(
       return {
         type,
         title: "Avocat attribué",
-        message: "Un avocat partenaire a été attribué à votre dossier. Ses coordonnées sont disponibles.",
+        message: "Un avocat extérieur a été attribué à votre dossier. Ses coordonnées sont disponibles.",
         dossierId: context.dossierId,
         actionUrl: context.dossierId ? `${baseUrl}/dashboard/cases/${context.dossierId}#avocat` : undefined,
       };

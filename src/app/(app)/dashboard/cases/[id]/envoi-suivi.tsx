@@ -24,7 +24,7 @@ export function EnvoiSuivi({
         </span>
       </div>
       <p className="mt-2 text-sm text-emerald-800">
-        Votre lettre de contestation a été vérifiée et validée par un juriste.
+        Votre lettre de contestation a été relue, corrigée et validée par nos juristes spécialistes en droit routier.
         SOS Amende la transmet pour votre compte — par nos soins, plus aucune
         action n&apos;est requise de votre part.
       </p>

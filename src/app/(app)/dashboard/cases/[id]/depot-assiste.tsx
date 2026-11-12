@@ -65,7 +65,7 @@ export function DepotAssiste({
         </span>
       </div>
       <p className="mt-2 text-sm text-emerald-800">
-        Votre lettre de contestation a été vérifiée et validée par un juriste.
+        Votre lettre de contestation a été relue, corrigée et validée par nos juristes spécialistes en droit routier.
         Déposez-la sur le portail officiel {web} puis marquez le dossier&nbsp;:
       </p>
       <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm text-emerald-800">

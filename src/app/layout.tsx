@@ -44,7 +44,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/" },
   openGraph: {
     title: "SOS Amende — Contester vos amendes",
-    description: "Analyse des motifs juridiques, lettre de recours validée par un juriste, suivi LRAR.",
+    description: "Analyse des motifs de contestation, lettre relue, corrigée et validée par nos juristes spécialistes en droit routier, suivi LRAR.",
     locale: "fr_FR",
     type: "website",
   },

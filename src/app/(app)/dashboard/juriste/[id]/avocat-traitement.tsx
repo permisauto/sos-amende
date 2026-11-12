@@ -44,7 +44,7 @@ export function AvocatTraitement({
         ) : (
           <>
           <p className="mt-2 text-sm text-zinc-600">
-            Le client demande une orientation vers un avocat partenaire.
+            Le client demande une orientation vers un avocat extérieur.
             Affectez un partenaire (recommandé pour les rétentions de permis)
             ou refusez avec une note.
           </p>

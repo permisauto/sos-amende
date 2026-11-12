@@ -13,7 +13,7 @@ export default function PricingPage() {
         <h1 className="text-4xl font-bold">Des tarifs simples, sans surprise</h1>
         <p className="mx-auto mt-4 max-w-xl text-zinc-600">
           La <span className="font-semibold">démo d&apos;analyse</span> sur la page d&apos;accueil est gratuite et ne stocke rien.
-          Le dépôt d&apos;un <span className="font-semibold">vrai dossier</span> (téléversement de votre PV, génération de la lettre, validation juriste) nécessite un crédit : {PRIX_AMENDE}&nbsp;€ / amende simple, {PRIX_CONTENTIEUX}&nbsp;€ / contentieux contraventionnel, {PRIX_SUSPENSION}&nbsp;€ / suspension. Paiement à l&apos;acte, sans abonnement.
+          Le dépôt d&apos;un <span className="font-semibold">vrai dossier</span> (téléversement de votre PV, génération de la lettre, validation par nos juristes spécialistes en droit routier) est facturé par dossier : {PRIX_AMENDE}&nbsp;€ / amende simple, {PRIX_CONTENTIEUX}&nbsp;€ / contentieux contraventionnel, {PRIX_SUSPENSION}&nbsp;€ / suspension. Paiement à l&apos;acte, sans abonnement.
         </p>
       </div>
 
@@ -27,13 +27,13 @@ export default function PricingPage() {
             public, prête à déposer sur le portail officiel.
           </p>
           <p className="mt-6 text-5xl font-bold">
-            {PRIX_AMENDE} €<span className="text-base font-normal text-zinc-500">/amende</span>
+            {PRIX_AMENDE} € TTC<span className="text-base font-normal text-zinc-500">/amende</span>
           </p>
           <ul className="mt-6 flex-1 space-y-2 text-sm text-zinc-600">
-            <li>Analyse juridique et détection de la faille</li>
+            <li>Analyse des motifs de contestation</li>
             <li>Lettre de contestation générée dynamiquement</li>
             <li>Signature électronique</li>
-            <li>Validation par un juriste</li>
+            <li>Relue, corrigée et validée par nos juristes spécialistes en droit routier</li>
             <li>Dépôt assisté sur le portail officiel (lien sécurisé)</li>
             <li>Suivi jusqu&apos;à la décision</li>
           </ul>
@@ -50,17 +50,17 @@ export default function PricingPage() {
             contestation avec consignation préalable et suivi dédié.
           </p>
           <p className="mt-6 text-5xl font-bold">
-            {PRIX_CONTENTIEUX} €<span className="text-base font-normal text-zinc-500">/dossier</span>
+            {PRIX_CONTENTIEUX} € TTC<span className="text-base font-normal text-zinc-500">/dossier</span>
           </p>
           <ul className="mt-6 flex-1 space-y-2 text-sm text-zinc-600">
             <li>Analyse des faits et de la procédure</li>
             <li>Requête pour le tribunal de police</li>
             <li>Guide de consignation (montant de votre avis)</li>
             <li>Signature électronique</li>
-            <li>Validation par un juriste</li>
+            <li>Relue, corrigée et validée par nos juristes spécialistes en droit routier</li>
             <li>Dépôt assisté et suivi de la décision</li>
           </ul>
-          <Link href="/deposer?type=AMENDE" className="mt-6 inline-block w-full rounded-full bg-emerald-600 px-6 py-3 text-center font-semibold text-white transition hover:bg-emerald-700">
+          <Link href="/deposer" className="mt-6 inline-block w-full rounded-full bg-emerald-600 px-6 py-3 text-center font-semibold text-white transition hover:bg-emerald-700">
             Analyser mon avis — gratuit
           </Link>
           <p className="mt-2 text-center text-xs text-zinc-500">
@@ -75,13 +75,13 @@ export default function PricingPage() {
             suivi des délais de la commission médicale.
           </p>
           <p className="mt-6 text-5xl font-bold">
-            {PRIX_SUSPENSION} €<span className="text-base font-normal text-zinc-500">/suspension</span>
+            {PRIX_SUSPENSION} € TTC<span className="text-base font-normal text-zinc-500">/suspension</span>
           </p>
           <ul className="mt-6 flex-1 space-y-2 text-sm text-zinc-600">
             <li>Analyse de la décision de suspension</li>
             <li>Recours gracieux au préfet généré</li>
             <li>Signature électronique</li>
-            <li>Validation par un juriste</li>
+            <li>Relue, corrigée et validée par nos juristes spécialistes en droit routier</li>
             <li>Dépôt assisté sur Télérecours (lien sécurisé)</li>
             <li>Suivi des délais et de la commission médicale</li>
           </ul>
@@ -94,7 +94,7 @@ export default function PricingPage() {
 
       <div className="mx-auto mt-10 max-w-4xl rounded-2xl border border-emerald-200 bg-emerald-50 p-8">
         <h2 className="text-lg font-semibold text-emerald-800">
-          Option — envoi en lettre recommandée (+{PRIX_OPTION_LRAR}&nbsp;€)
+          Option — envoi en lettre recommandée (+{PRIX_OPTION_LRAR}&nbsp;€ TTC)
         </h2>
         <p className="mt-2 text-sm text-emerald-900">
           Si vous préférez ne pas déposer vous-même sur le portail officiel,
@@ -102,6 +102,24 @@ export default function PricingPage() {
           réception et vous remet la preuve d&apos;envoi. Cette option
           s&apos;ajoute au tarif de base ({PRIX_AMENDE}&nbsp;€ / {PRIX_CONTENTIEUX}&nbsp;€ / {PRIX_SUSPENSION}&nbsp;€)
           et vous est proposée au moment du paiement.
+        </p>
+      </div>
+
+      <div className="mx-auto mt-10 max-w-4xl rounded-2xl border border-zinc-200 bg-zinc-50 p-6 text-sm text-zinc-600">
+        <p>
+          <strong>Paiement</strong> : par virement bancaire.{" "}
+          <strong>Droit de rétractation</strong> : 14 jours (le service étant
+          exécuté immédiatement, vous renoncez à ce droit en cochant la case
+          prévue au moment du paiement).{" "}
+          <strong>Remboursement</strong> : voir la{" "}
+          <Link href="/remboursement" className="font-medium text-emerald-700 underline">
+            Politique de remboursement
+          </Link>{" "}
+          et les{" "}
+          <Link href="/cgv" className="font-medium text-emerald-700 underline">
+            CGV
+          </Link>
+          .
         </p>
       </div>
 

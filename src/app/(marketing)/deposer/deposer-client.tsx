@@ -226,7 +226,7 @@ export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPEN
               <>
                 <p className="mt-2 text-3xl font-bold text-emerald-700">{reponse.scoreGlobal}%</p>
                 <p className="text-sm font-semibold text-emerald-800">Indice de corroboration des motifs</p>
-                <p className="mt-1 text-xs text-emerald-700">Cet indice ne prédit pas la décision de l&apos;administration — un juriste examine chaque dossier.</p>
+                <p className="mt-1 text-xs text-emerald-700">Cet indice est documentaire : il ne prédit pas la décision de l&apos;administration et ne constitue ni un avis juridique ni une probabilité de succès — un juriste examine chaque dossier.</p>
               </>
             )}
             <p className="mt-1 text-xs text-emerald-700">Appels : <code>/api/demo/analyse</code> (failles) + <code>/api/radars</code> (étalonnage) + <code>preuves météo/travaux</code> — croisement automatique.</p>

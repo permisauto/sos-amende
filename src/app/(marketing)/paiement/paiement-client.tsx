@@ -69,7 +69,7 @@ export function PaiementPublicClient({
           <label className="flex flex-col gap-1"><span className="text-sm font-medium">Prénom *</span><input value={prenom} onChange={(e) => setPrenom(e.target.value)} className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm" /></label>
           <label className="flex flex-col gap-1"><span className="text-sm font-medium">Nom *</span><input value={nom} onChange={(e) => setNom(e.target.value)} className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm" /></label>
           <label className="flex flex-col gap-1"><span className="text-sm font-medium">Email *</span><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm" /></label>
-          <label className="flex flex-col gap-1"><span className="text-sm font-medium">WhatsApp *</span><input type="tel" placeholder="+33 6 12 34 56 78" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm" /></label>
+          <label className="flex flex-col gap-1"><span className="text-sm font-medium">WhatsApp *</span><input type="tel" placeholder="+34 613 88 55 73" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm" /></label>
         </div>
         <label className="mt-4 flex flex-col gap-1"><span className="text-sm font-medium">Type</span>
           <select value={type} onChange={(e) => setType(e.target.value as never)} className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm">

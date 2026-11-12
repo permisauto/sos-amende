@@ -71,7 +71,7 @@ export default function CgvPage() {
           de fondements préalablement validés ;
         </li>
         <li>Génération d&apos;une lettre que le Client relit, valide et signe ;</li>
-        <li>Validation de la lettre par un juriste partenaire ;</li>
+        <li>Validation de la lettre par nos juristes spécialistes en droit routier ;</li>
         <li>
           Transmission de la contestation : soit par lettre recommandée avec
           accusé de réception (option payante) ; soit par dépôt assisté sur le
@@ -109,7 +109,7 @@ export default function CgvPage() {
       </p>
       <p>
         Le crédit acheté est porté au compte du Client et consommé à l&apos;ouverture
-        d&apos;un Dossier. En cas de rejet du Dossier par le juriste partenaire, le
+        d&apos;un Dossier. En cas de rejet du Dossier par nos juristes spécialistes en droit routier, le
         Client peut, à son choix, conserver le crédit, qui peut être réutilisé,
         ou en demander le remboursement par virement. Pour un Dossier
         relevant du contentieux contraventionnel, le paiement est rattaché au
@@ -166,7 +166,7 @@ export default function CgvPage() {
       <h2 className="text-lg font-semibold text-zinc-900">Article 6. Exécution du Service</h2>
       <p>
         Le Service est exécuté de manière immédiate dès la Commande : analyse du
-        Dossier, génération de la lettre, validation par le juriste partenaire et
+        Dossier, génération de la lettre, validation par nos juristes spécialistes en droit routier et
         mise à disposition de la lettre validée au Client. Les délais de
         traitement dépendent notamment de la rapidité avec laquelle le Client
         fournit des pièces exactes et complètes et relit ses informations.

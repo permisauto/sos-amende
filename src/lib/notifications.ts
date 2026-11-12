@@ -381,7 +381,7 @@ export async function notifierStatut(dossierId: string): Promise<boolean> {
         de dossier exige l'assistance d'un avocat et ne peut pas être traité
         comme une contestation administrative.</p>
         <p><strong>Aucun paiement n'a été débité.</strong> Vous pouvez demander
-        une mise en relation avec un avocat partenaire depuis votre dossier.</p>
+        une mise en relation avec un avocat extérieur depuis votre dossier.</p>
         <p><a href="${process.env.NEXT_PUBLIC_APP_URL ?? "https://recours-permis-pv.com"}/dashboard/cases/${dossier.id}">Ouvrir mon dossier</a></p>
         ${ACCUEIL}`;
       break;

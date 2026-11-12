@@ -92,7 +92,7 @@ export function PaiementForm({
           </label>
           <label className="flex flex-col gap-1.5">
             <span className="text-sm font-medium">WhatsApp *</span>
-            <input type="tel" placeholder="+33 6 12 34 56 78" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} required className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm" />
+            <input type="tel" placeholder="+34 613 88 55 73" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} required className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm" />
           </label>
         </div>
       </div>
@@ -141,7 +141,7 @@ export function PaiementForm({
           </button>
           {virementState?.error && <p className="mt-2 text-xs text-red-600">{virementState.error}</p>}
         </form>
-        <p className="mt-3 text-center text-xs text-zinc-400">Le virement est validé par un juriste sous 24 h ouvrées.</p>
+        <p className="mt-3 text-center text-xs text-zinc-400">Le virement est validé par nos juristes spécialistes en droit routier sous 24 h ouvrées.</p>
       </div>
     </div>
   );

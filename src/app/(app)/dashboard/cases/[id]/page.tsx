@@ -474,7 +474,7 @@ export default async function CaseDetailPage(
           </p>
           <p className="mt-2 text-sm text-orange-800">
             <strong>Aucun paiement n&apos;a été débité.</strong> Vous pouvez
-            demander une mise en relation avec un avocat partenaire ci-dessous.
+            demander une mise en relation avec un avocat extérieur ci-dessous.
           </p>
           <a
             href="#avocat"
@@ -1111,7 +1111,7 @@ export default async function CaseDetailPage(
                 Votre lettre de contestation
               </h2>
               <p className="mt-1 text-sm text-zinc-600">
-                Contenu de la lettre vérifiée et validée par un juriste, telle
+                Contenu de la lettre relue, corrigée et validée par nos juristes spécialistes en droit routier, telle
                 que transmise.
               </p>
               <div className="mt-4 whitespace-pre-wrap rounded-xl bg-zinc-50 p-6 text-sm leading-relaxed text-zinc-800">
@@ -1134,7 +1134,7 @@ export default async function CaseDetailPage(
         <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-6">
           <h2 className="font-semibold text-amber-900">Prochaines étapes</h2>
           <p className="mt-1 text-sm text-amber-800">
-            Une fois signée et validée par un juriste, votre lettre sera
+            Une fois signée et validée par nos juristes spécialistes en droit routier, votre lettre sera
             transmise par SOS Amende (en ligne ou en recommandé avec accusé de
             réception).
           </p>

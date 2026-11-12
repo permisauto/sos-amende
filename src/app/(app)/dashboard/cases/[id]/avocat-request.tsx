@@ -29,7 +29,7 @@ export function AvocatRequest({
       <p className="mt-0.5 text-xs text-zinc-500">
         Pour certains recours (notamment les rétentions de permis), une
         représentation par avocat peut être recommandée. Notre équipe
-        juridique peut vous orienter vers un avocat partenaire.
+        juridique peut vous orienter vers un avocat extérieur.
       </p>
 
       {!match && (

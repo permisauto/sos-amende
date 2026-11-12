@@ -1859,7 +1859,7 @@ export async function traiterDemandeAvocat(
   if (action === "AFFECTE") {
     const partnerName = String(formData.get("partnerName") ?? "").trim();
     if (partnerName.length < 2) {
-      return { error: "Le nom de l'avocat partenaire est requis." };
+      return { error: "Le nom de l'avocat extérieur est requis." };
     }
     await prisma.lawyerMatch.update({
       where: { id: match.id },

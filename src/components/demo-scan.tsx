@@ -295,7 +295,9 @@ export function DemoScan() {
                     ? "Plusieurs éléments concordent dans votre dossier — un juriste confirmera les motifs retenus."
                     : "Peu de motifs détectés pour cette démo — un juriste examinerait tout de même le dossier."}
                   <span className="mt-1 block text-xs text-zinc-500">
-                    Cet indice ne prédit pas la décision de l&apos;administration.
+                    Cet indice est documentaire : il ne prédit pas la décision de
+                    l&apos;administration et ne constitue ni un avis juridique ni une
+                    probabilité de succès.
                   </span>
                 </p>
               </div>

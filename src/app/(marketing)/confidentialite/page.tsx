@@ -40,7 +40,7 @@ export default function ConfidentialitePage() {
         la génération des courriers, le calcul des délais légaux de contestation,
         la facturation, la lutte contre la fraude, et l'amélioration du Service.
         Elles ne sont jamais revendues ni cédées à des tiers à des fins
-        commerciales. Une demande de mise en relation avec un avocat partenaire
+        commerciales. Une demande de mise en relation avec un avocat extérieur
         n'implique la transmission de vos coordonnées qu'avec votre accord
         explicite.
       </p>
@@ -83,14 +83,15 @@ export default function ConfidentialitePage() {
         <li>Fichiers des pièces (PV, signatures, PDF, preuves de virement) :
           stockage S3-compatible hébergé dans l'Union européenne ;</li>
         <li>Lecture automatique du document transmis (OCR, uniquement si
-          activée) : prestataire de lecture automatique de document, qui
-          reçoit l&apos;image du document pour l&apos;analyser ;</li>
+          activée) : Google Gemini (lecture automatique du document — OCR) ;</li>
         <li>Géolocalisation de l&apos;adresse d&apos;infraction (pièces externes) :
           API Adresse de l&apos;État français (BAN) ;</li>
         <li>Relevés météo des pièces (coordonnées du lieu) : Open-Meteo ;</li>
         <li>Veille juridique (Journal officiel uniquement, données publiques,
-          aucune donnée personnelle) : service d&apos;analyse de texte sur données
-          publiques.</li>
+          aucune donnée personnelle) : Groq (analyse de texte sur données
+          publiques) ;</li>
+        <li>Notifications clients : WhatsApp ;</li>
+        <li>Paiement par carte bancaire : Stripe (à venir).</li>
       </ul>
       <p>
         Conformément au RGPD, ces sous-traitants font l'objet d'accords encadrant

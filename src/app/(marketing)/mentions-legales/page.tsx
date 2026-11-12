@@ -17,6 +17,7 @@ export default function MentionsLegalesPage() {
         États-Unis.
       </p>
       <p>Contact électronique : contact@recours-permis-pv.com</p>
+      <p>Téléphone (WhatsApp) : +34 613 88 55 73</p>
       <p>Délégué à la protection des données : contact@recours-permis-pv.com</p>
 
       <h2 className="text-lg font-semibold text-zinc-900">2. Directeur de la publication</h2>
