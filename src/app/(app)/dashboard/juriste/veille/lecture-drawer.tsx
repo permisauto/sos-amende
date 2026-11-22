@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import type { ActionEtat, SourceDto } from "./veille-list";
@@ -288,7 +288,7 @@ export function LectureDrawer({
                   {p.typeInfraction === "SUSPENSION" && (
                     <>
                       <label className="block text-xs font-semibold text-zinc-500">
-                        Moyen de référé (L. 521-2 CJA) — variables{" "}
+                        Moyen de référé (L. 521-1 CJA) — variables{" "}
                         <code>{"{nom} {num_pv} {date} {metier} {entreprise} {siret} {risque_licenciement}"}</code>
                         <textarea
                           name="templateRefere"
@@ -626,7 +626,7 @@ export function LectureDrawer({
                       {p.templateRefere && (
                         <div>
                           <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                            Moyen de référé proposé (L. 521-2 CJA)
+                            Moyen de référé proposé (L. 521-1 CJA)
                           </p>
                           <p
                             className="mt-1.5 max-h-48 overflow-y-auto whitespace-pre-line rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-xs leading-relaxed text-zinc-800"

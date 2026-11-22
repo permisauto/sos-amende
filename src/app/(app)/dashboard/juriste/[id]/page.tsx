@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireJuriste } from "@/lib/dal";
@@ -1074,7 +1074,7 @@ export default async function JuristeCasePage(
                     Pack Télérecours — pièces du dépôt en ligne
                   </p>
                   <p className="mt-1 text-xs text-indigo-700/80">
-                    Requête au fond, référé (art. L. 521-2 CJA) et bordereau :
+                    Requête au fond, référé (art. L. 521-1 CJA) et bordereau :
                     les 3 documents que le client télécharge pour déposer sur
                     le portail officiel.
                   </p>
@@ -1098,7 +1098,7 @@ export default async function JuristeCasePage(
                         rel="noreferrer"
                         className="inline-block rounded-xl border border-indigo-300 bg-white px-5 py-2.5 text-sm font-semibold text-indigo-800 transition hover:bg-indigo-100"
                       >
-                        Référé L. 521-2 (PDF)
+                        Référé L. 521-1 (PDF)
                       </a>
                     )}
                     {packBordereauUrl && (
@@ -1535,7 +1535,7 @@ export default async function JuristeCasePage(
                   <span className="font-semibold">
                     Urgence professionnelle signalée.
                   </span>{" "}
-                  Un référé de suspension (art. L. 521-2 CJA) sera joint au
+                  Un référé de suspension (art. L. 521-1 CJA) sera joint au
                   pack Télérecours à la validation.
                 </div>
               )}

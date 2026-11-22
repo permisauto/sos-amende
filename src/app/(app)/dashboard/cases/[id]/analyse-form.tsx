@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useActionState } from "react";
 import { analyserDossier } from "../actions";
@@ -62,18 +62,18 @@ export type AnalysePrefill = {
   suspPointsCumulesJour?: boolean;
   suspStageAvantNotif?: boolean;
   suspSoldeInexact?: boolean;
-  // Chantier 2 (2026-10-10) — urgence professionnelle (référé L. 521-2).
+  // Chantier 2 (2026-10-10) — urgence professionnelle (référé L. 521-1).
   // Lot R1 : radio « Votre urgence » (situation principale).
   urgenceSituation?: string;
   siret?: string;
-  // Lot 5 (2026-10-10) — enclavement du domicile (référé L. 521-2).
+  // Lot 5 (2026-10-10) — enclavement du domicile (référé L. 521-1).
   domicileEnclave?: boolean;
   // Pack 3F/48SI : classificateur lu à l'OCR (badge informatif — le champ
   // n'est pas éditable ici, il est porté automatiquement à l'analyse).
   docType?: string;
   dateSignatureArrete?: string;
   dateNotification?: string;
-  // Référé-suspension (art. L. 521-2 CJA) — noms = variables du template.
+  // Référé-suspension (art. L. 521-1 CJA) — noms = variables du template.
   metier?: string;
   entreprise?: string;
   risque_licenciement?: string;

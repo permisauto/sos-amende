@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+﻿import { describe, expect, it, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/lien-depot", () => ({
   verifierLienDepot: vi.fn(),
@@ -158,7 +158,7 @@ describe("GET /api/recours/finaliser/fichier", () => {
     expect(resRef.status).toBe(200);
     expect(resRef.headers.get("Content-Type")).toBe("application/pdf");
     expect(resRef.headers.get("Content-Disposition")).toContain(
-      "refere-suspension-l521-2.pdf",
+      "refere-suspension-l521-1.pdf",
     );
     expect(
       (storageRead as ReturnType<typeof vi.fn>).mock.calls[0][0],

@@ -7,7 +7,7 @@ import { storageWrite } from "@/lib/storage";
  * Pack Télérecours Citoyens (documents classés 3F / 48SI) : les 3 PDF que le
  * client télécharge pour déposer sa contestation sur le portail officiel —
  * requête au fond (la lettre validée + signée), requête en référé-suspension
- * (art. L. 521-2 CJA, template de la faille principale, jamais de texte hors
+ * (art. L. 521-1 CJA, template de la faille principale, jamais de texte hors
  * base) et bordereau des pièces (inventaire procédural uniquement).
  * Stockés dans `Courrier.packUrls` (JSON).
  */
@@ -37,7 +37,7 @@ export function estPackTelecours(opts: {
  * Référé de secours (chantier 3, 2026-10-10) : utilisé quand le dossier porte
  * l'urgence professionnelle (`extractedData.urgencePro`) mais que la faille
  * principale n'a pas de `templateRefere` en base. Ne cite que l'article
- * L. 521-2 du CJA (déjà présent au catalogue) — jamais d'article inventé.
+ * L. 521-1 du CJA (déjà présent au catalogue) — jamais d'article inventé.
  * Les variables d'urgence non saisies ({metier}/{entreprise}/{siret}/
  * {risque_licenciement}) sont effacées par `nettoyerLettre`.
  */
@@ -45,7 +45,7 @@ const REFERE_SECOURS_URGENCE = `À Monsieur le Président du tribunal administra
 
 Je soussigné(e) {nom}, ai l'honneur de saisir Monsieur le Président, par la présente requête en référé, d'une demande de suspension d'exécution de la décision n° {num_pv} en date du {date} portant atteinte à la validité de mon permis de conduire.
 
-SUR LE FONDEMENT DE L'ARTICLE L. 521-2 DU CODE DE JUSTICE ADMINISTRATIVE
+SUR LE FONDEMENT DE L'ARTICLE L. 521-1 DU CODE DE JUSTICE ADMINISTRATIVE
 
 L'urgence est caractérisée par les conséquences immédiates de la décision contestée sur ma vie professionnelle : l'interdiction de conduire met en péril la poursuite de mon activité. J'exerce l'activité de {metier} au sein de {entreprise} (SIRET {siret}), et {risque_licenciement}.
 
@@ -53,11 +53,11 @@ Le moyen présenté à l'appui de la présente demande est la légalité manifes
 
 EN CONSÉQUENCE
 
-Je demande qu'il plaise à Monsieur le Président du tribunal administratif, en application de l'article L. 521-2 du code de justice administrative, d'ordonner la suspension de l'exécution de la décision n° {num_pv} en date du {date}, l'administration disposant du délai légal pour régulariser la situation si elle le juge opportun.`;
+Je demande qu'il plaise à Monsieur le Président du tribunal administratif, en application de l'article L. 521-1 du code de justice administrative, d'ordonner la suspension de l'exécution de la décision n° {num_pv} en date du {date}, l'urgence le justifiant et un doute sérieux sur la légalité de la décision étant établi.`;
 
 /**
  * Texte du référé-suspension pour un dossier SUSPENSION : le template validé
- * de la faille principale, sinon le référé de secours L. 521-2 si le client
+ * de la faille principale, sinon le référé de secours L. 521-1 si le client
  * a signalé son urgence professionnelle — `null` sinon (aucun référé produit,
  * jamais de texte hors base). Généré à l'analyse puis relu / modifié par le
  * juriste (`Dossier.refereGenere`) : le pack PDF reprend exactement ce texte.
@@ -94,7 +94,7 @@ export function texteBordereau(opts: {
   const lignes: string[] = ["BORDEREAU DES PIÈCES DU DÉPÔT"];
   if (aRefere) {
     lignes.push(
-      "Tribunal administratif — formation de référé (article L. 521-2 du code de justice administrative)",
+      "Tribunal administratif — formation de référé (article L. 521-1 du code de justice administrative)",
     );
   }
   lignes.push("");
@@ -118,7 +118,7 @@ export function texteBordereau(opts: {
  * bloquée par le pack). Le référé est produit si la faille principale porte
  * un `templateRefere` validé **ou** si le client a coché l'urgence
  * professionnelle (`data.urgencePro`) — auquel cas le référé de secours L.
- * 521-2 est utilisé à défaut de template en base (anti-hallucination : seul
+ * 521-1 est utilisé à défaut de template en base (anti-hallucination : seul
  * l'article déjà présent au catalogue est cité). Un référé relu/modifié par
  * le juriste (`refereGenere`) prime sur le template : le PDF déposé est mot
  * pour mot le texte validé. Sinon le pack se limite à la requête et au
@@ -143,7 +143,7 @@ export async function genererPackTelecours(opts: {
     `Requête au fond (lettre de contestation)${opts.signatureDataUrl ? " — signée" : ""}`,
   ];
   // Un référé n'existe que si la faille porte un template validé ou si
-  // l'urgence professionnelle est cochée (secours L. 521-2) — l'édition du
+  // l'urgence professionnelle est cochée (secours L. 521-1) — l'édition du
   // juriste (`refereGenere`) ne peut pas créer un référé hors conditions
   // (dossier re-classifié entre-temps) : elle prime seulement quand un référé
   // serait produit de toute façon.
@@ -157,7 +157,7 @@ export async function genererPackTelecours(opts: {
     : null;
   if (refereTexte) {
     documents.push(
-      "Requête en référé-suspension (article L. 521-2 du code de justice administrative)",
+      "Requête en référé-suspension (article L. 521-1 du code de justice administrative)",
     );
   }
   documents.push(...opts.piecesJointes);

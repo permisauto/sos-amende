@@ -1,4 +1,4 @@
-"use server";
+﻿"use server";
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -250,7 +250,7 @@ const analyseSchema = z.object({
   prefecture: z.string().trim().optional(),
   duree: z.string().trim().optional(),
   motif: z.string().trim().optional(),
-  // Référé-suspension (art. L. 521-2 CJA) — noms identiques aux variables du
+  // Référé-suspension (art. L. 521-1 CJA) — noms identiques aux variables du
   // template {metier}/{entreprise}/{risque_licenciement}. Saisie humaine
   // facultative (SUSPENSION) ; jamais extraite du texte.
   metier: z.string().trim().optional(),

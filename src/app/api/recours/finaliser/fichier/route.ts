@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+﻿import { prisma } from "@/lib/prisma";
 import { verifierLienDepot } from "@/lib/lien-depot";
 import { storageRead } from "@/lib/storage";
 
@@ -64,7 +64,7 @@ export async function GET(req: Request) {
       doc === "requete"
         ? "requete-contestation"
         : doc === "refere"
-          ? "refere-suspension-l521-2"
+          ? "refere-suspension-l521-1"
           : "bordereau-pieces";
   } else if (doc === "preuve" && preuveId) {
     const preuve = await prisma.preuve.findFirst({

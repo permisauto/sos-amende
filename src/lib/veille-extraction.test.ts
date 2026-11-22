@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+﻿import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   BUDGET_EXTRACTION,
   SCORE_SEUIL_EXTRACTION,
@@ -76,7 +76,7 @@ describe("articleVerbatim", () => {
 
   it("refuse l'article absent et la citation qui n'est pas un article", () => {
     expect(articleVerbatim(CONTENU, "L. 415-2 du code des impôts")).toBe(false);
-    expect(articleVerbatim(CONTENU, "L. 521-2 du code de justice")).toBe(false);
+    expect(articleVerbatim(CONTENU, "L. 521-1 du code de justice")).toBe(false);
     // Aucun groupe « -n » : aucune référence extraite → rejet (pas de faille
     // silencieuse qui passerait pour un article vérifié).
     expect(articleVerbatim(CONTENU, "L. 121")).toBe(false);
@@ -129,7 +129,7 @@ describe("parserExtraction — articles (régression pilote v2)", () => {
           paragraphe_recours_exces_de_pouvoir_fond:
             "Je conteste la suspension de mon permis de conduire, prononcée au titre de l'article L. 223-3 du code de la route, et demande son annulation pour défaut de notification dans le délai imparti.",
           paragraphe_memoire_refere_suspension_urgence:
-            "Je demande au juge des référés de suspendre l'exécution de l'arrêté attaqué, sur le fondement de l'article L. 521-2 du code de justice administrative, la décision présentant un doute sérieux.",
+            "Je demande au juge des référés de suspendre l'exécution de l'arrêté attaqué, sur le fondement de l'article L. 521-1 du code de justice administrative, la décision présentant un doute sérieux.",
         },
         parcours_suspension_amiable: {
           applicable: false,
@@ -755,7 +755,7 @@ describe("assainirTemplate — lint des templates proposés", () => {
     "les conditions d'application de ce texte n'étaient pas réunies au moment " +
     "des faits constants, la sanction prononcée ne peut dès lors être maintenue.";
   const REFERE_OK =
-    "Aux termes de l'article L. 521-2 du code de justice administrative, il " +
+    "Aux termes de l'article L. 521-1 du code de justice administrative, il " +
     "existe un doute sérieux sur la légalité de la décision contestée, prise " +
     "au titre de l'article L. 121-1, qui justifie la suspension de son exécution.";
 
@@ -780,7 +780,7 @@ describe("assainirTemplate — lint des templates proposés", () => {
     expect(assainirTemplate("", ARTICLES)).toBeUndefined();
   });
 
-  it("référé : accepte L. 521-2 hors articles[], refuse cette base en lettre simple", () => {
+  it("référé : accepte L. 521-1 hors articles[], refuse cette base en lettre simple", () => {
     expect(assainirTemplate(REFERE_OK, ARTICLES, { refere: true })).toBe(REFERE_OK);
     expect(assainirTemplate(REFERE_OK, ARTICLES)).toBeUndefined();
   });
@@ -794,10 +794,10 @@ describe("templates mécaniques (mock + secours local)", () => {
     expect(t.templateRefere).toBe("");
   });
 
-  it("suspension : lettre + moyen de référé L. 521-2", () => {
+  it("suspension : lettre + moyen de référé L. 521-1", () => {
     const t = templatesMechaniques(["article L. 224-16"], "SUSPENSION");
     expect(t.templateLettre).toContain("décision contestée");
-    expect(t.templateRefere).toContain("L. 521-2");
+    expect(t.templateRefere).toContain("L. 521-1");
     expect(t.templateRefere).toContain("l'article L. 224-16");
   });
 
@@ -809,7 +809,7 @@ describe("templates mécaniques (mock + secours local)", () => {
 });
 
 describe("templates pré-rédigés (lot 3 — 2026-10-10)", () => {
-  it("prompt : parcours OMP/référé/gracieux — variables bornées, L. 521-2 forcée", () => {
+  it("prompt : parcours OMP/référé/gracieux — variables bornées, L. 521-1 forcée", () => {
     const p = construirePromptExtraction(PUB);
     // Veille 2.0 : les templates vivent dans les blocs de parcours.
     expect(p).toContain("paragraphe_lettre_contestation_amende");
@@ -817,7 +817,7 @@ describe("templates pré-rédigés (lot 3 — 2026-10-10)", () => {
     expect(p).toContain("paragraphe_recours_gracieux_prefet_ou_ministre");
     expect(p).toContain("{radarId}");
     expect(p).toContain("risque_licenciement");
-    expect(p).toContain("L. 521-2");
+    expect(p).toContain("L. 521-1");
     expect(p).toContain('Sinon ""');
   });
 
@@ -849,7 +849,7 @@ describe("templates pré-rédigés (lot 3 — 2026-10-10)", () => {
     };
     const p = parserExtraction(extractionMock(pubSusp), pubSusp.contenu)!;
     expect(p.typeInfraction).toBe("SUSPENSION");
-    expect(p.templateRefere).toContain("L. 521-2");
+    expect(p.templateRefere).toContain("L. 521-1");
   });
 
   it("template invalide : champ vidé, état inchangé (jamais d'incomplet forcé)", () => {
@@ -916,7 +916,7 @@ describe("propositionDepuisFormulaire — templates (lot 3)", () => {
 
   it("n'inclut le référé que pour une suspension", () => {
     const refere =
-      "Aux termes de l'article L. 521-2 du code de justice administrative, " +
+      "Aux termes de l'article L. 521-1 du code de justice administrative, " +
       "le doute sérieux sur la légalité justifie la suspension sollicitée.";
     const susp = propositionDepuisFormulaire({
       ...base,

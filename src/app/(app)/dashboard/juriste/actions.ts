@@ -370,7 +370,7 @@ export async function validerDossier(
 
   const estSigne = dejaSigne || !!pdfSigne;
 
-  // Pack Télérecours (3F/48SI) : requête, référé (art. L. 521-2) et bordereau.
+  // Pack Télérecours (3F/48SI) : requête, référé (art. L. 521-1) et bordereau.
   // Générés seulement une fois la lettre signée — best-effort : un échec n'a
   // jamais bloqué une validation (le juriste relancera en relisant la lettre).
   let packUrls: PackTelecours | null = null;
@@ -1128,7 +1128,7 @@ export async function modifierLettre(
 export type GenererVarianteState = { error?: string; ok?: boolean } | undefined;
 
 /**
- * Modification du référé-suspension (art. L. 521-2 CJA) par le juriste avant
+ * Modification du référé-suspension (art. L. 521-1 CJA) par le juriste avant
  * validation : le texte relu/modifié est stocké dans `Dossier.refereGenere`
  * et c'est **exactement** ce texte qui partira dans le pack Télérecours
  * (`genererPackTelecours` le priorise sur le template). Aucun PDF à cet

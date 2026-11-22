@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { Resend } from "resend";
@@ -137,7 +137,7 @@ export async function POST(req: Request) {
       const from = process.env.EMAIL_FROM ?? "SOS Amende <onboarding@resend.dev>";
       const libelle = libelleMontant(type, optionLrar);
       const optionLinee = optionLrar ? `<p>Option « lettre recommandée » incluse (+${PRIX_OPTION_LRAR} €).</p>` : "";
-      const offreLinee = type === "SUSPENSION" ? "<p>Offre Suspension &amp; Invalidation incluse : requête au fond, référé-suspension (art. L. 521-2 CJA) et bordereau des pièces, pour un dépôt sur Télérecours Citoyens.</p>" : "";
+      const offreLinee = type === "SUSPENSION" ? "<p>Offre Suspension &amp; Invalidation incluse : requête au fond, référé-suspension (art. L. 521-1 CJA) et bordereau des pièces, pour un dépôt sur Télérecours Citoyens.</p>" : "";
       await resend.emails.send({
         from,
         to: email,

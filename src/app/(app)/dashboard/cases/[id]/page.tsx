@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/dal";
@@ -1011,7 +1011,7 @@ export default async function CaseDetailPage(
                         rel="noreferrer"
                         className="inline-flex items-center gap-2 rounded-full border border-indigo-300 bg-white px-4 py-2 text-sm font-semibold text-indigo-800 hover:bg-indigo-100"
                       >
-                        Référé-suspension L. 521-2 (PDF)
+                        Référé-suspension L. 521-1 (PDF)
                       </a>
                     )}
                     {packBordereauUrl && (

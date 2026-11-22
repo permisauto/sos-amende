@@ -84,10 +84,22 @@ export default function CgvPage() {
         </li>
       </ul>
       <p>
-        Le Service n&apos;est pas une prestation d&apos;avocat et n&apos;inclut aucune
-        représentation en justice, aucun recours ni aucune instance devant un
-        tribunal. SOS Amende n&apos;est pas un cabinet d&apos;avocats. Le Client reste
-        libre d&apos;envoyer la lettre générée ou de contester directement auprès des
+        Le Service est un outil d&apos;aide à la préparation de documents. Il n&apos;est
+        pas une prestation d&apos;avocat et n&apos;inclut aucune représentation en
+        justice. Lorsque la procédure le prévoit (requête devant le tribunal de
+        police, référé-suspension et recours pour excès de pouvoir devant le
+        tribunal administratif), le Service prépare les documents et un guide de
+        dépôt. Le Client dépose lui-même ces documents, en son nom et sous sa
+        responsabilité, selon les modalités indiquées dans le guide, notamment
+        depuis son propre compte Télérecours Citoyens pour le tribunal
+        administratif. SOS Amende n&apos;agit pas devant le tribunal à la place du
+        Client et ne garantit pas l&apos;issue de la procédure. Lorsque
+        l&apos;assistance d&apos;un avocat est obligatoire, le Client est invité à
+        consulter un avocat de son choix.
+      </p>
+      <p>
+        SOS Amende n&apos;est pas un cabinet d&apos;avocats. Le Client reste libre
+        d&apos;envoyer la lettre générée ou de contester directement auprès des
         autorités compétentes.
       </p>
 

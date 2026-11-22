@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 import { CATALOGUE_SOURCES, type FailleSourcee } from "./catalogue-sources";
 import type { RegleDetection } from "./moteur";
 
@@ -15,7 +15,7 @@ const VARIABLES_AUTORISEES = [
   "{prefecture}",
   "{motif}",
   "{conditions_meteo}",
-  // Référé-suspension du pack 3F/48SI (urgence art. L. 521-2 CJA) — effacées
+  // Référé-suspension du pack 3F/48SI (urgence art. L. 521-1 CJA) — effacées
   // par nettoyerLettre si le client n'a rien saisi.
   "{metier}",
   "{entreprise}",
@@ -152,7 +152,7 @@ describe("catalogue-sources (garde-fou anti-hallucination)", () => {
     expect(ids).toContain("faille-suspension-notification-irreguliere");
   });
 
-  it("pack 3F/48SI : 6 failles complètes, modèle de référé L. 521-2, aucun L. 521-1", () => {
+  it("pack 3F/48SI : 6 failles complètes, modèle de référé L. 521-1, aucun L. 521-2", () => {
     const pack = CATALOGUE_SOURCES.filter(
       (f) => f.id.startsWith("faille-3f-") || f.id.startsWith("faille-48si-"),
     );
@@ -166,7 +166,7 @@ describe("catalogue-sources (garde-fou anti-hallucination)", () => {
     ]);
     for (const f of pack) {
       expect(f.typeInfraction).toBe("SUSPENSION");
-      expect(f.templateRefere).toContain("L. 521-2");
+      expect(f.templateRefere).toContain("L. 521-1");
       expect(f.templateLettre.length).toBeGreaterThan(50);
       expect(f.reglesDetection.length).toBeGreaterThan(0);
       // Chaque règle de pack est cloisonnée par docType (3F ≠ 48SI)
@@ -174,10 +174,10 @@ describe("catalogue-sources (garde-fou anti-hallucination)", () => {
         expect(regle).toHaveProperty("docType");
       }
     }
-    // Le référé-suspension relève de l'article L. 521-2 CJA — plus aucune
-    // occurrence de l'ancienne (fausse) référence L. 521-1 (référé-liberté).
+    // Le référé-suspension relève de l'article L. 521-1 CJA — plus aucune
+    // occurrence de l'ancienne (fausse) référence L. 521-2 (référé-liberté).
     const tout = JSON.stringify(CATALOGUE_SOURCES);
-    expect(tout).not.toContain("L. 521-1");
-    expect(tout).not.toContain("L.521-1");
+    expect(tout).not.toContain("L. 521-2");
+    expect(tout).not.toContain("L.521-2");
   });
 });

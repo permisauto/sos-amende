@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import { PaiementPublicClient } from "./paiement-client";
 import { libelleMontant } from "@/lib/tarifs";
 
@@ -19,7 +19,7 @@ export default async function PaiementPublicPage(props: {
       <p className="mt-2 text-sm text-zinc-600">
         Renseignez vos informations personnelles pour obtenir le RIB et effectuer votre virement. Le scan et le scoring étaient gratuits.
         {type === "SUSPENSION" ? (
-          <> Offre Suspension &amp; Invalidation : requête au fond, référé-suspension (art. L. 521-2 CJA) et bordereau des pièces inclus.</>
+          <> Offre Suspension &amp; Invalidation : requête au fond, référé-suspension (art. L. 521-1 CJA) et bordereau des pièces inclus.</>
         ) : null}
       </p>
       <div className="mt-8">

@@ -33,9 +33,9 @@ export type FailleSourcee = {
   templateLettre: string;
   /**
    * 2ᵉ template validé admin (pack 3F/48SI) : requête en **référé-suspension**
-   * sur le fondement de l'art. **L. 521-2 du CJA** (le L. 521-1 est le
-   * référé-liberté — correction portée le 2026-10-07). Rendu dans le pack
-   * Télérecours aux côtés de la requête au fond ; null pour les failles sans
+   * sur le fondement de l'art. **L. 521-1 du CJA** (suspension d'exécution :
+   * urgence + doute sérieux sur la légalité — le L. 521-2 est le référé-liberté).
+   * Rendu dans le pack Télérecours aux côtés de la requête au fond ; null pour les failles sans
    * pack. Variables autorisées identiques à `templateLettre` + `{metier}`,
    * `{entreprise}`, `{risque_licenciement}` (urgence, effacées si absentes).
    */
@@ -57,7 +57,7 @@ export type FailleSourcee = {
 };
 
 /**
- * Modèle de **référé-suspension** (art. L. 521-2 CJA) commun aux 6 failles du
+ * Modèle de **référé-suspension** (art. L. 521-1 CJA) commun aux 6 failles du
  * pack 3F/48SI : chaque faille le porte en `templateRefere` pour que le juriste
  * puisse le relire/adapter avant validation (le pack ne rend que le template de
  * la faille principale CONFIRMEE — jamais de texte hors base). Les variables
@@ -68,7 +68,7 @@ const REFERE_SUSPENSION_PACK = `À Monsieur le Président du tribunal administra
 
 Je soussigné(e) {nom}, ai l'honneur de saisir Monsieur le Président, par la présente requête en référé, d'une demande de suspension d'exécution de la décision n° {num_pv} en date du {date} portant atteinte à la validité de mon permis de conduire.
 
-SUR LE FONDEMENT DE L'ARTICLE L. 521-2 DU CODE DE JUSTICE ADMINISTRATIVE
+SUR LE FONDEMENT DE L'ARTICLE L. 521-1 DU CODE DE JUSTICE ADMINISTRATIVE
 
 L'urgence est caractérisée par les conséquences immédiates de la décision contestée sur ma vie personnelle et professionnelle. J'exerce l'activité de {metier} au sein de {entreprise}, et la privation immédiate de la possibilité de conduire met en péril la poursuite de mon activité : {risque_licenciement}.
 
@@ -76,7 +76,7 @@ Le moyen présenté à l'appui de la présente demande est la légalité manifes
 
 EN CONSÉQUENCE
 
-Je demande qu'il plaise à Monsieur le Président du tribunal administratif, en application de l'article L. 521-2 du code de justice administrative, d'ordonner la suspension de l'exécution de la décision n° {num_pv} en date du {date}, l'administration disposant du délai légal pour régulariser la situation si elle le juge opportun.`;
+Je demande qu'il plaise à Monsieur le Président du tribunal administratif, en application de l'article L. 521-1 du code de justice administrative, d'ordonner la suspension de l'exécution de la décision n° {num_pv} en date du {date}, l'urgence le justifiant et un doute sérieux sur la légalité de la décision étant établi.`;
 
 /**
  * Propositions issues de la recherche documentaire (FAILLES.md §H). Chaque
@@ -670,7 +670,7 @@ Dans ces conditions, seule la contravention de l'article R. 234-1 du Code de la 
     id: "faille-suspension-refere-urgence",
     typeInfraction: "SUSPENSION",
     titreFaille: "Référé-suspension et commission médicale",
-    articleLoi: "art. L.521-2 CJA + R.421-1 CJA + R.221-12/13 CR",
+    articleLoi: "art. L.521-1 CJA + R.421-1 CJA + R.221-12/13 CR",
     source: "Service-Public",
     regle: "Recours gracieux/hiérarchique (2 mois) puis REP + référé-suspension (suspension provisoire en 48h-15j). Restitution subordonnée à visite médicale + test psycho.",
     reglesDetection: [{ type: "texteContient", motif: "référé" }],
@@ -679,7 +679,7 @@ Dans ces conditions, seule la contravention de l'article R. 234-1 du Code de la 
 
 L'exécution de cette décision me cause un préjudice grave et immédiat en me privant de la possibilité de conduire, alors que ma contestation présente un doute sérieux quant à la légalité de la suspension.
 
-En application de l'article L. 521-2 du Code de justice administrative, le juge des référés peut suspendre l'exécution d'une décision administrative lorsque l'urgence le justifie et qu'il existe un doute sérieux sur sa légalité.
+En application de l'article L. 521-1 du Code de justice administrative, le juge des référés peut suspendre l'exécution d'une décision administrative lorsque l'urgence le justifie et qu'il existe un doute sérieux sur sa légalité.
 
 En conséquence, je vous demande de bien vouloir ordonner la suspension provisoire de la décision litigieuse,   en m'engageant à accomplir dans le même temps les démarches médicales et psychotechniques préalables à la restitution de mon permis de conduire.`,
   },
@@ -747,7 +747,7 @@ En application des articles 429, 537 et 43 du Code de procédure pénale, l'acte
   // 4 d'entre elles sont injectées en ACTIVE à la synchronisation (décision
   // produit 2026-10-07, `FAILLES_PACK_ACTIVES`) ; les 2 autres (incompétence,
   // stage) restent en PROPOSEE : activation admin uniquement. Toutes portent le
-  // modèle de référé-suspension (art. L. 521-2 CJA). Sources non confirmées
+  // modèle de référé-suspension (art. L. 521-1 CJA). Sources non confirmées
   // marquées `verifiee: false` (décision D2) ; la citation « arrêt Sebaoun »
   // demandée est introuvable sur Légifrance/Judilibre et n'est donc PAS versée
   // en base (anti-hallucination, cf. FAILLES.md §Pack).

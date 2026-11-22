@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tarifs V1 — source unique des prix (plus de 39/59/349 éparpillés dans le
  * code). Trois offres :
  * - **Amende simple — 39 €** : contraventions des classes 1 à 3, lettre
@@ -7,7 +7,7 @@
  *   5 (consignation obligatoire avant le dépôt), même service de lettre et de
  *   dépôt assisté, avec suivi de la consignation.
  * - **Suspension & Invalidation — 199 €** (offre unique) : pack combiné
- *   « requête au fond + référé-suspension (art. L. 521-2 CJA) + bordereau »
+ *   « requête au fond + référé-suspension (art. L. 521-1 CJA) + bordereau »
  *   pour un dépôt sur Télérecours Citoyens (arrêtés 3F et invalidation 48SI).
  *
  * Option « lettre recommandée » (LRAR) : +10 € (montants avec option :

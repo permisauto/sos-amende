@@ -1,4 +1,4 @@
-// Questionnaire ciblé dynamique (N1/N2) — source UNIQUE des questions posées
+﻿// Questionnaire ciblé dynamique (N1/N2) — source UNIQUE des questions posées
 // au client après le scan, des clés écrites dans `extractedData` et des
 // libellés montrés au juriste.
 //
@@ -89,14 +89,14 @@ export type ChampReponse =
   | "suspPointsCumulesJour"
   | "suspStageAvantNotif"
   | "suspSoldeInexact"
-  // Chantier 2 (2026-10-10) — urgence professionnelle (référé L. 521-2).
+  // Chantier 2 (2026-10-10) — urgence professionnelle (référé L. 521-1).
   // `metier`/`entreprise`/`risque_licenciement` sont capturés par les champs
   // en dur du formulaire (`analyseSchema`), pas par le registre — éviter les
   // doublons de nom de champ. Lot R1 : la case `urgencePro` a été remplacée
   // par le radio `urgenceSituation` (pose `urgencePro` implicitement).
   | "urgenceSituation"
   | "siret"
-  // Lot 5 (2026-10-10) — enclavement du domicile (référé L. 521-2).
+  // Lot 5 (2026-10-10) — enclavement du domicile (référé L. 521-1).
   | "domicileEnclave";
 
 export type QuestionCiblee = {
@@ -372,7 +372,7 @@ export const QUESTIONS_CIBLEES: readonly QuestionCiblee[] = [
   },
 
   // ── SUSPENSION — urgence (chantier 2, 2026-10-10 — structuré R1, 2026-10-11)
-  // Capteurs de fait pour le référé d'urgence (art. L. 521-2 CJA) : ils
+  // Capteurs de fait pour le référé d'urgence (art. L. 521-1 CJA) : ils
   // contextualisent la demande de suspension de la mesure, jamais un fondement
   // supplémentaire. Lot R1 : choix unique de la situation principale (radio) —
   // toute option pose `urgencePro = true` (déclencheur pack référé inchangé) ;
@@ -432,7 +432,7 @@ export const QUESTIONS_CIBLEES: readonly QuestionCiblee[] = [
   },
 
   // ── SUSPENSION — enclavement du domicile (lot 5, 2026-10-10) ─────────────
-  // Capteur de fait pour étayer l'urgence du référé (art. L. 521-2 CJA) : le
+  // Capteur de fait pour étayer l'urgence du référé (art. L. 521-1 CJA) : le
   // client déclare que son domicile est difficile d'accès (peu/pas de
   // transport en commun) — sans voiture, la suspension le pénalise
   // fortement. Déclaratif, aucune vérification trajet (arbitrage RGPD) et

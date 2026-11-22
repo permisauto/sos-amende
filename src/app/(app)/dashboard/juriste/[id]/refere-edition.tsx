@@ -1,10 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useActionState, useEffect, useState } from "react";
 import { modifierRefere } from "../actions";
 
 /**
- * Référé-suspension (art. L. 521-2 CJA) : affiché en lecture seule par défaut
+ * Référé-suspension (art. L. 521-1 CJA) : affiché en lecture seule par défaut
  * (consultation), avec bouton « Modifier le référé » tant que le dossier n'est
  * pas validé. Le texte enregistré dans `Dossier.refereGenere` est exactement
  * celui qui partira dans le pack Télérecours (`genererPackTelecours` le
@@ -43,7 +43,7 @@ export function RefereEdition({
     >
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">
-          Référé-suspension (art. L. 521-2 CJA)
+          Référé-suspension (art. L. 521-1 CJA)
         </p>
         <p className="mt-1 text-xs text-indigo-700/80">
           Rédigé à l&apos;analyse — relu et modifiable avant validation : le

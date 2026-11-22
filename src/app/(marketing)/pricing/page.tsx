@@ -34,7 +34,7 @@ export default function PricingPage() {
             <li>Lettre de contestation générée dynamiquement</li>
             <li>Signature électronique</li>
             <li>Relue, corrigée et validée par nos juristes spécialistes en droit routier</li>
-            <li>Dépôt assisté sur le portail officiel (lien sécurisé)</li>
+            <li>Guide de dépôt sur le portail officiel (vous déposez vous-même)</li>
             <li>Suivi jusqu&apos;à la décision</li>
           </ul>
           <Link href="/deposer?type=AMENDE" className="mt-6 inline-block w-full rounded-full bg-emerald-600 px-6 py-3 text-center font-semibold text-white transition hover:bg-emerald-700">
@@ -58,7 +58,7 @@ export default function PricingPage() {
             <li>Guide de consignation (montant de votre avis)</li>
             <li>Signature électronique</li>
             <li>Relue, corrigée et validée par nos juristes spécialistes en droit routier</li>
-            <li>Dépôt assisté et suivi de la décision</li>
+            <li>Guide de dépôt et suivi de la décision</li>
           </ul>
           <Link href="/deposer" className="mt-6 inline-block w-full rounded-full bg-emerald-600 px-6 py-3 text-center font-semibold text-white transition hover:bg-emerald-700">
             Analyser mon avis — gratuit
@@ -82,7 +82,7 @@ export default function PricingPage() {
             <li>Recours gracieux au préfet généré</li>
             <li>Signature électronique</li>
             <li>Relue, corrigée et validée par nos juristes spécialistes en droit routier</li>
-            <li>Dépôt assisté sur Télérecours (lien sécurisé)</li>
+            <li>Préparation du dossier + guide de dépôt sur Télérecours (vous déposez vous-même)</li>
             <li>Suivi des délais et de la commission médicale</li>
           </ul>
           <Link href="/deposer?type=SUSPENSION" className="mt-6 inline-block w-full rounded-full bg-emerald-600 px-6 py-3 text-center font-semibold text-white transition hover:bg-emerald-700">

@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "crypto";
+﻿import { createHash, randomBytes } from "crypto";
 import { baseUrlApp } from "@/lib/base-url";
 import { prisma } from "@/lib/prisma";
 import { notifierLienDepot, notifierStatut } from "@/lib/notifications";
@@ -104,7 +104,7 @@ export async function verifierLienDepot(token: string): Promise<{
       lettrePdf: string | null;
       pv: string | null;
       preuves: FichierDepot[];
-      /** Pack Télérecours (3F/48SI) : requête, référé L. 521-2, bordereau. */
+      /** Pack Télérecours (3F/48SI) : requête, référé L. 521-1, bordereau. */
       pack: {
         requete: string | null;
         refere: string | null;

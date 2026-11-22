@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+﻿import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ExtractedData } from "@/lib/moteur";
 
 vi.mock("@/lib/storage", () => ({
@@ -47,7 +47,7 @@ describe("texteBordereau", () => {
     dateDecision: "2026-07-01",
     documents: [
       "Requête au fond (lettre de contestation) — signée",
-      "Requête en référé-suspension (article L. 521-2 du code de justice administrative)",
+      "Requête en référé-suspension (article L. 521-1 du code de justice administrative)",
       "Copie de la décision de suspension",
     ],
   };
@@ -55,12 +55,12 @@ describe("texteBordereau", () => {
   it("liste les documents réellement produits, numérotés", () => {
     const texte = texteBordereau(opts);
     expect(texte).toContain("BORDEREAU DES PIÈCES DU DÉPÔT");
-    expect(texte).toContain("article L. 521-2 du code de justice administrative");
+    expect(texte).toContain("article L. 521-1 du code de justice administrative");
     expect(texte).toContain("Dossier n° 12345678901234");
     expect(texte).toContain("Décision contestée en date du 1er juillet 2026");
     expect(texte).toContain("1. Requête au fond (lettre de contestation) — signée");
     expect(texte).toContain(
-      "2. Requête en référé-suspension (article L. 521-2 du code de justice administrative)",
+      "2. Requête en référé-suspension (article L. 521-1 du code de justice administrative)",
     );
     expect(texte).toContain("3. Copie de la décision de suspension");
     expect(texte).toContain(
@@ -153,7 +153,7 @@ describe("genererPackTelecours", () => {
   });
 
   // ── Chantier 3 (2026-10-10) : urgence professionnelle → pack double ──
-  it("urgence pro cochée sans templateRefere : référé de secours L. 521-2 généré", async () => {
+  it("urgence pro cochée sans templateRefere : référé de secours L. 521-1 généré", async () => {
     const urls = await genererPackTelecours({
       ...base,
       templateRefere: null,
@@ -165,7 +165,7 @@ describe("genererPackTelecours", () => {
     const texteRefere = vi
       .mocked(generateLettrePdf)
       .mock.calls.map((c) => String(c[0]))
-      .find((t) => t.includes("L'ARTICLE L. 521-2"));
+      .find((t) => t.includes("L'ARTICLE L. 521-1"));
     expect(texteRefere).toBeDefined();
     // Variables d'urgence remplies via ExtractedData.
     expect(texteRefere).toContain("ambulancier");
@@ -215,7 +215,7 @@ describe("genererPackTelecours", () => {
     const texteRefere = vi
       .mocked(generateLettrePdf)
       .mock.calls.map((c) => String(c[0]))
-      .find((t) => t.includes("L'ARTICLE L. 521-2"));
+      .find((t) => t.includes("L'ARTICLE L. 521-1"));
     expect(texteRefere).toBeDefined();
     expect(texteRefere).not.toContain("{metier}");
     expect(texteRefere).not.toContain("{entreprise}");
@@ -331,13 +331,13 @@ describe("texteReferePour", () => {
     ).toBeNull();
   });
 
-  it("sans template, urgence pro cochée : référé de secours L. 521-2", () => {
+  it("sans template, urgence pro cochée : référé de secours L. 521-1", () => {
     const texte = texteReferePour({
       type: "SUSPENSION",
       templateRefere: null,
       data: { ...data, urgencePro: true },
     });
-    expect(texte).toContain("L'ARTICLE L. 521-2");
+    expect(texte).toContain("L'ARTICLE L. 521-1");
     expect(texte).toContain("ambulancier");
     expect(texte).not.toContain("{metier}");
   });
@@ -348,7 +348,7 @@ describe("texteReferePour", () => {
       templateRefere: "",
       data: { ...data, urgencePro: true },
     });
-    expect(texte).toContain("L'ARTICLE L. 521-2");
+    expect(texte).toContain("L'ARTICLE L. 521-1");
   });
 
   it("template qui ne produit que des vides : null (jamais un référé vide)", () => {

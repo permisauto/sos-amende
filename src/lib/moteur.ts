@@ -1,4 +1,4 @@
-import { formaterDateFr } from "./envoi";
+﻿import { formaterDateFr } from "./envoi";
 import {
   ajouterJoursFrances,
   ajouterMoisFrancs,
@@ -146,7 +146,7 @@ export type ExtractedData = {
   suspStageAvantNotif?: boolean;
   suspSoldeInexact?: boolean;
   // Chantier 2 (2026-10-10) — urgence professionnelle (3F/48SI) : capteur de
-  // fait pour le référé d'urgence (L. 521-2 CJA). `siret` est le premier
+  // fait pour le référé d'urgence (L. 521-1 CJA). `siret` est le premier
   // champ **texte** du questionnaire (jamais pré-rempli par l'OCR).
   urgencePro?: boolean;
   /** Situation d'urgence principale (radio « Votre urgence », lot R1) —
@@ -163,7 +163,7 @@ export type ExtractedData = {
     etatAdministratif: string;
   } | null;
   /** Résidence difficile d'accès (peu/pas de transport en commun) — capteur
-   * de fait pour étayer l'urgence du référé L. 521-2 (lot 5). Déclaratif,
+   * de fait pour étayer l'urgence du référé L. 521-1 (lot 5). Déclaratif,
    * aucun fondement automatique (invariant N3). */
   domicileEnclave?: boolean;
   // Pack 3F/48SI (Télérecours Citoyens) — classificateur de document
@@ -197,7 +197,7 @@ export type ExtractedData = {
   soldePoints?: number | string;
   pointsEncourus?: number | string;
   mesure?: Mesure;
-  // Référé-suspension (art. L. 521-2 CJA) — **noms identiques aux variables
+  // Référé-suspension (art. L. 521-1 CJA) — **noms identiques aux variables
   // du template** (`{metier}`, `{entreprise}`, `{risque_licenciement}`) : un
   // renommage en `urgence*` casserait `remplirTemplate` (jamais de copie
   // intermédiaire). Saisie formulaire, jamais inventés.

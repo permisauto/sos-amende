@@ -1,4 +1,4 @@
-import { verifierLienDepot } from "@/lib/lien-depot";
+﻿import { verifierLienDepot } from "@/lib/lien-depot";
 import { ConfirmerDepotForm } from "./confirmer-depot";
 
 export const dynamic = "force-dynamic";
@@ -138,7 +138,7 @@ export default async function FinaliserPage(props: {
                       href={hrefFichier("refere")}
                       className="inline-flex items-center gap-1.5 font-medium text-emerald-800 underline hover:text-emerald-950"
                     >
-                      Télécharger le référé-suspension (art. L. 521-2 CJA)
+                      Télécharger le référé-suspension (art. L. 521-1 CJA)
                     </a>
                   </li>
                 )}

@@ -1,4 +1,4 @@
-import { z } from "zod";
+﻿import { z } from "zod";
 import { appelerGeminiJson } from "@/lib/ia-gemini";
 import type { JurisprudenceRef } from "@/lib/catalogue-sources";
 import {
@@ -70,7 +70,7 @@ export type PropositionVeille = {
    */
   templateLettre?: string;
   /**
-   * Moyen de référé (paragraphe L. 521-2 CJA) — seulement pour les
+   * Moyen de référé (paragraphe L. 521-1 CJA) — seulement pour les
    * suspensions, même lint. `undefined` sur les amendes.
    */
   templateRefere?: string;
@@ -233,7 +233,7 @@ function normaliserMentionArticle(t: string): string {
  *  2. chaque variable `{…}` appartient à la whitelist (le reste serait de
  *     toute façon effacé par `nettoyerLettre` à la génération) ;
  *  3. chaque référence d'article du texte appartient à `articles[]` (déjà
- *     verbatim sur la publication) — le référé cite en plus L. 521-2 CJA
+ *     verbatim sur la publication) — le référé cite en plus L. 521-1 CJA
  *     (seule référence légalement requise hors décision).
  *
  * Échec → le champ est laissé vide : le noyau de la proposition (articles,
@@ -260,7 +260,7 @@ export function assainirTemplate(
     const ref = normaliserMentionArticle(m[1]);
     const connu =
       refs.some((a) => a.includes(ref)) ||
-      (options.refere === true && ref === "l5212");
+      (options.refere === true && ref === "l5211");
     if (!connu) return undefined;
   }
   return t;
@@ -429,7 +429,7 @@ export function construirePromptExtraction(pub: PublicationVeille): string {
     "8. titre_faille_catalogue : titre court (10 à 120 caractères) résumant le fondement exploitable (ex. \"Défaut de motivation de la suspension du permis\").",
     "9. parcours_amende_contestation_omp.paragraphe_lettre_contestation_amende : SI applicable, le CORPS d'une lettre de contestation OMP au 1ère personne (style soutenu, 400 à 2 500 caractères) qui reprend le fondement et les motifs_cles, invoquant UNIQUEMENT les articles de articles_loi_vises. Variables autorisées — exactement celles-ci entre accolades, aucune autre : {nom} {plaque} {num_pv} {date} {montant} {radarId} {lieu}. Ne reprends AUCUN fait d'espèce absent du document. Sinon \"\".",
     "10. parcours_suspension_recours_au_fond_avec_refere.paragraphe_recours_exces_de_pouvoir_fond : SI applicable, le paragraphe du recours au fond (400 à 2 500 caractères, mêmes variables que 9).",
-    "11. parcours_suspension_recours_au_fond_avec_refere.paragraphe_memoire_refere_suspension_urgence : SI applicable, le moyen du référé-suspension — l'article applicable est L. 521-2 du code de justice administrative (doute sérieux + atteinte grave et manifestement illégale). 400 à 1 500 caractères. Variables : {nom} {num_pv} {date} {metier} {entreprise} {siret} {risque_licenciement}. Sinon \"\".",
+    "11. parcours_suspension_recours_au_fond_avec_refere.paragraphe_memoire_refere_suspension_urgence : SI applicable, le moyen du référé-suspension — l'article applicable est L. 521-1 du code de justice administrative (urgence + doute sérieux sur la légalité). 400 à 1 500 caractères. Variables : {nom} {num_pv} {date} {metier} {entreprise} {siret} {risque_licenciement}. Sinon \"\".",
     "12. parcours_suspension_amiable.paragraphe_recours_gracieux_prefet_ou_ministre : SI applicable (et seulement pour une suspension/invalidation où un recours gracieux a du sens), le CORPS d'une demande gracieuse au 1ère personne (400 à 2 500 caractères, mêmes variables que 9) — elle est envoyée en lettre recommandée, elle est autonome de la lettre de recours. Sinon \"\".",
     "13. auto_alimentation_questions_ux_et_preuves.questions : 0 à 6 questions que le CLIENT doit pouvoir répondre par oui/non (BOOLEAN) ou par un texte court (TEXT) pour documenter le cas d'espèce AU TITRE de ce fondement. Chaque question a un id court [a-z0-9_]{3,60} (ex. \"notification_recu_48h\"), un libellé en français, un declencheur (true = la réponse oui déclenche le fondement ; false = la réponse non le déclenche ; \"TEXT_PRESENT\" pour une question TEXT), et 0 ou 1 preuve suggérée {intitule, argument} que le client pourrait téléverser. Les questions portent sur des FAITS vérifiables par le client (notification reçue, délai respecté, état du véhicule…), JAMAIS sur des qualifications juridiques. Si aucune question utile, tableau vide.",
     "14. Si le document ne permet pas d'identifier au moins un article cité et un fondement : renvoie le JSON complet avec tableaux vides et chaînes vides — n'invente JAMAIS.",
@@ -827,7 +827,7 @@ export function templatesMechaniques(
     typeInfraction === "SUSPENSION" && article
       ? [
           `Monsieur le Président du tribunal administratif siégeant en formation de référé,`,
-          `Aux termes de l'article L. 521-2 du code de justice administrative, il existe, dans un litige sérieux, un motif d'ordonner la mesure sollicitée lorsque l'exécution de la décision contestée porte une atteinte grave et manifestement illégale.`,
+          `Aux termes de l'article L. 521-1 du code de justice administrative, le juge des référés peut ordonner la suspension de l'exécution d'une décision administrative lorsque l'urgence le justifie et qu'il existe un doute sérieux sur la légalité de la décision.`,
           `En l'espèce, l'application de l'article ${article} est contestable au regard des éléments constants du dossier : le doute sérieux sur la légalité de la décision contestée justifie la suspension de son exécution.`,
         ].join("\n\n")
       : "";

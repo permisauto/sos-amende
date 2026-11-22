@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { PreuveVirementUpload } from "@/components/preuve-virement-upload";
@@ -87,9 +87,9 @@ export function PaiementPublicClient({
                     Suspension &amp; Invalidation — {libelleMontant("SUSPENSION", false)}
                   </span>
                   <span className="mt-0.5 block text-xs text-zinc-600">
-                    Offre unique : requête au fond, référé-suspension (art. L. 521-2 du
+                    Offre unique : requête au fond, référé-suspension (art. L. 521-1 du
                     code de justice administrative) et bordereau des pièces, prêts à
-                    déposer sur Télérecours Citoyens — pour les arrêtés de suspension
+                    être déposés par vous sur Télérecours Citoyens — pour les arrêtés de suspension
                     (3F) et les invalidations du permis pour solde de points nul (48SI).
                   </span>
                 </span>
