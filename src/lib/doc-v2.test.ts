@@ -10,6 +10,7 @@ import {
   lireCategorie,
   normaliserCategorie,
   parserDocV2,
+  typeInfractionPourCategorie,
 } from "./doc-v2";
 
 describe("doc-v2 — catégories", () => {
@@ -46,6 +47,21 @@ describe("doc-v2 — catégories", () => {
     expect(libelleCategorie("SUSPENSION_PREFECTORALE")).toBe(
       "suspension préfectorale (3F)",
     );
+  });
+
+  it("typeInfractionPourCategorie : amende vs suspension, jamais de correction hasardeuse", () => {
+    expect(typeInfractionPourCategorie("AMENDE_ANTAI")).toBe("AMENDE");
+    expect(typeInfractionPourCategorie("RETENTION_TERRAIN")).toBe("SUSPENSION");
+    expect(typeInfractionPourCategorie("SUSPENSION_PREFECTORALE")).toBe(
+      "SUSPENSION",
+    );
+    expect(typeInfractionPourCategorie("INVALIDATION_48SI")).toBe("SUSPENSION");
+    expect(typeInfractionPourCategorie("PERTE_POINTS_48")).toBe("SUSPENSION");
+    expect(typeInfractionPourCategorie("ANNULATION_JUDICIAIRE")).toBe(
+      "SUSPENSION",
+    );
+    expect(typeInfractionPourCategorie("INCONNU")).toBeNull();
+    expect(typeInfractionPourCategorie(undefined)).toBeNull();
   });
 });
 

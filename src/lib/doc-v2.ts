@@ -65,6 +65,21 @@ export function docTypePourCategorie(
   return DOC_TYPE_PAR_CATEGORIE[cat];
 }
 
+/**
+ * Type d'infraction (AMENDE / SUSPENSION) dérivé de la catégorie OCR v2 —
+ * source de vérité quand le client s'est trompé de type au téléversement.
+ * `AMENDE_ANTAI` → AMENDE ; toute catégorie de suspension (rétention, 3F,
+ * 48SI, 48N, annulation) → SUSPENSION ; catégorie absente ou `INCONNU` →
+ * `null` (pas de correction). Le contentieux (149 €) reste une voie de
+ * procédure d'AMENDE, détectée par `detecterProcedure`, pas une catégorie.
+ */
+export function typeInfractionPourCategorie(
+  cat: CategorieDocument | undefined,
+): "AMENDE" | "SUSPENSION" | null {
+  if (!cat || cat === "INCONNU") return null;
+  return cat === "AMENDE_ANTAI" ? "AMENDE" : "SUSPENSION";
+}
+
 export function libelleCategorie(cat: CategorieDocument): string {
   return LIBELLES_CATEGORIE[cat];
 }

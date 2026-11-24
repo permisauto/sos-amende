@@ -19,7 +19,11 @@ import {
 import { generateLettrePdf } from "@/lib/lettre-pdf";
 import { extrairePv, getOcrProvider, fusionnerPrefill } from "@/lib/ocr";
 import { provenanceChamps } from "@/lib/confiance-ocr";
-import { alignerDocType, lireCategorie } from "@/lib/doc-v2";
+import {
+  alignerDocType,
+  lireCategorie,
+  typeInfractionPourCategorie,
+} from "@/lib/doc-v2";
 import { notifierStatut } from "@/lib/notifications";
 import {
   detecterProcedure,
@@ -148,6 +152,7 @@ export async function createDossier(
   // jamais l'analyse finale — un humain vérifie puis soumet. Borné par le
   // watchdog d'`extrairePv` ; tout échec laisse le dossier créé sans texte.
   let ocrOk = false;
+  let typeCorrige: "AMENDE" | "SUSPENSION" | null = null;
   const tOcr = Date.now();
   try {
     const ocr = await extrairePv(buffer, file.name);
@@ -180,6 +185,15 @@ export async function createDossier(
       const mesure = ocr.extrait?.mesure;
       if (mesure && typeof mesure === "object") prefill.mesure = mesure;
       alignerDocType(prefill, ocr.texte);
+      // Correction du type d'infraction d'après la catégorie OCR (garde-fou
+      // « le client se trompe de type ») : la nature réelle du document prime
+      // sur le choix initial, le prix de base (39 ↔ 199 €) suit le type
+      // corrigé. Le contentieux (149 €) reste détecté à l'analyse (voie de
+      // procédure), pas ici.
+      const derive = typeInfractionPourCategorie(
+        lireCategorie(prefill.categorie),
+      );
+      if (derive && derive !== parsedType.data) typeCorrige = derive;
       // Confiance OCR par champ : provenance dérivée (Gemini / regex / absent),
       // stockée sous la clé réservée `_provenanceOcr` — jamais lue par le
       // moteur, uniquement destinée à éclairer le juriste sur les champs dont
@@ -190,8 +204,23 @@ export async function createDossier(
       );
       await prisma.dossier.update({
         where: { id: dossier.id },
-        data: { pvTexte: ocr.texte, extractedData: prefill as object },
+        data: {
+          pvTexte: ocr.texte,
+          extractedData: prefill as object,
+          ...(typeCorrige
+            ? { type: typeCorrige, prix: prixBase(typeCorrige) }
+            : {}),
+        },
       });
+      if (typeCorrige) {
+        await prisma.dossierEvent.create({
+          data: {
+            dossierId: dossier.id,
+            type: "ANALYSE",
+            detail: `Type corrigé automatiquement (${parsedType.data} → ${typeCorrige}) : la nature du document reconnue diffère de la sélection initiale.`,
+          },
+        });
+      }
       ocrOk = true;
     }
   } catch (e) {
@@ -216,7 +245,9 @@ export async function createDossier(
   // n'est qu'un confort — la saisie manuelle reste le chemin principal.
   redirect(
     ocrOk
-      ? `/dashboard/cases/${dossier.id}`
+      ? typeCorrige
+        ? `/dashboard/cases/${dossier.id}?typecorrige=1`
+        : `/dashboard/cases/${dossier.id}`
       : `/dashboard/cases/${dossier.id}?ocr=echec`,
   );
 }
@@ -702,16 +733,6 @@ export async function analyserDossier(
         return d?.type ?? d?.docType ?? "AMENDE";
       })();
       const parsedType = z.enum(["AMENDE", "SUSPENSION"]).safeParse(documentType);
-      // A+B — protection divergence client / OCR (si le client se trompe de type)
-      if (parsedType.success && dossier.extractedData) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const ocrDocType = (dossier.extractedData as any)?.docType ?? (dossier.extractedData as any)?.doc_v2?.categorie ?? null;
-        if (ocrDocType && ocrDocType !== parsedType.data && (ocrDocType === "AMENDE" || ocrDocType === "3F" || ocrDocType === "48SI" || ocrDocType === "SUSPENSION")) {
-          // Divergence détectée : avertissement sans bloquer l'analyse (le juriste valide)
-          // Peut être tracé dans une variable ou un événement ; ici simple log défensif
-          console.warn(`[Divergence OCR/Client] Dossier ${dossier.id} : formulaire=${parsedType.data} vs OCR=${ocrDocType}`);
-        }
-      }
       const parReponses = await faillesDepuisReponses(
         data,
         failles.map((f) => f.id),

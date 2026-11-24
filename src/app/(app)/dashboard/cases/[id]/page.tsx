@@ -419,6 +419,18 @@ export default async function CaseDetailPage(
         </div>
       )}
 
+      {searchParams.typecorrige === "1" && (
+        <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+          Nous avons reconnu votre document comme{" "}
+          <strong>
+            {item.type === "AMENDE"
+              ? "un avis de contravention (amende)"
+              : "une décision de suspension de permis"}
+          </strong>{" "}
+          — votre sélection initiale a été corrigée en conséquence.
+        </div>
+      )}
+
       {searchParams.ocr === "echec" && (
         <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <p className="font-semibold">
