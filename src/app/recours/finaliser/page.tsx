@@ -35,6 +35,7 @@ export default async function FinaliserPage(props: {
     ? `${dossier.montant.toLocaleString("fr-FR")} €`
     : null;
 
+  const estTelecours = dossier.canal === "TELERECOURS";
   const statutPret = dossier.statut === "PRET";
   const dejaTransmis =
     dossier.statut === "ENVOYE" || dossier.statut === "RESOLU";
@@ -58,7 +59,7 @@ export default async function FinaliserPage(props: {
       </div>
 
       <h1 className="mt-6 text-2xl font-bold">
-        Déposer ma contestation ({dossier.type === "SUSPENSION" ? "Télérecours" : "ANTAI"})
+        Déposer ma contestation ({estTelecours ? "Télérecours" : "ANTAI"})
       </h1>
       <p className="mt-2 text-zinc-600">
         Bonjour {dossier.nomClient}, votre lettre de contestation
@@ -105,7 +106,7 @@ export default async function FinaliserPage(props: {
               <div className="rounded-lg bg-zinc-50 p-3">
                 <dt className="text-xs uppercase tracking-wide text-zinc-500">Portail officiel</dt>
                 <dd className="mt-0.5 font-medium text-zinc-800">
-                  {dossier.type === "SUSPENSION" ? "Télérecours Citoyens" : "ANTAI"}
+                  {estTelecours ? "Télérecours Citoyens" : "ANTAI"}
                 </dd>
               </div>
             </dl>
@@ -128,6 +129,17 @@ export default async function FinaliserPage(props: {
                       className="inline-flex items-center gap-1.5 font-medium text-emerald-800 underline hover:text-emerald-950"
                     >
                       Télécharger la lettre signée (PDF)
+                    </a>
+                  </li>
+                )}
+                {fichiers.pack.requete && (
+                  <li>
+                    <a
+                      data-testid="pack-requete"
+                      href={hrefFichier("requete")}
+                      className="inline-flex items-center gap-1.5 font-medium text-emerald-800 underline hover:text-emerald-950"
+                    >
+                      Télécharger la requête au fond
                     </a>
                   </li>
                 )}
@@ -194,7 +206,7 @@ export default async function FinaliserPage(props: {
             <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-zinc-700">
               <li>
                 Cliquez sur le bouton ci-dessous pour ouvrir le portail officiel{" "}
-                {dossier.type === "SUSPENSION" ? "Télérecours Citoyens" : "ANTAI"}.
+                {estTelecours ? "Télérecours Citoyens" : "ANTAI"}.
               </li>
               <li>
                 Saisissez le numéro de {dossier.type === "SUSPENSION" ? "la décision" : "l’avis de contravention"}{" "}
@@ -219,7 +231,7 @@ export default async function FinaliserPage(props: {
                 rel="noopener noreferrer"
                 className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700"
               >
-                Ouvrir le portail officiel ({dossier.type === "SUSPENSION" ? "Télérecours" : "ANTAI"})
+                Ouvrir le portail officiel ({estTelecours ? "Télérecours" : "ANTAI"})
               </a>
               <ConfirmerDepotForm token={token} />
             </div>
