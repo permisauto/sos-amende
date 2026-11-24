@@ -89,6 +89,25 @@ describe("normaliserPv", () => {
       normaliserPv("Date de vérification : sans objet").dateVerificationAppareil,
     ).toBeUndefined();
   });
+
+  it("préfère la date de l'infraction (libellé) à la date d'émission", () => {
+    const d = normaliserPv(
+      "Date de l'avis : 14/04/2026\nInfraction commise le 08/04/2026",
+    );
+    expect(d.date).toBe("2026-04-08");
+  });
+
+  it("retombe sur la première date libre sans libellé d'infraction", () => {
+    expect(normaliserPv("Date de l'avis : 14/04/2026").date).toBe("2026-04-14");
+  });
+
+  it("extrait le montant près du libellé même sans symbole €", () => {
+    expect(normaliserPv("Montant : 135").montant).toBe("135,00 €");
+  });
+
+  it("ne lit pas une date JJ.MM comme une heure", () => {
+    expect(normaliserPv("commise le 12.03.2026").heure).toBeUndefined();
+  });
 });
 
 describe("mock — identité extraite (Titulaire + Adresse)", () => {

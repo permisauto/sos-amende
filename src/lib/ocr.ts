@@ -437,7 +437,8 @@ Règles impératives :
 - "texte" : le texte brut intégral du document, lettre par lettre, sans reformuler ni résumer ;
 - "categorie" : une seule valeur parmi AMENDE_ANTAI, RETENTION_TERRAIN, SUSPENSION_PREFECTORALE, INVALIDATION_48SI, PERTE_POINTS_48, ANNULATION_JUDICIAIRE, INCONNU ;
 - dates au format AAAA-MM-JJ, heure au format HH:MM, montants en euros décimaux (ex : 135.0) ;
-- "nom" en MAJUSCULES, "prenom" tel qu'imprimé.
+- "nom" en MAJUSCULES, "prenom" tel qu'imprimé ;
+- tout champ technique (préfecture, motif, radar, télépaiement, clé, dates de signature/stage/vérification) n'est renseigné qu'auprès d'un libellé explicite du document ; hors libellé = null (jamais de valeur déduite).
 
 Objet attendu :
 {
@@ -447,7 +448,12 @@ Objet attendu :
     "identifiant_document": null,
     "numero_neph_dossier": null,
     "date_emission_officielle": null,
-    "date_notification_mentionnee": null
+    "date_notification_mentionnee": null,
+    "prefecture_emettrice": null,
+    "numero_telepaiement": null,
+    "cle_telepaiement": null,
+    "date_signature": null,
+    "heure_signature": null
   },
   "profil_client": {
     "nom": null,
@@ -459,7 +465,12 @@ Objet attendu :
     "heure_faits": null,
     "lieu_exact": null,
     "nature_infraction_libelle": null,
-    "immatriculation_vehicule": null
+    "immatriculation_vehicule": null,
+    "motif_suspension": null,
+    "type_radar": null,
+    "numero_radar": null,
+    "date_verification_cinemometre": null,
+    "date_stage": null
   },
   "impact_et_sanctions_financieres": {
     "montant_amende_euros": null,
@@ -656,7 +667,7 @@ async function mistralOcr(buffer: Buffer): Promise<OcrResult | null> {
  */
 async function tesseractOcr(buffer: Buffer): Promise<OcrResult | null> {
   try {
-    const { createWorker } = await import("tesseract.js");
+    const { createWorker, PSM } = await import("tesseract.js");
     // Vercel : le cwd est en lecture seule, seule /tmp est écrivable. Le
     // traineddata (fra) est téléchargé au runtime depuis le CDN jsDelivr puis
     // caché dans cachePath — obligatoire en production serverless.
@@ -665,6 +676,9 @@ async function tesseractOcr(buffer: Buffer): Promise<OcrResult | null> {
       ...(cachePath ? { cachePath } : {}),
     });
     try {
+      // PSM SINGLE_BLOCK : assume un bloc de texte uniforme — mieux adapté
+      // à un avis de contravention dense que l'auto-détection de mise en page.
+      await worker.setParameters({ tessedit_pageseg_mode: PSM.SINGLE_BLOCK });
       const { data } = await worker.recognize(buffer);
       const texte = data.text?.trim();
       if (!texte) return null;
@@ -778,8 +792,16 @@ const DATE_RE = /(?<!\d)(\d{2}[\/-]\d{2}[\/-]\d{2,4})/;
 const DATE_TEXTUELLE_RE = /\b(\d{1,2})(?:er|\.)?\s+([A-Za-zÀ-ÿ]{3,9})\.?\s+(\d{4})\b/;
 /** Date ISO déjà formatée par certains OCR (Gemini le demande explicitement). */
 const DATE_ISO_RE = /\b(\d{4})-(\d{2})-(\d{2})\b/;
-const HEURE_RE = /(\d{1,2})[hH:.](\d{2})/;
+/** Date de l'infraction près d'un libellé explicite (« infraction commise
+ * le… », « date des faits… ») — prioritaire sur la première date libre, qui
+ * peut être la date d'émission (le délai de contestation en dépend). */
+const DATE_INFRACTION_RE =
+  /\b(?:infraction\s+commise|infraction\s+constat[ée]e|date\s+des\s+faits|commise\s+le|constat[ée]e\s+le|relev[ée]e\s+le)\s*[:\-]?\s*([^\n]{0,40})/i;
+const HEURE_RE = /(\d{1,2})[hH:](\d{2})/;
 const MONTANT_RE = /(\d{1,3}(?:[\s.]\d{3})*(?:[,.]\d{2})?)\s*(?:€|euros?)/i;
+/** Montant près du libellé « montant » — accepte l'absence de symbole € (un
+ * OCR qui perd le symbole ne doit pas vider le montant). */
+const MONTANT_LIBELLE_RE = /\bmontant\s*(?:de\s+l['’]?amende\s*forfaitaire)?\s*[:\-]?\s*(\d{1,3}(?:[\s.]\d{3})*(?:[,.]\d{2})?)\s*(?:€|euros?)?/i;
 const NUM_RE = /(\d{3,4}[\s-]?\d{3,4}[\s-]?\d{3,4})/;
 /** Numéro près d'un libellé d'avis (« N° d'avis… », « Numéro de l'avis : » —
  * la forme officielle des avis) — évite de capter un montant, une date ou le
@@ -1056,7 +1078,7 @@ function classifierCategorie(
 export function normaliserPv(texte: string): Partial<ExtractedData> {
   const result: Partial<ExtractedData> = {};
 
-  const montantMatch = texte.match(MONTANT_RE);
+  const montantMatch = texte.match(MONTANT_LIBELLE_RE) ?? texte.match(MONTANT_RE);
   if (montantMatch) {
     const val = Number(montantMatch[1].replace(/[\s.]/g, "").replace(",", "."));
     if (!Number.isNaN(val)) {
@@ -1098,7 +1120,10 @@ export function normaliserPv(texte: string): Partial<ExtractedData> {
     if (iso) result.dateVerificationAppareil = iso;
   }
 
-  const date = extraireDate(texte);
+  const dateInfraction = texte.match(DATE_INFRACTION_RE);
+  const date =
+    (dateInfraction ? extraireDate(dateInfraction[1]) : undefined) ??
+    extraireDate(texte);
   if (date) result.date = date;
 
   // Télépaiement (amendes payables en ligne) : numéro complet + clé, jamais

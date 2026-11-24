@@ -39,6 +39,16 @@ export type DocV2StatutImport = {
   numero_neph_dossier?: string;
   date_emission_officielle?: string;
   date_notification_mentionnee?: string;
+  /** Émetteur de la décision (préfecture pour une suspension). */
+  prefecture_emettrice?: string;
+  /** N° de télépaiement (amendes payables en ligne). */
+  numero_telepaiement?: string;
+  /** Clé de télépaiement (1-2 chiffres). */
+  cle_telepaiement?: string;
+  /** Date de signature de l'arrêté / de la lettre 48SI. */
+  date_signature?: string;
+  /** Heure de signature de la décision. */
+  heure_signature?: string;
 };
 
 /** Section « profil_client » du contrat OCR v2 (titulaire). */
@@ -55,6 +65,16 @@ export type DocV2FaitsInfraction = {
   lieu_exact?: string;
   nature_infraction_libelle?: string;
   immatriculation_vehicule?: string;
+  /** Motif de la mesure (alcool, stupéfiants, excès de vitesse…). */
+  motif_suspension?: string;
+  /** Type de l'appareil radar (« MESTA 210C », …). */
+  type_radar?: string;
+  /** N° d'identification du radar (appareil de contrôle). */
+  numero_radar?: string;
+  /** Date de vérification périodique du cinémomètre (preuve d'entretien). */
+  date_verification_cinemometre?: string;
+  /** Date d'un stage de sensibilisation mentionné sur le document. */
+  date_stage?: string;
 };
 
 /** Section « impact_et_sanctions_financieres » du contrat OCR v2. */

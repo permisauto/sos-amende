@@ -183,6 +183,11 @@ const schemaStatutImport = z.object({
   numero_neph_dossier: champTexte(30),
   date_emission_officielle: champDate(),
   date_notification_mentionnee: champDate(),
+  prefecture_emettrice: champTexte(80),
+  numero_telepaiement: champTexte(20),
+  cle_telepaiement: champTexte(2),
+  date_signature: champDate(),
+  heure_signature: champHeure(),
 });
 
 const schemaProfilClient = z.object({
@@ -197,6 +202,11 @@ const schemaFaitsInfraction = z.object({
   lieu_exact: champTexte(120),
   nature_infraction_libelle: champTexte(140),
   immatriculation_vehicule: champTexte(20),
+  motif_suspension: champTexte(60),
+  type_radar: champTexte(60),
+  numero_radar: champTexte(20),
+  date_verification_cinemometre: champDate(),
+  date_stage: champDate(),
 });
 
 const schemaImpact = z.object({
@@ -278,6 +288,35 @@ function nettoyerNeph(v: string | undefined): string | undefined {
   return s.length >= 6 && s.length <= 20 ? s : undefined;
 }
 
+/** N° de télépaiement : chiffres seulement, 9 à 20 — sinon indéfini (la regex
+ * sur le texte reprendra le relais). Même borne que `TELEPAIEMENT_RE`. */
+function nettoyerTelepaiement(v: string | undefined): string | undefined {
+  if (!v) return undefined;
+  const chiffres = v.replace(/\D/g, "");
+  return chiffres.length >= 9 && chiffres.length <= 20 ? chiffres : undefined;
+}
+
+/** Clé de télépaiement : 1 à 2 chiffres — jamais déduite d'un autre nombre. */
+function nettoyerCleTelepaiement(v: string | undefined): string | undefined {
+  if (!v) return undefined;
+  const s = v.trim();
+  return /^\d{1,2}$/.test(s) ? s : undefined;
+}
+
+/** N° d'identification du radar : chiffres seulement, 2 à 8 — jamais inventé. */
+function nettoyerRadarId(v: string | undefined): string | undefined {
+  if (!v) return undefined;
+  const chiffres = v.replace(/\D/g, "");
+  return chiffres.length >= 2 && chiffres.length <= 8 ? chiffres : undefined;
+}
+
+/** Heure structurée « HH:MM » → miroir « HHhMM » (même format que les regex). */
+function heureVersMiroir(v: string | undefined): string | undefined {
+  if (!v) return undefined;
+  const m = /^(\d{2}):(\d{2})$/.exec(v);
+  return m ? `${m[1]}h${m[2]}` : v;
+}
+
 const PLAQUE_SIV_MIRROR = /^[A-Z]{2,3}-\d{2,4}-[A-Z]{2}$/;
 const PLAQUE_FNI_MIRROR = /^\d{1,4}-[A-Z]{1,2}-\d{1,3}$/;
 
@@ -315,6 +354,14 @@ export function aplatirDocV2(doc: DocV2): Partial<ExtractedData> {
     if (statut.date_notification_mentionnee) {
       m.dateNotification = statut.date_notification_mentionnee;
     }
+    if (statut.prefecture_emettrice) m.prefecture = statut.prefecture_emettrice;
+    const tele = nettoyerTelepaiement(statut.numero_telepaiement);
+    if (tele) m.numTelePaiement = tele;
+    const cle = nettoyerCleTelepaiement(statut.cle_telepaiement);
+    if (cle) m.cle = cle;
+    if (statut.date_signature) m.dateSignatureArrete = statut.date_signature;
+    const heureSign = heureVersMiroir(statut.heure_signature);
+    if (heureSign) m.heureSignatureArrete = heureSign;
   }
 
   const profil = doc.profil_client;
@@ -342,6 +389,14 @@ export function aplatirDocV2(doc: DocV2): Partial<ExtractedData> {
     }
     const plaque = plaqueDepuisStruct(faits.immatriculation_vehicule);
     if (plaque) m.plaque = plaque;
+    if (faits.motif_suspension) m.motif = faits.motif_suspension;
+    if (faits.type_radar) m.typeRadar = faits.type_radar;
+    const radarId = nettoyerRadarId(faits.numero_radar);
+    if (radarId) m.radarId = radarId;
+    if (faits.date_verification_cinemometre) {
+      m.dateVerificationAppareil = faits.date_verification_cinemometre;
+    }
+    if (faits.date_stage) m.dateStage = faits.date_stage;
   }
 
   const impact = doc.impact_et_sanctions_financieres;

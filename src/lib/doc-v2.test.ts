@@ -268,6 +268,47 @@ describe("doc-v2 — aplatirDocV2 (miroir clés plates)", () => {
     const inconnu = parserDocV2({ categorie: "INCONNU", texte: "…" });
     expect(aplatirDocV2(inconnu!).categorie).toBe("INCONNU");
   });
+
+  it("reflète les champs techniques enrichis (préfecture, motif, radar, télépaiement, horodatages)", () => {
+    const brut = parserDocV2({
+      categorie: "SUSPENSION_PREFECTORALE",
+      statut_import: {
+        numero_telepaiement: "12345678901",
+        cle_telepaiement: "02",
+        prefecture_emettrice: "Préfecture du Rhône",
+        date_signature: "2026-07-05",
+        heure_signature: "09:00",
+      },
+      faits_et_infraction: {
+        motif_suspension: "alcoolémie",
+        type_radar: "MESTA 210C",
+        numero_radar: "1248",
+        date_verification_cinemometre: "2025-05-12",
+        date_stage: "2026-06-01",
+      },
+    });
+    const m = aplatirDocV2(brut!);
+    expect(m.numTelePaiement).toBe("12345678901");
+    expect(m.cle).toBe("02");
+    expect(m.prefecture).toBe("Préfecture du Rhône");
+    expect(m.dateSignatureArrete).toBe("2026-07-05");
+    expect(m.heureSignatureArrete).toBe("09h00");
+    expect(m.motif).toBe("alcoolémie");
+    expect(m.typeRadar).toBe("MESTA 210C");
+    expect(m.radarId).toBe("1248");
+    expect(m.dateVerificationAppareil).toBe("2025-05-12");
+    expect(m.dateStage).toBe("2026-06-01");
+  });
+
+  it("écarte un n° de télépaiement trop court ou une clé invalide", () => {
+    const brut = parserDocV2({
+      categorie: "AMENDE_ANTAI",
+      statut_import: { numero_telepaiement: "123", cle_telepaiement: "abc" },
+    });
+    const m = aplatirDocV2(brut!);
+    expect(m.numTelePaiement).toBeUndefined();
+    expect(m.cle).toBeUndefined();
+  });
 });
 
 describe("doc-v2 — alignerDocType", () => {
