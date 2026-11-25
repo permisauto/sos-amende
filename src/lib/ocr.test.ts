@@ -449,17 +449,27 @@ describe("extrairePv — PDF (couche texte locale, jamais envoyé aux API images
   );
 
   it(
-    "PDF scanné + gemini-flash : bien téléversé via la Files API",
+    "PDF scanné + gemini-flash : extrait les images et les OCRise en inline_data (plus de Files API)",
     async () => {
       process.env.OCR_PROVIDER = "gemini-flash";
       process.env.GEMINI_API_KEY = "cle-test";
-      const fetchMock = simulerGeminiFiles(REPONSE_OK);
+      const fetchMock = simulerGemini([{ status: 200, body: REPONSE_OK }]);
 
       const res = await extrairePv(SCAN_PDF);
 
       expect(res?.extrait?.plaque).toBe("AB-123-CD");
-      // start (session) + push (octets) + generateContent = la Files API.
-      expect(fetchMock).toHaveBeenCalledTimes(3);
+      // Le PDF scanné est OCRisé image par image (inline_data), jamais via la
+      // Files API (2 uploads + génération) — c'est ce qui dépassait le watchdog
+      // de 20 s sur les PDF volumineux.
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const corps = JSON.parse(
+        String(
+          (fetchMock.mock.calls[0] as unknown as [RequestInfo | URL, RequestInit | undefined])[1]
+            ?.body,
+        ),
+      );
+      expect(corps.contents[0].parts[0].inline_data).toBeDefined();
+      expect(corps.contents[0].parts[0].inline_data.mime_type).toBe("image/png");
     },
     30_000,
   );

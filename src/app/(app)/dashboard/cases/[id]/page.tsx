@@ -443,6 +443,7 @@ export default async function CaseDetailPage(
               Diagnostic : provider OCR = <code className="font-mono font-semibold">{getOcrProvider()}</code>
               {getOcrProvider() === "aucun" && " — aucune clé API configurée (voir .env : OCR_PROVIDER / GEMINI_API_KEY / GOOGLE_VISION_KEY / MISTRAL_API_KEY)"}
               {getOcrProvider() === "mock" && process.env.NODE_ENV === "production" && " — simulation (mock) en production (texte fictif)"}
+              {getOcrProvider() === "gemini-flash" && " — si le document est un PDF volumineux, l'OCR a pu dépasser le délai ; réessayez avec une image ou un PDF plus léger."}
             </span>
           </p>
         </div>

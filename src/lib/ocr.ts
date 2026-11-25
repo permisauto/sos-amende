@@ -170,8 +170,26 @@ async function lirePdfAvecProvider(
     }
 
     if (provider === "gemini-flash") {
-      // PDF scanné : Gemini lit le document entier (Files API) — le seul
-      // chemin qu'il connaît pour un PDF, préservé tel quel.
+      // PDF sans couche texte : on privilégie les images intégrées
+      // (inline_data, une requête par image — rapide et fiable) plutôt que la
+      // Files API (2 requêtes d'upload + 1 génération ≈ 30 s), qui dépassait
+      // le watchdog global de 20 s sur les PDF volumineux. La Files API ne
+      // reste qu'en dernier recours (aucune image extractible).
+      const images = await imagesDepuisPdf(parser);
+      if (images.length > 0) {
+        const textes: string[] = [];
+        let extrait: OcrResult["extrait"];
+        for (const img of images) {
+          const r = await geminiFlashOcr(img);
+          if (r?.texte) textes.push(r.texte.trim());
+          if (!extrait && r?.extrait) extrait = r.extrait;
+        }
+        const concatene = textes.join("\n\n").trim();
+        console.log(
+          JSON.stringify({ evt: "ocr:pdf", couche: "gemini-images", provider, images: images.length, chars: concatene.length, ms: Date.now() - debut }),
+        );
+        return concatene ? { texte: concatene, extrait } : null;
+      }
       const res = await geminiFlashOcr(buffer);
       console.log(
         JSON.stringify({ evt: "ocr:pdf", couche: "gemini", provider, mots, ok: Boolean(res), ms: Date.now() - debut }),
