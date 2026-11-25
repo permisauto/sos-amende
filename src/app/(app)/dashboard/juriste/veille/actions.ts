@@ -22,6 +22,7 @@ import {
 import type { PropositionVeille } from "@/lib/veille-extraction";
 import { reglesDetectionPourQuestions } from "@/lib/questions";
 import { invalidateQuestionsDynamiquesCache } from "@/lib/questions-dyn";
+import { invaliderCacheVeille } from "@/lib/veille-cache";
 
 /** Budget du bouton « Extraire les propositions » (plus large que le lot auto). */
 const BUDGET_EXTRACTION_LOT = 30;
@@ -56,6 +57,7 @@ export async function ecarterSource(
       data: { statut: "INACTIVE" },
     });
     invalidateQuestionsDynamiquesCache();
+  invaliderCacheVeille();
   }
   revalidatePath("/dashboard/juriste/veille");
   revalidatePath("/dashboard/juriste/failles");
@@ -399,6 +401,7 @@ export async function validerPropositionSource(
   revalidatePath("/dashboard/juriste/veille");
   revalidatePath("/dashboard/juriste/failles");
   invalidateQuestionsDynamiquesCache();
+  invaliderCacheVeille();
   const etat = statutFaille === "ACTIVE" ? "ACTIVÉE" : "enregistrée en proposition";
   return {
     ok: true,

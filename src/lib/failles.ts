@@ -25,6 +25,7 @@
 
 import type { Prisma, PrismaClient } from "@/prisma/generated-client";
 import { invalidateQuestionsDynamiquesCache } from "@/lib/questions-dyn";
+import { invaliderCacheVeille } from "@/lib/veille-cache";
 
 export type ChampsActivation = {
   regle: string | null;
@@ -140,6 +141,7 @@ export async function activerPropositionsCompletes(
     });
   }
   invalidateQuestionsDynamiquesCache();
+  invaliderCacheVeille();
   return {
     activees: activables.map((f) => f.id),
     ignorees: proposees.length - activables.length,
@@ -189,5 +191,6 @@ export async function injecterFaillesPack(
     });
   }
   invalidateQuestionsDynamiquesCache();
+  invaliderCacheVeille();
   return activables.map((f) => f.id);
 }

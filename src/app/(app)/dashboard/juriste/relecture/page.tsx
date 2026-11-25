@@ -24,7 +24,7 @@ const TYPE_LABEL: Record<string, string> = {
 export default async function RelecturePage() {
   await requireJuriste();
 
-  const [aRelire, relues] = await Promise.all([
+  const [aRelire, relues, tracesCaducite] = await Promise.all([
     prisma.failleJuridique.findMany({
       where: { statut: "ACTIVE", reluLe: null },
       orderBy: [{ typeInfraction: "asc" }, { createdAt: "asc" }],
@@ -32,7 +32,22 @@ export default async function RelecturePage() {
     prisma.failleJuridique.count({
       where: { statut: "ACTIVE", reluLe: { not: null } },
     }),
+    prisma.autoAlimentationTrace.findMany({
+      where: { campagne: "caducite", statut: "OK" },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+      select: { id: true, detail: true, createdAt: true },
+    }),
   ]);
+
+  // Alertes de caducité : le cron signale (dans `detail`) les articles cités
+  // par une faille ACTIVE qu'un texte récemment ingéré abroge ou modifie.
+  const alertesCaducite = tracesCaducite.flatMap((t) =>
+    (t.detail ?? "")
+      .split("|")
+      .map((a) => a.trim())
+      .filter(Boolean),
+  );
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -50,6 +65,29 @@ export default async function RelecturePage() {
           Relues ({relues})
         </span>
       </div>
+
+      {alertesCaducite.length > 0 && (
+        <div
+          data-testid="alertes-caducite"
+          className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-5"
+        >
+          <h2 className="text-sm font-semibold text-red-900">
+            Alertes de caducité ({alertesCaducite.length})
+          </h2>
+          <p className="mt-1 text-xs text-red-800">
+            Un texte récemment ingéré abroge ou modifie un article cité par une
+            faille active. Vérifiez la faille concernée avant de la laisser
+            partir en lettre.
+          </p>
+          <ul className="mt-3 space-y-1.5 text-xs text-red-700">
+            {alertesCaducite.map((alerte, i) => (
+              <li key={i} className="rounded-lg bg-white px-3 py-2">
+                {alerte}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {aRelire.length === 0 ? (
         <div className="mt-6 rounded-2xl border border-dashed border-emerald-300 bg-emerald-50 p-12 text-center">

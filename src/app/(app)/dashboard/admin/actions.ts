@@ -22,6 +22,7 @@ import {
 } from "@/lib/failles";
 import { synchroniserSourceLiee } from "@/lib/veille-ingestion";
 import { invalidateQuestionsDynamiquesCache } from "@/lib/questions-dyn";
+import { invaliderCacheVeille } from "@/lib/veille-cache";
 
 export type FailleState =
   | {
@@ -128,6 +129,7 @@ export async function creerFaille(
 
   revalidatePath("/dashboard/juriste/failles");
   invalidateQuestionsDynamiquesCache();
+  invaliderCacheVeille();
   return { ok: true };
 }
 
@@ -147,6 +149,22 @@ export async function modifierFaille(
   const jurisprudence = lireJurisprudence(formData);
   if ("error" in jurisprudence) return jurisprudence;
 
+  // Réinitialise la trace de relecture quand le fondement juridique rédigé
+  // (article, règle dégagée, template de lettre) change : la faille repasse
+  // « à relire » — sinon la checklist mentirait (contenu modifié, encore
+  // marqué relu).
+  const existante = await prisma.failleJuridique.findUnique({
+    where: { id },
+    select: { articleLoi: true, regle: true, templateLettre: true },
+  });
+  if (!existante) {
+    return { error: "Faille introuvable." };
+  }
+  const fondementModifie =
+    existante.articleLoi !== parsed.data.articleLoi ||
+    (existante.regle ?? "") !== (parsed.data.regle || "") ||
+    existante.templateLettre !== parsed.data.templateLettre;
+
   await prisma.failleJuridique.update({
     where: { id },
     data: {
@@ -157,11 +175,13 @@ export async function modifierFaille(
         jurisprudence.jurisprudence.length > 0
           ? jurisprudence.jurisprudence
           : Prisma.JsonNull,
+      ...(fondementModifie ? { reluLe: null, reluPar: null } : {}),
     },
   });
 
   revalidatePath("/dashboard/juriste/failles");
   invalidateQuestionsDynamiquesCache();
+  invaliderCacheVeille();
   return { ok: true };
 }
 
@@ -197,6 +217,7 @@ export async function basculerFaille(
 
   revalidatePath("/dashboard/juriste/failles");
   invalidateQuestionsDynamiquesCache();
+  invaliderCacheVeille();
   return { ok: true, statut: devientActive ? "ACTIVE" : "INACTIVE" };
 }
 
@@ -235,6 +256,7 @@ export async function importerFaillesDepuisSources(
 
   revalidatePath("/dashboard/juriste/failles");
   invalidateQuestionsDynamiquesCache();
+  invaliderCacheVeille();
   return {
     ok: true,
     count,
@@ -353,6 +375,7 @@ export async function appliquerMiseAJourCatalogue(
 
   revalidatePath("/dashboard/juriste/failles");
   invalidateQuestionsDynamiquesCache();
+  invaliderCacheVeille();
   return { ok: true };
 }
 
@@ -406,6 +429,7 @@ export async function validerPropositionFaille(
 
   revalidatePath("/dashboard/juriste/failles");
   invalidateQuestionsDynamiquesCache();
+  invaliderCacheVeille();
   return { ok: true, statut: action };
 }
 
@@ -449,6 +473,7 @@ export async function activerFailleProposee(
 
   revalidatePath("/dashboard/juriste/failles");
   invalidateQuestionsDynamiquesCache();
+  invaliderCacheVeille();
   return { ok: true, statut: "ACTIVE" };
 }
 
@@ -526,6 +551,7 @@ export async function importerFailles(
 
   revalidatePath("/dashboard/juriste/failles");
   invalidateQuestionsDynamiquesCache();
+  invaliderCacheVeille();
   return { ok: true, count: checked.data.length };
 }
 
@@ -848,5 +874,6 @@ export async function activerToutesPropositions(
 
   revalidatePath("/dashboard/juriste/failles");
   invalidateQuestionsDynamiquesCache();
+  invaliderCacheVeille();
   return { ok: true };
 }

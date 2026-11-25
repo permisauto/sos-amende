@@ -77,6 +77,12 @@ import {
   quotaGeminiRestant,
 } from "@/lib/gemini-quota";
 import { invalidateQuestionsDynamiquesCache } from "@/lib/questions-dyn";
+import {
+  ecrireCacheArticlesVeille,
+  ecrireCacheHistoriqueVeille,
+  lireCacheArticlesVeille,
+  lireCacheHistoriqueVeille,
+} from "@/lib/veille-cache";
 
 const TIMEOUT_LISTING_MS = 15_000;
 const TIMEOUT_ARCHIVE_MS = 60_000;
@@ -739,8 +745,13 @@ export async function lireCandidatesExtraction(
  * publication qui ne cite qu'un article déjà traité est probablement un
  * doublon (le pré-filtre la dépriorise). Best-effort : une base en rade
  * renvoie un ensemble vide (aucune dépriorisation).
+ *
+ * Cache TTL (5 min) dans `veille-cache.ts` : la lecture est invalidée dès
+ * qu'une activation/écart/modification change la donne (`invaliderCacheVeille`).
  */
 export async function articlesCouvertsParFaillesActives(): Promise<Set<string>> {
+  const c = lireCacheArticlesVeille();
+  if (c) return c;
   try {
     const failles = await prisma.failleJuridique.findMany({
       where: { statut: "ACTIVE" },
@@ -750,6 +761,7 @@ export async function articlesCouvertsParFaillesActives(): Promise<Set<string>> 
     for (const f of failles) {
       for (const a of extraireArticles(f.articleLoi ?? "")) set.add(a);
     }
+    ecrireCacheArticlesVeille(set);
     return set;
   } catch (e) {
     console.error("veille-prefiltre: lecture des failles actives impossible", e);
@@ -765,6 +777,8 @@ export async function articlesCouvertsParFaillesActives(): Promise<Set<string>> 
 export async function historiqueVeille(): Promise<
   ReturnType<typeof historiqueParArticle>
 > {
+  const c = lireCacheHistoriqueVeille();
+  if (c) return c;
   try {
     const [historique, failles] = await Promise.all([
       chargerHistoriqueFailles(),
@@ -773,10 +787,12 @@ export async function historiqueVeille(): Promise<
         select: { id: true, articleLoi: true },
       }),
     ]);
-    return historiqueParArticle(
+    const data = historiqueParArticle(
       historique,
       failles.map((f) => ({ failleId: f.id, articleLoi: f.articleLoi })),
     );
+    ecrireCacheHistoriqueVeille(data);
+    return data;
   } catch (e) {
     console.error("veille-resultat: historique de veille impossible", e);
     return new Map();
