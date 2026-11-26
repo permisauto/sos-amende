@@ -37,7 +37,9 @@
 | **OCR_HTTP_TIMEOUT_MS** | `10000` | Production | Timeout par requête OCR (défaut 10 s) |
 | **VERIF_IA_PROVIDER** | `gemini` | Production | `off` pour couper ; jamais `mock` en prod |
 | **GEMINI_QUOTA_JOUR** | `20` | Production | Quota Gemini quotidien (palier gratuit) |
-| **GEMINI_PART_EXTRACTION** | `5` | Production | Part du quota réservée à la veille |
+| **GEMINI_PART_EXTRACTION** | `0` | Production | 0 = extraction IA de la veille coupée (secours local), tout le quota revient à l'OCR client. Remettre 5 après passage Gemini payant ou chantier « B4 » (réserve OCR). |
+| **OCR_PDF_MAX_PAGES** | `2` | Production | Pages max OCRisées d'un PDF scanné (défaut 2). |
+| **OCR_CACHE_TTL_SECONDS** | `86400` | Production | TTL du cache SHA-256 des documents déjà OCRisés (défaut 24 h). |
 | **GROQ_API_KEY** | `...` | Production | Optionnel (veille / health full) |
 | **SIRET_PROVIDER** | `` (vide) | Production | API publique gratuite |
 | **RATE_LIMIT_STORE** | `postgres` | Production | **Obligatoire en prod** pour rate-limit distribué |
