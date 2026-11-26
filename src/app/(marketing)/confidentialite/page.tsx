@@ -90,7 +90,6 @@ export default function ConfidentialitePage() {
         <li>Veille juridique (Journal officiel uniquement, données publiques,
           aucune donnée personnelle) : Groq (analyse de texte sur données
           publiques) ;</li>
-        <li>Notifications clients : WhatsApp ;</li>
         <li>Paiement par carte bancaire : Stripe (à venir).</li>
       </ul>
       <p>

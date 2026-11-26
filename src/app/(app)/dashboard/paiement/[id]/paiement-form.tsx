@@ -67,7 +67,7 @@ export function PaiementForm({
             )}
           </div>
         )}
-        <p className="mt-3 text-xs text-emerald-700">Un juriste validera votre paiement et débloquera la lettre (sous 24h ouvrées). Vous serez notifié par email/WhatsApp.</p>
+        <p className="mt-3 text-xs text-emerald-700">Un juriste validera votre paiement et débloquera la lettre (sous 24h ouvrées). Vous serez notifié par email ou WhatsApp.</p>
       </div>
     );
   }
@@ -76,7 +76,7 @@ export function PaiementForm({
     <div className="flex flex-col gap-6">
       <div className="rounded-2xl border border-zinc-200 bg-white p-6">
         <h3 className="font-semibold">Vos coordonnées</h3>
-        <p className="mt-1 text-xs text-zinc-500">Requises pour la facture et le suivi WhatsApp.</p>
+        <p className="mt-1 text-xs text-zinc-500">Requises pour la facture et le suivi de votre dossier.</p>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <label className="flex flex-col gap-1.5">
             <span className="text-sm font-medium">Prénom *</span>
@@ -91,8 +91,8 @@ export function PaiementForm({
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm" />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium">WhatsApp *</span>
-            <input type="tel" placeholder="+34 613 88 55 73" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} required className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm" />
+            <span className="text-sm font-medium">Téléphone (joignable par WhatsApp) *</span>
+            <input type="tel" placeholder="+33 6 12 34 56 78" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} required className="rounded-xl border border-zinc-300 px-3 py-2.5 text-sm" />
           </label>
         </div>
       </div>

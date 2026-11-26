@@ -18,10 +18,6 @@ export function SiteFooter() {
           <p className="text-xs">
             <a href="mailto:contact@recours-permis-pv.com" className="hover:text-zinc-900">
               contact@recours-permis-pv.com
-            </a>{" "}
-            · WhatsApp{" "}
-            <a href="https://wa.me/34613885573" className="hover:text-zinc-900">
-              +34 613 88 55 73
             </a>
           </p>
         </div>

@@ -202,7 +202,7 @@ type JuristeCaseDetail = {
   decisionAttendueLe?: Date | null;
   decisionRecupereeLe?: Date | null;
   valideLe: Date | null;
-  user: { name: string | null; email: string | null; signatureUrl: string | null };
+  user: { name: string | null; email: string | null; signatureUrl: string | null; telephone: string | null };
   messages: Array<{
     id: string;
     contenu: string;
@@ -256,6 +256,7 @@ function demoJuristeDossier(id: string): JuristeCaseDetail | null {
     name: "Jean Dupont",
     email: "e2e-client@test.local",
     signatureUrl: null,
+    telephone: null,
   };
   const evenements = [
     { type: "CREATION", detail: "Dossier créé", createdAt: new Date(MOCK_NOW_JURISTE - 86400000 * 2) },
@@ -338,7 +339,7 @@ export default async function JuristeCasePage(
             expediteur: { select: { id: true, name: true, role: true } },
           },
         },
-        user: { select: { name: true, email: true, signatureUrl: true } },
+        user: { select: { name: true, email: true, signatureUrl: true, telephone: true } },
       },
     })) as unknown as JuristeCaseDetail | null;
   } catch (e) {
@@ -806,6 +807,12 @@ export default async function JuristeCasePage(
               )}
           </div>
           <p className="mt-1 text-sm text-zinc-500">{item.user.email}</p>
+          {item.user.telephone && (
+            <p className="mt-1 text-sm text-zinc-600">
+              Téléphone (joignable par WhatsApp) :{" "}
+              <span className="font-medium">{item.user.telephone}</span>
+            </p>
+          )}
         </div>
         {dateLimite && (
           <div className="text-right">
