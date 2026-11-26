@@ -585,7 +585,7 @@ export default async function CaseDetailPage(
             envoi. C&apos;est gratuit : le paiement intervient seulement si une
             faille est validée.
           </p>
-          <div className="mt-6">
+          <div className="mt-6 grid gap-6 lg:grid-cols-2 lg:items-start">
             <AnalyseForm
               dossierId={item.id}
               type={item.type}
@@ -593,6 +593,31 @@ export default async function CaseDetailPage(
               prefill={item.extractedData as AnalysePrefill | null}
               questionsDynamiques={questionsDynamiques}
             />
+            {/* Document téléversé, à côté du formulaire : le client peut
+                copier-coller les champs (n° avis, montant…) au lieu de tout
+                ressaisir — filet de sécurité quand l'OCR n'a rien pré-rempli. */}
+            <aside className="lg:sticky lg:top-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                Document téléversé (copiez-collez si besoin)
+              </p>
+              {item.pvTexte ? (
+                <pre className="mt-2 max-h-[70vh] overflow-auto whitespace-pre-wrap rounded-xl bg-white p-3 text-xs leading-relaxed text-zinc-700">
+                  {item.pvTexte}
+                </pre>
+              ) : (
+                <p className="mt-2 text-xs text-zinc-500">
+                  Aucun texte extrait — le document est visible plus bas.
+                </p>
+              )}
+              {pvUrl && isImage && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={pvUrl}
+                  alt="Document téléversé"
+                  className="mt-3 max-h-64 rounded-xl border border-zinc-200 bg-white object-contain"
+                />
+              )}
+            </aside>
           </div>
         </section>
       )}

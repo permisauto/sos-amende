@@ -15,6 +15,18 @@ const nextConfig = {
   //    NEXT_OUTPUT=standalone). `next start` local/E2E refuse ce mode.
   output: process.env.NEXT_OUTPUT === 'standalone' ? 'standalone' : undefined,
 
+  // 3. Traçage forcé du polyfill canvas (chargé dynamiquement par pdf-parse/
+  //    pdfjs-dist pour DOMMatrix) : sans lui, la lecture locale de la couche
+  //    texte d'un PDF échoue en prod Vercel (ReferenceError: DOMMatrix is not
+  //    defined) et retombe sur la Files API Gemini. On embarque le wrapper JS
+  //    ET les binaires natifs (win32 en local, linux-x64-gnu en prod).
+  outputFileTracingIncludes: {
+    '/**': [
+      './node_modules/@napi-rs/canvas/**/*',
+      './node_modules/@napi-rs/canvas-*/**/*',
+    ],
+  },
+
   // 4. Fallbacks de secours si Webpack est appelé en parallèle
   webpack: (
     config: { resolve: { fallback?: Record<string, unknown>; alias: Record<string, unknown> } },

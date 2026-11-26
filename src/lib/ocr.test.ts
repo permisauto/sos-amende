@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { estTransitoire, extrairePv, fusionnerPrefill, getOcrProvider, normaliserPv } from "./ocr";
+import { viderCacheOcr } from "./ocr-cache";
 
 const PV_TEXTE = `CONTRAVENTION
 N° 123456789
@@ -40,6 +41,7 @@ afterEach(() => {
   delete process.env.MISTRAL_API_KEY;
   delete process.env.OCR_TIMEOUT_MS;
   delete process.env.OCR_HTTP_TIMEOUT_MS;
+  viderCacheOcr();
 });
 
 describe("normaliserPv", () => {

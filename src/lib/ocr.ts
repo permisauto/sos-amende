@@ -1,5 +1,7 @@
 import type { CategorieDocument, ExtractedData } from "@/lib/moteur";
 import { aplatirDocV2, docTypePourCategorie, parserDocV2 } from "@/lib/doc-v2";
+import { enregistrerAppelGemini, quotaGeminiRestant } from "@/lib/gemini-quota";
+import { ecrireCacheOcr, hashBuffer, lireCacheOcr } from "@/lib/ocr-cache";
 
 export type OcrResult = {
   texte: string;
@@ -7,6 +9,8 @@ export type OcrResult = {
   /** Champs structurés éventuels (Gemini les extrait nativement) — sinon,
    * normaliserPv(texte) s'applique en secours. */
   extrait?: Partial<ExtractedData>;
+  /** Usage Gemini (tokens) — télémétrie FinOps, jamais exposé au client. */
+  usage?: { promptTokens: number; candidatesTokens: number };
 };
 
 export type OcrProvider = "google-vision" | "mistral-ocr" | "gemini-flash" | "tesseract" | "mock" | "aucun";
@@ -62,6 +66,33 @@ function delaiOcr(env: string | undefined, defaut: number): number {
  * ordonnance de justice, sinon le PV d'amende de référence). Seul « arrete »
  * ouvre la voie 3F : « decision » reste sur le PV par défaut pour ne pas
  * basculer `suspension.spec.ts`. */
+/** Télémétrie FinOps anonymisée : cache hit/miss, modèle, octets, tokens,
+ * latence — jamais de PII (pas de plaque, nom, n° d'avis). */
+function logFinOps(opts: {
+  cache: "hit" | "miss";
+  provider: OcrProvider;
+  bytesIn: number;
+  latenceMs: number;
+  tokensIn?: number;
+  tokensOut?: number;
+}): void {
+  console.log(
+    JSON.stringify({
+      evt: "ocr:finops",
+      cache: opts.cache,
+      provider: opts.provider,
+      modele:
+        opts.provider === "gemini-flash"
+          ? (process.env.GEMINI_MODEL ?? "gemini-3.6-flash")
+          : null,
+      bytes_in: opts.bytesIn,
+      latence_ms: opts.latenceMs,
+      tokens_in: opts.tokensIn ?? null,
+      tokens_out: opts.tokensOut ?? null,
+    }),
+  );
+}
+
 export async function extrairePv(
   buffer: Buffer,
   nomFichier?: string,
@@ -70,10 +101,20 @@ export async function extrairePv(
   if (provider === "mock") return mockOcr(nomFichier);
   if (provider === "aucun") return null;
 
+  // Cache FinOps : un même document ré-uploadé récemment est servi sans
+  // rappeler l'OCR (0 €). Empreinte SHA-256 du buffer, jamais de PII.
+  const hash = hashBuffer(buffer);
+  const enCache = lireCacheOcr(hash);
+  if (enCache) {
+    logFinOps({ cache: "hit", provider, bytesIn: buffer.length, latenceMs: 0 });
+    return enCache;
+  }
+
+  const debut = Date.now();
   const delai = delaiOcr(process.env.OCR_TIMEOUT_MS, OCR_TIMEOUT_MS_DEFAUT);
   let minuteur: ReturnType<typeof setTimeout> | undefined;
   try {
-    return await Promise.race([
+    const resultat = await Promise.race([
       extrairePvSelonFormat(buffer, provider),
       new Promise<null>((resolve) => {
         minuteur = setTimeout(() => {
@@ -84,6 +125,18 @@ export async function extrairePv(
         }, delai);
       }),
     ]);
+    if (resultat?.texte) {
+      ecrireCacheOcr(hash, resultat);
+      logFinOps({
+        cache: "miss",
+        provider,
+        bytesIn: buffer.length,
+        latenceMs: Date.now() - debut,
+        tokensIn: resultat.usage?.promptTokens,
+        tokensOut: resultat.usage?.candidatesTokens,
+      });
+    }
+    return resultat;
   } finally {
     clearTimeout(minuteur);
   }
@@ -133,8 +186,13 @@ function fetchOcr(url: string, init: RequestInit = {}): Promise<Response> {
 
 /** Seuil sous lequel on considère qu'un PDF n'a pas de couche texte exploitable. */
 const SEUIL_TEXTE_PDF = 10; // mots
-/** Images intégrées maximales OCRisées dans un PDF scanné (1 par page en pratique). */
-const MAX_IMAGES_PDF = 4;
+/** Images intégrées maximales OCRisées dans un PDF scanné (1 par page en
+ * pratique). Borné pour maîtriser le coût : seules les N premières pages d'un
+ * scan partent en OCR. Surchargeable par `OCR_PDF_MAX_PAGES` (défaut 2). */
+function limitePagesPdf(): number {
+  const n = Number.parseInt(process.env.OCR_PDF_MAX_PAGES ?? "", 10);
+  return Number.isFinite(n) && n > 0 ? n : 2;
+}
 
 type PdfParse = InstanceType<typeof import("pdf-parse").PDFParse>;
 
@@ -246,7 +304,7 @@ async function imagesDepuisPdf(parser: PdfParse): Promise<Buffer[]> {
         const octets = Buffer.from(m[2], "base64");
         if (octets.length < 2_000) continue; // vignettes / icônes
         out.push(octets);
-        if (out.length >= MAX_IMAGES_PDF) return out;
+        if (out.length >= limitePagesPdf()) return out;
       }
     }
   } catch (err) {
@@ -340,6 +398,13 @@ function detecterMime(buffer: Buffer): string {
  * d'exception : un OCR en échec laisse le client saisir à la main.
  */
 async function geminiFlashOcr(buffer: Buffer): Promise<OcrResult | null> {
+  // Garde-fou quota Gemini : quand le palier gratuit est épuisé, on ne tente
+  // pas l'appel (qui échouerait en 429) et on retombe sur le repli local
+  // tesseract — le client n'est jamais bloqué, le document est toujours lu.
+  if ((await quotaGeminiRestant()) <= 0) {
+    console.error("[ocr:gemini] quota journalier épuisé — repli tesseract");
+    return tesseractOcr(buffer);
+  }
   try {
     return await avecRetry(() => geminiFlashOcrUnEssai(buffer));
   } catch (err) {
@@ -375,6 +440,9 @@ async function geminiFlashOcrUnEssai(buffer: Buffer): Promise<OcrResult | null> 
       ];
     }
 
+    // Chaque appel generateContent consomme le quota Gemini gratuit : on le
+    // compte (best-effort, jamais bloquant) pour ne jamais dépasser le plafond.
+    await enregistrerAppelGemini();
     const res = await fetchOcr(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
       {
@@ -386,7 +454,10 @@ async function geminiFlashOcrUnEssai(buffer: Buffer): Promise<OcrResult | null> 
         cache: "no-store",
         body: JSON.stringify({
           contents: [{ parts }],
-          generationConfig: { response_mime_type: "application/json" },
+          generationConfig: {
+            response_mime_type: "application/json",
+            response_schema: SCHEMA_REPONSE_OCR,
+          },
         }),
       },
     );
@@ -399,6 +470,7 @@ async function geminiFlashOcrUnEssai(buffer: Buffer): Promise<OcrResult | null> 
 
     const body = (await res.json()) as {
       candidates?: { content?: { parts?: { text?: string }[] } }[];
+      usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
     };
     const brut = (body.candidates?.[0]?.content?.parts ?? [])
       .map((p) => p.text ?? "")
@@ -414,14 +486,22 @@ async function geminiFlashOcrUnEssai(buffer: Buffer): Promise<OcrResult | null> 
       console.error("[ocr:gemini] JSON illisible", brut.slice(0, 300));
       return null;
     }
+    const usage =
+      body.usageMetadata?.promptTokenCount !== undefined ||
+      body.usageMetadata?.candidatesTokenCount !== undefined
+        ? {
+            promptTokens: body.usageMetadata?.promptTokenCount ?? 0,
+            candidatesTokens: body.usageMetadata?.candidatesTokenCount ?? 0,
+          }
+        : undefined;
     const texte = typeof parse.texte === "string" && parse.texte.trim() ? parse.texte.trim() : brut;
     // Contrat v2 (4 sections) : parser tolérant + miroir clés plates. Les
     // champs hors contrat (prefecture, motif, radar, télépaiement…) sont
     // comblés par les regex de `fusionnerPrefill` sur `texte` — plus aucune
     // clé plate n'est lue ici : le prompt est la source unique du structuré.
     const docV2 = parserDocV2(parse);
-    if (!docV2) return { texte };
-    return { texte, extrait: aplatirDocV2(docV2) };
+    if (!docV2) return { texte, ...(usage ? { usage } : {}) };
+    return { texte, extrait: aplatirDocV2(docV2), ...(usage ? { usage } : {}) };
   } catch (err) {
     // Les échecs transitoires doivent remonter à avecRetry : c'est exactement
     // le cas à réessayer (503 « high demand »). Les autres renvoient null.
@@ -503,6 +583,73 @@ Objet attendu :
   }
 }
 (unités de mesure autorisées : "mg/L", "g/L", "km/h")`;
+
+/**
+ * Schéma de sortie imposé à Gemini (`response_schema`) : borne la réponse aux
+ * champs utiles du contrat `DocV2` et réduit les tokens de sortie (pas de
+ * texte libre ni de fioritures). Reflète strictement le prompt ci-dessus.
+ */
+const SCHEMA_REPONSE_OCR = {
+  type: "OBJECT",
+  properties: {
+    texte: { type: "STRING" },
+    categorie: { type: "STRING" },
+    statut_import: {
+      type: "OBJECT",
+      properties: {
+        identifiant_document: { type: "STRING", nullable: true },
+        numero_neph_dossier: { type: "STRING", nullable: true },
+        date_emission_officielle: { type: "STRING", nullable: true },
+        date_notification_mentionnee: { type: "STRING", nullable: true },
+        prefecture_emettrice: { type: "STRING", nullable: true },
+        numero_telepaiement: { type: "STRING", nullable: true },
+        cle_telepaiement: { type: "STRING", nullable: true },
+        date_signature: { type: "STRING", nullable: true },
+        heure_signature: { type: "STRING", nullable: true },
+      },
+    },
+    profil_client: {
+      type: "OBJECT",
+      properties: {
+        nom: { type: "STRING", nullable: true },
+        prenom: { type: "STRING", nullable: true },
+        adresse_postale_brute: { type: "STRING", nullable: true },
+      },
+    },
+    faits_et_infraction: {
+      type: "OBJECT",
+      properties: {
+        date_faits: { type: "STRING", nullable: true },
+        heure_faits: { type: "STRING", nullable: true },
+        lieu_exact: { type: "STRING", nullable: true },
+        nature_infraction_libelle: { type: "STRING", nullable: true },
+        immatriculation_vehicule: { type: "STRING", nullable: true },
+        motif_suspension: { type: "STRING", nullable: true },
+        type_radar: { type: "STRING", nullable: true },
+        numero_radar: { type: "STRING", nullable: true },
+        date_verification_cinemometre: { type: "STRING", nullable: true },
+        date_stage: { type: "STRING", nullable: true },
+      },
+    },
+    impact_et_sanctions_financieres: {
+      type: "OBJECT",
+      properties: {
+        montant_amende_euros: { type: "NUMBER", nullable: true },
+        retrait_points_encouru: { type: "NUMBER", nullable: true },
+        solde_points_apres_infraction: { type: "NUMBER", nullable: true },
+        duree_retrait_permis_mois: { type: "NUMBER", nullable: true },
+        mesure_technique: {
+          type: "OBJECT",
+          properties: {
+            chiffre_mesure: { type: "NUMBER", nullable: true },
+            unite: { type: "STRING", nullable: true },
+            chiffre_retenu: { type: "NUMBER", nullable: true },
+          },
+        },
+      },
+    },
+  },
+};
 
 /**
  * Téléverse un fichier (PDF) sur la Gemini Files API et renvoie son URI.
@@ -710,6 +857,21 @@ async function tesseractOcr(buffer: Buffer): Promise<OcrResult | null> {
     console.error("[ocr:tesseract] échec :", err);
     return null;
   }
+}
+
+/**
+ * OCR **local et gratuit**, sans jamais appeler une API payante (Gemini /
+ * Vision / Mistral). Sert à la démo publique (`/deposer`) : un visiteur peut
+ * téléverser un fichier sans épuiser le quota Gemini partagé avec les dossiers
+ * clients. Pour un PDF, la couche texte est lue localement (pdf-parse) puis,
+ * à défaut, les images intégrées sont OCRisées par tesseract ; pour une image,
+ * tesseract directement.
+ */
+export async function extrairePvLocal(buffer: Buffer): Promise<OcrResult | null> {
+  if (detecterMime(buffer) === "application/pdf") {
+    return lirePdfAvecProvider(buffer, "tesseract");
+  }
+  return tesseractOcr(buffer);
 }
 
 /** Provider de dev/E2E : retourne un texte de PV fictif déterministe.

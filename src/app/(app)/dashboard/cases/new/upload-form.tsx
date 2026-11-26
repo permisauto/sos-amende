@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import SignatureCanvas from "react-signature-canvas";
 import { createDossier } from "../actions";
+import { compresserImage } from "@/lib/compress-image";
 
 /** Étapes affichées pendant le traitement, pour que le client comprenne l'attente. */
 const ETAPES_TRAITEMENT = [
@@ -30,9 +31,18 @@ export function UploadForm({
   const inputRef = useRef<HTMLInputElement>(null);
   const padRef = useRef<InstanceType<typeof SignatureCanvas>>(null);
 
-  function acceptFile(candidate: File | undefined | null) {
+  async function acceptFile(candidate: File | undefined | null) {
     if (!candidate) return;
-    setFile(candidate);
+    // Compression finOps : l'image est redimensionnée/ré-encodée avant l'envoi
+    // (réduit les tokens d'entrée). On remplace le fichier de l'input pour que
+    // la server action reçoive bien la version compressée. Best-effort.
+    const compresse = await compresserImage(candidate).catch(() => candidate);
+    setFile(compresse);
+    if (inputRef.current) {
+      const dt = new DataTransfer();
+      dt.items.add(compresse);
+      inputRef.current.files = dt.files;
+    }
   }
 
   const previewUrl = file?.type.startsWith("image/")

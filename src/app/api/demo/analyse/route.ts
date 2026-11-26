@@ -6,7 +6,7 @@ import {
   type ExtractedData,
   type RegleDetection,
 } from "@/lib/moteur";
-import { extrairePv, getOcrProvider, normaliserPv } from "@/lib/ocr";
+import { extrairePv, extrairePvLocal, getOcrProvider, normaliserPv } from "@/lib/ocr";
 import { consommerCreneau } from "@/lib/rate-limit";
 import { formaterLettreOfficielle } from "@/lib/envoi";
 import type { JurisprudenceRef } from "@/lib/catalogue-sources";
@@ -154,18 +154,17 @@ export async function POST(req: Request) {
         );
       }
       // Garde-fou RGPD/coût : la démo publique n'exécute JAMAIS d'OCR payant
-      // (Google Vision / Mistral hébergé / Gemini Flash). Seuls les providers
-      // locaux et gratuits (mock, tesseract) peuvent scanner un fichier
-      // ici — sinon on retombe sur l'échantillon simulé. Exclure Gemini est
-      // capital : `/deposer` pouvait épuiser le quota Gemini (partagé avec le
-      // dashboard) et casser l'OCR de production.
+      // (Google Vision / Mistral hébergé / Gemini Flash) — le quota Gemini est
+      // partagé avec les dossiers clients. On retombe sur l'OCR **local**
+      // (couche texte PDF + tesseract) au lieu de l'échantillon simulé : le
+      // visiteur a un vrai pré-remplissage, sans épuiser le quota de production.
       const provider = getOcrProvider();
       const buffer = Buffer.from(await fichier.arrayBuffer());
       const ocr =
         provider === "google-vision" ||
         provider === "mistral-ocr" ||
         provider === "gemini-flash"
-          ? null
+          ? await extrairePvLocal(buffer)
           : await extrairePv(buffer);
       if (ocr?.texte) {
         texte = ocr.texte;

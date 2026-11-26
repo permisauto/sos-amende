@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
+import { compresserImage } from "@/lib/compress-image";
 
 type Resultat = { titreFaille: string | null; articleLoi: string | null; score: number; proposition: boolean };
 type Preuves = { radar: { checked: boolean; found: boolean; expired: boolean | null; preuveUrl: string | null }; meteo: { checked: boolean; value: string | null; source: string | null }; travaux: { checked: boolean; value: boolean | null }; dureeMs: number };
@@ -35,10 +36,14 @@ export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPEN
     setReponse(null);
     try {
       // Upload -> OCR extrait les données ET lance directement le scan/scoring (une seule requête)
-      const fd = new FormData();
-      fd.set("type", type);
-      fd.set("pv", f);
-      const res = await fetch("/api/demo/analyse", { method: "POST", body: fd });
+    // Compression finOps : l'image est redimensionnée/ré-encodée avant l'envoi
+    // pour réduire les tokens d'entrée (et le poids réseau). Best-effort.
+    const compresse = await compresserImage(f).catch(() => f);
+    setFile(compresse);
+    const fd = new FormData();
+    fd.set("type", type);
+    fd.set("pv", compresse);
+    const res = await fetch("/api/demo/analyse", { method: "POST", body: fd });
       const body = (await res.json()) as Reponse & { data?: Record<string, string> };
       if (body.data) {
         setInfos((prev) => ({
