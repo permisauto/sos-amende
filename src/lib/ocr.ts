@@ -39,12 +39,9 @@ export function getOcrProvider(): OcrProvider {
  * il pré-remplit le formulaire d'analyse soumis par un humain (garde-fou
  * human-in-the-loop). Sans provider configuré, renvoie null.
  *
- * PDF : la couche texte est lue **en local** (pdf-parse) pour TOUS les
- * providers — un PDF à texte ne dépend d'aucune API (les API d'OCR images
- * n'acceptent jamais un PDF dans `image.content`, et Gemini saturait en
- * prod sur des PDF pourtant lisibles en local). Sans couche texte (scan),
- * on en extrait les images intégrées pour l'OCR image, sauf Gemini qui lit
- * le PDF entier via sa Files API.
+ * PDF : la couche texte est lue **en local** (pdfjs-dist standard, sans
+ * canvas) pour TOUS les providers — un PDF à texte ne dépend d'aucune API.
+ * Sans couche texte (scan), seul Gemini lit le PDF entier via sa Files API.
  *
  * Garde-fous temporalité : un OCR qui pend ne doit JAMAIS faire échouer le
  * dépôt du dossier — watchdog global (`OCR_TIMEOUT_MS`) + délai par requête
@@ -57,7 +54,7 @@ function delaiOcr(env: string | undefined, defaut: number): number {
   return env && /^\d+$/.test(env) ? Number(env) : defaut;
 }
 
-/** Délai global d'un cycle OCR (API, pdf-parse, tesseract) : passé, on rend
+/** Délai global d'un cycle OCR (API, lecture locale du PDF, tesseract) : passé, on rend
  * null et le client saisit à la main — jamais d'exception, jamais de hang.
  *
  * `nomFichier` ne sert qu'au provider mock (dev/E2E) : il choisit le document
@@ -186,23 +183,56 @@ function fetchOcr(url: string, init: RequestInit = {}): Promise<Response> {
 
 /** Seuil sous lequel on considère qu'un PDF n'a pas de couche texte exploitable. */
 const SEUIL_TEXTE_PDF = 10; // mots
-/** Images intégrées maximales OCRisées dans un PDF scanné (1 par page en
- * pratique). Borné pour maîtriser le coût : seules les N premières pages d'un
- * scan partent en OCR. Surchargeable par `OCR_PDF_MAX_PAGES` (défaut 2). */
-function limitePagesPdf(): number {
-  const n = Number.parseInt(process.env.OCR_PDF_MAX_PAGES ?? "", 10);
-  return Number.isFinite(n) && n > 0 ? n : 2;
-}
-
-type PdfParse = InstanceType<typeof import("pdf-parse").PDFParse>;
 
 /**
- * Lit un PDF pour le provider configuré : d'abord la couche texte (local,
- * gratuit, immédiat — tous les providers, Gemini compris), sinon le scan.
+ * Extrait le texte natif d'un PDF via `pdfjs-dist` (build standard), SANS
+ * aucune dépendance au canvas. L'ancienne lecture via `pdf-parse` chargeait
+ * `pdfjs-dist` en mode « legacy » qui réclame `@napi-rs/canvas` (polyfill
+ * DOMMatrix) même pour du texte — ce binaire n'était pas embarqué en prod
+ * (ReferenceError: DOMMatrix is not defined) et faisait retomber sur la Files
+ * API Gemini. Le build standard retourne le texte sans canvas.
  *
- * Sans couche texte exploitable : Gemini reçoit le PDF entier (sa Files API
- * lit les documents nativement), les autres providers passent par les images
- * intégrées extraites en local.
+ * Le `standardFontDataUrl` est fourni pour neutraliser l'avertissement des
+ * polices standard non embarquées — le texte reste lisible sans lui.
+ */
+async function extraireTextePdfLocal(buffer: Buffer): Promise<string | null> {
+  try {
+    const pdfjs = await import("pdfjs-dist");
+    const chargeur = {
+      data: new Uint8Array(buffer),
+      standardFontDataUrl: standardFontDataUrlPdfjs(),
+      useSystemFonts: false,
+    };
+    const doc = await pdfjs.getDocument(chargeur).promise;
+    const morceaux: string[] = [];
+    for (let p = 1; p <= doc.numPages; p++) {
+      const page = await doc.getPage(p);
+      const tc = await page.getTextContent();
+      morceaux.push(tc.items.map((it) => ("str" in it ? it.str : "")).join(" "));
+      page.cleanup();
+    }
+    return morceaux.join("\n").replace(/\s+/g, " ").trim() || null;
+  } catch (err) {
+    console.error(
+      "[ocr:pdf] lecture texte locale impossible :",
+      err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    );
+    return null;
+  }
+}
+
+/** Chemin des polices standard embarquées (métrique du texte). Sert à
+ * neutraliser l'avertissement des polices non embarquées — le texte reste
+ * lisible même si le dossier est absent. */
+function standardFontDataUrlPdfjs(): string {
+  return `${process.cwd()}/node_modules/pdfjs-dist/standard_fonts/`;
+}
+
+/**
+ * Lit un PDF pour le provider configuré : d'abord la couche texte **en local
+ * via pdfjs-dist standard (sans canvas)** — gratuit, immédiat, tous providers.
+ * Sans couche texte exploitable (scan), Gemini reçoit le PDF entier (Files
+ * API), les autres providers ne peuvent rien extraire d'image et rendent null.
  *
  * Jamais d'exception propagée : un PDF illisible laisse le client saisir à la
  * main et est journalisé.
@@ -212,112 +242,31 @@ async function lirePdfAvecProvider(
   provider: OcrProvider,
 ): Promise<OcrResult | null> {
   const debut = Date.now();
-  let parser: PdfParse | undefined;
-  try {
-    const { PDFParse } = await import("pdf-parse");
-    parser = new PDFParse({ data: new Uint8Array(buffer) });
 
-    const lu = await parser.getText();
-    const texte = (lu?.text ?? "").replace(/\r\n/g, "\n").trim();
-    const mots = texte ? texte.split(/\s+/).length : 0;
-    if (mots >= SEUIL_TEXTE_PDF) {
-      console.log(
-        JSON.stringify({ evt: "ocr:pdf", couche: "texte", provider, mots, pages: lu?.total ?? 0, ms: Date.now() - debut }),
-      );
-      return { texte };
-    }
-
-    if (provider === "gemini-flash") {
-      // PDF sans couche texte : on privilégie les images intégrées
-      // (inline_data, une requête par image — rapide et fiable) plutôt que la
-      // Files API (2 requêtes d'upload + 1 génération ≈ 30 s), qui dépassait
-      // le watchdog global de 20 s sur les PDF volumineux. La Files API ne
-      // reste qu'en dernier recours (aucune image extractible).
-      const images = await imagesDepuisPdf(parser);
-      if (images.length > 0) {
-        const textes: string[] = [];
-        let extrait: OcrResult["extrait"];
-        for (const img of images) {
-          const r = await geminiFlashOcr(img);
-          if (r?.texte) textes.push(r.texte.trim());
-          if (!extrait && r?.extrait) extrait = r.extrait;
-        }
-        const concatene = textes.join("\n\n").trim();
-        console.log(
-          JSON.stringify({ evt: "ocr:pdf", couche: "gemini-images", provider, images: images.length, chars: concatene.length, ms: Date.now() - debut }),
-        );
-        return concatene ? { texte: concatene, extrait } : null;
-      }
-      const res = await geminiFlashOcr(buffer);
-      console.log(
-        JSON.stringify({ evt: "ocr:pdf", couche: "gemini", provider, mots, ok: Boolean(res), ms: Date.now() - debut }),
-      );
-      return res;
-    }
-
-    const images = await imagesDepuisPdf(parser);
-    if (images.length === 0) {
-      console.error(
-        `[ocr:pdf] ni couche texte (${mots} mot(s)) ni image intégrée — PDF non exploitable par ${provider}`,
-      );
-      return null;
-    }
-    const textes: string[] = [];
-    for (const img of images) {
-      const r = await ocrImage(img, provider);
-      if (r?.texte) textes.push(r.texte.trim());
-    }
-    const concatene = textes.join("\n\n").trim();
+  const texteLocal = await extraireTextePdfLocal(buffer);
+  const mots = texteLocal ? texteLocal.split(/\s+/).length : 0;
+  if (texteLocal && mots >= SEUIL_TEXTE_PDF) {
     console.log(
-      JSON.stringify({ evt: "ocr:pdf", couche: "images", provider, images: images.length, chars: concatene.length, ms: Date.now() - debut }),
+      JSON.stringify({ evt: "ocr:pdf", couche: "texte", provider, mots, ms: Date.now() - debut }),
     );
-    return concatene ? { texte: concatene } : null;
-  } catch (err) {
-    console.error("[ocr:pdf] échec :", err instanceof Error ? `${err.name}: ${err.message}` : String(err));
-    // Repli : la lecture locale a échoué (polyfill canvas absent de la
-    // plateforme, PDF corrompu…) — on ne bloque pas pour autant. Gemini
-    // reçoit le PDF entier (Files API, comportement d'avant P1) ; les autres
-    // providers n'ont aucun flux images sans parser, reste la saisie manuelle.
-    if (provider === "gemini-flash") {
-      const res = await geminiFlashOcr(buffer);
-      console.log(
-        JSON.stringify({ evt: "ocr:pdf", couche: "gemini-repli", ok: Boolean(res), ms: Date.now() - debut }),
-      );
-      return res;
-    }
-    return null;
-  } finally {
-    if (parser) await parser.destroy().catch(() => undefined);
+    return { texte: texteLocal };
   }
-}
 
-/** Extrait les images JPEG/PNG/WebP intégrées (page par page, plafonné). */
-async function imagesDepuisPdf(parser: PdfParse): Promise<Buffer[]> {
-  const out: Buffer[] = [];
-  try {
-    const res = await parser.getImage();
-    for (const page of res?.pages ?? []) {
-      for (const img of page?.images ?? []) {
-        const raw = img?.dataUrl ?? "";
-        const m = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/.exec(raw);
-        if (!m) continue;
-        const octets = Buffer.from(m[2], "base64");
-        if (octets.length < 2_000) continue; // vignettes / icônes
-        out.push(octets);
-        if (out.length >= limitePagesPdf()) return out;
-      }
-    }
-  } catch (err) {
-    console.error("[ocr:pdf] lecture images impossible :", err instanceof Error ? err.message : String(err));
+  // Pas de couche texte exploitable (scan) : seul Gemini sait lire un PDF
+  // entier via sa Files API. Les providers image (Vision/Mistral/tesseract)
+  // ne traitent que des images — un PDF scanné versé sans Gemini retombe sur
+  // la saisie manuelle (déjà le flux historique).
+  if (provider === "gemini-flash") {
+    const res = await geminiFlashOcr(buffer);
+    console.log(
+      JSON.stringify({ evt: "ocr:pdf", couche: "gemini", provider, mots, ok: Boolean(res), ms: Date.now() - debut }),
+    );
+    return res;
   }
-  return out;
-}
 
-/** Route une image vers le provider d'images configuré. */
-async function ocrImage(buffer: Buffer, provider: OcrProvider): Promise<OcrResult | null> {
-  if (provider === "google-vision") return googleVisionOcr(buffer);
-  if (provider === "mistral-ocr") return mistralOcr(buffer);
-  if (provider === "tesseract") return tesseractOcr(buffer);
+  console.error(
+    `[ocr:pdf] PDF sans couche texte (${mots} mot(s)) — provider ${provider} ne lit pas les PDF scannés`,
+  );
   return null;
 }
 
@@ -863,13 +812,14 @@ async function tesseractOcr(buffer: Buffer): Promise<OcrResult | null> {
  * OCR **local et gratuit**, sans jamais appeler une API payante (Gemini /
  * Vision / Mistral). Sert à la démo publique (`/deposer`) : un visiteur peut
  * téléverser un fichier sans épuiser le quota Gemini partagé avec les dossiers
- * clients. Pour un PDF, la couche texte est lue localement (pdf-parse) puis,
- * à défaut, les images intégrées sont OCRisées par tesseract ; pour une image,
- * tesseract directement.
+ * clients. Pour un PDF, la couche texte est lue localement (pdfjs-dist) ;
+ * pour une image, tesseract directement. Un PDF scanné (sans texte) rend null
+ * — la saisie manuelle reste le dernier recours.
  */
 export async function extrairePvLocal(buffer: Buffer): Promise<OcrResult | null> {
   if (detecterMime(buffer) === "application/pdf") {
-    return lirePdfAvecProvider(buffer, "tesseract");
+    const texte = await extraireTextePdfLocal(buffer);
+    return texte ? { texte } : null;
   }
   return tesseractOcr(buffer);
 }

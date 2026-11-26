@@ -451,27 +451,17 @@ describe("extrairePv — PDF (couche texte locale, jamais envoyé aux API images
   );
 
   it(
-    "PDF scanné + gemini-flash : extrait les images et les OCRise en inline_data (plus de Files API)",
+    "PDF scanné (sans texte) + gemini-flash : lu via la Files API",
     async () => {
       process.env.OCR_PROVIDER = "gemini-flash";
       process.env.GEMINI_API_KEY = "cle-test";
-      const fetchMock = simulerGemini([{ status: 200, body: REPONSE_OK }]);
+      const fetchMock = simulerGeminiFiles(REPONSE_OK);
 
       const res = await extrairePv(SCAN_PDF);
 
       expect(res?.extrait?.plaque).toBe("AB-123-CD");
-      // Le PDF scanné est OCRisé image par image (inline_data), jamais via la
-      // Files API (2 uploads + génération) — c'est ce qui dépassait le watchdog
-      // de 20 s sur les PDF volumineux.
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-      const corps = JSON.parse(
-        String(
-          (fetchMock.mock.calls[0] as unknown as [RequestInfo | URL, RequestInit | undefined])[1]
-            ?.body,
-        ),
-      );
-      expect(corps.contents[0].parts[0].inline_data).toBeDefined();
-      expect(corps.contents[0].parts[0].inline_data.mime_type).toBe("image/png");
+      // start (session) + push (octets) + generateContent = la Files API.
+      expect(fetchMock).toHaveBeenCalledTimes(3);
     },
     30_000,
   );
@@ -501,22 +491,18 @@ describe("extrairePv — PDF (couche texte locale, jamais envoyé aux API images
     30_000,
   );
 
-  it(
-    "PDF scanné (aucun texte) : extrait les images intégrées et les OCRise en image",
+it(
+    "PDF scanné (sans texte) + google-vision : null (pas de lecture d'image PDF)",
     async () => {
       process.env.OCR_PROVIDER = "google-vision";
       process.env.GOOGLE_VISION_KEY = "cle-test";
-      const fetchMock = simulerVision([
-        { status: 200, body: { responses: [{ fullTextAnnotation: { text: "PLAQUE AB-123-CD" } }] } },
-      ]);
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
 
       const res = await extrairePv(SCAN_PDF);
 
-      expect(res?.texte).toBe("PLAQUE AB-123-CD");
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-      const corps = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
-      // La preuve que le PDF n'est plus envoyé tel quel : c'est un PNG en base64.
-      expect(corps.requests[0].image.content.startsWith("iVBOR")).toBe(true);
+      expect(res).toBeNull();
+      expect(fetchMock).not.toHaveBeenCalled();
     },
     30_000,
   );

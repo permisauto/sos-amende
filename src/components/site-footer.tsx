@@ -15,11 +15,6 @@ export function SiteFooter() {
       <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 py-8 text-sm text-zinc-500 md:flex-row">
         <div className="flex flex-col items-center gap-1 md:items-start">
           <p>© {new Date().getFullYear()} SOS Amende. Tous droits réservés.</p>
-          <p className="text-xs">
-            <a href="mailto:contact@recours-permis-pv.com" className="hover:text-zinc-900">
-              contact@recours-permis-pv.com
-            </a>
-          </p>
         </div>
         <nav className="flex flex-wrap items-center justify-center gap-6">
           {legal.map((item) => (
