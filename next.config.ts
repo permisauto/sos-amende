@@ -7,6 +7,7 @@ const nextConfig = {
     '@prisma/client',
     '@prisma/adapter-pg',
     'pg',
+    'pg-native',
     'ioredis',
     '@/prisma/generated-client'
   ],
