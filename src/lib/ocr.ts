@@ -202,6 +202,9 @@ async function extraireTextePdfLocal(buffer: Buffer): Promise<string | null> {
       data: new Uint8Array(buffer),
       standardFontDataUrl: standardFontDataUrlPdfjs(),
       useSystemFonts: false,
+      // Parsing sans worker : en serverless Vercel le fichier pdf.worker.mjs
+      // n'est pas embarqué et le « fake worker » échouait (Cannot find module).
+      disableWorker: true,
     };
     const doc = await pdfjs.getDocument(chargeur).promise;
     const morceaux: string[] = [];
