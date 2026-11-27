@@ -976,6 +976,14 @@ const LIEU_FALLBACK_RE = /(?:à|au|lieu)\s+([A-ZÉÈÀÂÊÎÔÛÇa-zéèàâê�
  * d'une ligne libre (anti-hallucination). Même ligne uniquement (jamais `\s`
  * qui inclut `\n` : sinon « MARTIN Jean↵Adresse : … » avalerait la rubrique). */
 const NOM_RE = /\b(?:nom\s*\/\s*pr[eé]nom|nom\s+du\s+titulaire|titulaire|propri[eé]taire|destinataire|conducteur|pr[eé]nom|nom)\s*[:\-]\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'’\- \t]{1,59})/iu;
+/** Nom/prénom par civilité : « M. DUPONT JEAN » / « MME MARTIN SOPHIE ».
+ * C'est le motif transversal des avis réels (amende, lettre 48, arrêté, FPS…)
+ * quel que soit le libellé qui précède (« DESTINATAIRE / TITULAIRE… »,
+ * « REDEVABLE », « Identité », ligne libre…). Capture NOM (groupe 1) puis
+ * Prénom (groupe 2), tous deux en capitales — jamais un libellé de rubrique
+ * (anti-hallucination : deux mots majuscules consécutifs après la civilité). */
+const NOM_CIVILITE_RE =
+  /\bM(?:M|onsieur|\.)?E?\.?\s+([A-ZÀ-Ÿ][A-ZÀ-Ÿ'’\-]{1,29})\s+([A-ZÀ-Ÿ][A-ZÀ-Ÿ'’\-]{1,29})\b/;
 /** Radar : « Appareil : RADAR TYPE MESTA 210C - N° 1248 » (avis de vitesse). */
 const RADAR_RE = /\b(?:appareil(?:\s+de\s+mesure)?|cin[eé]mom[eè]tre|radar)\s*[:\-]\s*([^\n]{3,70})/i;
 /** Date de vérification périodique du cinémomètre — libellé obligatoire
@@ -1234,13 +1242,23 @@ export function normaliserPv(texte: string): Partial<ExtractedData> {
   const plaque = extrairePlaque(texte);
   if (plaque) result.plaque = plaque;
 
-  // Nom du titulaire (libellé explicite, même ligne) — le champ « Nom » du
-  // formulaire est requis : sans cette règle, un PDF à couche texte (lecture
-  // locale, sans extrait Gemini) laissait le pré-remplissage vide.
-  const nomM = texte.match(NOM_RE);
-  if (nomM) {
-    const nom = nomM[1].replace(/[\s\-–—|:]+$/, "").replace(/\s+/g, " ").trim();
-    if (nom.length >= 2 && nom.length <= 60) result.nom = nom;
+  // Nom du titulaire : priorité au motif civilité « M./MME + NOM + Prénom »
+  // (transversal aux avis réels), repli sur le libellé explicite historique.
+  // Le champ « Nom » du formulaire est requis : sans cette règle, un PDF à
+  // couche texte laissait le pré-remplissage vide.
+  const civilite = texte.match(NOM_CIVILITE_RE);
+  if (civilite) {
+    const nom = civilite[1];
+    const prenom = civilite[2];
+    const formate = (p: string, n: string) =>
+      `${p[0]}${p.slice(1).toLowerCase()} ${n[0]}${n.slice(1).toLowerCase()}`;
+    result.nom = formate(prenom, nom);
+  } else {
+    const nomM = texte.match(NOM_RE);
+    if (nomM) {
+      const nom = nomM[1].replace(/[\s\-–—|:]+$/, "").replace(/\s+/g, " ").trim();
+      if (nom.length >= 2 && nom.length <= 60) result.nom = nom;
+    }
   }
 
   // Radar : type de l'appareil + numéro d'identification, près de « Appareil : ».

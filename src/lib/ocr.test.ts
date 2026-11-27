@@ -55,9 +55,19 @@ describe("normaliserPv", () => {
     });
   });
 
-  it("gère les plaques au format ancien 1234 AB 75", () => {
+it("gère les plaques au format ancien 1234 AB 75", () => {
     const out = normaliserPv("Véhicule 1234 AB 75, le 12/08/2026");
     expect(out.plaque).toBe("1234-AB-75");
+  });
+
+  it("extrait nom + prénom par civilité (M./MME + NOM + Prénom)", () => {
+    expect(normaliserPv("M. DUPONT JEAN").nom).toBe("Jean Dupont");
+    expect(normaliserPv("MME MARTIN SOPHIE").nom).toBe("Sophie Martin");
+    expect(normaliserPv("M. LEFEBVRE ANTOINE").nom).toBe("Antoine Lefebvre");
+  });
+
+  it("repli sur le libellé explicite sans civilité", () => {
+    expect(normaliserPv("Titulaire : MARTIN Jean").nom).toBe("MARTIN Jean");
   });
 
   it("gère le format de date sans année complète", () => {
