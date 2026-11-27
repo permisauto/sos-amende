@@ -9,6 +9,7 @@ const nextConfig = {
     'pg',
     'pg-native',
     'ioredis',
+    'pdf2json',
     '@/prisma/generated-client'
   ],
 

@@ -185,46 +185,52 @@ function fetchOcr(url: string, init: RequestInit = {}): Promise<Response> {
 const SEUIL_TEXTE_PDF = 10; // mots
 
 /**
- * Extrait le texte natif d'un PDF via `pdfjs-dist` (build standard), SANS
- * aucune dépendance au canvas. L'ancienne lecture via `pdf-parse` chargeait
- * `pdfjs-dist` en mode « legacy » qui réclame `@napi-rs/canvas` (polyfill
- * DOMMatrix) même pour du texte — ce binaire n'était pas embarqué en prod
- * (ReferenceError: DOMMatrix is not defined) et faisait retomber sur la Files
- * API Gemini. Le build standard retourne le texte sans canvas.
+ * Extrait le texte natif d'un PDF via `pdf2json` — porte un portage de PDF.JS
+ * vers Node **pure, sans worker, sans canvas, sans WebCrypto navigateur**.
+ * C'est le choix retenu après l'échec en serverless de `pdf-parse`/`pdfjs-dist`
+ * (DOMMatrix → pdf.worker.mjs introuvable → crypto.toHex introuvable) : chacune
+ * de ces briques est un prérequis « navigateur » absent d'une runtime Node.
  *
- * Le `standardFontDataUrl` est fourni pour neutraliser l'avertissement des
- * polices standard non embarquées — le texte reste lisible sans lui.
+ * `getRawTextContent()` recompose le texte page par page. Un PDF scanné (aucun
+ * texte) renvoie une chaîne quasi vide → l'appelant bascule alors sur Gemini
+ * (Files API) ou la saisie manuelle.
  */
 async function extraireTextePdfLocal(buffer: Buffer): Promise<string | null> {
   try {
-    const pdfjs = await import("pdfjs-dist");
-    // Piste A : fournit le worker « main thread » via globalThis.pdfjsWorker.
-    // pdfjs-dist (build standard) importe dynamiquement `pdf.worker.mjs` avec
-    // /*webpackIgnore:true*/ → non embarqué en serverless (Cannot find module).
-    // En posant le handler explicitement, `#mainThreadWorkerMessageHandler` le
-    // réutilise sans cet import. L'import ci-dessous est statique → tracé par
-    // Next/Webpack (fichier embarqué dans le bundle).
-    const worker = (await import(
-      "pdfjs-dist/build/pdf.worker.mjs"
-    )) as { WorkerMessageHandler: unknown };
-    const { WorkerMessageHandler } = worker;
-    (globalThis as unknown as { pdfjsWorker: unknown }).pdfjsWorker = {
-      WorkerMessageHandler,
+    const mod = await import("pdf2json");
+    const PDFParser = (mod.default ?? mod.PDFParser) as new (
+      context?: unknown,
+      needRawText?: boolean,
+    ) => unknown;
+    const parser = new PDFParser(null, true) as {
+      on: (ev: string, cb: (d?: unknown) => void) => void;
+      getRawTextContent: () => string;
+      parseBuffer: (buf: Uint8Array, verbosity?: number) => void;
     };
-    const chargeur = {
-      data: new Uint8Array(buffer),
-      standardFontDataUrl: standardFontDataUrlPdfjs(),
-      useSystemFonts: false,
-    };
-    const doc = await pdfjs.getDocument(chargeur).promise;
-    const morceaux: string[] = [];
-    for (let p = 1; p <= doc.numPages; p++) {
-      const page = await doc.getPage(p);
-      const tc = await page.getTextContent();
-      morceaux.push(tc.items.map((it) => ("str" in it ? it.str : "")).join(" "));
-      page.cleanup();
-    }
-    return morceaux.join("\n").replace(/\s+/g, " ").trim() || null;
+    const texte = await new Promise<string>((resolve, reject) => {
+      parser.on("pdfParser_dataError", (err) => {
+        const brut = err as
+          | Error
+          | { parserError?: Error }
+          | null
+          | undefined;
+        const e = brut instanceof Error
+          ? brut
+          : brut && "parserError" in brut && brut.parserError
+            ? brut.parserError
+            : new Error("erreur pdf2json");
+        reject(e);
+      });
+      parser.on("pdfParser_dataReady", () => {
+        try {
+          resolve(parser.getRawTextContent() || "");
+        } catch (e) {
+          reject(e instanceof Error ? e : new Error(String(e)));
+        }
+      });
+      parser.parseBuffer(new Uint8Array(buffer), 0);
+    });
+    return texte.replace(/\s+/g, " ").trim() || null;
   } catch (err) {
     console.error(
       "[ocr:pdf] lecture texte locale impossible :",
@@ -232,13 +238,6 @@ async function extraireTextePdfLocal(buffer: Buffer): Promise<string | null> {
     );
     return null;
   }
-}
-
-/** Chemin des polices standard embarquées (métrique du texte). Sert à
- * neutraliser l'avertissement des polices non embarquées — le texte reste
- * lisible même si le dossier est absent. */
-function standardFontDataUrlPdfjs(): string {
-  return `${process.cwd()}/node_modules/pdfjs-dist/standard_fonts/`;
 }
 
 /**
