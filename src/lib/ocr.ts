@@ -198,13 +198,23 @@ const SEUIL_TEXTE_PDF = 10; // mots
 async function extraireTextePdfLocal(buffer: Buffer): Promise<string | null> {
   try {
     const pdfjs = await import("pdfjs-dist");
+    // Piste A : fournit le worker « main thread » via globalThis.pdfjsWorker.
+    // pdfjs-dist (build standard) importe dynamiquement `pdf.worker.mjs` avec
+    // /*webpackIgnore:true*/ → non embarqué en serverless (Cannot find module).
+    // En posant le handler explicitement, `#mainThreadWorkerMessageHandler` le
+    // réutilise sans cet import. L'import ci-dessous est statique → tracé par
+    // Next/Webpack (fichier embarqué dans le bundle).
+    const worker = (await import(
+      "pdfjs-dist/build/pdf.worker.mjs"
+    )) as { WorkerMessageHandler: unknown };
+    const { WorkerMessageHandler } = worker;
+    (globalThis as unknown as { pdfjsWorker: unknown }).pdfjsWorker = {
+      WorkerMessageHandler,
+    };
     const chargeur = {
       data: new Uint8Array(buffer),
       standardFontDataUrl: standardFontDataUrlPdfjs(),
       useSystemFonts: false,
-      // Parsing sans worker : en serverless Vercel le fichier pdf.worker.mjs
-      // n'est pas embarqué et le « fake worker » échouait (Cannot find module).
-      disableWorker: true,
     };
     const doc = await pdfjs.getDocument(chargeur).promise;
     const morceaux: string[] = [];
