@@ -28,7 +28,7 @@ const DOC_TYPE_PAR_CATEGORIE: Record<CategorieDocument, DocTypeAnalyse | undefin
   RETENTION_TERRAIN: "3F",
   SUSPENSION_PREFECTORALE: "3F",
   INVALIDATION_48SI: "48SI",
-  PERTE_POINTS_48: undefined,
+  PERTE_POINTS_48: "48N",
   ANNULATION_JUDICIAIRE: undefined,
   INCONNU: undefined,
 };

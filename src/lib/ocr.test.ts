@@ -950,7 +950,7 @@ describe("OCR v2 — classification de catégorie (6 documents)", () => {
       ["arrete-suspension.png", "SUSPENSION_PREFECTORALE", "3F"],
       ["48si.png", "INVALIDATION_48SI", "48SI"],
       ["retention-permis.png", "RETENTION_TERRAIN", "3F"],
-      ["48n-points.png", "PERTE_POINTS_48", undefined],
+      ["48n-points.png", "PERTE_POINTS_48", "48N"],
       ["annulation-tribunal.png", "ANNULATION_JUDICIAIRE", undefined],
     ];
     for (const [nom, cat, docType] of cas) {
@@ -987,7 +987,7 @@ describe("OCR v2 — classification de catégorie (6 documents)", () => {
       (await extrairePv(Buffer.from("x"), "48n-points.png"))?.texte ?? "",
     );
     expect(dn.categorie).toBe("PERTE_POINTS_48");
-    expect(dn.docType).toBeUndefined(); // 48N hors pack : jamais de docType
+    expect(dn.docType).toBe("48N");
     expect(dn.soldePoints).toBe(4);
     expect(dn.pointsEncourus).toBe(2);
     expect(dn.dateEmission).toBe("2026-06-15");

@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { compresserImage } from "@/lib/compress-image";
 import { PvSurligne } from "@/components/pv-surligne";
+import { lireCategorie, typeInfractionPourCategorie } from "@/lib/doc-v2";
 
 type Resultat = { titreFaille: string | null; articleLoi: string | null; score: number; proposition: boolean };
 type Preuves = { radar: { checked: boolean; found: boolean; expired: boolean | null; preuveUrl: string | null }; meteo: { checked: boolean; value: string | null; source: string | null }; travaux: { checked: boolean; value: boolean | null }; dureeMs: number };
@@ -64,7 +65,14 @@ export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPEN
       // L'OCR a extrait -> on affiche directement le scoring (l'utilisateur vérifie ensuite)
       if (body.scoreGlobal !== undefined || body.resultats) {
         setReponse(body);
-        if (body.data) sessionStorage.setItem("deposer_data", JSON.stringify({ type, data: body.data, scoreGlobal: body.scoreGlobal, resultats: body.resultats }));
+        // Correction auto du type d'après la catégorie OCR (comme l'espace
+        // client) : une lettre 48 / un arrêté devient SUSPENSION même si le
+        // client a choisi « Amende » (les questions associées suivent).
+        const cat = lireCategorie(body.data?.categorie as string | undefined);
+        const typeCorrige = typeInfractionPourCategorie(cat);
+        const typeFinal = typeCorrige ?? type;
+        if (typeCorrige && typeCorrige !== type) setType(typeCorrige);
+        if (body.data) sessionStorage.setItem("deposer_data", JSON.stringify({ type: typeFinal, data: body.data, scoreGlobal: body.scoreGlobal, resultats: body.resultats }));
       }
     } catch {}
     finally { setAutoFilling(false); }

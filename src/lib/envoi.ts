@@ -12,11 +12,13 @@ export type InfractionType = "AMENDE" | "SUSPENSION";
 export type CanalEnvoi = "ANTAI" | "TELERECOURS" | "LRAR";
 
 /** Classification du document contesté (OCR, cf. `classifierDocType`). */
-export type DocTypeAnalyse = "AMENDE" | "3F" | "48SI";
+export type DocTypeAnalyse = "AMENDE" | "3F" | "48SI" | "48N";
 
 /** Lecture défensive du docType extrait (Json) — jamais de valeur fabriquée. */
 export function lireDocType(v: unknown): DocTypeAnalyse | undefined {
-  return v === "AMENDE" || v === "3F" || v === "48SI" ? v : undefined;
+  return v === "AMENDE" || v === "3F" || v === "48SI" || v === "48N"
+    ? v
+    : undefined;
 }
 
 /**

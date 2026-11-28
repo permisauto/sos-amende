@@ -968,6 +968,11 @@ const PLAQUE_PERMISE_RE = /\b([A-Z0-9]{2,4})[\s-]([A-Z0-9]{2,4})[\s-]([A-Z0-9]{2
  * PARIS ») : sans ce `\s+`, seul le repli (peu propre) captait l'adresse. */
 const ADRESSE_RE = /\b\d{1,4}\s+(?:rue|avenue|av\.?|boulevard|bd|chemin|impasse|all[eé]e|place|route|quai)[^\n]{0,60}\s+\d{5}\s+[A-Za-zÉÈÀÂÊÎÔÛÇéèàâêîôûç\- ]{2,40}/i;
 const ADRESSE_FALLBACK_RE = /\b\d{5}\s+[A-ZÉÈÀÂÊÎÔÛÇ][A-ZÉÈÀÂÊÎÔÛÇa-zéèàâêîôûç\- ]{2,30}\b/;
+/** Adresse au format « code postal + VILLE + rue » (ordre produit par le
+ * texte PDF aplati, ex. « 75008 PARIS 45 Rue de la Simulation Électronique »).
+ * Ville en majuscules puis rue (numéro + voie). */
+const ADRESSE_CP_VILLE_RUE_RE =
+  /\b(\d{5})\s+([A-ZÉÈÀÂÊÎÔÛÇ][A-ZÉÈÀÂÊÎÔÛÇ\-]{1,30})\s+(\d{1,4}\s+(?:rue|avenue|av\.?|boulevard|bd|chemin|impasse|all[eé]e|place|route|quai|cours)[^\n]{0,60})/i;
 /** Lieu d'infraction : après "lieu" ou "à" + adresse. */
 const LIEU_RE = /lieu[^\n]{0,5}[:\-]\s*([^\n]{5,80})/i;
 const LIEU_FALLBACK_RE = /(?:à|au|lieu)\s+([A-ZÉÈÀÂÊÎÔÛÇa-zéèàâêîôûç0-9][^\n]{5,60})/i;
@@ -1332,20 +1337,26 @@ export function normaliserPv(texte: string): Partial<ExtractedData> {
   // voisines (« 4. EMPLACEMENT CLIC », « Titulaire : … »).
   let adresse: string | undefined;
   const adresseMatch = texte.match(ADRESSE_RE);
-  if (adresseMatch) adresse = adresseMatch[0];
-  else {
-    const fallback = texte.match(ADRESSE_FALLBACK_RE);
-    if (fallback) {
-      const idx = fallback.index ?? 0;
-      const ligneCp = texte.lastIndexOf("\n", idx) + 1; // ligne du code postal
-      const lignePrec =
-        ligneCp >= 2 ? texte.lastIndexOf("\n", ligneCp - 2) + 1 : 0;
-      const finLigneCp = texte.indexOf("\n", idx);
-      const end =
-        finLigneCp === -1
-          ? Math.min(texte.length, idx + fallback[0].length + 20)
-          : finLigneCp;
-      adresse = texte.slice(Math.min(lignePrec, idx), end);
+  if (adresseMatch) {
+    adresse = adresseMatch[0];
+  } else {
+    const cpVilleRue = texte.match(ADRESSE_CP_VILLE_RUE_RE);
+    if (cpVilleRue) {
+      adresse = `${cpVilleRue[3]} ${cpVilleRue[1]} ${cpVilleRue[2]}`;
+    } else {
+      const fallback = texte.match(ADRESSE_FALLBACK_RE);
+      if (fallback) {
+        const idx = fallback.index ?? 0;
+        const ligneCp = texte.lastIndexOf("\n", idx) + 1; // ligne du code postal
+        const lignePrec =
+          ligneCp >= 2 ? texte.lastIndexOf("\n", ligneCp - 2) + 1 : 0;
+        const finLigneCp = texte.indexOf("\n", idx);
+        const end =
+          finLigneCp === -1
+            ? Math.min(texte.length, idx + fallback[0].length + 20)
+            : finLigneCp;
+        adresse = texte.slice(Math.min(lignePrec, idx), end);
+      }
     }
   }
   if (adresse) {

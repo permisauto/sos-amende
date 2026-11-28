@@ -165,6 +165,11 @@ export type ExtractedData = {
   suspPointsCumulesJour?: boolean;
   suspStageAvantNotif?: boolean;
   suspSoldeInexact?: boolean;
+  // Lot 48N (lettre 48N — stage probatoire, retrait ≥ 3 points).
+  suspInfractionContestee?: boolean;
+  suspStageDejaSuivi?: boolean;
+  suspProbatoireEnCours?: boolean;
+  suspRetraitSansNotif?: boolean;
   // Chantier 2 (2026-10-10) — urgence professionnelle (3F/48SI) : capteur de
   // fait pour le référé d'urgence (L. 521-1 CJA). `siret` est le premier
   // champ **texte** du questionnaire (jamais pré-rempli par l'OCR).
@@ -191,7 +196,7 @@ export type ExtractedData = {
   // par libellé (OCR) ou saisis par l'humain ; le moteur ne conclut que si les
   // valeurs existent. Les règles pack ne portent que 3F/48SI (`DocTypeDocument`)
   // : un document classé AMENDE ne déclenche donc jamais une règle de pack.
-  docType?: "AMENDE" | "3F" | "48SI";
+  docType?: "AMENDE" | "3F" | "48SI" | "48N";
   dateSignatureArrete?: string; // date de signature de l'arrêté / de la 48SI
   heureSignatureArrete?: string;
   /** Cumul de retraits de points le même jour — nombre si l'OCR l'a lu

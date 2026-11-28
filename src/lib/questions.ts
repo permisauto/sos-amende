@@ -89,6 +89,12 @@ export type ChampReponse =
   | "suspPointsCumulesJour"
   | "suspStageAvantNotif"
   | "suspSoldeInexact"
+  // Lot 48N (lettre 48N — stage probatoire, retrait ≥ 3 points) : capteurs
+  // de fait dédiés, jamais un fondement.
+  | "suspInfractionContestee"
+  | "suspStageDejaSuivi"
+  | "suspProbatoireEnCours"
+  | "suspRetraitSansNotif"
   // Chantier 2 (2026-10-10) — urgence professionnelle (référé L. 521-1).
   // `metier`/`entreprise`/`risque_licenciement` sont capturés par les champs
   // en dur du formulaire (`analyseSchema`), pas par le registre — éviter les
@@ -368,6 +374,46 @@ export const QUESTIONS_CIBLEES: readonly QuestionCiblee[] = [
     groupe: "Calcul du solde de points (48 SI)",
     types: ["SUSPENSION"],
     docTypes: ["48SI"],
+    preuveClient: "RELEVE_POINTS",
+  },
+
+  // ── SUSPENSION — 48N (stage probatoire, retrait ≥ 3 points, L. 223-6) ─────
+  // Capteurs de fait dédiés à la lettre 48N : ils informent le juriste, jamais
+  // de fondement automatique. Contenu juridique à faire valider par le juriste.
+  {
+    cle: "suspInfractionContestee",
+    champ: "suspInfractionContestee",
+    libelle:
+      "Je conteste la réalité de l'infraction à l'origine du retrait de 3 points",
+    groupe: "Stage probatoire (48N)",
+    types: ["SUSPENSION"],
+    docTypes: ["48N"],
+  },
+  {
+    cle: "suspStageDejaSuivi",
+    champ: "suspStageDejaSuivi",
+    libelle: "J'ai déjà suivi le stage de sensibilisation exigé",
+    groupe: "Stage probatoire (48N)",
+    types: ["SUSPENSION"],
+    docTypes: ["48N"],
+    preuveClient: "ATTESTATION_STAGE",
+  },
+  {
+    cle: "suspProbatoireEnCours",
+    champ: "suspProbatoireEnCours",
+    libelle: "J'étais encore en période probatoire au moment de l'infraction",
+    groupe: "Stage probatoire (48N)",
+    types: ["SUSPENSION"],
+    docTypes: ["48N"],
+  },
+  {
+    cle: "suspRetraitSansNotif",
+    champ: "suspRetraitSansNotif",
+    libelle:
+      "Le retrait de points n'a pas été précédé d'une notification régulière",
+    groupe: "Stage probatoire (48N)",
+    types: ["SUSPENSION"],
+    docTypes: ["48N"],
     preuveClient: "RELEVE_POINTS",
   },
 

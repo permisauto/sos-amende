@@ -62,6 +62,11 @@ export type AnalysePrefill = {
   suspPointsCumulesJour?: boolean;
   suspStageAvantNotif?: boolean;
   suspSoldeInexact?: boolean;
+  // Lot 48N (lettre 48N — stage probatoire).
+  suspInfractionContestee?: boolean;
+  suspStageDejaSuivi?: boolean;
+  suspProbatoireEnCours?: boolean;
+  suspRetraitSansNotif?: boolean;
   // Chantier 2 (2026-10-10) — urgence professionnelle (référé L. 521-1).
   // Lot R1 : radio « Votre urgence » (situation principale).
   urgenceSituation?: string;

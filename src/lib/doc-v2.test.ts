@@ -35,7 +35,7 @@ describe("doc-v2 — catégories", () => {
     expect(docTypePourCategorie("RETENTION_TERRAIN")).toBe("3F");
     expect(docTypePourCategorie("SUSPENSION_PREFECTORALE")).toBe("3F");
     expect(docTypePourCategorie("INVALIDATION_48SI")).toBe("48SI");
-    expect(docTypePourCategorie("PERTE_POINTS_48")).toBeUndefined();
+    expect(docTypePourCategorie("PERTE_POINTS_48")).toBe("48N");
     expect(docTypePourCategorie("ANNULATION_JUDICIAIRE")).toBeUndefined();
     expect(docTypePourCategorie("INCONNU")).toBeUndefined();
   });
@@ -333,14 +333,24 @@ describe("doc-v2 — alignerDocType", () => {
     }
   });
 
-  it("catégories hors pack → docType supprimé (jamais de mismatch)", () => {
+  it("catégories hors pack → docType supprimé (jamais de mismatch), 48N excepté", () => {
     const data: Record<string, unknown> = {
       categorie: "PERTE_POINTS_48",
       docType: "3F",
     };
     alignerDocType(data);
-    expect(data.docType).toBeUndefined();
+    expect(data.docType).toBe("48N");
     expect(data.categorie).toBe("PERTE_POINTS_48");
+  });
+
+  it("annulation judiciaire → docType supprimé (jamais de mismatch)", () => {
+    const data: Record<string, unknown> = {
+      categorie: "ANNULATION_JUDICIAIRE",
+      docType: "3F",
+    };
+    alignerDocType(data);
+    expect(data.docType).toBeUndefined();
+    expect(data.categorie).toBe("ANNULATION_JUDICIAIRE");
   });
 
   it("catégorie invalide → les deux clés supprimées", () => {
