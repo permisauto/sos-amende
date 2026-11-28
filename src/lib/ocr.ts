@@ -983,7 +983,7 @@ const NOM_RE = /\b(?:nom\s*\/\s*pr[eé]nom|nom\s+du\s+titulaire|titulaire|propri
  * de personne (chacun commençant par une majuscule ou tout en capitales) —
  * jamais un simple libellé de rubrique (anti-hallucination). */
 const NOM_CIVILITE_GLOUTON =
-  /(?:M\.?|MME?\.?|Monsieur|Madame)[:\-\s]+\s*((?:[A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’\-]{0,29}\s+){1,2}[A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’\-]{1,29})/i;
+  /\b(Monsieur|Madame|MME?\.?|M\.)\s*[:\-]?\s*([A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’\-]*(?:\s+[A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’\-]*)?)/;
 /** Radar : « Appareil : RADAR TYPE MESTA 210C - N° 1248 » (avis de vitesse). */
 const RADAR_RE = /\b(?:appareil(?:\s+de\s+mesure)?|cin[eé]mom[eè]tre|radar)\s*[:\-]\s*([^\n]{3,70})/i;
 /** Date de vérification périodique du cinémomètre — libellé obligatoire
@@ -1248,10 +1248,11 @@ export function normaliserPv(texte: string): Partial<ExtractedData> {
   // laissait le pré-remplissage vide.
   const civilite = texte.match(NOM_CIVILITE_GLOUTON);
   if (civilite) {
-    const mots = civilite[1]
-      .trim()
-      .split(/\s+/)
-      .filter((m) => !/^(?:né|née|le|à|de)$/i.test(m));
+    // Le 1er mot après la civilité doit être un nom propre (majuscule initiale).
+    // Rejet du vocatif « Monsieur, … » : la civilité est suivie d'une virgule,
+    // donc le séparateur `[:\-\s]+` n'aura pas consommé une virgule — le match
+    // exige déjà un mot majuscule collé après la civilité.
+    const raw = civilite[2].trim();
     const cap = (s: string) =>
       s
         .split(/[-\s]/)
@@ -1259,20 +1260,18 @@ export function normaliserPv(texte: string): Partial<ExtractedData> {
           part ? part[0].toUpperCase() + part.slice(1).toLowerCase() : part,
         )
         .join(s.includes("-") ? "-" : " ");
-
-    if (mots.length >= 2) {
-      // Heuristique d'ordre : un mot tout-en-majuscules est le NOM de famille.
-      //  - « JULIEN » (« M. NOM PRÉNOM ») → NOM = JULIEN si tout en capitales ;
-      //  - « Jean-Marc DUPONT » (lettre 48) → « DUPONT » seul en capitales = NOM.
-      // Sinon (casse mixte partout, ex. « Madame Alice Martin »), le dernier
-      // mot majuscule-initiale est le nom.
-      const toutMaj = (s: string) => /^[A-ZÀ-Ÿ'’\-]+$/.test(s);
-      const idxNomMaj = mots.findIndex((m) => toutMaj(m) && m.length > 1);
+    const toutMaj = (s: string) => /^[A-ZÀ-Ÿ'’\-]+$/.test(s);
+    const mots = raw.split(/\s+/).filter(Boolean);
+    // 1 seul mot majuscule (ex. « Monsieur DUPONT ») : c'est le nom, sans prénom.
+    if (mots.length === 1) {
+      result.nom = cap(mots[0]);
+    } else if (mots.length >= 2) {
+      const idxNom = mots.findIndex((m) => toutMaj(m) && m.length > 1);
       let nom: string;
       let prenoms: string[];
-      if (idxNomMaj >= 0) {
-        nom = mots[idxNomMaj];
-        prenoms = mots.filter((_, i) => i !== idxNomMaj);
+      if (idxNom >= 0) {
+        nom = mots[idxNom];
+        prenoms = mots.filter((_, i) => i !== idxNom);
       } else {
         nom = mots[mots.length - 1];
         prenoms = mots.slice(0, mots.length - 1);

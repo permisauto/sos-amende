@@ -75,6 +75,11 @@ it("gère les plaques au format ancien 1234 AB 75", () => {
     expect(normaliserPv("Madame Alice Martin").nom).toBe("Alice Martin");
   });
 
+  it("ne confond pas un mot banal avec une civilité (maximum, vocatif)", () => {
+    expect(normaliserPv("maximum de deux mois à compter").nom).toBeUndefined();
+    expect(normaliserPv("Monsieur, À la suite des infractions constatées").nom).toBeUndefined();
+  });
+
   it("gère le format de date sans année complète", () => {
     expect(normaliserPv("commise le 05-03-26 à 9h05").date).toBe("2026-03-05");
   });

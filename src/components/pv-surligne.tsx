@@ -4,11 +4,35 @@ import { useMemo } from "react";
 
 /**
  * Surligne, dans le texte brut du document, les valeurs déjà extraites par
- * l'OCR (plaque, numéro, date, montant, nom, adresse…). Objectif : guider le
- * client dans sa relecture — ce qui est en vert est déjà capté, le reste reste
- * à saisir/corriger. Aucune logique métier : simple correspondance de chaînes
- * (insensible casse/accents), bornée à des valeurs non triviales.
+ * l'OCR (plaque, numéro, date, montant, nom, adresse…) en **vert**, et les
+ * **libellés de champs** (Nom, Plaque, N°, Date…) en **ambre** quand la valeur
+ * associée n'a pas été captée. Objectif : guider le client dans sa relecture —
+ * vert = déjà reconnu, ambre = à copier-coller/remplir. Aucune logique métier.
  */
+
+const LIBELLES = [
+  "Nom",
+  "Prénom",
+  "Plaque",
+  "Immatriculation",
+  "N°",
+  "N° de l'avis",
+  "Numéro",
+  "Date",
+  "Heure",
+  "Montant",
+  "Adresse",
+  "Lieu",
+  "NEPH",
+  "Solde",
+  "N° Permis",
+  "Titulaire",
+  "Destinataire",
+  "Redevable",
+];
+
+const echappe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 export function PvSurligne({
   texte,
   valeurs,
@@ -17,7 +41,7 @@ export function PvSurligne({
   valeurs: Record<string, unknown>;
 }) {
   const segments = useMemo(() => {
-    const sortables: string[] = [];
+    // 1. Valeurs captées (vert).
     const CHAMPS = [
       "nom",
       "prenom",
@@ -38,40 +62,47 @@ export function PvSurligne({
       "radarId",
       "typeRadar",
     ];
+    const captees: string[] = [];
     for (const c of CHAMPS) {
       const v = valeurs[c];
       if (typeof v !== "string") continue;
-      const nettoye = v.trim();
-      if (nettoye.length < 2) continue;
-      // Évite de surligner des valeurs trop génériques (un mot très court).
-      if (nettoye.length < 3 && !/^\d/.test(nettoye)) continue;
-      sortables.push(nettoye);
+      const n = v.trim();
+      if (n.length < 2) continue;
+      if (n.length < 3 && !/^\d/.test(n)) continue;
+      captees.push(n);
     }
-    // Déduplication + tri par longueur décroissante (surlig. prioritaire).
-    const uniques = Array.from(new Set(sortables)).sort(
+    const uniques = Array.from(new Set(captees)).sort(
       (a, b) => b.length - a.length,
     );
-    if (uniques.length === 0) return [{ texte, hit: false }];
 
-    // Échappement des métacaractères regex.
-    const echappe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const re = new RegExp(
-      `(${uniques.map(echappe).join("|")})`,
-      "gi",
-    );
+    // 2. Libellés de champs (ambre) : insensibles casse/accents.
+    const motifs = [
+      ...uniques.map(echappe),
+      ...LIBELLES.map(echappe),
+    ];
+    if (motifs.length === 0) return [{ texte, type: "brut" as const }];
+
+    const re = new RegExp(`(${motifs.join("|")})`, "gi");
     return texte.split(re).map((part) => {
-      const hit = uniques.some(
-        (u) => u.toLowerCase() === part.toLowerCase(),
+      if (!part) return { texte: "", type: "brut" as const };
+      const valHit = uniques.some((u) => u.toLowerCase() === part.toLowerCase());
+      if (valHit) return { texte: part, type: "vert" as const };
+      const libelleHit = LIBELLES.some(
+        (l) => l.toLowerCase() === part.toLowerCase(),
       );
-      return { texte: part, hit };
+      return { texte: part, type: libelleHit ? "ambre" as const : "brut" as const };
     });
   }, [texte, valeurs]);
 
   return (
     <>
       {segments.map((s, i) =>
-        s.hit ? (
+        s.type === "vert" ? (
           <mark key={i} className="rounded bg-emerald-200 px-0.5 text-emerald-900">
+            {s.texte}
+          </mark>
+        ) : s.type === "ambre" ? (
+          <mark key={i} className="rounded bg-amber-200 px-0.5 text-amber-900">
             {s.texte}
           </mark>
         ) : (

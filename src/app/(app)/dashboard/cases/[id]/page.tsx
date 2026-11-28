@@ -602,7 +602,7 @@ export default async function CaseDetailPage(
                 Document téléversé (copiez-collez si besoin)
               </p>
               <p className="mt-1 text-[11px] text-zinc-500">
-                Les valeurs <mark className="rounded bg-emerald-200 px-0.5">en vert</mark> sont déjà reconnues ; le reste est à saisir ou corriger.
+                Les valeurs <mark className="rounded bg-emerald-200 px-0.5">en vert</mark> sont reconnues ; les libellés <mark className="rounded bg-amber-200 px-0.5">en ambre</mark> indiquent les champs à copier-coller ou compléter.
               </p>
               {item.pvTexte ? (
                 <pre className="mt-2 max-h-[70vh] overflow-auto whitespace-pre-wrap rounded-xl bg-white p-3 text-xs leading-relaxed text-zinc-700">

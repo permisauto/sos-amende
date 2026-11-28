@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { compresserImage } from "@/lib/compress-image";
+import { PvSurligne } from "@/components/pv-surligne";
 
 type Resultat = { titreFaille: string | null; articleLoi: string | null; score: number; proposition: boolean };
 type Preuves = { radar: { checked: boolean; found: boolean; expired: boolean | null; preuveUrl: string | null }; meteo: { checked: boolean; value: string | null; source: string | null }; travaux: { checked: boolean; value: boolean | null }; dureeMs: number };
@@ -12,7 +13,7 @@ export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPEN
   const [type, setType] = useState<"AMENDE" | "SUSPENSION">(initialType);
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [infos, setInfos] = useState({ plaque: "", num_pv: "", date: "", montant: "", heure: "", adresse: "", lieu: "", prefecture: "", duree: "", motif: "" });
+  const [infos, setInfos] = useState({ nom: "", plaque: "", num_pv: "", date: "", montant: "", heure: "", adresse: "", lieu: "", prefecture: "", duree: "", motif: "" });
   const [complement, setComplement] = useState({ paiementDejaFait: false, vehiculeCede: false, vehiculeVole: false, conducteurDifferent: false, plaqueIncorrecte: false, travaux: false, meteoPluie: false, adresseIncorrecte: false });
   const [showComplement, setShowComplement] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -47,6 +48,7 @@ export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPEN
       const body = (await res.json()) as Reponse & { data?: Record<string, string> };
       if (body.data) {
         setInfos((prev) => ({
+          nom: (body.data?.nom as string) || prev.nom,
           plaque: (body.data?.plaque as string) || prev.plaque,
           num_pv: (body.data?.num_pv as string) || prev.num_pv,
           date: (body.data?.date as string) || prev.date,
@@ -160,6 +162,7 @@ export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPEN
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <label className="flex flex-col gap-1 sm:col-span-2"><span className="text-xs font-medium">Nom {infos.nom && <span className="text-emerald-600">✓ pré-rempli</span>}</span><input value={infos.nom} onChange={(e) => setInfos({ ...infos, nom: e.target.value })} placeholder="Prénom NOM" className={`rounded-xl border px-3 py-2 text-sm ${infos.nom ? "border-emerald-300 bg-emerald-50" : "border-zinc-300"}`} /></label>
           <label className="flex flex-col gap-1 sm:col-span-2"><span className="text-xs font-medium">Adresse {type === "SUSPENSION" ? "(titulaire / préfecture)" : "(titulaire)"} — vérifiable {infos.adresse && <span className="text-emerald-600">✓ pré-rempli</span>}</span><input value={infos.adresse} onChange={(e) => setInfos({ ...infos, adresse: e.target.value })} placeholder="12 rue de Paris, 75001 Paris" className={`rounded-xl border px-3 py-2 text-sm ${infos.adresse ? "border-emerald-300 bg-emerald-50" : "border-zinc-300"}`} /></label>
           <label className="flex flex-col gap-1"><span className="text-xs font-medium">Lieu {type === "SUSPENSION" ? "de la rétention" : "de l'infraction"} {infos.lieu && <span className="text-emerald-600">✓ pré-rempli</span>}</span><input value={infos.lieu} onChange={(e) => setInfos({ ...infos, lieu: e.target.value })} placeholder={type === "SUSPENSION" ? "Route, préfecture" : "Avenue, ville"} className={`rounded-xl border px-3 py-2 text-sm ${infos.lieu ? "border-emerald-300 bg-emerald-50" : "border-zinc-300"}`} /></label>
           <label className="flex flex-col gap-1"><span className="text-xs font-medium">Plaque {type === "SUSPENSION" ? "(si mentionnée)" : ""} {infos.plaque && <span className="text-emerald-600">✓ pré-rempli</span>}</span><input value={infos.plaque} onChange={(e) => setInfos({ ...infos, plaque: e.target.value })} placeholder="AB-123-CD" className={`rounded-xl border px-3 py-2 text-sm ${infos.plaque ? "border-emerald-300 bg-emerald-50" : "border-zinc-300"}`} /></label>
@@ -174,6 +177,20 @@ export function DeposerClient({ initialType }: { initialType: "AMENDE" | "SUSPEN
             </>
           )}
         </div>
+
+        {reponse?.texte && (
+          <div className="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Document téléversé (copiez-collez si besoin)
+            </p>
+            <p className="mt-1 text-[11px] text-zinc-500">
+              Les valeurs <mark className="rounded bg-emerald-200 px-0.5">en vert</mark> sont reconnues ; les libellés <mark className="rounded bg-amber-200 px-0.5">en ambre</mark> indiquent les champs à copier-coller ou compléter.
+            </p>
+            <pre className="mt-2 max-h-[70vh] overflow-auto whitespace-pre-wrap rounded-xl bg-white p-3 text-xs leading-relaxed text-zinc-700">
+              <PvSurligne texte={reponse.texte} valeurs={(reponse.data ?? {})} />
+            </pre>
+          </div>
+        )}
 
         <div className="mt-6 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
           <button type="button" onClick={() => setShowComplement(!showComplement)} className="flex w-full items-center justify-between text-left">
