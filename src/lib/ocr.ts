@@ -975,15 +975,15 @@ const LIEU_FALLBACK_RE = /(?:à|au|lieu)\s+([A-ZÉÈÀÂÊÎÔÛÇa-zéèàâê�
  * MARTIN Jean », « NOM/PRÉNOM : … », « Destinataire : … ») — jamais déduit
  * d'une ligne libre (anti-hallucination). Même ligne uniquement (jamais `\s`
  * qui inclut `\n` : sinon « MARTIN Jean↵Adresse : … » avalerait la rubrique). */
-const NOM_RE = /\b(?:nom\s*\/\s*pr[eé]nom|nom\s+du\s+titulaire|titulaire|propri[eé]taire|destinataire|conducteur|pr[eé]nom|nom)\s*[:\-]\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'’\- \t]{1,59})/iu;
-/** Nom/prénom par civilité : « M. DUPONT JEAN » / « MME MARTIN SOPHIE ».
- * C'est le motif transversal des avis réels (amende, lettre 48, arrêté, FPS…)
- * quel que soit le libellé qui précède (« DESTINATAIRE / TITULAIRE… »,
- * « REDEVABLE », « Identité », ligne libre…). Capture NOM (groupe 1) puis
- * Prénom (groupe 2), tous deux en capitales — jamais un libellé de rubrique
- * (anti-hallucination : deux mots majuscules consécutifs après la civilité). */
-const NOM_CIVILITE_RE =
-  /\bM(?:M|onsieur|\.)?E?\.?\s+([A-ZÀ-Ÿ][A-ZÀ-Ÿ'’\-]{1,29})\s+([A-ZÀ-Ÿ][A-ZÀ-Ÿ'’\-]{1,29})\b/;
+const NOM_RE = /\b(?:nom\s*\/\s*pr[eé]nom|nom\s+du\s+titulaire|titulaire|propri[eé]taire|destinataire(?:\s+fictif)?|redevable|identit[eé]|conducteur|pr[eé]nom|nom)\s*[:\-]\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'’\- \t]{1,59})/iu;
+/** Nom/prénom par civilité : « M. DUPONT JEAN », « MME MARTIN SOPHIE »,
+ * mais aussi les variantes des avis réels : « Monsieur Jean-Marc DUPONT »
+ * (civilité en toutes lettres, prénom composé, ordre Prénom NOM, casse mixte)
+ * et « Madame Alice Martin ». Capture, après la civilité, 2 à 3 mots de nom
+ * de personne (chacun commençant par une majuscule ou tout en capitales) —
+ * jamais un simple libellé de rubrique (anti-hallucination). */
+const NOM_CIVILITE_GLOUTON =
+  /(?:M\.?|MME?\.?|Monsieur|Madame)[:\-\s]+\s*((?:[A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’\-]{0,29}\s+){1,2}[A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’\-]{1,29})/i;
 /** Radar : « Appareil : RADAR TYPE MESTA 210C - N° 1248 » (avis de vitesse). */
 const RADAR_RE = /\b(?:appareil(?:\s+de\s+mesure)?|cin[eé]mom[eè]tre|radar)\s*[:\-]\s*([^\n]{3,70})/i;
 /** Date de vérification périodique du cinémomètre — libellé obligatoire
@@ -1242,17 +1242,44 @@ export function normaliserPv(texte: string): Partial<ExtractedData> {
   const plaque = extrairePlaque(texte);
   if (plaque) result.plaque = plaque;
 
-  // Nom du titulaire : priorité au motif civilité « M./MME + NOM + Prénom »
-  // (transversal aux avis réels), repli sur le libellé explicite historique.
-  // Le champ « Nom » du formulaire est requis : sans cette règle, un PDF à
-  // couche texte laissait le pré-remplissage vide.
-  const civilite = texte.match(NOM_CIVILITE_RE);
+  // Nom du titulaire : priorité au motif civilité (« M./Monsieur/MME/Madame +
+  // 2-3 mots de nom »), repli sur le libellé explicite historique. Le champ
+  // « Nom » du formulaire est requis : sans cette règle, un PDF à couche texte
+  // laissait le pré-remplissage vide.
+  const civilite = texte.match(NOM_CIVILITE_GLOUTON);
   if (civilite) {
-    const nom = civilite[1];
-    const prenom = civilite[2];
-    const formate = (p: string, n: string) =>
-      `${p[0]}${p.slice(1).toLowerCase()} ${n[0]}${n.slice(1).toLowerCase()}`;
-    result.nom = formate(prenom, nom);
+    const mots = civilite[1]
+      .trim()
+      .split(/\s+/)
+      .filter((m) => !/^(?:né|née|le|à|de)$/i.test(m));
+    const cap = (s: string) =>
+      s
+        .split(/[-\s]/)
+        .map((part) =>
+          part ? part[0].toUpperCase() + part.slice(1).toLowerCase() : part,
+        )
+        .join(s.includes("-") ? "-" : " ");
+
+    if (mots.length >= 2) {
+      // Heuristique d'ordre : un mot tout-en-majuscules est le NOM de famille.
+      //  - « JULIEN » (« M. NOM PRÉNOM ») → NOM = JULIEN si tout en capitales ;
+      //  - « Jean-Marc DUPONT » (lettre 48) → « DUPONT » seul en capitales = NOM.
+      // Sinon (casse mixte partout, ex. « Madame Alice Martin »), le dernier
+      // mot majuscule-initiale est le nom.
+      const toutMaj = (s: string) => /^[A-ZÀ-Ÿ'’\-]+$/.test(s);
+      const idxNomMaj = mots.findIndex((m) => toutMaj(m) && m.length > 1);
+      let nom: string;
+      let prenoms: string[];
+      if (idxNomMaj >= 0) {
+        nom = mots[idxNomMaj];
+        prenoms = mots.filter((_, i) => i !== idxNomMaj);
+      } else {
+        nom = mots[mots.length - 1];
+        prenoms = mots.slice(0, mots.length - 1);
+      }
+      const prenom = prenoms.length ? cap(prenoms.join(" ")) : "";
+      result.nom = prenom ? `${prenom} ${cap(nom)}` : cap(nom);
+    }
   } else {
     const nomM = texte.match(NOM_RE);
     if (nomM) {

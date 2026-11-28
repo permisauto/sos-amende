@@ -70,6 +70,11 @@ it("gère les plaques au format ancien 1234 AB 75", () => {
     expect(normaliserPv("Titulaire : MARTIN Jean").nom).toBe("MARTIN Jean");
   });
 
+  it("gère civilité en toutes lettres + prénom composé + ordre Prénom NOM", () => {
+    expect(normaliserPv("Monsieur Jean-Marc DUPONT").nom).toBe("Jean-Marc Dupont");
+    expect(normaliserPv("Madame Alice Martin").nom).toBe("Alice Martin");
+  });
+
   it("gère le format de date sans année complète", () => {
     expect(normaliserPv("commise le 05-03-26 à 9h05").date).toBe("2026-03-05");
   });

@@ -13,19 +13,21 @@ export function PaiementForm({
   voie,
   defaultEmail,
   defaultName,
+  defaultTelephone,
 }: {
   dossierId: string;
   type: "AMENDE" | "SUSPENSION";
   voie?: string | null;
   defaultEmail: string;
   defaultName: string;
+  defaultTelephone?: string;
 }) {
   const [virementState, virementAction, virementPending] = useActionState(payerParVirement, undefined);
 
   const [nom, setNom] = useState(defaultName.split(" ").slice(1).join(" ") || "");
   const [prenom, setPrenom] = useState(defaultName.split(" ")[0] || "");
   const [email, setEmail] = useState(defaultEmail);
-  const [whatsapp, setWhatsapp] = useState("");
+  const [whatsapp, setWhatsapp] = useState(defaultTelephone ?? "");
   const [optionLrar, setOptionLrar] = useState(false);
   const [renonciation, setRenonciation] = useState(false);
 

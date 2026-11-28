@@ -21,6 +21,7 @@ import { libellePreuve } from "@/lib/preuve-labels";
 import { DossierTimeline, type TimelineEvent } from "@/components/dossier-timeline";
 import { FilMessages, type MessageDto } from "@/components/messages";
 import { Avancement } from "@/components/avancement";
+import { PvSurligne } from "@/components/pv-surligne";
 import { marquerMessagesLus } from "../../messages/actions";
 
 const statusLabels: Record<string, string> = {
@@ -600,9 +601,15 @@ export default async function CaseDetailPage(
               <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
                 Document téléversé (copiez-collez si besoin)
               </p>
+              <p className="mt-1 text-[11px] text-zinc-500">
+                Les valeurs <mark className="rounded bg-emerald-200 px-0.5">en vert</mark> sont déjà reconnues ; le reste est à saisir ou corriger.
+              </p>
               {item.pvTexte ? (
                 <pre className="mt-2 max-h-[70vh] overflow-auto whitespace-pre-wrap rounded-xl bg-white p-3 text-xs leading-relaxed text-zinc-700">
-                  {item.pvTexte}
+                  <PvSurligne
+                    texte={item.pvTexte}
+                    valeurs={(item.extractedData ?? {}) as Record<string, unknown>}
+                  />
                 </pre>
               ) : (
                 <p className="mt-2 text-xs text-zinc-500">

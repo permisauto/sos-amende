@@ -9,10 +9,16 @@ export default async function PaiementPage(props: PageProps<"/dashboard/paiement
   const user = await requireUser();
   const params = await props.params;
   const id = params.id;
-  const dossier = await prisma.dossier.findFirst({
-    where: { id, userId: user.id },
-    include: { failleJuridique: true, faillesRetenues: { include: { faille: true } } },
-  });
+  const [dossier, profil] = await Promise.all([
+    prisma.dossier.findFirst({
+      where: { id, userId: user.id },
+      include: { failleJuridique: true, faillesRetenues: { include: { faille: true } } },
+    }),
+    prisma.user.findUnique({
+      where: { id: user.id },
+      select: { telephone: true },
+    }),
+  ]);
   if (!dossier) notFound();
   if (dossier.statut !== "EN_ATTENTE_PAIEMENT" || !dossier.lettreGeneree) {
     redirect(`/dashboard/cases/${id}`);
@@ -46,7 +52,7 @@ export default async function PaiementPage(props: PageProps<"/dashboard/paiement
         </div>
       )}
       <div className="mt-6">
-        <PaiementForm dossierId={dossier.id} type={dossier.type} voie={dossier.voieProcedure} defaultEmail={user.email ?? ""} defaultName={user.name ?? ""} />
+        <PaiementForm dossierId={dossier.id} type={dossier.type} voie={dossier.voieProcedure} defaultEmail={user.email ?? ""} defaultName={user.name ?? ""} defaultTelephone={profil?.telephone ?? ""} />
       </div>
       <p className="mt-6 text-center text-xs text-zinc-500">Paiement sécurisé par virement bancaire. RIB affiché après formulaire, validation sous 24 h ouvrées.</p>
     </div>
